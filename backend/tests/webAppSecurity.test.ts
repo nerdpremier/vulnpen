@@ -285,7 +285,7 @@ test("the report draft is complete enough to hand to a reviewer", () => {
     target: "https://shop.example.com",
     scope: "Public storefront and REST API",
     client: "Acme Retail",
-    tester: "BugBase",
+    tester: "VulnPen",
     vulnerabilities: [unmapped, sqli],
     testPlan: executed,
     generatedAt: new Date("2026-02-01T00:00:00.000Z"),

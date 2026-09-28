@@ -96,11 +96,11 @@
 .greenButton {
   background-color: rgba(16, 202, 0, 0.12) !important;
   color: var(--primary-text) !important;
-  border: 1px solid var(--bugbase-green) !important;
+  border: 1px solid var(--vulnpen-green) !important;
 
   &:hover {
     background-color: rgba(16, 202, 0, 0.22) !important;
-    border-color: var(--bugbase-green) !important;
+    border-color: var(--vulnpen-green) !important;
     color: var(--primary-text) !important;
   }
 }
@@ -491,7 +491,7 @@
 
   .activeHeaderLink {
     @extend .headerLink;
-    color: var(--bugbase-green);
+    color: var(--vulnpen-green);
   }
 }
 

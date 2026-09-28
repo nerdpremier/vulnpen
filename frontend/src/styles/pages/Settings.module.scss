@@ -384,13 +384,13 @@
         display: flex;
         justify-content: flex-end;
 
-        .extraBugbaseButton {
+        .extraVulnpenButton {
           height: 2.3rem;
           font-size: nth($fontSize, 1);
         }
 
         .kycButton {
-          color: var(--bugbase-green);
+          color: var(--vulnpen-green);
           font-size: nth($fontSize, 2);
           font-weight: 600;
           display: flex;
@@ -1017,10 +1017,10 @@
 
   .validateButtonSuccess {
     @extend .validateButton;
-    color: var(--bugbase-green);
+    color: var(--vulnpen-green);
 
     &:hover {
-      color: var(--bugbase-green);
+      color: var(--vulnpen-green);
     }
   }
 }
@@ -1062,7 +1062,7 @@
 
     .createdAt {
       font-weight: 700;
-      color: var(--bugbase-green);
+      color: var(--vulnpen-green);
       font-size: nth($fontSize, 3);
     }
 

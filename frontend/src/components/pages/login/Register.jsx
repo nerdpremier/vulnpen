@@ -155,7 +155,7 @@ const RegisterPage = () => {
               </Form.Item> */}
               <Form.Item>
                 <Button
-                  className={styles.loginButtonBugbase}
+                  className={styles.loginButtonVulnpen}
                   htmlType="submit"
                   disabled={registrationStatus?.registrationOpen === false}
                   loading={registrationStatusLoading || registerMutation.isLoading}

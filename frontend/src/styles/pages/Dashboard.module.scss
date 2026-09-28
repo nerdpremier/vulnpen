@@ -657,11 +657,11 @@
 
       .iconBtn {
         padding-left: 0.1rem;
-        color: var(--bugbase-green);
+        color: var(--vulnpen-green);
       }
 
       &:hover {
-        border-color: var(--bugbase-green);
+        border-color: var(--vulnpen-green);
         background: rgba(#10ca00, 0.08);
       }
     }

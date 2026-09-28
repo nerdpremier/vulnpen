@@ -115,7 +115,7 @@ const LoginPage = () => {
               <Form.Item>
               <Button
               htmlType="submit"
-              className={styles.loginButtonBugbase}
+              className={styles.loginButtonVulnpen}
               loading={loginMutation.isLoading}
             >
               Login

@@ -54,7 +54,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--bugbase-green);
+  color: var(--vulnpen-green);
   background: rgba(16, 202, 0, 0.07);
   border: 1px solid rgba(16, 202, 0, 0.18);
   border-radius: 4px;
@@ -519,7 +519,7 @@
   font-size: 0.48rem;
   font-weight: 700;
   font-family: "JetBrains Mono", monospace;
-  color: var(--bugbase-green);
+  color: var(--vulnpen-green);
   background: rgba(16, 202, 0, 0.08);
   padding: 0.04rem 0.2rem;
   border-radius: 2px;
@@ -532,7 +532,7 @@
   font-weight: 600;
   font-size: 0.68rem;
 
-  &.status2xx { color: var(--bugbase-green); }
+  &.status2xx { color: var(--vulnpen-green); }
   &.status3xx { color: #79c0ff; }
   &.status4xx { color: var(--orange); }
   &.status5xx { color: #ff7b72; }
@@ -695,7 +695,7 @@
 .httpVersion { color: var(--secondary-text); }
 .httpHeaderName { color: #79c0ff; }
 .httpHeaderValue { color: var(--primary-text-100); }
-.httpStatusOk { color: var(--bugbase-green); font-weight: 700; }
+.httpStatusOk { color: var(--vulnpen-green); font-weight: 700; }
 .httpStatusRedirect { color: #79c0ff; font-weight: 700; }
 .httpStatusClientErr { color: var(--orange); font-weight: 700; }
 .httpStatusServerErr { color: #ff7b72; font-weight: 700; }

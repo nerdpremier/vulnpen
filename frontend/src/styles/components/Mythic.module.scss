@@ -160,7 +160,7 @@ $mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #c08bff;
 }
 
-.st_done { border-color: rgba(16, 202, 0, 0.35); background: var(--bugbase-green-100); color: var(--bugbase-green); }
+.st_done { border-color: rgba(16, 202, 0, 0.35); background: var(--vulnpen-green-100); color: var(--vulnpen-green); }
 .st_error { border-color: var(--danger-600); background: var(--danger-100); color: var(--danger); }
 .st_running { border-color: var(--yellow-700); background: rgba(245, 214, 0, 0.08); color: var(--yellow); }
 .st_neutral { color: var(--secondary-text); }

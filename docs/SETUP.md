@@ -42,7 +42,7 @@ Docker deployment is local-only: application and infrastructure ports bind to
 ## Normal installation
 
 ```bash
-git clone https://github.com/bugbasesecurity/vulnpen.git
+git clone <repository-url>
 cd vulnpen
 ./run.sh start
 ```

@@ -19,12 +19,7 @@
     "migrate:db-name": "node scripts/migrate-database-name.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/bugbasesecurity/vulnpen.git"
-  },
-  "author": "BugBase",
+  },  "author": "T-NET IT Solution",
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "0.78.0",

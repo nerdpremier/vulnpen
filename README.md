@@ -48,7 +48,7 @@ VulnPen's assistant is built around web application security testing. It execute
 ## Quick Start
 
 ```bash
-git clone https://github.com/bugbasesecurity/vulnpen.git
+git clone <repository-url>
 cd vulnpen
 ./run.sh start
 ```
@@ -162,20 +162,6 @@ removed when the container is recreated.
 
 The in-repository **[Setup and Troubleshooting guide](./docs/SETUP.md)** is the
 authoritative source for installation, configuration, recovery, and deployment.
-The Wiki contains additional feature reference and may lag the current release:
-
-- [Getting Started](https://github.com/bugbasesecurity/vulnpen/wiki/Home) - project overview
-- [Architecture](https://github.com/bugbasesecurity/vulnpen/wiki/Architecture) - system design, agent loop, subagents
-- [Usage](https://github.com/bugbasesecurity/vulnpen/wiki/Usage) - workflow, consent model, chat interface
-- [Features](https://github.com/bugbasesecurity/vulnpen/wiki/Features) - full feature overview
-- [Settings](https://github.com/bugbasesecurity/vulnpen/wiki/Settings) - models, SSH, VNC, Burp, Magnitude
-- [Capabilities](https://github.com/bugbasesecurity/vulnpen/wiki/Capabilities) - tool registry and buckets
-- [Agent Tools](https://github.com/bugbasesecurity/vulnpen/wiki/Agent-Tools) - all 16 tools and consent behavior
-- [Burp Suite Integration](https://github.com/bugbasesecurity/vulnpen/wiki/Burp-Suite-Integration) - setup and usage
-- [Browser Agent](https://github.com/bugbasesecurity/vulnpen/wiki/Browser-Agent) - Magnitude configuration
-- [VPN Management](https://github.com/bugbasesecurity/vulnpen/wiki/VPN-Management) - profile management
-- [Slash Commands](https://github.com/bugbasesecurity/vulnpen/wiki/Slash-Commands) - session utilities
-- [Changelog](https://github.com/bugbasesecurity/vulnpen/wiki/Changelog) - what's new
 
 ## Local Development
 
@@ -196,20 +182,7 @@ For development setup and troubleshooting, see the
 
 ## Authors
 
-- Dhruva Goyal - [dhruva@bugbase.ai](mailto:dhruva@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/dhruva-goyal/) | [GitHub](https://github.com/shero4) | [X](https://x.com/dhruvagoyal)
-- Aditya Peela - [aditya@bugbase.ai](mailto:aditya@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/aditya-peela/) | [GitHub](https://github.com/adityamhn) | [X](https://x.com/adityapeela)
-- Sitaraman Subramanian - [sitaraman@bugbase.ai](mailto:sitaraman@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/sitaraman-s/) | [GitHub](https://github.com/hackerbone) | [X](https://x.com/situuu_ig)
-
-## Citations
-
-```bibtex
-@article{goyal2024hacking,
-  title={Hacking, the lazy way: LLM augmented pentesting},
-  author={Goyal, Dhruva and Subramanian, Sitaraman and Peela, Aditya},
-  journal={arXiv preprint arXiv:2409.09493},
-  year={2024}
-}
-```
+- TBD
 
 ## Contributing
 

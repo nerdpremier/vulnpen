@@ -19,7 +19,7 @@ To maintain a professional and responsible community, we expect all contributors
   - Report vulnerabilities **responsibly** following coordinated disclosure practices.
 
 - **Contribution Guidelines:**
-  - Follow our contribution guidelines as detailed in [CONTRIBUTING.md](https://github.com/bugbasesecurity/vulnpen/CONTRIBUTING.md).
+  - Follow our contribution guidelines as detailed in [CONTRIBUTING.md](./CONTRIBUTING.md).
   - Maintain integrity and transparency in all contributions.
   - Avoid introducing malicious or harmful code.
 
@@ -29,11 +29,11 @@ Any violations of this Code of Conduct may result in:
 - **Temporary or permanent bans** from contributing or using the tool.
 - **Legal consequences** if the tool is misused in ways that violate laws or ethical standards.
 
-If you witness or experience any unethical behavior related to VulnPen, please report it to our team at [queries@bugbase.ai](mailto:queries@bugbase.ai).
+If you witness or experience any unethical behavior related to VulnPen, please report it to our team (contact details: TBD).
 
 ## Final Note
 VulnPen is created with the intent of **improving cybersecurity** by helping organizations and researchers find and fix vulnerabilities before they can be exploited. Let’s work together to ensure it is used for ethical and legal purposes only.
 
-For more details, please refer to our [Terms and Conditions](https://pentest.bugbase.ai/terms).
+For more details, please refer to our Terms and Conditions (TBD).
 
 Thank you for being a responsible member of our community!
