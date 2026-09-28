@@ -1,0 +1,14 @@
+node_modules/
+dist/
+tsconfig.tsbuildinfo
+package-lock.json
+
+# Secrets
+.env
+.env.*
+!.env.template
+*.pem
+
+# Runtime data
+logs/
+kali-data/

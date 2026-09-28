@@ -1,0 +1,57 @@
+services:
+  mongodb:
+    container_name: vulnpen-mongodb
+    image: mongo:7
+    volumes:
+      - mongodb-data:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: always
+
+  redis:
+    container_name: vulnpen-redis
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: always
+
+  kali:
+    container_name: vulnpen-kali
+    build: ./kali
+    privileged: true
+    ports:
+      - "127.0.0.1:4242:22"
+      - "127.0.0.1:4200:4200"
+      - "127.0.0.1:1194:1194/udp"
+      - "127.0.0.1:9020:9020"
+      - "127.0.0.1:5901:5901"
+    volumes:
+      - ./kali-data:/kali-data
+      - ./backend/.env:/run/vulnpen.env:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/22'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
+    driver: local
+  redis-data:
+    driver: local
+  kali-data:
+    driver: local

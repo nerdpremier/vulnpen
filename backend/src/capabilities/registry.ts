@@ -1,0 +1,1904 @@
+export interface Capability {
+  name: string;
+  type: "binary" | "python_package";
+  bucket: string;
+  label: string;
+  description: string;
+  usageHint?: string;
+  installCommand: string;
+  /** macOS (Darwin) install command. Uses brew when not set. */
+  installCommandDarwin?: string;
+  checkCommand: string;
+  size: string;
+}
+
+export interface CapabilityBucket {
+  id: string;
+  label: string;
+  description: string;
+  promptContext: string;
+  capabilities: Capability[];
+}
+
+const coreBucket: CapabilityBucket = {
+  id: "core",
+  label: "Core",
+  description:
+    "Always-present baseline: shell, Python3, compiler, text tools, git, curl, and essential Python packages.",
+  promptContext: `You have a full Linux shell (run_bash) with: python3, gcc/g++, make, git, curl, wget,
+netcat (nc), socat, ssh, file, strings, xxd, base64, openssl, jq, tmux, and standard
+unix utilities. Python packages available (run_python_script): requests, pyyaml, beautifulsoup4,
+Pillow, python-magic, chepy. You can install additional packages with python3 -m pip or apt if needed.
+Write and run Python scripts for any complex logic. Use chepy for encoding/decoding chains.`,
+  capabilities: [
+    {
+      name: "python3",
+      type: "binary",
+      bucket: "core",
+      label: "Python 3",
+      description: "Primary scripting runtime. The agent writes and runs .py scripts for almost everything.",
+      installCommand: "apt install -y python3 python3-pip python3-venv",
+      checkCommand: "which python3",
+      size: "80 MB",
+    },
+    {
+      name: "gcc",
+      type: "binary",
+      bucket: "core",
+      label: "GCC / G++",
+      description: "Compile C/C++ exploits, challenge sources, helper programs.",
+      installCommand: "apt install -y build-essential",
+      installCommandDarwin: "brew install gcc",
+      checkCommand: "which gcc",
+      size: "150 MB",
+    },
+    {
+      name: "make",
+      type: "binary",
+      bucket: "core",
+      label: "Make / CMake",
+      description: "Build systems for compiling multi-file projects.",
+      installCommand: "apt install -y make cmake",
+      checkCommand: "which make",
+      size: "15 MB",
+    },
+    {
+      name: "git",
+      type: "binary",
+      bucket: "core",
+      label: "Git",
+      description: "Clone exploit repos, tools, challenge sources.",
+      installCommand: "apt install -y git",
+      checkCommand: "which git",
+      size: "30 MB",
+    },
+    {
+      name: "curl",
+      type: "binary",
+      bucket: "core",
+      label: "curl / wget",
+      description: "HTTP requests, file downloads.",
+      installCommand: "apt install -y curl wget",
+      checkCommand: "which curl",
+      size: "5 MB",
+    },
+    {
+      name: "nc",
+      type: "binary",
+      bucket: "core",
+      label: "Netcat",
+      description: "Raw TCP/UDP connections. Connect to challenge servers.",
+      installCommand: "apt install -y netcat-openbsd",
+      installCommandDarwin: "brew install netcat",
+      checkCommand: "which nc",
+      size: "1 MB",
+    },
+    {
+      name: "socat",
+      type: "binary",
+      bucket: "core",
+      label: "Socat",
+      description: "Advanced relay/proxy. Upgrade shells, port forwarding, PTY wrapping.",
+      installCommand: "apt install -y socat",
+      checkCommand: "which socat",
+      size: "2 MB",
+    },
+    {
+      name: "ssh",
+      type: "binary",
+      bucket: "core",
+      label: "SSH / sshpass",
+      description: "Remote access to challenge machines.",
+      installCommand: "apt install -y openssh-client sshpass",
+      checkCommand: "which ssh",
+      size: "5 MB",
+    },
+    {
+      name: "file",
+      type: "binary",
+      bucket: "core",
+      label: "file",
+      description: "Identify file types. First thing to run on any unknown file.",
+      installCommand: "apt install -y file",
+      checkCommand: "which file",
+      size: "1 MB",
+    },
+    {
+      name: "strings",
+      type: "binary",
+      bucket: "core",
+      label: "strings",
+      description: "Extract printable strings from binaries, firmware, memory dumps.",
+      installCommand: "apt install -y binutils",
+      checkCommand: "which strings",
+      size: "20 MB",
+    },
+    {
+      name: "xxd",
+      type: "binary",
+      bucket: "core",
+      label: "xxd",
+      description: "Hex dump / reverse hex dump. Essential for binary data manipulation.",
+      installCommand: "apt install -y xxd",
+      checkCommand: "which xxd",
+      size: "1 MB",
+    },
+    {
+      name: "openssl",
+      type: "binary",
+      bucket: "core",
+      label: "OpenSSL",
+      description: "Quick crypto ops: hashing, cipher, certificate inspection, key generation.",
+      installCommand: "apt install -y openssl",
+      checkCommand: "which openssl",
+      size: "5 MB",
+    },
+    {
+      name: "jq",
+      type: "binary",
+      bucket: "core",
+      label: "jq",
+      description: "JSON parsing from shell.",
+      installCommand: "apt install -y jq",
+      checkCommand: "which jq",
+      size: "2 MB",
+    },
+    {
+      name: "tmux",
+      type: "binary",
+      bucket: "core",
+      label: "tmux",
+      description: "Session management. Run long processes, split work.",
+      installCommand: "apt install -y tmux",
+      checkCommand: "which tmux",
+      size: "2 MB",
+    },
+    {
+      name: "requests",
+      type: "python_package",
+      bucket: "core",
+      label: "requests",
+      description: "HTTP library. Default for any HTTP interaction.",
+      installCommand: "python3 -m pip install requests",
+      checkCommand: "python3 -c 'import requests'",
+      size: "2 MB",
+    },
+    {
+      name: "pyyaml",
+      type: "python_package",
+      bucket: "core",
+      label: "PyYAML",
+      description: "YAML parsing for challenge configs.",
+      installCommand: "python3 -m pip install pyyaml",
+      checkCommand: "python3 -c 'import yaml'",
+      size: "1 MB",
+    },
+    {
+      name: "beautifulsoup4",
+      type: "python_package",
+      bucket: "core",
+      label: "BeautifulSoup4",
+      description: "HTML/XML parsing.",
+      installCommand: "python3 -m pip install beautifulsoup4",
+      checkCommand: "python3 -c 'import bs4'",
+      size: "1 MB",
+    },
+    {
+      name: "Pillow",
+      type: "python_package",
+      bucket: "core",
+      label: "Pillow",
+      description: "Image manipulation. Used across stego, forensics, and misc.",
+      installCommand: "python3 -m pip install Pillow",
+      checkCommand: "python3 -c 'import PIL'",
+      size: "15 MB",
+    },
+    {
+      name: "python-magic",
+      type: "python_package",
+      bucket: "core",
+      label: "python-magic",
+      description: "Programmatic file command — detect MIME types in scripts.",
+      installCommand: "python3 -m pip install python-magic",
+      checkCommand: "python3 -c 'import magic'",
+      size: "1 MB",
+    },
+    {
+      name: "chepy",
+      type: "python_package",
+      bucket: "core",
+      label: "Chepy",
+      description:
+        "CyberChef in Python. Encoding, decoding, hashing, compression, crypto — 300+ operations chained fluently.",
+      installCommand: "python3 -m pip install chepy",
+      checkCommand: "python3 -c 'import chepy'",
+      size: "10 MB",
+    },
+    {
+      name: "pexpect",
+      type: "python_package",
+      bucket: "core",
+      label: "pexpect",
+      description: "Expect-like automation for interactive CLI programs from Python.",
+      installCommand: "python3 -m pip install pexpect",
+      checkCommand: "python3 -c 'import pexpect'",
+      size: "1 MB",
+    },
+  ],
+};
+
+const revBucket: CapabilityBucket = {
+  id: "rev",
+  label: "Reverse Engineering",
+  description:
+    "Binary analysis, decompilation, disassembly, and understanding compiled code.",
+  promptContext: `Reverse engineering capabilities available:
+- ghidra (headless): analyzeHeadless /tmp/proj proj -import binary -postScript DecompileAll.java
+- radare2: r2 -A binary then afl (list funcs), pdf @ main (disasm func), VV (graph)
+- gdb + pwndbg: gdb ./binary then checksec, info functions, disass main, telescope
+- ltrace/strace: trace library calls or syscalls at runtime
+- objdump/readelf/nm: quick static analysis of ELF structure and symbols
+- upx: upx -d packed_binary to unpack UPX-compressed binaries
+- uncompyle6/pycdc: decompile Python .pyc files back to source
+- frida: frida -U -f com.app.target -l hook.js — dynamic instrumentation (Android/iOS/Linux)
+- objection: objection -g com.app.target explore — mobile runtime exploration (Frida-powered)
+Python: capstone (disasm), keystone (asm), pyelftools, lief (binary patching),
+        r2pipe (script r2), unicorn (CPU emulation)`,
+  capabilities: [
+    {
+      name: "ghidra",
+      type: "binary",
+      bucket: "rev",
+      label: "Ghidra (headless)",
+      description:
+        "Industry-standard decompiler. Run headless via analyzeHeadless for scripted decompilation. Supports x86, ARM, MIPS, PPC.",
+      usageHint: "analyzeHeadless /tmp/proj proj -import binary -postScript DecompileAll.java",
+      installCommand:
+        "apt install -y default-jdk && wget -q https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.0.1_build/ghidra_11.0.1_PUBLIC_20240130.zip -O /tmp/ghidra.zip && unzip -q /tmp/ghidra.zip -d /opt/ && ln -sf /opt/ghidra_*/support/analyzeHeadless /usr/local/bin/analyzeHeadless",
+      checkCommand: "which analyzeHeadless || test -d /opt/ghidra_*",
+      size: "700 MB",
+    },
+    {
+      name: "r2",
+      type: "binary",
+      bucket: "rev",
+      label: "Radare2",
+      description: "Interactive disassembler, debugger, hex editor. Good for quick analysis.",
+      usageHint: "r2 -A binary then afl (list funcs), pdf @ main (disasm), VV (graph)",
+      installCommand: "apt install -y radare2",
+      checkCommand: "which r2",
+      size: "50 MB",
+    },
+    {
+      name: "gdb",
+      type: "binary",
+      bucket: "rev",
+      label: "GDB + pwndbg",
+      description:
+        "Debugger with exploit-dev plugin. Heap visualization, telescope, ROP search, vmmap.",
+      usageHint: "gdb ./binary then checksec, info functions, disass main, telescope",
+      installCommand:
+        "apt install -y gdb && python3 -m pip install pwndbg",
+      checkCommand: "which gdb",
+      size: "150 MB",
+    },
+    {
+      name: "ltrace",
+      type: "binary",
+      bucket: "rev",
+      label: "ltrace",
+      description: "Trace library calls. See what libc functions a binary calls at runtime.",
+      installCommand: "apt install -y ltrace",
+      checkCommand: "which ltrace",
+      size: "1 MB",
+    },
+    {
+      name: "strace",
+      type: "binary",
+      bucket: "rev",
+      label: "strace",
+      description: "Trace syscalls. Understand what a binary does without reversing it.",
+      installCommand: "apt install -y strace",
+      checkCommand: "which strace",
+      size: "2 MB",
+    },
+    {
+      name: "upx",
+      type: "binary",
+      bucket: "rev",
+      label: "UPX",
+      description: "Unpack UPX-compressed binaries. Common in CTF.",
+      usageHint: "upx -d packed_binary",
+      installCommand: "apt install -y upx",
+      checkCommand: "which upx",
+      size: "1 MB",
+    },
+    {
+      name: "uncompyle6",
+      type: "python_package",
+      bucket: "rev",
+      label: "uncompyle6",
+      description: "Decompile Python 2/3 bytecode (.pyc) back to source.",
+      installCommand: "python3 -m pip install uncompyle6",
+      checkCommand: "python3 -c 'import uncompyle6'",
+      size: "5 MB",
+    },
+    {
+      name: "jadx",
+      type: "binary",
+      bucket: "rev",
+      label: "JADX",
+      description: "Java/Android APK decompiler. Produces readable Java source.",
+      installCommand: "apt install -y jadx",
+      checkCommand: "which jadx",
+      size: "40 MB",
+    },
+    {
+      name: "apktool",
+      type: "binary",
+      bucket: "rev",
+      label: "apktool",
+      description: "Decode/rebuild APK resources and smali code.",
+      installCommand: "apt install -y apktool",
+      checkCommand: "which apktool",
+      size: "10 MB",
+    },
+    {
+      name: "capstone",
+      type: "python_package",
+      bucket: "rev",
+      label: "Capstone",
+      description: "Multi-arch disassembly framework. Disassemble x86, ARM, MIPS from Python.",
+      installCommand: "python3 -m pip install capstone",
+      checkCommand: "python3 -c 'import capstone'",
+      size: "5 MB",
+    },
+    {
+      name: "keystone-engine",
+      type: "python_package",
+      bucket: "rev",
+      label: "Keystone",
+      description: "Multi-arch assembler. Assemble instructions from Python.",
+      installCommand: "python3 -m pip install keystone-engine",
+      checkCommand: "python3 -c 'import keystone'",
+      size: "5 MB",
+    },
+    {
+      name: "pyelftools",
+      type: "python_package",
+      bucket: "rev",
+      label: "pyelftools",
+      description: "Pure-Python ELF parsing. Read sections, symbols, relocations, DWARF debug info.",
+      installCommand: "python3 -m pip install pyelftools",
+      checkCommand: "python3 -c 'import elftools'",
+      size: "2 MB",
+    },
+    {
+      name: "lief",
+      type: "python_package",
+      bucket: "rev",
+      label: "LIEF",
+      description: "Parse and modify ELF, PE, Mach-O binaries. Patch imports, sections, entrypoints.",
+      installCommand: "python3 -m pip install lief",
+      checkCommand: "python3 -c 'import lief'",
+      size: "15 MB",
+    },
+    {
+      name: "r2pipe",
+      type: "python_package",
+      bucket: "rev",
+      label: "r2pipe",
+      description: "Radare2 Python bindings. Script r2 analysis from Python.",
+      installCommand: "python3 -m pip install r2pipe",
+      checkCommand: "python3 -c 'import r2pipe'",
+      size: "1 MB",
+    },
+    {
+      name: "unicorn",
+      type: "python_package",
+      bucket: "rev",
+      label: "Unicorn",
+      description:
+        "CPU emulator. Emulate x86, ARM, MIPS code snippets without running the full binary.",
+      installCommand: "python3 -m pip install unicorn",
+      checkCommand: "python3 -c 'import unicorn'",
+      size: "10 MB",
+    },
+    {
+      name: "frida-tools",
+      type: "python_package",
+      bucket: "rev",
+      label: "Frida",
+      description: "Dynamic instrumentation toolkit. Hook functions, trace calls, bypass checks at runtime on Android/iOS/Linux/Windows.",
+      usageHint: "frida -U -f com.app.target -l hook.js OR frida-ps -U",
+      installCommand: "python3 -m pip install frida-tools",
+      checkCommand: "which frida",
+      size: "40 MB",
+    },
+    {
+      name: "objection",
+      type: "python_package",
+      bucket: "rev",
+      label: "Objection",
+      description: "Runtime mobile exploration powered by Frida. SSL pinning bypass, root detection bypass, memory dumping.",
+      usageHint: "objection -g com.app.target explore",
+      installCommand: "python3 -m pip install objection",
+      checkCommand: "which objection",
+      size: "15 MB",
+    },
+  ],
+};
+
+const pwnBucket: CapabilityBucket = {
+  id: "pwn",
+  label: "Binary Exploitation",
+  description:
+    "Buffer overflows, ROP chains, format strings, heap exploitation, shellcoding.",
+  promptContext: `Binary exploitation capabilities available:
+- pwntools (Python): process/remote interaction, ELF parsing, ROP chain building, shellcraft,
+  cyclic patterns, format string helpers. from pwn import *
+- angr: symbolic execution, auto-solve crackmes, find winning inputs. import angr
+- ROPgadget: ROPgadget --binary ./vuln [--ropchain]
+- ropper: ropper -f ./vuln --search "pop rdi"
+- one_gadget: one_gadget /path/to/libc.so.6
+- seccomp-tools: seccomp-tools dump ./binary
+- patchelf: patchelf --set-interpreter ./ld-linux.so --set-rpath . ./binary
+- checksec: checksec --file=./binary (installed with pwntools)
+- qemu-user-static: run non-x86 binaries
+- nasm: write raw shellcode .asm files`,
+  capabilities: [
+    {
+      name: "ROPgadget",
+      type: "binary",
+      bucket: "pwn",
+      label: "ROPgadget",
+      description:
+        "Find ROP gadgets in any binary. --ropchain auto-generates chains.",
+      usageHint: "ROPgadget --binary ./vuln [--ropchain]",
+      installCommand: "python3 -m pip install ROPgadget",
+      checkCommand: "which ROPgadget",
+      size: "3 MB",
+    },
+    {
+      name: "ropper",
+      type: "binary",
+      bucket: "pwn",
+      label: "Ropper",
+      description: "Alternative gadget finder. Better filtering, JOP/SOP support.",
+      usageHint: "ropper -f ./vuln --search \"pop rdi\"",
+      installCommand: "python3 -m pip install ropper",
+      checkCommand: "which ropper",
+      size: "5 MB",
+    },
+    {
+      name: "one_gadget",
+      type: "binary",
+      bucket: "pwn",
+      label: "one_gadget",
+      description: "Find one-shot execve gadgets in libc. Give it the libc, get instant shell offsets.",
+      usageHint: "one_gadget /path/to/libc.so.6",
+      installCommand: "gem install one_gadget",
+      checkCommand: "which one_gadget",
+      size: "2 MB",
+    },
+    {
+      name: "seccomp-tools",
+      type: "binary",
+      bucket: "pwn",
+      label: "seccomp-tools",
+      description: "Dump and analyze seccomp-bpf sandbox rules. Essential for sandboxed pwn challenges.",
+      usageHint: "seccomp-tools dump ./binary",
+      installCommand: "gem install seccomp-tools",
+      checkCommand: "which seccomp-tools",
+      size: "2 MB",
+    },
+    {
+      name: "patchelf",
+      type: "binary",
+      bucket: "pwn",
+      label: "patchelf",
+      description:
+        "Change ELF interpreter and RPATH. Use to run binaries against a specific libc locally.",
+      usageHint: "patchelf --set-interpreter ./ld-linux.so --set-rpath . ./binary",
+      installCommand: "apt install -y patchelf",
+      checkCommand: "which patchelf",
+      size: "1 MB",
+    },
+    {
+      name: "nasm",
+      type: "binary",
+      bucket: "pwn",
+      label: "NASM",
+      description: "x86/x64 assembler. Write shellcode or custom assembly payloads.",
+      installCommand: "apt install -y nasm",
+      checkCommand: "which nasm",
+      size: "5 MB",
+    },
+    {
+      name: "qemu-user-static",
+      type: "binary",
+      bucket: "pwn",
+      label: "QEMU User Static",
+      description: "Run ARM, MIPS, RISC-V, PPC binaries on x86. Many CTFs use non-x86 targets.",
+      installCommand: "apt install -y qemu-user-static",
+      checkCommand: "which qemu-arm-static",
+      size: "150 MB",
+    },
+    {
+      name: "pwntools",
+      type: "python_package",
+      bucket: "pwn",
+      label: "pwntools",
+      description:
+        "The exploit dev framework. Remote/local process interaction, ELF parsing, ROP builder, shellcraft, cyclic patterns, format string helpers, asm/disasm.",
+      usageHint: "from pwn import *; checksec --file=./binary (bundled)",
+      installCommand: "python3 -m pip install pwntools",
+      checkCommand: "python3 -c 'import pwn'",
+      size: "50 MB",
+    },
+    {
+      name: "angr",
+      type: "python_package",
+      bucket: "pwn",
+      label: "angr",
+      description:
+        "Symbolic execution engine. Auto-solve crackmes, find inputs that reach specific code paths, bypass checks.",
+      usageHint: "import angr; p = angr.Project('./binary')",
+      installCommand: "python3 -m pip install angr",
+      checkCommand: "python3 -c 'import angr'",
+      size: "400 MB",
+    },
+  ],
+};
+
+const cryptoBucket: CapabilityBucket = {
+  id: "crypto",
+  label: "Cryptography",
+  description:
+    "Cipher breaking, RSA attacks, hash cracking, number theory, custom crypto implementations.",
+  promptContext: `Cryptography capabilities available:
+- sagemath: sage -python script.py or sage interactive. Elliptic curves, LLL, finite fields.
+- john: john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt
+- hashcat: hashcat -m <mode> hash.txt wordlist.txt
+- hashid: hashid '<hash_string>' — identify hash type
+- RsaCtfTool: python3 RsaCtfTool.py -n <N> -e <e> --uncipher <c>
+- xortool: xortool encrypted_file — guess XOR key
+Python: pycryptodome (AES/RSA/DES/hashing), gmpy2 (fast bignum math),
+        sympy (symbolic math), z3-solver (constraint solving),
+        primefac (factorization), factordb-python (known factorizations)`,
+  capabilities: [
+    {
+      name: "sagemath",
+      type: "binary",
+      bucket: "crypto",
+      label: "SageMath",
+      description:
+        "Computer algebra system. Elliptic curves, lattice reduction (LLL), polynomial rings, finite fields, number theory.",
+      usageHint: "sage -python script.py or sage interactive",
+      installCommand: "apt install -y sagemath",
+      checkCommand: "which sage",
+      size: "2 GB",
+    },
+    {
+      name: "john",
+      type: "binary",
+      bucket: "crypto",
+      label: "John the Ripper",
+      description: "CPU-based password/hash cracker. Supports 300+ hash formats.",
+      usageHint: "john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt",
+      installCommand: "apt install -y john",
+      checkCommand: "which john",
+      size: "30 MB",
+    },
+    {
+      name: "hashcat",
+      type: "binary",
+      bucket: "crypto",
+      label: "Hashcat",
+      description: "GPU-accelerated hash cracker. Faster than john when GPU available.",
+      usageHint: "hashcat -m <mode> hash.txt wordlist.txt",
+      installCommand: "apt install -y hashcat",
+      checkCommand: "which hashcat",
+      size: "20 MB",
+    },
+    {
+      name: "hashid",
+      type: "binary",
+      bucket: "crypto",
+      label: "hashid",
+      description: "Identify unknown hash types. Feed it a hash, get possible algorithms.",
+      usageHint: "hashid '<hash_string>'",
+      installCommand: "python3 -m pip install hashid",
+      checkCommand: "which hashid",
+      size: "1 MB",
+    },
+    {
+      name: "xortool",
+      type: "binary",
+      bucket: "crypto",
+      label: "xortool",
+      description: "Analyze XOR-encrypted data. Guess key length and probable key.",
+      usageHint: "xortool encrypted_file",
+      installCommand: "python3 -m pip install xortool",
+      checkCommand: "which xortool",
+      size: "1 MB",
+    },
+    {
+      name: "pycryptodome",
+      type: "python_package",
+      bucket: "crypto",
+      label: "PyCryptodome",
+      description:
+        "Full crypto toolkit. AES, RSA, DES, ChaCha20, hashing, PKCS padding, stream ciphers, MACs.",
+      installCommand: "python3 -m pip install pycryptodome",
+      checkCommand: "python3 -c 'import Crypto'",
+      size: "15 MB",
+    },
+    {
+      name: "gmpy2",
+      type: "python_package",
+      bucket: "crypto",
+      label: "gmpy2",
+      description:
+        "Fast arbitrary-precision arithmetic with GMP. Modular exponentiation, inversion, GCD. 10-100x faster than native Python for big numbers.",
+      installCommand: "python3 -m pip install gmpy2",
+      checkCommand: "python3 -c 'import gmpy2'",
+      size: "10 MB",
+    },
+    {
+      name: "sympy",
+      type: "python_package",
+      bucket: "crypto",
+      label: "SymPy",
+      description:
+        "Symbolic math. Solve equations, simplify expressions, number theory functions (factorint, isprime, discrete_log).",
+      installCommand: "python3 -m pip install sympy",
+      checkCommand: "python3 -c 'import sympy'",
+      size: "30 MB",
+    },
+    {
+      name: "z3-solver",
+      type: "python_package",
+      bucket: "crypto",
+      label: "Z3 Solver",
+      description:
+        "SMT constraint solver from Microsoft. Solve systems of equations, bit-vector constraints, boolean satisfiability.",
+      installCommand: "python3 -m pip install z3-solver",
+      checkCommand: "python3 -c 'import z3'",
+      size: "30 MB",
+    },
+    {
+      name: "primefac",
+      type: "python_package",
+      bucket: "crypto",
+      label: "primefac",
+      description: "Integer factorization (trial division, Pollard rho, ECM).",
+      installCommand: "python3 -m pip install primefac",
+      checkCommand: "python3 -c 'import primefac'",
+      size: "1 MB",
+    },
+    {
+      name: "factordb-python",
+      type: "python_package",
+      bucket: "crypto",
+      label: "factordb-python",
+      description: "Query factordb.com for known factorizations of large numbers.",
+      installCommand: "python3 -m pip install factordb-python",
+      checkCommand: "python3 -c 'import factordb'",
+      size: "1 MB",
+    },
+  ],
+};
+
+const forensicsBucket: CapabilityBucket = {
+  id: "forensics",
+  label: "Forensics",
+  description:
+    "Disk images, memory dumps, packet captures, file carving, document analysis.",
+  promptContext: `Forensics capabilities available:
+- binwalk: binwalk -e firmware.bin — extract embedded files
+- sleuthkit: mmls disk.img, fls -r -o <offset> disk.img, icat disk.img <inode>
+- volatility3: vol -f memory.dmp windows.pslist, vol -f memory.dmp windows.filescan
+- tshark: tshark -r capture.pcap -Y "http", tshark -r cap.pcap -z follow,tcp,ascii,0
+- foremost/scalpel: foremost -i image.raw -o output/ — carve files
+- exiftool: exiftool file.jpg — read/write metadata
+- pdf-parser: pdf-parser.py -s /JavaScript document.pdf
+- oletools: olevba document.docm — extract VBA macros
+- ffmpeg: ffmpeg -i audio.wav -lavfi showspectrumpic=s=1024x512 spectrogram.png
+- tesseract: tesseract image.png stdout — OCR text extraction from images
+- mediainfo: mediainfo video.mp4 — detailed media file metadata
+- testdisk/photorec: photorec /d output/ disk.img — partition recovery and file carving
+- djxl: djxl input.jxl output.png — decode JPEG XL images
+- pdftotext: pdftotext document.pdf - — extract text from PDFs
+- 7z: 7z x archive.7z — handle 7z, RAR, ISO archives
+Python: scapy (packet crafting), dpkt/pyshark (pcap parsing),
+        oletools, PyPDF2 (PDF manipulation)`,
+  capabilities: [
+    {
+      name: "binwalk",
+      type: "binary",
+      bucket: "forensics",
+      label: "Binwalk",
+      description:
+        "Scan firmware/binaries for embedded files, file systems, compressed data.",
+      usageHint: "binwalk -e firmware.bin (auto-extract embedded files)",
+      installCommand: "apt install -y binwalk",
+      checkCommand: "which binwalk",
+      size: "15 MB",
+    },
+    {
+      name: "foremost",
+      type: "binary",
+      bucket: "forensics",
+      label: "Foremost",
+      description: "File carving from disk images or raw data based on headers/footers.",
+      installCommand: "apt install -y foremost",
+      checkCommand: "which foremost",
+      size: "1 MB",
+    },
+    {
+      name: "mmls",
+      type: "binary",
+      bucket: "forensics",
+      label: "Sleuth Kit",
+      description:
+        "Filesystem forensics suite. Analyze disk images — list partitions, browse files, recover deleted files.",
+      usageHint: "mmls disk.img, fls -r -o <offset> disk.img, icat disk.img <inode>",
+      installCommand: "apt install -y sleuthkit",
+      checkCommand: "which mmls",
+      size: "20 MB",
+    },
+    {
+      name: "vol",
+      type: "binary",
+      bucket: "forensics",
+      label: "Volatility 3",
+      description:
+        "Memory forensics framework. Analyze RAM dumps — list processes, extract files, find credentials.",
+      usageHint: "vol -f memory.dmp windows.pslist, vol -f memory.dmp windows.filescan",
+      installCommand: "python3 -m pip install volatility3",
+      checkCommand: "which vol || python3 -c 'import volatility3'",
+      size: "30 MB",
+    },
+    {
+      name: "tshark",
+      type: "binary",
+      bucket: "forensics",
+      label: "TShark",
+      description: "CLI Wireshark. Parse pcap files, filter protocols, extract streams.",
+      usageHint: "tshark -r capture.pcap -Y \"http\", tshark -r cap.pcap -z follow,tcp,ascii,0",
+      installCommand: "apt install -y tshark",
+      checkCommand: "which tshark",
+      size: "80 MB",
+    },
+    {
+      name: "exiftool",
+      type: "binary",
+      bucket: "forensics",
+      label: "ExifTool",
+      description: "Read/write metadata from images, PDFs, docs, videos, audio.",
+      usageHint: "exiftool file.jpg",
+      installCommand: "apt install -y libimage-exiftool-perl",
+      checkCommand: "which exiftool",
+      size: "25 MB",
+    },
+    {
+      name: "oletools",
+      type: "python_package",
+      bucket: "forensics",
+      label: "oletools",
+      description: "Analyze Microsoft Office documents. Extract VBA macros, detect malicious content.",
+      installCommand: "python3 -m pip install oletools",
+      checkCommand: "python3 -c 'import oletools'",
+      size: "5 MB",
+    },
+    {
+      name: "ffmpeg",
+      type: "binary",
+      bucket: "forensics",
+      label: "FFmpeg",
+      description: "Media file swiss-army knife. Extract frames, audio channels, manipulate for stego.",
+      usageHint: "ffmpeg -i audio.wav -lavfi showspectrumpic=s=1024x512 spectrogram.png",
+      installCommand: "apt install -y ffmpeg",
+      checkCommand: "which ffmpeg",
+      size: "80 MB",
+    },
+    {
+      name: "scalpel",
+      type: "binary",
+      bucket: "forensics",
+      label: "Scalpel",
+      description: "File carver with more configurable rules than foremost.",
+      installCommand: "apt install -y scalpel",
+      checkCommand: "which scalpel",
+      size: "1 MB",
+    },
+    {
+      name: "scapy",
+      type: "python_package",
+      bucket: "forensics",
+      label: "Scapy",
+      description: "Packet crafting and analysis in Python. Parse pcaps, forge packets, decode protocols.",
+      installCommand: "python3 -m pip install scapy",
+      checkCommand: "python3 -c 'import scapy'",
+      size: "15 MB",
+    },
+    {
+      name: "dpkt",
+      type: "python_package",
+      bucket: "forensics",
+      label: "dpkt",
+      description: "Lightweight pcap/packet parsing. Faster than scapy for simple pcap analysis.",
+      installCommand: "python3 -m pip install dpkt",
+      checkCommand: "python3 -c 'import dpkt'",
+      size: "2 MB",
+    },
+    {
+      name: "pyshark",
+      type: "python_package",
+      bucket: "forensics",
+      label: "PyShark",
+      description: "Python wrapper for tshark. Use Wireshark's dissectors from Python.",
+      installCommand: "python3 -m pip install pyshark",
+      checkCommand: "python3 -c 'import pyshark'",
+      size: "5 MB",
+    },
+    {
+      name: "PyPDF2",
+      type: "python_package",
+      bucket: "forensics",
+      label: "PyPDF2",
+      description: "PDF parsing and manipulation from Python.",
+      installCommand: "python3 -m pip install PyPDF2",
+      checkCommand: "python3 -c 'import PyPDF2'",
+      size: "3 MB",
+    },
+    {
+      name: "tesseract",
+      type: "binary",
+      bucket: "forensics",
+      label: "Tesseract OCR",
+      description: "Extract text from images. Supports 100+ languages.",
+      usageHint: "tesseract image.png stdout OR tesseract image.png output -l eng",
+      installCommand: "apt install -y tesseract-ocr",
+      checkCommand: "which tesseract",
+      size: "15 MB",
+    },
+    {
+      name: "libjxl",
+      type: "binary",
+      bucket: "forensics",
+      label: "JPEG XL Tools",
+      description: "Decode/encode JPEG XL images. djxl converts .jxl to PNG/JPEG for analysis.",
+      usageHint: "djxl input.jxl output.png",
+      installCommand: "apt install -y libjxl-tools",
+      checkCommand: "which djxl",
+      size: "5 MB",
+    },
+    {
+      name: "mediainfo",
+      type: "binary",
+      bucket: "forensics",
+      label: "MediaInfo",
+      description: "Display detailed metadata for audio/video files. Codecs, bitrate, resolution, embedded text tracks.",
+      usageHint: "mediainfo video.mp4",
+      installCommand: "apt install -y mediainfo",
+      checkCommand: "which mediainfo",
+      size: "5 MB",
+    },
+    {
+      name: "testdisk",
+      type: "binary",
+      bucket: "forensics",
+      label: "TestDisk / PhotoRec",
+      description: "Recover lost partitions (testdisk) and carve files from disk images (photorec). Handles FAT, NTFS, ext, HFS+.",
+      usageHint: "photorec /d output/ disk.img",
+      installCommand: "apt install -y testdisk",
+      checkCommand: "which testdisk",
+      size: "5 MB",
+    },
+    {
+      name: "p7zip",
+      type: "binary",
+      bucket: "forensics",
+      label: "7-Zip",
+      description: "Handle 7z, RAR, ISO, and other archive formats. Broader format support than unzip/tar.",
+      usageHint: "7z x archive.7z OR 7z l archive.7z",
+      installCommand: "apt install -y p7zip-full",
+      checkCommand: "which 7z",
+      size: "5 MB",
+    },
+    {
+      name: "poppler-utils",
+      type: "binary",
+      bucket: "forensics",
+      label: "Poppler Utils",
+      description: "PDF text extraction and rendering. pdftotext, pdfimages, pdfinfo for analyzing PDF documents.",
+      usageHint: "pdftotext document.pdf - OR pdfimages -all document.pdf images/",
+      installCommand: "apt install -y poppler-utils",
+      checkCommand: "which pdftotext",
+      size: "10 MB",
+    },
+  ],
+};
+
+const stegoBucket: CapabilityBucket = {
+  id: "stego",
+  label: "Steganography",
+  description:
+    "Data hidden in images, audio, text, or other media.",
+  promptContext: `Steganography capabilities available:
+- steghide: steghide extract -sf image.jpg [-p password]
+- zsteg: zsteg image.png — detect LSB stego in PNG/BMP
+- stegoveritas: stegoveritas image.png — automated multi-check stego analysis
+- pngcheck: pngcheck -v image.png — validate PNG chunk structure
+- exiftool: check for metadata-hidden flags
+- binwalk: check for appended/embedded files
+- sonic-visualiser: visualize audio spectrograms (hidden images in audio)
+Python: Pillow (pixel-level manipulation), numpy/scipy (bulk array + FFT for audio stego)
+Technique: always check — file, strings, exiftool, binwalk, xxd first. Then specialized stego binaries.`,
+  capabilities: [
+    {
+      name: "steghide",
+      type: "binary",
+      bucket: "stego",
+      label: "Steghide",
+      description: "Embed/extract data in JPEG and BMP files.",
+      usageHint: "steghide extract -sf image.jpg [-p password]",
+      installCommand: "apt install -y steghide",
+      checkCommand: "which steghide",
+      size: "2 MB",
+    },
+    {
+      name: "zsteg",
+      type: "binary",
+      bucket: "stego",
+      label: "zsteg",
+      description: "Detect LSB steganography in PNG and BMP files. Finds hidden data in color channels/bit planes.",
+      usageHint: "zsteg image.png",
+      installCommand: "gem install zsteg",
+      checkCommand: "which zsteg",
+      size: "5 MB",
+    },
+    {
+      name: "stegoveritas",
+      type: "binary",
+      bucket: "stego",
+      label: "StegoVeritas",
+      description:
+        "Automated stego analysis. Runs multiple checks: LSB, color planes, trailing data, EXIF, binwalk.",
+      usageHint: "stegoveritas image.png",
+      installCommand: "python3 -m pip install stegoveritas",
+      checkCommand: "which stegoveritas",
+      size: "20 MB",
+    },
+    {
+      name: "pngcheck",
+      type: "binary",
+      bucket: "stego",
+      label: "pngcheck",
+      description: "Validate PNG structure. Detect corrupted or manipulated chunks (IHDR, IDAT, etc.).",
+      usageHint: "pngcheck -v image.png",
+      installCommand: "apt install -y pngcheck",
+      checkCommand: "which pngcheck",
+      size: "1 MB",
+    },
+    {
+      name: "numpy",
+      type: "python_package",
+      bucket: "stego",
+      label: "NumPy",
+      description: "Array manipulation for bulk pixel/audio data processing.",
+      installCommand: "python3 -m pip install numpy",
+      checkCommand: "python3 -c 'import numpy'",
+      size: "30 MB",
+    },
+    {
+      name: "scipy",
+      type: "python_package",
+      bucket: "stego",
+      label: "SciPy",
+      description: "Signal processing. FFT, audio analysis, image filtering for stego.",
+      installCommand: "python3 -m pip install scipy",
+      checkCommand: "python3 -c 'import scipy'",
+      size: "40 MB",
+    },
+  ],
+};
+
+const networkBucket: CapabilityBucket = {
+  id: "network",
+  label: "Network & Recon",
+  description:
+    "Port scanning, service enumeration, traffic capture, protocol interaction, web testing.",
+  promptContext: `Network capabilities available:
+- nmap: nmap -sV -sC <target> — port scan with version detection and default scripts
+- masscan: masscan -p1-65535 <target> --rate=1000 — fast full-port scan
+- tcpdump: tcpdump -i eth0 -w capture.pcap — packet capture
+- dig: dig @<dns_server> <domain> ANY — DNS enumeration
+- hydra: hydra -l admin -P wordlist.txt <target> ssh — brute-force logins
+- sqlmap: sqlmap -u "http://target/page?id=1" --batch --dbs
+- msfvenom: msfvenom -p <payload> LHOST=<ip> LPORT=<port> -f <format> -o output — generate payloads
+Python: paramiko (SSH), dnspython (DNS), impacket (SMB/Kerberos/LDAP)`,
+  capabilities: [
+    {
+      name: "nmap",
+      type: "binary",
+      bucket: "network",
+      label: "Nmap",
+      description:
+        "Port scanner + service/version detection + NSE scripts. The starting point for any network challenge.",
+      usageHint: "nmap -sV -sC <target> -oN scan.txt",
+      installCommand: "apt install -y nmap",
+      checkCommand: "which nmap",
+      size: "25 MB",
+    },
+    {
+      name: "masscan",
+      type: "binary",
+      bucket: "network",
+      label: "Masscan",
+      description: "Fastest port scanner. Scan entire networks quickly, then follow up with nmap.",
+      usageHint: "masscan -p1-65535 <target> --rate=1000",
+      installCommand: "apt install -y masscan",
+      checkCommand: "which masscan",
+      size: "5 MB",
+    },
+    {
+      name: "tcpdump",
+      type: "binary",
+      bucket: "network",
+      label: "tcpdump",
+      description: "Lightweight packet capture. Faster to invoke than tshark for quick sniffing.",
+      usageHint: "tcpdump -i eth0 -w capture.pcap",
+      installCommand: "apt install -y tcpdump",
+      checkCommand: "which tcpdump",
+      size: "2 MB",
+    },
+    {
+      name: "dig",
+      type: "binary",
+      bucket: "network",
+      label: "dig / nslookup",
+      description: "DNS lookups and zone transfers.",
+      usageHint: "dig @<dns_server> <domain> ANY",
+      installCommand: "apt install -y dnsutils",
+      installCommandDarwin: "brew install bind",
+      checkCommand: "which dig",
+      size: "5 MB",
+    },
+    {
+      name: "hydra",
+      type: "binary",
+      bucket: "network",
+      label: "THC-Hydra",
+      description: "Network brute-forcer. SSH, FTP, HTTP, SMB, SQL, etc.",
+      usageHint: "hydra -l admin -P wordlist.txt <target> ssh",
+      installCommand: "apt install -y hydra",
+      checkCommand: "which hydra",
+      size: "5 MB",
+    },
+    {
+      name: "sqlmap",
+      type: "binary",
+      bucket: "network",
+      label: "sqlmap",
+      description: "Automated SQL injection detection and exploitation.",
+      usageHint: "sqlmap -u \"http://target/page?id=1\" --batch --dbs",
+      installCommand: "apt install -y sqlmap",
+      checkCommand: "which sqlmap",
+      size: "20 MB",
+    },
+    {
+      name: "msfvenom",
+      type: "binary",
+      bucket: "network",
+      label: "msfvenom",
+      description:
+        "Metasploit payload generator. Create reverse shells, meterpreter payloads, and encoded shellcode in various formats.",
+      usageHint: "msfvenom -p linux/x64/shell_reverse_tcp LHOST=<ip> LPORT=<port> -f elf -o shell.elf",
+      installCommand: "apt install -y metasploit-framework",
+      installCommandDarwin: "brew install metasploit",
+      checkCommand: "which msfvenom",
+      size: "500 MB",
+    },
+    {
+      name: "ffuf",
+      type: "binary",
+      bucket: "network",
+      label: "ffuf",
+      description: "Fast web fuzzer for directory and parameter brute-forcing.",
+      installCommand: "apt install -y ffuf || go install github.com/ffuf/ffuf/v2@latest",
+      checkCommand: "which ffuf",
+      size: "10 MB",
+    },
+    {
+      name: "feroxbuster",
+      type: "binary",
+      bucket: "network",
+      label: "Feroxbuster",
+      description: "Recursive content discovery tool written in Rust. Fast directory brute-forcing.",
+      installCommand: "apt install -y feroxbuster",
+      checkCommand: "which feroxbuster",
+      size: "10 MB",
+    },
+    {
+      name: "gobuster",
+      type: "binary",
+      bucket: "network",
+      label: "Gobuster",
+      description: "Directory/DNS/VHost brute-forcing tool written in Go.",
+      installCommand: "apt install -y gobuster",
+      checkCommand: "which gobuster",
+      size: "10 MB",
+    },
+    {
+      name: "dirsearch",
+      type: "binary",
+      bucket: "network",
+      label: "dirsearch",
+      description: "Web path scanner with recursive brute-force capabilities.",
+      installCommand: "python3 -m pip install dirsearch",
+      checkCommand: "which dirsearch",
+      size: "5 MB",
+    },
+    {
+      name: "wfuzz",
+      type: "binary",
+      bucket: "network",
+      label: "wfuzz",
+      description: "Web application brute-forcer with flexible payloads and filters.",
+      installCommand: "python3 -m pip install wfuzz",
+      checkCommand: "which wfuzz",
+      size: "5 MB",
+    },
+    {
+      name: "subfinder",
+      type: "binary",
+      bucket: "network",
+      label: "Subfinder",
+      description: "Fast passive subdomain enumeration tool.",
+      installCommand: "apt install -y subfinder || go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+      checkCommand: "which subfinder",
+      size: "15 MB",
+    },
+    {
+      name: "amass",
+      type: "binary",
+      bucket: "network",
+      label: "Amass",
+      description: "In-depth attack surface mapping and asset discovery.",
+      installCommand: "apt install -y amass",
+      checkCommand: "which amass",
+      size: "30 MB",
+    },
+    {
+      name: "httpx",
+      type: "binary",
+      bucket: "network",
+      label: "httpx",
+      description: "Fast multi-purpose HTTP toolkit for probing and fingerprinting.",
+      installCommand: "apt install -y httpx || go install github.com/projectdiscovery/httpx/cmd/httpx@latest",
+      checkCommand: "which httpx",
+      size: "15 MB",
+    },
+    {
+      name: "naabu",
+      type: "binary",
+      bucket: "network",
+      label: "naabu",
+      description: "Fast port scanner written in Go, integrates with other ProjectDiscovery tools.",
+      installCommand: "apt install -y naabu || go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+      checkCommand: "which naabu",
+      size: "15 MB",
+    },
+    {
+      name: "katana",
+      type: "binary",
+      bucket: "network",
+      label: "Katana",
+      description: "Next-generation crawling and spidering framework.",
+      installCommand: "go install github.com/projectdiscovery/katana/cmd/katana@latest",
+      checkCommand: "which katana",
+      size: "15 MB",
+    },
+    {
+      name: "whatweb",
+      type: "binary",
+      bucket: "network",
+      label: "WhatWeb",
+      description: "Web technology fingerprinting — identify CMS, frameworks, libraries.",
+      installCommand: "apt install -y whatweb",
+      checkCommand: "which whatweb",
+      size: "10 MB",
+    },
+    {
+      name: "wpscan",
+      type: "binary",
+      bucket: "network",
+      label: "WPScan",
+      description: "WordPress vulnerability scanner.",
+      installCommand: "gem install wpscan",
+      checkCommand: "which wpscan",
+      size: "15 MB",
+    },
+    {
+      name: "dalfox",
+      type: "binary",
+      bucket: "network",
+      label: "DalFox",
+      description: "Parameter analysis and XSS scanning tool.",
+      installCommand: "go install github.com/hahwul/dalfox/v2@latest",
+      checkCommand: "which dalfox",
+      size: "10 MB",
+    },
+    {
+      name: "waybackurls",
+      type: "binary",
+      bucket: "network",
+      label: "WayBackURLs",
+      description: "Fetch known URLs from the Wayback Machine for a domain.",
+      installCommand: "go install github.com/tomnomnom/waybackurls@latest",
+      checkCommand: "which waybackurls",
+      size: "5 MB",
+    },
+    {
+      name: "gau",
+      type: "binary",
+      bucket: "network",
+      label: "gau",
+      description: "Fetch known URLs from AlienVault OTX, Wayback Machine, and Common Crawl.",
+      installCommand: "go install github.com/lc/gau/v2/cmd/gau@latest",
+      checkCommand: "which gau",
+      size: "5 MB",
+    },
+    {
+      name: "gospider",
+      type: "binary",
+      bucket: "network",
+      label: "GoSpider",
+      description: "Fast web spider written in Go.",
+      installCommand: "go install github.com/jaeles-project/gospider@latest",
+      checkCommand: "which gospider",
+      size: "10 MB",
+    },
+    {
+      name: "paramiko",
+      type: "python_package",
+      bucket: "network",
+      label: "Paramiko",
+      description: "SSH client library. Programmatic remote command execution.",
+      installCommand: "python3 -m pip install paramiko",
+      checkCommand: "python3 -c 'import paramiko'",
+      size: "5 MB",
+    },
+    {
+      name: "dnspython",
+      type: "python_package",
+      bucket: "network",
+      label: "dnspython",
+      description: "DNS toolkit. Queries, zone transfers, record manipulation from Python.",
+      installCommand: "python3 -m pip install dnspython",
+      checkCommand: "python3 -c 'import dns'",
+      size: "2 MB",
+    },
+    {
+      name: "impacket",
+      type: "python_package",
+      bucket: "network",
+      label: "Impacket",
+      description: "Network protocol library. SMB, LDAP, Kerberos, MSSQL. Essential for AD/Windows.",
+      installCommand: "python3 -m pip install impacket",
+      checkCommand: "python3 -c 'import impacket'",
+      size: "20 MB",
+    },
+  ],
+};
+
+const webBucket: CapabilityBucket = {
+  id: "web",
+  label: "Web Application",
+  description: "Web application security testing: scanning, fuzzing, injection, authentication attacks, and API testing.",
+  promptContext: `Web application capabilities available:
+- nikto: nikto -h http://target — web server misconfiguration scanner
+- nuclei: nuclei -u http://target — fast template-based vulnerability scanner
+- commix: commix --url="http://target/page?cmd=id" — command injection
+- xsser: xsser -u "http://target/page?q=XSS" — XSS detection
+- jwt_tool: python3 jwt_tool.py <token> -T — JWT attack toolkit
+- wapiti: wapiti -u http://target — web vulnerability scanner
+- arjun: arjun -u http://target/page — HTTP parameter discovery
+Python: requests-html (JS rendering), PyJWT (JWT decode/encode)`,
+  capabilities: [
+    {
+      name: "nikto",
+      type: "binary",
+      bucket: "web",
+      label: "Nikto",
+      description: "Web server scanner. Detects dangerous files, outdated software, misconfigurations.",
+      usageHint: "nikto -h http://target -o output.txt",
+      installCommand: "apt install -y nikto",
+      checkCommand: "which nikto",
+      size: "5 MB",
+    },
+    {
+      name: "nuclei",
+      type: "binary",
+      bucket: "web",
+      label: "Nuclei",
+      description: "Fast template-based vulnerability scanner. 9000+ templates for CVEs, misconfigs, exposures.",
+      usageHint: "nuclei -u http://target -t /root/nuclei-templates",
+      installCommand: "apt install -y nuclei || go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+      checkCommand: "which nuclei",
+      size: "20 MB",
+    },
+    {
+      name: "commix",
+      type: "binary",
+      bucket: "web",
+      label: "Commix",
+      description: "Automated command injection exploitation tool.",
+      usageHint: "commix --url=\"http://target/page?cmd=id\"",
+      installCommand: "apt install -y commix",
+      checkCommand: "which commix",
+      size: "10 MB",
+    },
+    {
+      name: "xsser",
+      type: "binary",
+      bucket: "web",
+      label: "XSSer",
+      description: "Automated XSS detection and exploitation framework.",
+      usageHint: "xsser -u \"http://target/page?q=XSS\"",
+      installCommand: "python3 -m pip install xsser",
+      checkCommand: "which xsser",
+      size: "5 MB",
+    },
+    {
+      name: "wapiti",
+      type: "binary",
+      bucket: "web",
+      label: "Wapiti",
+      description: "Web vulnerability scanner. Detects XSS, SQLi, LFI, RCE, SSRF, XXE.",
+      usageHint: "wapiti -u http://target -f html -o report.html",
+      installCommand: "python3 -m pip install wapiti3",
+      checkCommand: "which wapiti",
+      size: "15 MB",
+    },
+    {
+      name: "arjun",
+      type: "binary",
+      bucket: "web",
+      label: "Arjun",
+      description: "HTTP parameter discovery. Find hidden GET/POST parameters.",
+      usageHint: "arjun -u http://target/page",
+      installCommand: "python3 -m pip install arjun",
+      checkCommand: "which arjun",
+      size: "5 MB",
+    },
+    {
+      name: "jwt_tool",
+      type: "binary",
+      bucket: "web",
+      label: "jwt_tool",
+      description: "JWT attack toolkit. Algorithm confusion, none attack, brute-force secret.",
+      usageHint: "python3 jwt_tool.py <token> -T",
+      installCommand: "git clone https://github.com/ticarpi/jwt_tool /opt/jwt_tool && python3 -m pip install -r /opt/jwt_tool/requirements.txt && ln -sf /opt/jwt_tool/jwt_tool.py /usr/local/bin/jwt_tool",
+      checkCommand: "which jwt_tool || test -f /opt/jwt_tool/jwt_tool.py",
+      size: "5 MB",
+    },
+    {
+      name: "requests-html",
+      type: "python_package",
+      bucket: "web",
+      label: "requests-html",
+      description: "HTTP requests with JavaScript rendering support.",
+      installCommand: "python3 -m pip install requests-html",
+      checkCommand: "python3 -c 'import requests_html'",
+      size: "5 MB",
+    },
+    {
+      name: "PyJWT",
+      type: "python_package",
+      bucket: "web",
+      label: "PyJWT",
+      description: "Decode, encode and verify JWT tokens from Python scripts.",
+      installCommand: "python3 -m pip install PyJWT",
+      checkCommand: "python3 -c 'import jwt'",
+      size: "1 MB",
+    },
+  ],
+};
+
+const cloudBucket: CapabilityBucket = {
+  id: "cloud",
+  label: "Cloud",
+  description:
+    "Cloud provider CLIs plus enumeration, privilege-escalation, secrets-scanning and container-registry tooling for AWS, GCP, Azure, Alibaba, DigitalOcean and Kubernetes.",
+  promptContext: `Cloud capabilities available:
+- aws: aws sts get-caller-identity — always identify the principal first. Key CTF verbs:
+  s3 ls/cp --no-sign-request, ec2 describe-snapshots --owner-ids all --filters Name=status,Values=completed,
+  ec2 copy-snapshot + register-image (mount a public EBS snapshot), sns subscribe, secretsmanager get-secret-value,
+  ssm get-parameters-by-path, lambda get-function, sts assume-role. Add --region to sweep all regions.
+- gcloud / gsutil: gcloud auth activate-service-account --key-file=sa.json; gsutil ls gs://bucket.
+  Many GCP challenges are solved with raw curl against googleapis.com using a metadata Bearer token —
+  see storage.googleapis.com, secretmanager.googleapis.com and iamcredentials.googleapis.com
+  (generateAccessToken for service-account impersonation).
+- az: az account show; az storage blob list. SAS-URL manipulation is a recurring Azure challenge theme.
+- aliyun / doctl: Alibaba Cloud and DigitalOcean CLIs — Cloud Village hosts challenges on both.
+- kubectl: kubectl get pods/secrets -A; kubectl auth can-i --list — for exposed kubeconfigs and SA tokens.
+- enumerate-iam: enumerate-iam --access-key AKIA... --secret-key ... — brute-force which API calls a
+  leaked key can make. Run this FIRST whenever you obtain unknown AWS credentials.
+- pacu: automated AWS exploitation framework; run_recon / iam__privesc_scan modules.
+- cloudfox: cloudfox aws --profile p all-checks — fast attack-path enumeration.
+- scout / prowler: full multi-cloud security posture audits (slower, very thorough).
+- s3scanner: s3scanner scan -b bucketname — find open/misconfigured buckets.
+- trufflehog / gitleaks: scan repos, filesystems and container layers for leaked cloud credentials.
+- crane / regctl: pull and inspect container images and layers WITHOUT a docker daemon —
+  crane export <image> - | tar -tv; the flag is often in a stale ECR/GCR image layer.
+- checkov / cloudsplaining: analyse Terraform and IAM policies for the intended misconfiguration.
+- roadrecon: Azure AD / Entra ID enumeration.
+- cloud-python: a venv python with boto3, google-cloud-*, azure-* and kubernetes preloaded.
+  Use it for anything the CLIs can't express: cloud-python script.py
+Metadata endpoints worth remembering (SSRF targets):
+  AWS   http://169.254.169.254/latest/meta-data/iam/security-credentials/ (IMDSv2 needs a PUT token)
+  GCP   http://metadata.google.internal/computeMetadata/v1/ with header 'Metadata-Flavor: Google'
+  Azure http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01 with 'Metadata: true'`,
+  capabilities: [
+    {
+      name: "aws",
+      type: "binary",
+      bucket: "cloud",
+      label: "AWS CLI v2",
+      description:
+        "Official AWS CLI. The single most-used tool in Cloud Village CTFs — S3, EC2 snapshots, SNS, Secrets Manager, SSM, Lambda, STS.",
+      usageHint: "aws sts get-caller-identity; aws s3 ls s3://bucket --no-sign-request",
+      installCommand:
+        "curl -fsSL 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o /tmp/awscliv2.zip && unzip -qo /tmp/awscliv2.zip -d /tmp && /tmp/aws/install --update",
+      installCommandDarwin: "brew install awscli",
+      checkCommand: "which aws",
+      size: "120 MB",
+    },
+    {
+      name: "gcloud",
+      type: "binary",
+      bucket: "cloud",
+      label: "Google Cloud SDK",
+      description:
+        "gcloud, gsutil and bq. Service-account activation, GCS bucket access, Secret Manager, Cloud Build artifacts.",
+      usageHint: "gcloud auth activate-service-account --key-file=sa.json; gsutil ls gs://bucket",
+      installCommand:
+        "curl -fsSL 'https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz' -o /tmp/gcloud.tgz && tar -xzf /tmp/gcloud.tgz -C /opt && /opt/google-cloud-sdk/install.sh -q --path-update false && ln -sf /opt/google-cloud-sdk/bin/gcloud /opt/google-cloud-sdk/bin/gsutil /opt/google-cloud-sdk/bin/bq /usr/local/bin/",
+      installCommandDarwin: "brew install --cask google-cloud-sdk",
+      checkCommand: "which gcloud",
+      size: "200 MB",
+    },
+    {
+      name: "az",
+      type: "binary",
+      bucket: "cloud",
+      label: "Azure CLI",
+      description:
+        "Azure CLI. Storage blobs, SAS URLs, key vaults, managed identity — the core Azure challenge surface.",
+      usageHint: "az account show; az storage blob list --account-name acct -c container",
+      installCommand: "curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash",
+      installCommandDarwin: "brew install azure-cli",
+      checkCommand: "which az",
+      size: "100 MB",
+    },
+    {
+      name: "aliyun",
+      type: "binary",
+      bucket: "cloud",
+      label: "Alibaba Cloud CLI",
+      description: "Alibaba Cloud CLI. Cloud Village explicitly hosts challenges on Alibaba Cloud.",
+      usageHint: "aliyun oss ls; aliyun ecs DescribeInstances",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/aliyun/aliyun-cli/releases/latest | grep -o 'https://[^\"]*aliyun-cli-linux-[0-9.]*-amd64\\.tgz' | head -1)\" -o /tmp/aliyun.tgz && tar -xzf /tmp/aliyun.tgz -C /usr/local/bin aliyun",
+      checkCommand: "which aliyun",
+      size: "30 MB",
+    },
+    {
+      name: "doctl",
+      type: "binary",
+      bucket: "cloud",
+      label: "DigitalOcean CLI",
+      description: "DigitalOcean CLI. Spaces buckets, droplets, and DO-hosted Cloud Village challenges.",
+      usageHint: "doctl compute droplet list; doctl auth init",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/digitalocean/doctl/releases/latest | grep -o 'https://[^\\\"]*linux-amd64.tar.gz' | head -1)\" -o /tmp/doctl.tgz && tar -xzf /tmp/doctl.tgz -C /usr/local/bin doctl",
+      installCommandDarwin: "brew install doctl",
+      checkCommand: "which doctl",
+      size: "15 MB",
+    },
+    {
+      name: "kubectl",
+      type: "binary",
+      bucket: "cloud",
+      label: "kubectl",
+      description:
+        "Kubernetes CLI. For exposed kubeconfigs, service-account tokens, and container-escape challenges.",
+      usageHint: "kubectl auth can-i --list; kubectl get secrets -A -o yaml",
+      installCommand:
+        "curl -fsSL \"https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl\" -o /usr/local/bin/kubectl && chmod +x /usr/local/bin/kubectl",
+      installCommandDarwin: "brew install kubectl",
+      checkCommand: "which kubectl",
+      size: "50 MB",
+    },
+    {
+      name: "enumerate-iam",
+      type: "binary",
+      bucket: "cloud",
+      label: "enumerate-iam",
+      description:
+        "Brute-forces which AWS API calls a set of credentials is permitted to make. Run first on any leaked key pair.",
+      usageHint: "enumerate-iam --access-key AKIA... --secret-key ...",
+      installCommand:
+        "git clone --depth 1 https://github.com/andresriancho/enumerate-iam.git /opt/enumerate-iam && python3 -m venv /opt/enumerate-iam/venv && /opt/enumerate-iam/venv/bin/pip install -r /opt/enumerate-iam/requirements.txt && printf '#!/bin/sh\\nexec env PYTHONPATH=/opt/enumerate-iam /opt/enumerate-iam/venv/bin/python /opt/enumerate-iam/enumerate-iam.py \"$@\"\\n' > /usr/local/bin/enumerate-iam && chmod +x /usr/local/bin/enumerate-iam",
+      checkCommand: "which enumerate-iam",
+      size: "50 MB",
+    },
+    {
+      name: "pacu",
+      type: "binary",
+      bucket: "cloud",
+      label: "Pacu",
+      description:
+        "AWS exploitation framework by Rhino Security. Recon and IAM privilege-escalation modules.",
+      usageHint: "pacu; then: run iam__enum_permissions / run iam__privesc_scan",
+      installCommand: "pipx install pacu || python3 -m pip install --break-system-packages pacu",
+      checkCommand: "which pacu",
+      size: "80 MB",
+    },
+    {
+      name: "cloudfox",
+      type: "binary",
+      bucket: "cloud",
+      label: "CloudFox",
+      description:
+        "BishopFox attack-path enumeration for AWS/Azure/GCP. Fastest way to map what a credential can reach.",
+      usageHint: "cloudfox aws --profile ctf all-checks",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/BishopFox/cloudfox/releases/latest | grep -o 'https://[^\"]*cloudfox-linux-amd64\\.zip' | head -1)\" -o /tmp/cf.zip && unzip -qo /tmp/cf.zip -d /tmp/cf && install -m755 \"$(find /tmp/cf -name cloudfox -type f | head -1)\" /usr/local/bin/cloudfox",
+      installCommandDarwin: "brew install cloudfox",
+      checkCommand: "which cloudfox",
+      size: "40 MB",
+    },
+    {
+      name: "scout",
+      type: "binary",
+      bucket: "cloud",
+      label: "ScoutSuite",
+      description: "Multi-cloud security auditing. Full posture report across AWS, Azure, GCP, Alibaba.",
+      usageHint: "scout aws --profile ctf",
+      installCommand: "pipx install scoutsuite || python3 -m pip install --break-system-packages scoutsuite",
+      checkCommand: "which scout",
+      size: "60 MB",
+    },
+    {
+      name: "prowler",
+      type: "binary",
+      bucket: "cloud",
+      label: "Prowler",
+      description: "Deep multi-cloud security assessment with hundreds of checks. Thorough but slow.",
+      usageHint: "prowler aws --profile ctf",
+      installCommand: "pipx install prowler || python3 -m pip install --break-system-packages prowler",
+      checkCommand: "which prowler",
+      size: "100 MB",
+    },
+    {
+      name: "s3scanner",
+      type: "binary",
+      bucket: "cloud",
+      label: "S3Scanner",
+      description: "Finds open and misconfigured S3-compatible buckets and dumps their contents.",
+      usageHint: "s3scanner scan -b bucket-name",
+      installCommand: "pipx install s3scanner || python3 -m pip install --break-system-packages s3scanner",
+      checkCommand: "which s3scanner",
+      size: "10 MB",
+    },
+    {
+      name: "cloudsplaining",
+      type: "binary",
+      bucket: "cloud",
+      label: "Cloudsplaining",
+      description: "IAM policy analysis. Flags over-permissive policies and privilege-escalation paths.",
+      usageHint: "cloudsplaining scan-policy-file --input-file policy.json",
+      installCommand: "pipx install cloudsplaining || python3 -m pip install --break-system-packages cloudsplaining",
+      checkCommand: "which cloudsplaining",
+      size: "20 MB",
+    },
+    {
+      name: "roadrecon",
+      type: "binary",
+      bucket: "cloud",
+      label: "ROADrecon",
+      description: "Azure AD / Entra ID enumeration and offline exploration of tenant data.",
+      usageHint: "roadrecon auth -u user@tenant -p pass; roadrecon gather",
+      installCommand: "pipx install roadrecon || python3 -m pip install --break-system-packages roadrecon",
+      checkCommand: "which roadrecon",
+      size: "40 MB",
+    },
+    {
+      name: "trufflehog",
+      type: "binary",
+      bucket: "cloud",
+      label: "TruffleHog",
+      description:
+        "Verified secret scanning across git history, filesystems, S3 buckets and container images.",
+      usageHint: "trufflehog filesystem ./dir --only-verified; trufflehog git https://repo",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/trufflesecurity/trufflehog/releases/latest | grep -o 'https://[^\\\"]*linux_amd64.tar.gz' | head -1)\" -o /tmp/th.tgz && tar -xzf /tmp/th.tgz -C /usr/local/bin trufflehog",
+      installCommandDarwin: "brew install trufflehog",
+      checkCommand: "which trufflehog",
+      size: "40 MB",
+    },
+    {
+      name: "gitleaks",
+      type: "binary",
+      bucket: "cloud",
+      label: "Gitleaks",
+      description: "Fast git-history secret scanner. Catches keys committed then deleted.",
+      usageHint: "gitleaks detect --source . -v",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep -o 'https://[^\\\"]*linux_x64.tar.gz' | head -1)\" -o /tmp/gl.tgz && tar -xzf /tmp/gl.tgz -C /usr/local/bin gitleaks",
+      installCommandDarwin: "brew install gitleaks",
+      checkCommand: "which gitleaks",
+      size: "15 MB",
+    },
+    {
+      name: "crane",
+      type: "binary",
+      bucket: "cloud",
+      label: "crane",
+      description:
+        "Pull, inspect and export container images without a docker daemon. For ECR/GCR image-layer challenges.",
+      usageHint: "crane manifest <image>; crane export <image> - | tar -tv",
+      installCommand:
+        "curl -fsSL https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz -o /tmp/crane.tgz && tar -xzf /tmp/crane.tgz -C /usr/local/bin crane",
+      installCommandDarwin: "brew install crane",
+      checkCommand: "which crane",
+      size: "20 MB",
+    },
+    {
+      name: "regctl",
+      type: "binary",
+      bucket: "cloud",
+      label: "regctl",
+      description: "Registry client for inspecting image manifests, layers and blobs across registries.",
+      usageHint: "regctl image inspect <image>; regctl blob get <repo> <digest>",
+      installCommand:
+        "curl -fsSL https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 -o /usr/local/bin/regctl && chmod +x /usr/local/bin/regctl",
+      checkCommand: "which regctl",
+      size: "15 MB",
+    },
+    {
+      name: "checkov",
+      type: "binary",
+      bucket: "cloud",
+      label: "Checkov",
+      description:
+        "Static analysis for Terraform/CloudFormation/Kubernetes IaC. Points straight at the planted misconfiguration.",
+      usageHint: "checkov -f main.tf",
+      installCommand: "pipx install checkov || python3 -m pip install --break-system-packages checkov",
+      checkCommand: "which checkov",
+      size: "60 MB",
+    },
+    {
+      name: "yq",
+      type: "binary",
+      bucket: "cloud",
+      label: "yq",
+      description: "YAML/JSON processor. Parsing kubeconfigs, CloudFormation, GitHub Actions workflows.",
+      usageHint: "yq '.clusters[].cluster.server' kubeconfig.yaml",
+      installCommand:
+        "curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq",
+      installCommandDarwin: "brew install yq",
+      checkCommand: "which yq",
+      size: "10 MB",
+    },
+    {
+      name: "firefox_decrypt",
+      type: "binary",
+      bucket: "cloud",
+      label: "firefox_decrypt",
+      description:
+        "Decrypts saved credentials from a Firefox profile (logins.json + key4.db). Used in Cloud Village 2024.",
+      usageHint: "firefox_decrypt /path/to/profile",
+      installCommand:
+        "git clone --depth 1 https://github.com/unode/firefox_decrypt.git /opt/firefox_decrypt && printf '#!/bin/sh\\nexec python3 /opt/firefox_decrypt/firefox_decrypt.py \"$@\"\\n' > /usr/local/bin/firefox_decrypt && chmod +x /usr/local/bin/firefox_decrypt",
+      checkCommand: "which firefox_decrypt",
+      size: "5 MB",
+    },
+    {
+      name: "boto3",
+      type: "python_package",
+      bucket: "cloud",
+      label: "boto3",
+      description:
+        "AWS SDK for Python. For anything the CLI can't express — unsigned requests, cross-region sweeps, custom signing.",
+      usageHint: "import boto3; boto3.client('s3', region_name='us-east-1')",
+      installCommand: "python3 -m pip install --break-system-packages boto3 botocore",
+      checkCommand: "python3 -c 'import boto3'",
+      size: "20 MB",
+    },
+    {
+      name: "google-cloud-storage",
+      type: "python_package",
+      bucket: "cloud",
+      label: "google-cloud SDK (Python)",
+      description: "GCP SDK for Python — storage, auth and generic API client for token-based access.",
+      installCommand:
+        "python3 -m pip install --break-system-packages google-cloud-storage google-auth google-api-python-client",
+      checkCommand: "python3 -c 'import google.cloud.storage'",
+      size: "30 MB",
+    },
+    {
+      name: "azure-identity",
+      type: "python_package",
+      bucket: "cloud",
+      label: "azure SDK (Python)",
+      description: "Azure SDK for Python — identity, blob storage and resource management.",
+      installCommand:
+        "python3 -m pip install --break-system-packages azure-identity azure-storage-blob azure-mgmt-resource",
+      checkCommand: "python3 -c 'import azure.identity'",
+      size: "30 MB",
+    },
+    {
+      name: "kubernetes",
+      type: "python_package",
+      bucket: "cloud",
+      label: "kubernetes (Python)",
+      description: "Kubernetes API client for Python. Scripted cluster enumeration from a stolen token.",
+      installCommand: "python3 -m pip install --break-system-packages kubernetes",
+      checkCommand: "python3 -c 'import kubernetes'",
+      size: "15 MB",
+    },
+  ],
+};
+
+export const capabilityBuckets: CapabilityBucket[] = [
+  coreBucket,
+  networkBucket,
+  revBucket,
+  pwnBucket,
+  cryptoBucket,
+  forensicsBucket,
+  stegoBucket,
+  webBucket,
+  cloudBucket,
+];
+
+export const allCapabilities: Capability[] = capabilityBuckets.flatMap(
+  (b) => b.capabilities
+);
+
+export function getCapabilityByName(name: string): Capability | undefined {
+  return allCapabilities.find((c) => c.name === name);
+}
+
+/**
+ * Find a capability matching a binary name or Python module that failed.
+ * Tries exact name match first, then checks if checkCommand references the name.
+ */
+export function findCapabilityForCommand(missing: string): Capability | undefined {
+  const lower = missing.toLowerCase().replace(/^['"]|['"]$/g, "");
+  const exact = allCapabilities.find((c) => c.name.toLowerCase() === lower);
+  if (exact) return exact;
+
+  return allCapabilities.find((c) => {
+    const check = c.checkCommand.toLowerCase();
+    return check.includes(`which ${lower}`) || check.includes(`import ${lower}`);
+  });
+}
+
+/**
+ * Returns the install command for the given capability and OS.
+ * On macOS (Darwin), uses installCommandDarwin if set, otherwise falls back to brew install.
+ */
+export function getInstallCommandForOS(cap: Capability, isDarwin: boolean): string {
+  if (isDarwin) {
+    if (cap.installCommandDarwin) return cap.installCommandDarwin;
+    // pip/gem install commands work on both; apt commands need brew
+    if (cap.installCommand.startsWith("apt ") || cap.installCommand.startsWith("apt-get ")) {
+      return `brew install ${cap.name}`;
+    }
+    // Go-only install (no apt fallback) needs go first
+    if (
+      cap.installCommand.trimStart().startsWith("go install ") &&
+      !cap.installCommand.includes("apt ")
+    ) {
+      return `brew install go && ${cap.installCommand}`;
+    }
+  }
+  return cap.installCommand;
+}
+
+export function getBucketById(id: string): CapabilityBucket | undefined {
+  return capabilityBuckets.find((b) => b.id === id);
+}
+
+export function getActiveBucketIds(selectedCapabilities: string[]): string[] {
+  const bucketIds = new Set<string>();
+  for (const name of selectedCapabilities) {
+    const cap = getCapabilityByName(name);
+    if (cap) bucketIds.add(cap.bucket);
+  }
+  return Array.from(bucketIds);
+}
+
+export function buildCapabilityPromptContext(
+  installedCapabilities: string[]
+): string {
+  const activeBuckets = getActiveBucketIds(installedCapabilities);
+  const sections: string[] = [];
+
+  for (const bucketId of activeBuckets) {
+    const bucket = getBucketById(bucketId);
+    if (!bucket) continue;
+
+    const installed = bucket.capabilities.filter((c) =>
+      installedCapabilities.includes(c.name)
+    );
+    if (installed.length === 0) continue;
+
+    const lines = installed.map((c) => {
+      const hint = c.usageHint ? `: ${c.usageHint}` : "";
+      return `- ${c.label} (${c.name})${hint} — ${c.description}`;
+    });
+
+    sections.push(`${bucket.label}:\n${lines.join("\n")}`);
+  }
+
+  return sections.join("\n\n");
+}
+
+export function buildDetectionScript(capabilityNames: string[]): string {
+  const checks: string[] = [];
+  for (const name of capabilityNames) {
+    const cap = getCapabilityByName(name);
+    if (!cap) continue;
+    checks.push(
+      `echo -n "${cap.name}:"; ${cap.checkCommand} > /dev/null 2>&1 && echo "yes" || echo "no"`
+    );
+  }
+  // Detection runs over non-interactive SSH, which does not source ~/.bashrc, so
+  // user-local installs (~/.local/bin from pipx and root-less installers, ~/go/bin
+  // from `go install`) would otherwise be reported as missing even when present.
+  // Must match the prefix used in work-host.service.ts so detection and execution agree.
+  const pathPrefix = 'export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"';
+  return [pathPrefix, ...checks].join(" ; ");
+}
+
+export function parseDetectionOutput(
+  output: string
+): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  const lines = output.split("\n").filter(Boolean);
+  for (const line of lines) {
+    const [name, status] = line.split(":");
+    if (name && status) {
+      result[name.trim()] = status.trim() === "yes";
+    }
+  }
+  return result;
+}

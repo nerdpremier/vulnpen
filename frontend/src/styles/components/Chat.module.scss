@@ -1,0 +1,1603 @@
+@import "../_variables";
+
+.chatContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-primary, #0a0a0a);
+}
+
+.messagesArea {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.5rem 2rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  @media (max-width: 768px) {
+    padding: 1rem 1rem 1.5rem;
+  }
+}
+
+.scrollToBottomBtn {
+  position: absolute;
+  bottom: 7.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.4rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(142, 53, 255);
+  background: rgba(142, 53, 255, 0.9);
+  color: var(--primary-text, #fff);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: 0 2px 12px rgba(142, 53, 255, 0.2);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  z-index: 10;
+
+  span {
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+  }
+
+  &:hover {
+    background: rgba(142, 53, 255, 0.25);
+    border-color: rgba(142, 53, 255, 0.6);
+    transform: translateX(-50%) scale(1.03);
+    box-shadow: 0 4px 16px rgba(142, 53, 255, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    bottom: 5.5rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 10px;
+  }
+}
+
+.emptyState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--secondary-text, #888);
+
+  .emptyStateLogo {
+    flex-shrink: 0;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary-text, #fff);
+  }
+
+  p {
+    font-size: 0.875rem;
+    max-width: 400px;
+    text-align: center;
+    line-height: 1.5;
+  }
+}
+
+/* ─── Messages ────────────────────────────────────────────────── */
+
+.message {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.userMessage {
+  align-self: flex-end;
+  max-width: 100%;
+  background: var(--accent-bg, #1a3a5c);
+  border: 1px solid var(--accent-border, #2a5a8c);
+  border-radius: 12px 12px 4px 12px;
+  padding: 0.75rem 1rem;
+  color: var(--primary-text, #fff);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.assistantMessage {
+  align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--primary-text, #e0e0e0);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  padding: 0.5rem 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+
+  p {
+    margin: 0.3em 0;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0.75em 0 0.4em;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  h1 { font-size: 1.2em; }
+  h2 { font-size: 1.1em; }
+  h3 { font-size: 1em; }
+  h4 { font-size: 0.95em; }
+  h5 { font-size: 0.9em; }
+  h6 { font-size: 0.88em; color: var(--secondary-text, #aaa); }
+
+  ul, ol {
+    margin: 0.4em 0;
+    padding-left: 1.5em;
+  }
+
+  li {
+    margin: 0.2em 0;
+  }
+
+  code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.82em;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  pre {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+
+    code {
+      background: none;
+      padding: 0;
+    }
+  }
+}
+
+.streamingCursor {
+  &::after {
+    content: "▊";
+    animation: blink 0.8s step-end infinite;
+    color: var(--accent-color, #4a9eff);
+  }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.systemMessage {
+  align-self: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  color: var(--secondary-text, #888);
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+
+.errorMessage {
+  border-color: rgba(255, 80, 80, 0.3);
+  background: rgba(255, 80, 80, 0.08);
+  color: #ff6b6b;
+}
+
+/* ─── Iteration Limit ─────────────────────────────────────────── */
+
+.iterationLimitBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.65rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(142, 53, 255, 0.34);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(142, 53, 255, 0.13), rgba(74, 158, 255, 0.05));
+}
+
+.iterationLimitCopy {
+  min-width: 0;
+}
+
+.iterationLimitEyebrow {
+  margin-bottom: 0.2rem;
+  color: #b97bff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.iterationLimitTitle {
+  color: var(--primary-text, #fff);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.iterationLimitDescription {
+  max-width: 680px;
+  margin-top: 0.3rem;
+  color: var(--secondary-text, #999);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.iterationLimitActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
+.iterationContinueBtn,
+.iterationStopBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.2rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.iterationContinueBtn {
+  border: 1px solid rgba(142, 53, 255, 0.65);
+  background: #8e35ff;
+  color: #fff;
+
+  &:hover {
+    background: #9b4cff;
+    transform: translateY(-1px);
+  }
+}
+
+.iterationStopBtn {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--secondary-text, #aaa);
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: var(--primary-text, #fff);
+  }
+}
+
+@media (max-width: 760px) {
+  .iterationLimitBanner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .iterationLimitActions {
+    flex-wrap: wrap;
+  }
+}
+
+/* ─── Reasoning Block ────────────────────────────────────────── */
+
+.reasoningBlock {
+  width: 100%;
+  margin: 0.25rem 0;
+  border: 1px solid rgba(250, 200, 50, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(250, 200, 50, 0.03);
+  transition: border-color 0.2s;
+}
+
+.reasoningStreaming {
+  border-color: rgba(250, 200, 50, 0.25);
+
+  .reasoningIcon {
+    animation: pulse 1.5s ease infinite;
+  }
+}
+
+.reasoningHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.78rem;
+  color: var(--secondary-text, #aaa);
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(250, 200, 50, 0.05);
+  }
+}
+
+.reasoningIcon {
+  font-size: 0.82rem;
+  color: #e8c547;
+}
+
+.reasoningLabel {
+  font-weight: 600;
+  color: #e8c547;
+  font-size: 0.78rem;
+}
+
+.reasoningLive {
+  font-size: 0.68rem;
+  color: #e8c547;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(232, 197, 71, 0.1);
+  animation: pulse 1.5s ease infinite;
+}
+
+.reasoningMeta {
+  font-size: 0.68rem;
+  color: var(--secondary-text, #666);
+  margin-left: auto;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.reasoningChevron {
+  font-size: 0.6rem;
+  color: var(--secondary-text, #666);
+  transition: transform 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.reasoningContent {
+  border-top: 1px solid rgba(250, 200, 50, 0.08);
+  max-height: 400px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.15);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  pre {
+    margin: 0;
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.6;
+    color: var(--secondary-text, #aaa);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+/* ─── Tool Call Block ─────────────────────────────────────────── */
+
+.toolCallBlock {
+  width: 100%;
+  min-width: 0;
+  margin: 0.25rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.toolCallHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.8rem;
+  color: var(--secondary-text, #aaa);
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.toolCallCopyBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--secondary-text, #666);
+  cursor: pointer;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--primary-text, #fff);
+  }
+
+  &.copied {
+    color: #52c41a;
+  }
+}
+
+.toolCallIcon {
+  font-size: 0.7rem;
+  transition: transform 0.15s;
+  color: var(--secondary-text, #666);
+}
+
+.toolCallIconOpen {
+  transform: rotate(90deg);
+}
+
+.toolCallName {
+  font-weight: 600;
+  color: var(--accent-color, #4a9eff);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.toolCallArgs {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--secondary-text, #666);
+}
+
+.toolCallStatus {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.toolCallRunning {
+  color: #faad14;
+  background: rgba(250, 173, 20, 0.1);
+}
+
+.toolCallSuccess {
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.1);
+}
+
+.toolCallError {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.1);
+}
+
+.toolCallCodePreview {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  max-height: 300px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.25);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  pre {
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  code {
+    font-family: "JetBrains Mono", monospace !important;
+    background: transparent !important;
+  }
+
+  code span {
+    background: transparent !important;
+  }
+}
+
+.toolCallOutputSection {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.toolCallOutputHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary-text, #666);
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--primary-text, #aaa);
+  }
+}
+
+.toolCallOutput {
+  padding: 0 0.75rem 0.5rem;
+  max-height: 300px;
+  overflow: auto;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  pre {
+    margin: 0;
+    font-size: 0.72rem;
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.5;
+    color: var(--primary-text, #ccc);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
+
+/* ─── Consent Banner ──────────────────────────────────────────── */
+
+.consentBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 0.9rem;
+  background: linear-gradient(180deg, rgba(250, 173, 20, 0.08), rgba(250, 173, 20, 0.04));
+  border: 1px solid rgba(250, 173, 20, 0.18);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  margin: 0.5rem 0;
+
+  .consentInfo {
+    flex: 1;
+
+    .consentHeader {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+
+    .consentBadge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-shrink: 0;
+      padding: 0.28rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(250, 173, 20, 0.12);
+      border: 1px solid rgba(250, 173, 20, 0.22);
+      color: #faad14;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .consentTitleGroup {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .consentTitle {
+      font-weight: 600;
+      color: #ffd666;
+      font-size: 0.84rem;
+      line-height: 1.25;
+    }
+
+    .consentSubtitle {
+      margin-top: 0.15rem;
+      color: rgba(255, 255, 255, 0.58);
+      font-size: 0.72rem;
+      line-height: 1.3;
+    }
+
+    .consentCodePreview {
+      margin-top: 0.55rem;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      max-height: 180px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.22);
+
+      &::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 2px;
+      }
+
+      pre {
+        margin: 0 !important;
+      }
+
+      code {
+        font-family: "JetBrains Mono", monospace !important;
+        background: transparent !important;
+      }
+
+      code span {
+        background: transparent !important;
+      }
+    }
+  }
+
+  .consentActions {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
+
+  .consentApproveBtn,
+  .consentDenyBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+  }
+
+  .consentApproveBtn {
+    background: rgba(82, 196, 26, 0.14);
+    color: #73d13d;
+    border-color: rgba(82, 196, 26, 0.26);
+
+    &:hover {
+      background: rgba(82, 196, 26, 0.22);
+      border-color: rgba(82, 196, 26, 0.42);
+      transform: translateY(-1px);
+    }
+  }
+
+  .consentDenyBtn {
+    background: rgba(255, 77, 79, 0.1);
+    color: #ff7875;
+    border-color: rgba(255, 77, 79, 0.22);
+
+    &:hover {
+      background: rgba(255, 77, 79, 0.18);
+      border-color: rgba(255, 77, 79, 0.36);
+      transform: translateY(-1px);
+    }
+  }
+
+  @media (max-width: 640px) {
+    width: 100%;
+
+    .consentInfo {
+      .consentHeader {
+        gap: 0.6rem;
+      }
+
+      .consentBadge {
+        display: none;
+      }
+    }
+  }
+}
+
+.consentBannerDanger {
+  background: linear-gradient(180deg, rgba(255, 77, 79, 0.12), rgba(255, 77, 79, 0.05));
+  border-color: rgba(255, 77, 79, 0.28);
+  box-shadow: 0 10px 30px rgba(255, 0, 0, 0.08);
+}
+
+.consentBadgeDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 77, 79, 0.16);
+  border: 1px solid rgba(255, 77, 79, 0.32);
+  color: #ff4d4f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ─── Install Suggestion Banner ───────────────────────────────── */
+
+.installBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(22, 119, 255, 0.28);
+  background: linear-gradient(180deg, rgba(22, 119, 255, 0.10), rgba(22, 119, 255, 0.04));
+  box-shadow: 0 10px 30px rgba(22, 119, 255, 0.06);
+  align-self: flex-start;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0;
+
+  .installInfo {
+    .installHeader {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      min-width: 0;
+    }
+
+    .installTitleGroup {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .installTitle {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .installSubtitle {
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.45);
+      margin-top: 0.1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+.installActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.installPrimaryBtn,
+.installDismissBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  height: 2.1rem;
+  padding: 0 0.72rem;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+.installPrimaryBtn {
+  border: 1px solid rgba(22, 119, 255, 0.55);
+  background: rgba(22, 119, 255, 0.18);
+  color: #69a7ff;
+
+  &:hover:not(:disabled) {
+    background: rgba(22, 119, 255, 0.28);
+    border-color: rgba(22, 119, 255, 0.75);
+  }
+}
+
+.installDismissBtn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--secondary-text, #999);
+
+  &:hover:not(:disabled) {
+    color: var(--primary-text, #fff);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+}
+
+.installBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(22, 119, 255, 0.16);
+  border: 1px solid rgba(22, 119, 255, 0.32);
+  color: #1677ff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.installBadgeSuccess {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(82, 196, 26, 0.16);
+  border: 1px solid rgba(82, 196, 26, 0.32);
+  color: #73d13d;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.installError {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: #ff4d4f;
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  background: rgba(255, 77, 79, 0.08);
+  border-radius: 4px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 8rem;
+  overflow-y: auto;
+
+  strong {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .installBanner .installInfo .installHeader {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .installActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* ─── Manual Execution Block ──────────────────────────────────── */
+
+.manualExecBlock {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 90%;
+  margin: 0.5rem 0;
+  border: 1px solid rgba(74, 158, 255, 0.25);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(74, 158, 255, 0.04);
+}
+
+.manualExecHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  background: rgba(74, 158, 255, 0.08);
+  border-bottom: 1px solid rgba(74, 158, 255, 0.12);
+}
+
+.manualExecIcon {
+  font-size: 0.9rem;
+}
+
+.manualExecTitle {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--accent-color, #4a9eff);
+}
+
+.manualExecCommand {
+  position: relative;
+  margin: 0.75rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  padding-right: 2.5rem;
+
+  pre {
+    margin: 0;
+    font-size: 0.78rem;
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.5;
+    color: var(--primary-text, #e0e0e0);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
+
+.manualExecCopyBtn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+  color: var(--secondary-text, #888);
+  font-size: 0.75rem;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--primary-text, #fff);
+  }
+}
+
+.manualExecOutputArea {
+  padding: 0 0.75rem;
+}
+
+.manualExecTextarea {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  color: var(--primary-text, #e0e0e0) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 0.78rem !important;
+  resize: vertical !important;
+
+  &::placeholder {
+    color: var(--secondary-text, #555) !important;
+  }
+
+  &:focus {
+    border-color: var(--accent-color, #4a9eff) !important;
+    box-shadow: none !important;
+  }
+}
+
+.manualExecActions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  justify-content: flex-end;
+}
+
+/* ─── Slash Command Menu ─────────────────────────────────────── */
+
+.slashMenu {
+  position: relative;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated, #141414);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  animation: slideUp 0.15s ease;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slashMenuHeader {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--secondary-text, #666);
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.slashMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.1s;
+
+  &:hover,
+  &.slashMenuItemActive {
+    background: rgba(74, 158, 255, 0.1);
+  }
+}
+
+.slashMenuItemChallenge {
+  align-items: stretch;
+}
+
+.slashChallengeInner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.slashChallengeTitleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+
+  .slashMenuCmd {
+    min-width: 0;
+    flex: 1;
+    word-break: break-word;
+  }
+}
+
+.challengeStatusPill {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.challengeStatus_pending {
+  color: var(--secondary-text, #888);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.challengeStatus_solving {
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.12);
+}
+
+.challengeStatus_solved {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.12);
+}
+
+.challengeStatus_submitted {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.12);
+}
+
+.slashMenuCmd {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent-color, #4a9eff);
+  min-width: 100px;
+}
+
+.slashMenuDesc {
+  font-size: 0.78rem;
+  color: var(--secondary-text, #888);
+}
+
+/* ─── Slash Command Result ───────────────────────────────────── */
+
+.slashCommandResult {
+  width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+  margin: 0.35rem 0;
+  border: 1px solid rgba(74, 158, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(74, 158, 255, 0.03);
+  animation: fadeIn 0.2s ease;
+}
+
+.slashCommandHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  background: rgba(74, 158, 255, 0.06);
+  border-bottom: 1px solid rgba(74, 158, 255, 0.1);
+}
+
+.slashCommandIcon {
+  font-size: 0.85rem;
+}
+
+.slashCommandLabel {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-color, #4a9eff);
+}
+
+.slashCommandContent {
+  padding: 0.75rem 1rem;
+  font-size: 0.84rem;
+  line-height: 1.7;
+  color: var(--primary-text, #e0e0e0);
+
+  h1, h2, h3, h4 {
+    color: var(--primary-text, #fff);
+    margin: 0.6em 0 0.3em;
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
+  h1 { font-size: 1.1em; }
+  h2 { font-size: 1em; }
+  h3 { font-size: 0.92em; }
+  h4 { font-size: 0.88em; color: var(--secondary-text, #aaa); }
+
+  strong {
+    color: var(--primary-text, #fff);
+  }
+
+  code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.12em 0.35em;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  pre {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+
+    code {
+      background: none;
+      padding: 0;
+    }
+  }
+
+  :global(.list-item) {
+    display: block;
+    padding-left: 0.25rem;
+  }
+}
+
+/* ─── Burp Attachment Chip ────────────────────────────────────── */
+
+.attachmentChip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, rgba(74, 158, 255, 0.08), rgba(74, 158, 255, 0.04));
+  border: 1px solid rgba(74, 158, 255, 0.2);
+  border-radius: 10px;
+  animation: fadeIn 0.2s ease;
+}
+
+.attachmentIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(74, 158, 255, 0.12);
+  color: var(--accent-color, #4a9eff);
+  flex-shrink: 0;
+}
+
+.attachmentInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.attachmentMethod {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-color, #4a9eff);
+  padding: 0.1rem 0.35rem;
+  background: rgba(74, 158, 255, 0.1);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.attachmentTarget {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--primary-text, #e0e0e0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentStatus {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--secondary-text, #888);
+  padding: 0.05rem 0.3rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.attachmentDismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--secondary-text, #666);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(255, 80, 80, 0.15);
+    color: #ff6b6b;
+  }
+}
+
+/* ─── Burp Request Block (collapsible in chat) ───────────────── */
+
+.burpRequestBlock {
+  width: 100%;
+  margin: 0.25rem 0;
+  border: 1px solid rgba(74, 158, 255, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(74, 158, 255, 0.04);
+}
+
+.burpRequestHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.8rem;
+  color: var(--secondary-text, #aaa);
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(74, 158, 255, 0.08);
+  }
+}
+
+.burpRequestIcon {
+  font-size: 0.95rem;
+  color: var(--accent-color, #4a9eff);
+  flex-shrink: 0;
+}
+
+.burpRequestMethod {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-color, #4a9eff);
+  padding: 0.1rem 0.4rem;
+  background: rgba(74, 158, 255, 0.12);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.burpRequestTarget {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.73rem;
+  color: var(--primary-text, #e0e0e0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.burpRequestStatus {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--secondary-text, #888);
+  padding: 0.05rem 0.35rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.burpRequestChevron {
+  font-size: 0.6rem;
+  color: var(--secondary-text, #666);
+  transition: transform 0.15s;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.burpRequestBody {
+  border-top: 1px solid rgba(74, 158, 255, 0.1);
+  max-height: 400px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.2);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  pre {
+    margin: 0;
+    padding: 0.75rem;
+    font-size: 0.72rem;
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.5;
+    color: var(--primary-text, #ccc);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
+
+/* ─── Input Area ──────────────────────────────────────────────── */
+
+.inputArea {
+  flex-shrink: 0;
+  padding: 1rem 2rem 1.5rem;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-primary, #0a0a0a);
+
+  @media (max-width: 768px) {
+    padding: 0.75rem 1rem 1rem;
+  }
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.5rem 0.75rem;
+  transition: border-color 0.2s;
+
+  &:focus-within {
+    border-color: var(--accent-color, #4a9eff);
+  }
+
+  textarea {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--primary-text, #fff);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    max-height: 150px;
+    min-height: 32px;
+    padding: 0.2rem 0;
+    font-family: inherit;
+
+    &::placeholder {
+      color: var(--secondary-text, #555);
+    }
+  }
+}
+
+.inputActions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.sendButton,
+.pauseButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+}
+
+.sendButton {
+  background: #4a9eff;
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: #5aadff;
+  }
+}
+
+.pauseButton {
+  background: rgba(255, 80, 80, 0.2);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 80, 80, 0.35);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 80, 80, 0.3);
+  }
+}
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--secondary-text, #666);
+
+  .statusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    &.ready {
+      background: #52c41a;
+    }
+
+    &.running {
+      background: #52c41a;
+      animation: pulse 1.5s ease infinite;
+    }
+
+    &.paused {
+      background: #faad14;
+    }
+
+    &.waitingConsent {
+      background: #faad14;
+      animation: pulse 1.5s ease infinite;
+    }
+  }
+
+  .statusReady {
+    color: #52c41a;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

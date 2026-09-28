@@ -1,0 +1,373 @@
+@import "../_variables";
+
+@keyframes thinkingPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.infoMessage {
+  color: var(--primary-text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.messageBoxContainer {
+  border: none;
+  border-left: 2px solid var(--border-default);
+  background: transparent;
+  margin: 1.5rem 0;
+  margin-bottom: 2rem;
+  border-radius: 0;
+  padding-left: 0.5rem;
+  transition: border-color var(--transition-fast);
+
+  &:hover {
+    border-left-color: var(--primary-purple);
+  }
+
+  :global(.ant-card-body) {
+    padding: 1rem 1.25rem;
+  }
+
+  .actionPanel {
+    position: absolute;
+    right: 1rem;
+    top: 0;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 0.5rem;
+
+    .actionButton {
+      cursor: pointer;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.35rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: var(--primary-bg);
+      color: var(--secondary-text);
+      transition: all var(--transition-fast);
+
+      &:hover {
+        background-color: var(--surface-hover);
+        color: var(--primary-text);
+        border-color: var(--border-default);
+      }
+    }
+  }
+
+  .messageBoxForm {
+    color: var(--primary-text);
+
+    .messageBoxFormItem {
+      :global(label) {
+        font-size: 0.85rem;
+        color: var(--primary-text);
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.01em;
+        font-weight: 500;
+      }
+      :global(.ant-input) {
+        background-color: var(--surface-hover);
+        border: 1px solid var(--border-subtle);
+        height: 2.4rem;
+        color: var(--primary-text);
+        border-radius: 6px;
+        padding: 0.6rem 0.875rem;
+        font-size: 0.875rem;
+        transition: border-color var(--transition-fast);
+
+        &:hover,
+        &:focus {
+          border-color: var(--primary-purple);
+        }
+      }
+      :global(.ant-input::placeholder) {
+        color: var(--secondary-text-500);
+      }
+      :global(.ant-upload-list-item .ant-upload-list-item-name) {
+        color: var(--bugbase-green) !important;
+      }
+      :global(.ant-upload-list-item .anticon) {
+        color: var(--bugbase-green) !important;
+      }
+      :global(.ant-upload-list-item-container .ant-tooltip) {
+        display: none !important;
+      }
+    }
+
+    .submitBtn {
+      padding: 0 1.25rem;
+      height: 2.25rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    .messageBoxLabel {
+      font-size: 0.85rem;
+      color: var(--primary-text);
+      letter-spacing: -0.01em;
+      font-weight: 600;
+    }
+
+    .llmTrace {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+      padding: 0.625rem 0.75rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      background: var(--surface-hover);
+      color: var(--secondary-text);
+      font-size: 0.75rem;
+    }
+
+    .llmTracePrimary {
+      color: var(--primary-text);
+      font-weight: 500;
+      padding-right: 0.25rem;
+    }
+
+    .llmTraceItem {
+      padding: 0.2rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.02);
+      white-space: nowrap;
+    }
+
+    .googleSearchCard {
+      background: var(--surface-hover);
+      border: 1px solid var(--border-subtle);
+      margin: 0.75rem 0;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all var(--transition-fast);
+
+      :global(.ant-card-body) {
+        padding: 0.75rem 1.25rem;
+      }
+
+      &:hover {
+        background: var(--surface-active);
+        border-color: var(--primary-purple);
+      }
+
+      h2 {
+        color: var(--primary-text);
+        font-size: 0.875rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-bottom: 0;
+      }
+
+      a {
+        color: var(--primary-purple);
+        font-size: 0.75rem;
+        font-weight: 400;
+      }
+
+      p {
+        color: var(--secondary-text);
+        font-size: 0.8rem;
+        font-weight: 400;
+        margin-bottom: 0;
+        line-height: 1.4;
+      }
+    }
+
+    .googleSearchCardSelected {
+      background: var(--surface-active);
+      border-color: var(--primary-purple);
+      box-shadow: 0 0 0 1px var(--primary-purple);
+    }
+
+    .messageMarkdownContainer {
+      margin-bottom: 1rem;
+      position: relative;
+
+      :global(.codeStyle) {
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        font-weight: 400 !important;
+        font-family: "JetBrains Mono", "Menlo for powerline", monospace !important;
+        font-size: 0.8rem;
+        background: var(--primary-bg) !important;
+      }
+
+      :global(code) {
+        font-family: "JetBrains Mono", "Menlo for powerline", monospace;
+        font-size: 0.8rem;
+      }
+
+      :global(pre) {
+        background: var(--primary-bg) !important;
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        padding: 1rem;
+      }
+    }
+
+    .showMoreContainer {
+      height: 4rem;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      align-items: flex-end;
+      padding: 0 1rem;
+
+      .showMoreButton {
+        background: none;
+        border: none;
+        color: var(--secondary-text);
+        gap: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: color var(--transition-fast);
+
+        &:hover {
+          color: var(--primary-text);
+        }
+      }
+    }
+
+    .showMoreContainerBackground {
+      background: linear-gradient(
+        0deg,
+        var(--primary-bg) 0%,
+        rgba(#0a0a0a, 0.8) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+    }
+
+    .messageBoxLabelOutput {
+      font-size: 0.8rem;
+      color: var(--text-light);
+      letter-spacing: -0.01em;
+      margin: 0.75rem 0;
+      font-weight: 400;
+      font-family: "JetBrains Mono", "Menlo for powerline", monospace;
+      line-height: 1.6;
+    }
+
+    .loader {
+      color: var(--primary-purple);
+
+      :global(.ant-spin-dot-item) {
+        background-color: var(--primary-purple);
+      }
+    }
+
+    :global(.ant-form-item-label label) {
+      font-size: 0.85rem;
+      color: var(--primary-text);
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.01em;
+      font-weight: 500;
+    }
+    :global(.ant-input) {
+      min-height: 2.4rem;
+      min-width: 25rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: 6px;
+      background: var(--surface-hover) !important;
+      border: 1px solid var(--border-subtle);
+      color: var(--primary-text);
+      font-size: 0.875rem;
+      transition: border-color var(--transition-fast);
+
+      &:hover,
+      &:focus {
+        border-color: var(--primary-purple);
+      }
+    }
+    :global(.ant-input::placeholder) {
+      color: var(--secondary-text);
+    }
+    :global(.ant-radio-group .ant-radio-wrapper) {
+      color: var(--secondary-text);
+      font-size: 0.85rem;
+      transition: color var(--transition-fast);
+
+      &:hover {
+        color: var(--primary-text);
+      }
+    }
+  }
+
+  .divider {
+    border-top: 1px solid var(--border-subtle);
+    margin: 1rem 0 1.5rem;
+  }
+}
+
+.messagestep1Summary {
+  font-size: 0.85rem;
+  color: var(--primary-text);
+  margin: 1rem 0;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+
+  span {
+    color: var(--secondary-text);
+  }
+}
+
+.commandTableContainer {
+  :global(.ant-table-content) {
+    overflow: auto;
+    background: var(--primary-bg) !important;
+    border-radius: 6px;
+  }
+  :global(.ant-table-content .ant-table-tbody .ant-table-row) {
+    background: transparent !important;
+  }
+  :global(.ant-table-content .ant-table-tbody .ant-table-cell-row-hover) {
+    background: var(--surface-hover) !important;
+  }
+  :global(.ant-table-content .ant-table-thead > tr > th) {
+    background-color: var(--primary-bg);
+    color: var(--secondary-text);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: none;
+  }
+  :global(.ant-table-content .ant-table-thead > tr > th::before) {
+    display: none;
+  }
+  :global(.ant-table-content .ant-table-tbody > tr > td) {
+    border: none;
+    color: var(--primary-text);
+    font-size: 0.8rem;
+    font-weight: 400;
+    font-family: "JetBrains Mono", "Menlo for powerline", monospace;
+    background-color: var(--primary-bg);
+  }
+  :global(.ant-table-content .ant-table-placeholder) {
+    border: none;
+    background: var(--primary-bg) !important;
+  }
+  :global(.ant-table-content .ant-table-placeholder .ant-empty-description) {
+    color: var(--secondary-text);
+  }
+  :global(table) {
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+  }
+  :global(table tr:last-child td) {
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+  }
+}

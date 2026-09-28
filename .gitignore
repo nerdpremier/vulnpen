@@ -1,0 +1,35 @@
+# ── Secrets & generated config (NEVER commit these) ──
+config.toml
+backend/.env
+backend/model-registry.json
+frontend/.env
+.env
+*.env.local
+*.env.production
+
+# ── Run script generated files ──
+.run.conf
+.run-state
+docker-compose.override.yml
+ssh-keys/
+
+# ── Runtime data ──
+/kali-data/
+/kali_data/
+/backups/
+
+# ── Dependencies ──
+**/node_modules/
+.pnpm-store/
+
+# ── Editor / OS ──
+**/.DS_Store
+**/.vscode
+
+# ── Local agent/tooling state ──
+/.claude/
+/.codex-tmp/
+/tmp-work/
+
+# ── Generated deliverables (decks, reports) ──
+/output/

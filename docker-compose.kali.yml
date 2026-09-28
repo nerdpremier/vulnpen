@@ -1,0 +1,115 @@
+services:
+  mongodb:
+    container_name: vulnpen-mongodb
+    image: mongo:7
+    volumes:
+      - mongodb-data:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: always
+
+  redis:
+    container_name: vulnpen-redis
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: always
+
+  backend:
+    container_name: vulnpen-backend
+    build: ./backend
+    cap_add:
+      - NET_ADMIN
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/vulnpen
+      REDIS_URL: redis://redis:6379
+      CODEX_HOME: /root/.codex
+      SSH_CONFIG_FILE: /root/.ssh/config
+      WORKSPACE_DIR: /kali-data/workspaces
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - ./kali-data:/kali-data
+      - backend-data:/srv/data
+      - ./backend/.env:/srv/data/.env
+      - ./backend/model-registry.json:/srv/data/model-registry.json
+      - ./config.toml:/srv/data/config.toml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      kali:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+
+  frontend:
+    container_name: vulnpen-frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI:-http://localhost:8080}
+        NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-LOCAL}
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kali:
+    container_name: vulnpen-kali
+    build: ./kali
+    privileged: true
+    ports:
+      - "127.0.0.1:4242:22"
+      - "127.0.0.1:4200:4200"
+      - "127.0.0.1:1194:1194/udp"
+      - "127.0.0.1:9020:9020"
+      - "127.0.0.1:5901:5901"
+    volumes:
+      - ./kali-data:/kali-data
+      - ./backend/.env:/run/vulnpen.env:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/22'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
+    driver: local
+  redis-data:
+    driver: local
+  backend-data:
+    driver: local
+  kali-data:
+    driver: local
