@@ -32,7 +32,10 @@ async function loadModelsQuietly() {
  * happens in Settings > Models whenever the user chooses.
  */
 const ModelSetupGate = ({ children }) => {
-  const { data } = useQuery("unified-models", loadModelsQuietly, {
+  // cacheTime is 0 globally, so the query refetches on every navigation and
+  // `data` is undefined mid-flight — the banner must wait for a settled
+  // result or it flashes on every page change.
+  const { data, isLoading } = useQuery("unified-models", loadModelsQuietly, {
     staleTime: 15 * 1000,
     retryOnMount: false,
     retry: false,
@@ -43,7 +46,7 @@ const ModelSetupGate = ({ children }) => {
 
   return (
     <>
-      {!isConfigured && (
+      {!isConfigured && !isLoading && (
         <div style={{ padding: "0.5rem 1rem 0" }}>
           <Alert
             type="warning"
