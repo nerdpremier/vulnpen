@@ -172,6 +172,14 @@ function categoryNameFor(code: string): string {
   return WSTG_CATEGORIES.find((category) => category.code === code)?.name ?? code;
 }
 
+/** Index in the WSTG v4.2 section order (4.1 INFO → 4.12 …); unknown codes sort last. */
+const CATEGORY_ORDER = new Map<string, number>(
+  WSTG_CATEGORIES.map((category, index) => [category.code as string, index]),
+);
+function categoryOrder(code: string): number {
+  return CATEGORY_ORDER.get(code) ?? CATEGORY_ORDER.size;
+}
+
 /** A test id that does not belong to the static WSTG catalogue (e.g. CUSTOM-01). */
 export function isCustomTestId(testId: string): boolean {
   return !getWstgTest(testId);
@@ -394,7 +402,7 @@ export function computeCoverage(cases: SessionTestCaseDoc[]): TestPlanCoverage {
     byCategory: groupBy(
       (testCase) => [testCase.categoryCode],
       (code) => categoryNameFor(code),
-    ).sort((a, b) => a.key.localeCompare(b.key)),
+    ).sort((a, b) => categoryOrder(a.key) - categoryOrder(b.key)),
   };
 }
 
