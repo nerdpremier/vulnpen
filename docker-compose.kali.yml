@@ -96,5 +96,3 @@ volumes:
     driver: local
   backend-data:
     driver: local
-  kali-data:
-    driver: local

@@ -278,6 +278,9 @@ check_selected_environment() {
         if [[ "${DEPLOY_MODE:-}" == "kali" || "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
             ports+=(4242 4200)
         fi
+        if [[ "${DEPLOY_MODE:-}" == "kali" ]]; then
+            ports+=(9020)
+        fi
         local port listener
         for port in "${ports[@]}"; do
             listener=""
@@ -1212,6 +1215,7 @@ launch_dev() {
     local dev_services="mongodb redis"
     [[ "${DEPLOY_MODE:-}" == "dev-kali" ]] && dev_services="mongodb redis kali"
 
+    save_run_state
     info "Starting infrastructure: ${BOLD}${dev_services}${NC}"
     echo
     compose up ${build_flag} -d ${dev_services}
@@ -1328,7 +1332,7 @@ cmd_config() {
     fi
     echo
     local max_choice=3
-    [[ "${DEV_MODE:-false}" == true ]] && max_choice=5
+    [[ "${DEV_MODE:-false}" == true ]] && max_choice=4
     prompt_input "Choose [1-${max_choice}]:"
     read -r choice
 
@@ -1355,7 +1359,9 @@ cmd_config() {
     if [[ "${DEV_MODE:-false}" != true ]]; then
         if confirm "Restart containers to apply changes?" "y"; then
             ensure_compose_override
-            compose restart
+            # up -d rather than restart so a mode switch (e.g. adding or
+            # removing the kali exploit box) materializes new/removed services.
+            compose up -d --remove-orphans
             info "Containers restarted"
         else
             hint "Runtime-editable settings (Models, SSH) take effect without restart."
@@ -1407,7 +1413,9 @@ cmd_stop() {
     check_prerequisites
     select_mode_for_operations
     section "Stopping VulnPen"
-    compose down
+    # --remove-orphans so services from a previous, different mode (e.g. a
+    # kali container left over from full-kali mode) are stopped too.
+    compose down --remove-orphans
     info "All containers stopped"
 }
 
