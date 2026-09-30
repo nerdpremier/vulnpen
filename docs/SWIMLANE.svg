@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="900" viewBox="0 0 1300 900" font-family="Segoe UI, Tahoma, sans-serif">
+<rect width="1300" height="900" fill="#f6f7fb"/>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker></defs>
+<text x="650.0" y="26" text-anchor="middle" font-size="19" font-weight="700" fill="#222">VulnPen — OWASP WSTG v4.2 Web Pentest Flow (Swim Lane)</text>
+<polygon points="156,38 354,38 368,58 354,78 156,78 170,58" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+<text x="262.0" y="63" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563eb">1. INITIATE &amp; SETUP</text>
+<polygon points="382,38 580,38 594,58 580,78 382,78 396,58" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+<text x="488.0" y="63" text-anchor="middle" font-size="12.5" font-weight="700" fill="#16a34a">2. RECON</text>
+<polygon points="608,38 806,38 820,58 806,78 608,78 622,58" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="714.0" y="63" text-anchor="middle" font-size="12.5" font-weight="700" fill="#ca8a04">3. WSTG TEST PLAN</text>
+<polygon points="834,38 1032,38 1046,58 1032,78 834,78 848,58" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+<text x="940.0" y="63" text-anchor="middle" font-size="12.5" font-weight="700" fill="#ea580c">4. EXECUTE &amp; EVIDENCE</text>
+<polygon points="1060,38 1258,38 1272,58 1258,78 1060,78 1074,58" fill="#fae8ff" stroke="#a21caf" stroke-width="1.5"/>
+<text x="1166.0" y="63" text-anchor="middle" font-size="12.5" font-weight="700" fill="#a21caf">5. MAP &amp; REPORT</text>
+<rect x="150" y="96" width="1140" height="92" fill="#ffe3e3" opacity="0.35" stroke="#d64545" stroke-width="0.7" stroke-dasharray="4 3"/>
+<rect x="8" y="96" width="132" height="92" rx="8" fill="#ffe3e3" stroke="#d64545" stroke-width="1.5"/>
+<text x="74.0" y="139.0" text-anchor="middle" font-size="12" font-weight="700" fill="#d64545">USER</text>
+<text x="74.0" y="155.0" text-anchor="middle" font-size="12" font-weight="700" fill="#d64545">HTML</text>
+<rect x="150" y="196" width="1140" height="104" fill="#e3ecff" opacity="0.35" stroke="#3b5bd6" stroke-width="0.7" stroke-dasharray="4 3"/>
+<rect x="8" y="196" width="132" height="104" rx="8" fill="#e3ecff" stroke="#3b5bd6" stroke-width="1.5"/>
+<text x="74.0" y="245.0" text-anchor="middle" font-size="12" font-weight="700" fill="#3b5bd6">ORCHESTRATOR</text>
+<text x="74.0" y="261.0" text-anchor="middle" font-size="12" font-weight="700" fill="#3b5bd6">AI</text>
+<rect x="150" y="308" width="1140" height="96" fill="#e2f6e6" opacity="0.35" stroke="#2e8b46" stroke-width="0.7" stroke-dasharray="4 3"/>
+<rect x="8" y="308" width="132" height="96" rx="8" fill="#e2f6e6" stroke="#2e8b46" stroke-width="1.5"/>
+<text x="74.0" y="361.0" text-anchor="middle" font-size="12" font-weight="700" fill="#2e8b46">WSTG SPECIALISTS</text>
+<rect x="150" y="412" width="1140" height="100" fill="#fff1d6" opacity="0.35" stroke="#c07f16" stroke-width="0.7" stroke-dasharray="4 3"/>
+<rect x="8" y="412" width="132" height="100" rx="8" fill="#fff1d6" stroke="#c07f16" stroke-width="1.5"/>
+<text x="74.0" y="467.0" text-anchor="middle" font-size="12" font-weight="700" fill="#c07f16">WORKERS → KALI (SSH)</text>
+<rect x="150" y="520" width="1140" height="118" fill="#f0e3ff" opacity="0.35" stroke="#7a2fd6" stroke-width="0.7" stroke-dasharray="4 3"/>
+<rect x="8" y="520" width="132" height="118" rx="8" fill="#f0e3ff" stroke="#7a2fd6" stroke-width="1.5"/>
+<text x="74.0" y="584.0" text-anchor="middle" font-size="12" font-weight="700" fill="#7a2fd6">BURP + BROWSER AGENT</text>
+<rect x="150" y="646" width="1140" height="78" fill="#dff2f5" opacity="0.35" stroke="#1a7f8c" stroke-width="0.7" stroke-dasharray="4 3"/>
+<rect x="8" y="646" width="132" height="78" rx="8" fill="#dff2f5" stroke="#1a7f8c" stroke-width="1.5"/>
+<text x="74.0" y="682.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a7f8c">DATA (MONGO</text>
+<text x="74.0" y="698.0" text-anchor="middle" font-size="12" font-weight="700" fill="#1a7f8c">REDIS)</text>
+<rect x="168" y="119" width="190" height="46" rx="9" fill="#ffffff" stroke="#d64545" stroke-width="1.6"/>
+<text x="263.0" y="140" text-anchor="middle" font-size="10.8" fill="#222">สร้าง Workspace / Session</text>
+<text x="263.0" y="155" text-anchor="middle" font-size="10.8" fill="#222">(เลือก Pentest WSTG)</text>
+<rect x="168" y="225" width="190" height="46" rx="9" fill="#ffffff" stroke="#3b5bd6" stroke-width="1.6"/>
+<text x="263.0" y="246" text-anchor="middle" font-size="10.8" fill="#222">อ่าน env + สร้าง System Prompt</text>
+<text x="263.0" y="261" text-anchor="middle" font-size="10.8" fill="#222">(WSTG v4.2 + capabilities)</text>
+<rect x="168" y="662" width="190" height="46" rx="9" fill="#ffffff" stroke="#1a7f8c" stroke-width="1.6"/>
+<text x="263.0" y="683" text-anchor="middle" font-size="10.8" fill="#222">persist session</text>
+<text x="263.0" y="698" text-anchor="middle" font-size="10.8" fill="#222">(MongoDB)</text>
+<rect x="394" y="119" width="190" height="46" rx="9" fill="#ffffff" stroke="#d64545" stroke-width="1.6"/>
+<text x="489.0" y="140" text-anchor="middle" font-size="10.8" fill="#222">สั่งงานในแชต</text>
+<text x="489.0" y="155" text-anchor="middle" font-size="10.8" fill="#222">/wstg &lt;target&gt;</text>
+<rect x="394" y="232" width="190" height="31" rx="9" fill="#ffffff" stroke="#3b5bd6" stroke-width="1.6"/>
+<text x="489.0" y="253" text-anchor="middle" font-size="10.8" fill="#222">วางแผน Recon + spawn tools</text>
+<rect x="394" y="439" width="190" height="46" rx="9" fill="#ffffff" stroke="#c07f16" stroke-width="1.6"/>
+<text x="489.0" y="460" text-anchor="middle" font-size="10.8" fill="#222">run_bash → SSH :4242</text>
+<text x="489.0" y="475" text-anchor="middle" font-size="10.8" fill="#222">nmap / ffuf / whatweb</text>
+<rect x="620" y="225" width="190" height="46" rx="9" fill="#fff8dc" stroke="#ca8a04" stroke-width="1.6"/>
+<text x="715.0" y="246" text-anchor="middle" font-size="10.8" fill="#222">wstg_test_plan generate</text>
+<text x="715.0" y="261" text-anchor="middle" font-size="10.8" fill="#222">(catalogue 97 / custom)</text>
+<rect x="620" y="119" width="190" height="46" rx="9" fill="#ffffff" stroke="#d64545" stroke-width="1.6"/>
+<text x="715.0" y="140" text-anchor="middle" font-size="10.8" fill="#222">แก้ไข / เพิ่ม case</text>
+<text x="715.0" y="155" text-anchor="middle" font-size="10.8" fill="#222">(ปุ่ม Edit / Add custom)</text>
+<rect x="620" y="662" width="190" height="46" rx="9" fill="#ffffff" stroke="#1a7f8c" stroke-width="1.6"/>
+<text x="715.0" y="683" text-anchor="middle" font-size="10.8" fill="#222">save test plan</text>
+<text x="715.0" y="698" text-anchor="middle" font-size="10.8" fill="#222">(cases + status)</text>
+<rect x="846" y="225" width="190" height="46" rx="9" fill="#ffffff" stroke="#3b5bd6" stroke-width="1.6"/>
+<text x="941.0" y="246" text-anchor="middle" font-size="10.8" fill="#222">spawn subagent รายหมวด</text>
+<text x="941.0" y="261" text-anchor="middle" font-size="10.8" fill="#222">(INPV / ATHN / SESS ...)</text>
+<rect x="846" y="333" width="190" height="46" rx="9" fill="#ffffff" stroke="#2e8b46" stroke-width="1.6"/>
+<text x="941.0" y="354" text-anchor="middle" font-size="10.8" fill="#222">รัน test case ตามแผน</text>
+<text x="941.0" y="369" text-anchor="middle" font-size="10.8" fill="#222">update_case + observations</text>
+<rect x="846" y="119" width="190" height="46" rx="9" fill="#ffffff" stroke="#d64545" stroke-width="1.6"/>
+<text x="941.0" y="140" text-anchor="middle" font-size="10.8" fill="#222">ยืนยัน consent</text>
+<text x="941.0" y="155" text-anchor="middle" font-size="10.8" fill="#222">(requires_consent)</text>
+<rect x="846" y="439" width="190" height="46" rx="9" fill="#ffffff" stroke="#c07f16" stroke-width="1.6"/>
+<text x="941.0" y="460" text-anchor="middle" font-size="10.8" fill="#222">รัน tools + เก็บ evidence</text>
+<text x="941.0" y="475" text-anchor="middle" font-size="10.8" fill="#222">(ไฟล์ใน workspace)</text>
+<rect x="846" y="556" width="190" height="46" rx="9" fill="#ffffff" stroke="#7a2fd6" stroke-width="1.6"/>
+<text x="941.0" y="577" text-anchor="middle" font-size="10.8" fill="#222">browser_action → Chromium</text>
+<text x="941.0" y="592" text-anchor="middle" font-size="10.8" fill="#222">ผ่าน Burp proxy (intercept HTTPS)</text>
+<rect x="1072" y="225" width="190" height="46" rx="9" fill="#ffffff" stroke="#3b5bd6" stroke-width="1.6"/>
+<text x="1167.0" y="246" text-anchor="middle" font-size="10.8" fill="#222">auto-map OWASP (ถ้าตรงจริง)</text>
+<text x="1167.0" y="261" text-anchor="middle" font-size="10.8" fill="#222">สร้าง Report Draft (/report)</text>
+<rect x="1072" y="662" width="190" height="46" rx="9" fill="#ffffff" stroke="#1a7f8c" stroke-width="1.6"/>
+<text x="1167.0" y="683" text-anchor="middle" font-size="10.8" fill="#222">save vulnerabilities</text>
+<text x="1167.0" y="698" text-anchor="middle" font-size="10.8" fill="#222">+ owasp/cwe/cvss (optional)</text>
+<rect x="1072" y="119" width="190" height="46" rx="9" fill="#ffffff" stroke="#d64545" stroke-width="1.6"/>
+<text x="1167.0" y="140" text-anchor="middle" font-size="10.8" fill="#222">ดูหน้า Vulnerabilities</text>
+<text x="1167.0" y="155" text-anchor="middle" font-size="10.8" fill="#222">ตรวจ Report + Export</text>
+<rect x="856" y="584" width="170" height="46" rx="9" fill="#ffffff" stroke="#7a2fd6" stroke-width="1.6"/>
+<text x="941" y="605" text-anchor="middle" font-size="10.8" fill="#222">Burp: history / Intruder</text>
+<text x="941" y="620" text-anchor="middle" font-size="10.8" fill="#222">ผ่าน gRPC :50051</text>
+<line x1="263.0" y1="142.0" x2="263.0" y2="248.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<line x1="263.0" y1="248.0" x2="263.0" y2="685.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<line x1="489.0" y1="142.0" x2="489.0" y2="247.5" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<line x1="489.0" y1="247.5" x2="489.0" y2="462.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="451.0" y="345.75" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="489.0" y="356.75" text-anchor="middle" font-size="9" fill="#444">SSH</text>
+<line x1="489.0" y1="247.5" x2="715.0" y2="248.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<line x1="715.0" y1="248.0" x2="715.0" y2="142.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="677.0" y="186.0" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="715.0" y="197.0" text-anchor="middle" font-size="9" fill="#444">แก้ได้</text>
+<line x1="715.0" y1="248.0" x2="715.0" y2="685.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<line x1="715.0" y1="248.0" x2="941.0" y2="248.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="790.0" y="239.0" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="828.0" y="250.0" text-anchor="middle" font-size="9" fill="#444">เริ่ม execute</text>
+<line x1="941.0" y1="248.0" x2="941.0" y2="356.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="903.0" y="293.0" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="941.0" y="304.0" text-anchor="middle" font-size="9" fill="#444">spawn</text>
+<line x1="941.0" y1="356.0" x2="941.0" y2="462.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="903.0" y="400.0" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="941.0" y="411.0" text-anchor="middle" font-size="9" fill="#444">run tools</text>
+<line x1="941.0" y1="248.0" x2="941.0" y2="579.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="903.0" y="404.5" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="941.0" y="415.5" text-anchor="middle" font-size="9" fill="#444">browser agent</text>
+<line x1="941" y1="607.0" x2="941.0" y2="462.0" stroke="#555" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+<rect x="903.0" y="525.5" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="941.0" y="536.5" text-anchor="middle" font-size="9" fill="#444">proxy</text>
+<line x1="941.0" y1="356.0" x2="1167.0" y2="248.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="1016.0" y="293.0" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="1054.0" y="304.0" text-anchor="middle" font-size="9" fill="#444">findings</text>
+<line x1="941.0" y1="579.0" x2="1167.0" y2="248.0" stroke="#555" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+<rect x="1016.0" y="404.5" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="1054.0" y="415.5" text-anchor="middle" font-size="9" fill="#444">history</text>
+<line x1="1167.0" y1="248.0" x2="1167.0" y2="685.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<line x1="1167.0" y1="248.0" x2="1167.0" y2="142.0" stroke="#555" stroke-width="1.4"  marker-end="url(#arr)"/>
+<rect x="1129.0" y="186.0" width="76" height="14" rx="4" fill="#ffffffcc"/>
+<text x="1167.0" y="197.0" text-anchor="middle" font-size="9" fill="#444">report</text>
+</svg>

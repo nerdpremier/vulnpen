@@ -8,7 +8,6 @@ function createSessionState() {
     pendingConsent: null,
     pendingManualExecution: null,
     subagents: [],
-    swarms: [],
     sidebarExpanded: true,
     historyLoaded: false,
     tokenUsage: null,
@@ -24,8 +23,6 @@ function createSessionState() {
     reasoningRafRef: { current: null },
     slashStreamRef: { current: null },
     toolNameMapRef: { current: {} },
-    swarmProgressBufferRef: { current: [] },
-    swarmProgressRafRef: { current: null },
   };
 }
 
@@ -120,22 +117,6 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
     });
   },
 
-  setSwarms: (sessionId, swarmsOrUpdater) => {
-    set((state) => {
-      const s = state.sessions[sessionId];
-      if (!s) return state;
-      const newSwarms =
-        typeof swarmsOrUpdater === "function"
-          ? swarmsOrUpdater(s.swarms)
-          : swarmsOrUpdater;
-      return {
-        sessions: {
-          ...state.sessions,
-          [sessionId]: { ...s, swarms: newSwarms },
-        },
-      };
-    });
-  },
 
   setSidebarExpanded: (sessionId, expanded) => {
     set((state) => {
@@ -176,7 +157,7 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
     });
   },
 
-  loadHistory: (sessionId, historyMessages, historySubagents, historySwarms) => {
+  loadHistory: (sessionId, historyMessages, historySubagents) => {
     set((state) => {
       const s = state.sessions[sessionId];
       if (!s) return state;
@@ -187,7 +168,6 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
             ...s,
             messages: historyMessages.map((m) => ({ ...m, streaming: false })),
             subagents: historySubagents || s.subagents,
-            swarms: historySwarms || s.swarms,
             historyLoaded: true,
           },
         },

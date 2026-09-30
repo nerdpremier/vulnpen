@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-import type { TestPlanDepth, WstgTestStatus } from "../../knowledge/types";
+import type { WstgTestStatus } from "../../knowledge/types";
 
 const Schema = mongoose.Schema;
 
@@ -90,96 +90,12 @@ export interface SubagentDoc {
   completedAt?: Date;
 }
 
-export type SwarmWinCondition = "first_success" | "all_complete";
-export type SwarmStatus =
-  | "running"
-  | "completed"
-  | "cancelled"
-  | "timed_out"
-  | "paused";
-
-export interface SwarmAgentDoc {
-  agentId: string;
-  task: string;
-  modelLabel: string;
-  modelSpec: {
-    provider: string;
-    model: string;
-  };
-  status: SubagentStatus;
-  result?: string;
-  messages: AgentMessageDoc[];
-  subagents: SubagentDoc[];
-  shells: string[];
-  createdAt: Date;
-  completedAt?: Date;
-}
-
-export interface SwarmFindingDoc {
-  agentId: string;
-  content: string;
-  isSuccess: boolean;
-  timestamp: Date;
-}
-
-export interface SwarmDoc {
-  swarmId: string;
-  goal: string;
-  winCondition: SwarmWinCondition;
-  status: SwarmStatus;
-  agents: SwarmAgentDoc[];
-  findings: SwarmFindingDoc[];
-  winner?: string;
-  timeoutMs?: number;
-  createdAt: Date;
-  completedAt?: Date;
-}
-
 export interface ConnectionStateDoc {
   sshConnected: boolean;
   hostConnected?: boolean;
   hostKind?: "local" | "ssh";
   lastConnectedAt?: Date;
   lastError?: string;
-}
-
-export interface CtfActiveSolveDoc {
-  name: string;
-  safeDir: string;
-  challengeTxt: string;
-  files: string[];
-  category?: string;
-  points?: number;
-  connectionInfo?: string;
-  userNotes?: string;
-  setAt: Date;
-}
-
-export interface CtfSolveRecord {
-  challengeName: string;
-  challengeId?: number;
-  safeDir: string;
-  category: string;
-  status: "solving" | "flag_found" | "incorrect" | "solved" | "submitted";
-  confirmedFlag?: string;
-  attempts: number;
-  startedAt: Date;
-  solvedAt?: Date;
-  submittedToCtfd: boolean;
-  ctfdResult?: string;
-}
-
-export interface CtfConfigDoc {
-  url: string;
-  ctfName: string;
-  authMethod: "token" | "credentials";
-  apiToken?: string;
-  username?: string;
-  sessionCookie?: string;
-  lastSynced?: Date;
-  flagFormat?: string;
-  activeSolve?: CtfActiveSolveDoc;
-  solveHistory?: CtfSolveRecord[];
 }
 
 export interface SessionFindingDoc {
@@ -233,8 +149,6 @@ export interface SessionTestCaseDoc {
   title: string;
   objective: string;
   howToTest: string;
-  owasp: string[];
-  cwe: string[];
   tools: string[];
   evidenceExpectation: string;
   status: SessionTestCaseStatus;
@@ -251,7 +165,6 @@ export interface WebAppTestPlanDoc {
   target: string;
   scope: string;
   notes: string;
-  depth: TestPlanDepth;
   categories: string[];
   cases: SessionTestCaseDoc[];
   createdAt: Date;
@@ -317,10 +230,8 @@ export interface SessionDoc extends mongoose.Document {
   }>;
   shells: ShellDoc[];
   subagents: SubagentDoc[];
-  swarms: SwarmDoc[];
   connectionState: ConnectionStateDoc;
   disabledAgentTools?: string[];
-  ctfConfig?: CtfConfigDoc;
   mcpFindings?: SessionFindingDoc[];
   mcpContext?: McpContextDoc;
   mcpArtifacts?: SessionArtifactDoc[];
@@ -414,67 +325,6 @@ const SubagentSchema = new Schema(
   { _id: false },
 );
 
-const SwarmAgentSchema = new Schema(
-  {
-    agentId: { type: String, required: true },
-    task: { type: String, required: true },
-    modelLabel: { type: String, required: true },
-    modelSpec: {
-      type: {
-        provider: { type: String, required: true },
-        model: { type: String, required: true },
-      },
-      required: true,
-    },
-    status: {
-      type: String,
-      default: "running",
-      enum: ["running", "completed", "failed", "cancelled"],
-    },
-    result: { type: String },
-    messages: { type: [SubagentMessageSchema], default: [] },
-    subagents: { type: [SubagentSchema], default: [] },
-    shells: { type: [String], default: [] },
-    createdAt: { type: Date, default: Date.now },
-    completedAt: { type: Date },
-  },
-  { _id: false },
-);
-
-const SwarmFindingSchema = new Schema(
-  {
-    agentId: { type: String, required: true },
-    content: { type: String, required: true },
-    isSuccess: { type: Boolean, default: false },
-    timestamp: { type: Date, default: Date.now },
-  },
-  { _id: false },
-);
-
-const SwarmSchema = new Schema(
-  {
-    swarmId: { type: String, required: true },
-    goal: { type: String, required: true },
-    winCondition: {
-      type: String,
-      required: true,
-      enum: ["first_success", "all_complete"],
-    },
-    status: {
-      type: String,
-      default: "running",
-      enum: ["running", "completed", "cancelled", "timed_out"],
-    },
-    agents: { type: [SwarmAgentSchema], default: [] },
-    findings: { type: [SwarmFindingSchema], default: [] },
-    winner: { type: String },
-    timeoutMs: { type: Number },
-    createdAt: { type: Date, default: Date.now },
-    completedAt: { type: Date },
-  },
-  { _id: false },
-);
-
 const SessionFindingSchema = new Schema(
   {
     findingId: { type: String, required: true },
@@ -558,8 +408,6 @@ const SessionTestCaseSchema = new Schema(
     title: { type: String, required: true },
     objective: { type: String, default: "" },
     howToTest: { type: String, default: "" },
-    owasp: { type: [String], default: [] },
-    cwe: { type: [String], default: [] },
     tools: { type: [String], default: [] },
     evidenceExpectation: { type: String, default: "" },
     status: {
@@ -589,11 +437,6 @@ const WebAppTestPlanSchema = new Schema(
     target: { type: String, default: "" },
     scope: { type: String, default: "" },
     notes: { type: String, default: "" },
-    depth: {
-      type: String,
-      enum: ["smoke", "standard", "deep", "full"],
-      default: "standard",
-    },
     categories: { type: [String], default: [] },
     cases: { type: [SessionTestCaseSchema], default: [] },
     createdAt: { type: Date, default: Date.now },
@@ -714,7 +557,6 @@ const SessionSchema = new Schema({
   },
   shells: { type: [ShellSchema], default: [] },
   subagents: { type: [SubagentSchema], default: [] },
-  swarms: { type: [SwarmSchema], default: [] },
   connectionState: {
     type: {
       sshConnected: { type: Boolean, default: false },
@@ -728,65 +570,6 @@ const SessionSchema = new Schema({
   disabledAgentTools: {
     type: [{ type: String }],
     default: [],
-  },
-  ctfConfig: {
-    type: {
-      url: { type: String, required: true },
-      ctfName: { type: String, required: true },
-      authMethod: {
-        type: String,
-        required: true,
-        enum: ["token", "credentials"],
-      },
-      apiToken: { type: String },
-      username: { type: String },
-      sessionCookie: { type: String },
-      lastSynced: { type: Date },
-      flagFormat: { type: String },
-      activeSolve: {
-        type: {
-          name: { type: String, required: true },
-          safeDir: { type: String, required: true },
-          challengeTxt: { type: String, required: true },
-          files: { type: [String], default: [] },
-          category: { type: String },
-          points: { type: Number },
-          connectionInfo: { type: String },
-          userNotes: { type: String },
-          setAt: { type: Date, default: Date.now },
-        },
-        default: undefined,
-      },
-      solveHistory: {
-        type: [
-          {
-            challengeName: { type: String, required: true },
-            challengeId: { type: Number },
-            safeDir: { type: String, required: true },
-            category: { type: String, default: "" },
-            status: {
-              type: String,
-              required: true,
-              enum: [
-                "solving",
-                "flag_found",
-                "incorrect",
-                "solved",
-                "submitted",
-              ],
-            },
-            confirmedFlag: { type: String },
-            attempts: { type: Number, default: 0 },
-            startedAt: { type: Date, default: Date.now },
-            solvedAt: { type: Date },
-            submittedToCtfd: { type: Boolean, default: false },
-            ctfdResult: { type: String },
-          },
-        ],
-        default: [],
-      },
-    },
-    default: undefined,
   },
   mcpFindings: {
     type: [SessionFindingSchema],

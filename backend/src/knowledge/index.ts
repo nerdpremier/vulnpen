@@ -31,7 +31,6 @@ export {
 export type {
   OwaspTop10Category,
   OwaspTop10Id,
-  TestPlanDepth,
   WstgCategory,
   WstgCategoryCode,
   WstgTest,

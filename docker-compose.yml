@@ -40,7 +40,7 @@ services:
       WORKSPACE_DIR: /srv/data/workspaces
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
-      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali}"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     cap_add:
@@ -49,9 +49,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:6080:6080"
-      - "127.0.0.1:9020:9020"
     volumes:
-      - ./kali-data:/kali-data
       - backend-data:/srv/data
       - ./backend/.env:/srv/data/.env
       - ./backend/model-registry.json:/srv/data/model-registry.json
@@ -69,18 +67,6 @@ services:
       retries: 24
       start_period: 10s
 
-  frontend:
-    container_name: vulnpen-frontend
-    build:
-      context: ./frontend
-    ports:
-      - "127.0.0.1:3000:3000"
-    env_file:
-      - ./frontend/.env
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
 
 volumes:
   mongodb-data:

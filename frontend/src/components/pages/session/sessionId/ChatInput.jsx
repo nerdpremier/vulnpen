@@ -3,20 +3,7 @@ import styles from "@/styles/components/Chat.module.scss";
 import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import { useQuery } from "react-query";
-import { getCtfChallenges } from "@/services/ctf.service";
 import { getSessionInfo } from "@/services/agent.service";
-import { formatDurationSec } from "@/utils/formatDuration";
-
-function challengeStatusBadge(ch) {
-  const raw = (ch.status || "pending").toLowerCase();
-  const map = {
-    pending: { label: "Pending", tone: "pending" },
-    solving: { label: "Solving", tone: "solving" },
-    solved: { label: "Solved", tone: "solved" },
-    submitted: { label: "Submitted", tone: "submitted" },
-  };
-  return map[raw] || map.pending;
-}
 
 const SLASH_COMMANDS = [
   { name: "summarize", description: "Summarize the entire session so far" },
@@ -27,7 +14,6 @@ const SLASH_COMMANDS = [
   { name: "export", description: "Export findings as a structured report" },
   { name: "shells", description: "List all shell sessions" },
   { name: "reset", description: "Reset agent state to idle" },
-  { name: "solve", description: "Focus on a CTF challenge" },
 ];
 
 export default function ChatInput({
@@ -50,11 +36,6 @@ export default function ChatInput({
     { enabled: !!sessionId, staleTime: 60000 }
   );
 
-  const [challengeList, setChallengeList] = useState([]);
-  const [challengeSelectedIndex, setChallengeSelectedIndex] = useState(0);
-  const solveMenuSessionRef = useRef(null);
-  const autoSolvePopulatedRef = useRef(null);
-
   const isRunning = agentState === "running";
   const canSend = !isRunning && (value.trim().length > 0 || !!burpAttachment) && !disabled;
 
@@ -69,66 +50,11 @@ export default function ChatInput({
 
   const showMenu = slashMatches.length > 0 && !isRunning;
 
-  const isSolveArgMode = useMemo(() => {
-    const trimmed = value.trimStart().toLowerCase();
-    return trimmed.startsWith("/solve ") && !isRunning;
-  }, [value, isRunning]);
-
-  const challengeQuery = useMemo(() => {
-    if (!isSolveArgMode) return "";
-    return value.trimStart().slice(7).replace(/^["']|["']$/g, "").trim().toLowerCase();
-  }, [value, isSolveArgMode]);
-
-  const filteredChallenges = useMemo(() => {
-    if (!isSolveArgMode || challengeList.length === 0) return [];
-    if (!challengeQuery) return challengeList;
-    return challengeList.filter(
-      (c) =>
-        c.name.toLowerCase().includes(challengeQuery) ||
-        c.category.toLowerCase().includes(challengeQuery),
-    );
-  }, [isSolveArgMode, challengeList, challengeQuery]);
-
-  const showChallengeMenu = filteredChallenges.length > 0 && isSolveArgMode;
-
-  useEffect(() => {
-    if (
-      sessionInfo?.isCTF &&
-      sessionInfo?.name &&
-      sessionId &&
-      autoSolvePopulatedRef.current !== sessionId
-    ) {
-      autoSolvePopulatedRef.current = sessionId;
-      // Seed the one-time command after asynchronous session metadata arrives.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setValue(`/solve "${sessionInfo.name}" `);
-    }
-  }, [sessionId, sessionInfo?.isCTF, sessionInfo?.name]);
-
-  useEffect(() => {
-    if (!isSolveArgMode || !sessionId) {
-      solveMenuSessionRef.current = null;
-      return;
-    }
-    if (solveMenuSessionRef.current === sessionId) return;
-    solveMenuSessionRef.current = sessionId;
-    const scopeId = sessionInfo?.workspaceId || sessionId;
-    getCtfChallenges(scopeId)
-      .then((data) => setChallengeList(data.challenges || []))
-      .catch(() => setChallengeList([]));
-  }, [isSolveArgMode, sessionId, sessionInfo?.workspaceId]);
-
   useEffect(() => {
     // A different result set starts keyboard navigation at its first item.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIndex(0);
   }, [slashMatches.length]);
-
-  useEffect(() => {
-    // A different result set starts keyboard navigation at its first item.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setChallengeSelectedIndex(0);
-  }, [filteredChallenges.length]);
 
   const acceptCommand = useCallback(
     (cmd) => {
@@ -136,23 +62,6 @@ export default function ChatInput({
       textareaRef.current?.focus();
     },
     [],
-  );
-
-  const acceptChallenge = useCallback(
-    (ch, send) => {
-      const quoted = `/solve "${ch.name}" `;
-      if (send) {
-        setValue(`/solve "${ch.name}"`);
-        setTimeout(() => {
-          onSend(`/solve "${ch.name}"`);
-          setValue("");
-        }, 0);
-      } else {
-        setValue(quoted);
-        textareaRef.current?.focus();
-      }
-    },
-    [onSend],
   );
 
   const handleSend = useCallback(() => {
@@ -166,40 +75,6 @@ export default function ChatInput({
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (showChallengeMenu) {
-        if (e.key === "ArrowDown") {
-          e.preventDefault();
-          setChallengeSelectedIndex((prev) =>
-            prev < filteredChallenges.length - 1 ? prev + 1 : 0,
-          );
-          return;
-        }
-        if (e.key === "ArrowUp") {
-          e.preventDefault();
-          setChallengeSelectedIndex((prev) =>
-            prev > 0 ? prev - 1 : filteredChallenges.length - 1,
-          );
-          return;
-        }
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const ch = filteredChallenges[challengeSelectedIndex];
-          if (ch) acceptChallenge(ch, false);
-          return;
-        }
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          const ch = filteredChallenges[challengeSelectedIndex];
-          if (ch) acceptChallenge(ch, true);
-          return;
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setValue("");
-          return;
-        }
-      }
-
       if (showMenu) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -243,7 +118,7 @@ export default function ChatInput({
         handleSend();
       }
     },
-    [handleSend, showMenu, showChallengeMenu, slashMatches, selectedIndex, filteredChallenges, challengeSelectedIndex, acceptCommand, acceptChallenge, onSend],
+    [handleSend, showMenu, slashMatches, selectedIndex, acceptCommand, onSend],
   );
 
   const handleInput = useCallback(() => {
@@ -303,47 +178,6 @@ export default function ChatInput({
           >
             <CloseOutlined style={{ fontSize: "0.6rem" }} />
           </button>
-        </div>
-      )}
-
-      {showChallengeMenu && (
-        <div className={styles.slashMenu} ref={menuRef}>
-          <div className={styles.slashMenuHeader}>Challenges</div>
-          {filteredChallenges.map((ch, i) => {
-            const st = challengeStatusBadge(ch);
-            return (
-              <div
-                key={ch.safeDir}
-                className={`${styles.slashMenuItem} ${styles.slashMenuItemChallenge} ${i === challengeSelectedIndex ? styles.slashMenuItemActive : ""}`}
-                onMouseEnter={() => setChallengeSelectedIndex(i)}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  acceptChallenge(ch, true);
-                }}
-              >
-                <div className={styles.slashChallengeInner}>
-                  <div className={styles.slashChallengeTitleRow}>
-                    <span className={styles.slashMenuCmd}>{ch.name}</span>
-                    <span
-                      className={`${styles.challengeStatusPill} ${styles[`challengeStatus_${st.tone}`]}`}
-                    >
-                      {st.label}
-                    </span>
-                  </div>
-                  <span className={styles.slashMenuDesc}>
-                    {ch.category} &middot; {ch.value} pts
-                    {ch.timeToSolveSec != null &&
-                      (ch.status === "solved" || ch.status === "submitted") && (
-                        <>
-                          {" "}
-                          &middot; {formatDurationSec(ch.timeToSolveSec)} to flag
-                        </>
-                      )}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
 

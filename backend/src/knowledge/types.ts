@@ -44,9 +44,6 @@ export type WstgTestStatus =
   | "blocked"
   | "skipped";
 
-/** How much of the WSTG v4.2 catalogue a generated plan covers. */
-export type TestPlanDepth = "smoke" | "standard" | "deep" | "full";
-
 export interface OwaspTop10Category {
   /** Official identifier, e.g. "A05:2025". */
   id: OwaspTop10Id;

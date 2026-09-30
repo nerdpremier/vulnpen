@@ -6,7 +6,6 @@ import type { WebAppTestPlanDoc } from "../models/Sessions/Sessions.model";
 import { requireActiveSession } from "../services/session.helpers";
 import { mapUnclassifiedVulnerabilities } from "../services/vulnerability.service";
 import {
-  TEST_PLAN_DEPTHS,
   computeCoverage,
   createTestPlan,
   normalizeTestStatus,
@@ -39,12 +38,6 @@ function catalogPayload() {
       name: category.name,
       objective: category.objective,
       testCount: WSTG_TESTS.filter((test) => test.category === category.code).length,
-    })),
-    depths: TEST_PLAN_DEPTHS.map((depth) => ({
-      id: depth.id,
-      label: depth.label,
-      description: depth.description,
-      testCount: depth.testCount,
     })),
   };
 }
@@ -89,7 +82,6 @@ export const generateTestPlan = async (req: Request, res: Response) => {
       target: typeof body.target === "string" ? body.target : undefined,
       scope: typeof body.scope === "string" ? body.scope : undefined,
       notes: typeof body.notes === "string" ? body.notes : undefined,
-      depth: body.depth,
       categories: Array.isArray(body.categories) ? body.categories : undefined,
       testIds: Array.isArray(body.testIds)
         ? body.testIds
@@ -222,30 +214,22 @@ export const getOwaspCoverage = async (req: Request, res: Response) => {
       .select("vulnerabilities webAppTestPlan")
       .lean();
     const vulnerabilities = (refreshed?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-    const plan = (refreshed?.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
-    const coverage = plan ? computeCoverage(plan.cases) : null;
 
     return res.status(200).json({
       framework: {
         version: OWASP_TOP10_2025_VERSION,
         source: OWASP_TOP10_2025_SOURCE,
-        categories: OWASP_TOP10_2025.map((category) => {
-          const owaspRow = coverage?.byOwasp.find((row) => row.key === category.id);
-          return {
-            id: category.id,
-            rank: category.rank,
-            title: category.title,
-            summary: category.summary,
-            cwes: category.cwes,
-            wstgFocus: category.wstgFocus,
-            findings: vulnerabilities.filter(
-              (vulnerability) => vulnerability.owaspTop10 === category.id,
-            ).length,
-            testsPlanned: owaspRow?.total ?? 0,
-            testsExecuted: owaspRow?.executed ?? 0,
-            testsFailed: owaspRow?.failed ?? 0,
-          };
-        }),
+        categories: OWASP_TOP10_2025.map((category) => ({
+          id: category.id,
+          rank: category.rank,
+          title: category.title,
+          summary: category.summary,
+          cwes: category.cwes,
+          wstgFocus: category.wstgFocus,
+          findings: vulnerabilities.filter(
+            (vulnerability) => vulnerability.owaspTop10 === category.id,
+          ).length,
+        })),
       },
       totalFindings: vulnerabilities.length,
       unmappedFindings: vulnerabilities.filter((vulnerability) => !vulnerability.owaspTop10).length,

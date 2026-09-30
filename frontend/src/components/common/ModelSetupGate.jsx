@@ -47,7 +47,7 @@ const ModelSetupGate = ({ children }) => {
         <h1>Configure a model before starting</h1>
         <p>
           Add at least one reusable model preset in Settings, then assign the
-          orchestrator model. API keys, provider details, racers, and Browser
+          orchestrator model. API keys, provider details, and Browser
           Agent model selection all live in Settings &gt; Models.
         </p>
 

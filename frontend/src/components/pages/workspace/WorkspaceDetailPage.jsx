@@ -1,31 +1,22 @@
 import styles from "@/styles/pages/WorkspaceDetail.module.scss";
-import { message, Tag, Tooltip, Input, Form, Radio, Empty, Button, Spin } from "antd";
+import { message, Tag, Tooltip, Input, Form, Empty, Button } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import {
   PlusOutlined,
   ArrowLeftOutlined,
-  SyncOutlined,
-  LinkOutlined,
-  DisconnectOutlined,
   PlayCircleOutlined,
-  TrophyFilled,
-  ClockCircleOutlined,
-  LoadingOutlined,
 } from "@ant-design/icons";
 import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useQuery, useMutation, useQueryClient } from "react-query";
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { getWorkspaceDetail, createSessionInWorkspace } from "@/services/workspace.service";
-import { getCtfChallenges, connectCtf, syncCtfStream, disconnectCtf, submitFlagToCtfd, startSolvingAll } from "@/services/ctf.service";
 import { deleteSession } from "@/services/agent.service";
-import { formatDurationSec } from "@/utils/formatDuration";
 import moment from "moment";
 import { useRouter } from "next/navigation";
-import { FiTrash, FiFlag, FiKey, FiLock } from "react-icons/fi";
+import { FiTrash } from "react-icons/fi";
 import ModalComponent from "@/components/common/ModalComponent";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
-import ChallengeTable from "@/components/common/ChallengeTable";
 
 const STATE_DOT = {
   running: { color: "#10ca00", label: "Running" },
@@ -42,29 +33,12 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   const confirmPopUp = useConfirmPopUp();
 
   const [showNewSession, setShowNewSession] = useState(false);
-  const [showCtfConnect, setShowCtfConnect] = useState(false);
-  const [ctfAuthMethod, setCtfAuthMethod] = useState("token");
-  const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState("");
-  const [syncProgress, setSyncProgress] = useState(null);
-  const [syncResult, setSyncResult] = useState(null);
-  const [syncError, setSyncError] = useState(null);
-  const syncAbortRef = useRef(null);
   const [newSessionForm] = Form.useForm();
 
   const { data: workspace, isLoading } = useQuery(
     ["workspace-detail", workspaceId],
     () => getWorkspaceDetail(workspaceId),
     { enabled: !!user && !!workspaceId, refetchInterval: 8000 }
-  );
-
-  const { data: challengesData, isLoading: challengesLoading } = useQuery(
-    ["ctf-challenges", workspaceId],
-    () => getCtfChallenges(workspaceId),
-    {
-      enabled: !!workspace?.ctf?.connected,
-      refetchInterval: 15000,
-    }
   );
 
   const createSessionMutation = useMutation(
@@ -106,236 +80,9 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     });
   }, [confirmPopUp, deleteSessionMutation]);
 
-  const handleCtfConnect = async (values) => {
-    try {
-      setSyncing(true);
-      setSyncStatus("Connecting...");
-
-      const body =
-        ctfAuthMethod === "token"
-          ? { url: values.ctfUrl, apiToken: values.apiToken }
-          : { url: values.ctfUrl, username: values.username, password: values.password };
-
-      const connectResult = await connectCtf(workspaceId, body);
-
-      const refresh = () => {
-        queryClient.invalidateQueries(["workspace-detail", workspaceId]);
-        queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
-        setShowCtfConnect(false);
-        setSyncStatus("");
-      };
-
-      // Connected, but CTFd is withholding challenges (not started / no team).
-      // Keep the connection and let the user sync when the event opens.
-      if (connectResult?.challengesAvailable === false) {
-        refresh();
-        message.info(
-          connectResult.unavailableReason ||
-            "Connected, but challenges aren't available yet. Use Sync Challenges once the CTF starts.",
-          8,
-        );
-        return;
-      }
-
-      setSyncStatus("Connected! Syncing challenges...");
-
-      await new Promise((resolve, reject) => {
-        syncCtfStream(
-          workspaceId,
-          (event) => {
-            if (event.phase === "done") {
-              setSyncStatus(`Synced ${event.total} challenges`);
-            } else if (event.phase === "error") {
-              reject(new Error(event.detail));
-            } else if (event.phase === "sync") {
-              setSyncStatus(`Syncing: ${event.name || ""} (${event.current}/${event.total})`);
-            }
-          },
-          resolve,
-          reject,
-        );
-      });
-
-      queryClient.invalidateQueries(["workspace-detail", workspaceId]);
-      queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
-      message.success("CTF connected and synced!");
-      setShowCtfConnect(false);
-      setSyncStatus("");
-    } catch (err) {
-      message.error(
-        err?.response?.data?.message || err?.message || "Failed to connect CTF",
-        8,
-      );
-      setSyncStatus("");
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handleSync = useCallback(() => {
-    setSyncing(true);
-    setSyncProgress(null);
-    setSyncResult(null);
-    setSyncError(null);
-
-    const abort = syncCtfStream(
-      workspaceId,
-      (event) => {
-        if (event.phase === "done") {
-          setSyncResult(event);
-          setSyncProgress(null);
-          setSyncing(false);
-          queryClient.invalidateQueries(["workspace-detail", workspaceId]);
-          queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
-          message.success("Challenges synced!");
-        } else if (event.phase === "error") {
-          setSyncError(event.detail || "Sync failed");
-          setSyncProgress(null);
-          setSyncing(false);
-          message.error(event.detail || "Sync failed");
-        } else {
-          setSyncProgress(event);
-        }
-      },
-      () => { setSyncing(false); },
-      (err) => {
-        setSyncError(err?.message || "Sync failed");
-        setSyncProgress(null);
-        setSyncing(false);
-        message.error(err?.message || "Sync failed");
-      },
-    );
-
-    syncAbortRef.current = abort;
-  }, [workspaceId, queryClient]);
-
-  const [submittingFlag, setSubmittingFlag] = useState(null);
-  const [solvingAll, setSolvingAll] = useState(false);
-
-  const challenges = useMemo(
-    () => challengesData?.challenges || [],
-    [challengesData?.challenges],
-  );
-  const activeSolve = challengesData?.activeSolve ?? null;
-  const isCTF = workspace?.type === "ctf";
-  const ctfConnected = workspace?.ctf?.connected;
   const sessions = useMemo(
     () => workspace?.sessions || [],
     [workspace?.sessions],
-  );
-
-  const solvedCount = challenges.filter(
-    (c) => c.status === "solved" || c.status === "submitted",
-  ).length;
-
-  const solvedWithTime = challenges.filter(
-    (c) => (c.status === "solved" || c.status === "submitted") && c.timeToSolveSec != null,
-  );
-  const totalSolveTimeSec = solvedWithTime.reduce((acc, c) => acc + c.timeToSolveSec, 0);
-  const avgSolveTimeSec =
-    solvedWithTime.length > 0 ? Math.round(totalSolveTimeSec / solvedWithTime.length) : null;
-
-  const sessionsByName = useMemo(() => {
-    const map = {};
-    sessions.forEach((s) => { map[s.name] = s; });
-    return map;
-  }, [sessions]);
-
-  // Challenges that "Solve All" would actually start: not yet solved, and
-  // backed by a session (sessions are matched to challenges by name).
-  const solvableChallenges = useMemo(
-    () =>
-      challenges.filter(
-        (c) => c.status !== "solved" && c.status !== "submitted" && sessionsByName[c.name],
-      ),
-    [challenges, sessionsByName],
-  );
-
-  const handleSolveAll = useCallback(() => {
-    const count = solvableChallenges.length;
-    confirmPopUp({
-      title: `Start solving ${count} challenge${count === 1 ? "" : "s"}?`,
-      content:
-        `Each unsolved challenge with a session will start its own agent, all at once. ` +
-        `Challenges already solved or currently running are skipped.`,
-      okText: "Start All",
-      cancelText: "Cancel",
-      okButtonBg: "#7c3aed",
-      onOk: async () => {
-        setSolvingAll(true);
-        try {
-          const res = await startSolvingAll(workspaceId);
-          message.success(res?.message || `Started ${res?.started ?? 0} sessions`);
-          queryClient.invalidateQueries(["workspace-detail", workspaceId]);
-          queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
-        } catch (err) {
-          message.error(err?.response?.data?.message || "Failed to start solving");
-        } finally {
-          setSolvingAll(false);
-        }
-      },
-    });
-  }, [solvableChallenges.length, confirmPopUp, workspaceId, queryClient]);
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnectCtf(workspaceId);
-      queryClient.invalidateQueries(["workspace-detail", workspaceId]);
-      message.success("Disconnected from CTF");
-    } catch {
-      message.error("Failed to disconnect");
-    }
-  };
-
-  const handleSubmitFlag = useCallback(async (ch) => {
-    if (!ch.flag || submittingFlag) return;
-    setSubmittingFlag(ch.name);
-    try {
-      const res = await submitFlagToCtfd(workspaceId, {
-        challengeName: ch.name,
-        flag: ch.flag,
-      });
-      message.success(res?.message || "Flag submitted!");
-      queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
-    } catch (err) {
-      message.error(err?.response?.data?.message || "Submission failed");
-    } finally {
-      setSubmittingFlag(null);
-    }
-  }, [workspaceId, submittingFlag, queryClient]);
-
-  const handleChallengeRowClick = useCallback(
-    (ch) => {
-      const session = sessionsByName[ch.name];
-      if (session) router.push(`/session/${session.sessionId}`);
-    },
-    [sessionsByName, router],
-  );
-
-  const handleChallengeSolve = useCallback(
-    (ch) => {
-      const session = sessionsByName[ch.name];
-      if (session) router.push(`/session/${session.sessionId}`);
-    },
-    [sessionsByName, router],
-  );
-
-  const renderChallengeExtraActions = useCallback(
-    (ch) => {
-      const session = sessionsByName[ch.name];
-      if (!session) return null;
-      return (
-        <Tooltip title="Delete session">
-          <div
-            className={styles.sessionActionBtn}
-            onClick={(e) => onDeleteSession(session.sessionId, e)}
-          >
-            <FiTrash size={11} />
-          </div>
-        </Tooltip>
-      );
-    },
-    [sessionsByName, onDeleteSession],
   );
 
   if (!user || isLoading || !workspace) {
@@ -356,91 +103,17 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
             <div className={styles.titleRow}>
               <h1>{workspace.name}</h1>
               <Tag className={styles.typeBadge} color={
-                workspace.type === "ctf" ? "#f59e0b" :
                 workspace.type === "pentest" ? "#8b5cf6" : "#6b7280"
               }>
                 {workspace.type?.toUpperCase()}
               </Tag>
-              {isCTF && ctfConnected && challenges.length > 0 && (
-                <span className={styles.scoreBadge}>
-                  <TrophyFilled /> {solvedCount}/{challenges.length}
-                </span>
-              )}
-              {isCTF && ctfConnected && solvedWithTime.length > 0 && (
-                <span className={styles.statBadge}>
-                  <ClockCircleOutlined /> {formatDurationSec(totalSolveTimeSec)} total
-                </span>
-              )}
-              {isCTF && ctfConnected && avgSolveTimeSec != null && (
-                <span className={styles.statBadge}>
-                  ⌀ {formatDurationSec(avgSolveTimeSec)} / challenge
-                </span>
-              )}
             </div>
-            {isCTF && ctfConnected ? (
-              <p className={styles.ctfSubtitle}>
-                <FiFlag size={11} />
-                {workspace.ctf.ctfName && <span className={styles.ctfSubtitleName}>{workspace.ctf.ctfName}</span>}
-                {workspace.ctf.url && <span className={styles.ctfSubtitleUrl}>{workspace.ctf.url}</span>}
-                {workspace.ctf.flagFormat && <code className={styles.flagFormat}>{workspace.ctf.flagFormat}</code>}
-                {workspace.ctf.lastSynced && (
-                  <span>Synced {moment(workspace.ctf.lastSynced).fromNow()}</span>
-                )}
-                {syncStatus && <span className={styles.syncStatusInline}>{syncStatus}</span>}
-              </p>
-            ) : workspace.description ? (
+            {workspace.description ? (
               <p className={styles.description}>{workspace.description}</p>
             ) : null}
           </div>
         </div>
         <div className={styles.headerRight}>
-          {isCTF && ctfConnected && (
-            <>
-              <Tooltip
-                title={
-                  solvableChallenges.length === 0
-                    ? "Nothing to solve — every challenge is solved or has no session yet"
-                    : null
-                }
-              >
-                <Button
-                  icon={solvingAll ? <LoadingOutlined /> : <PlayCircleOutlined />}
-                  onClick={handleSolveAll}
-                  disabled={solvingAll || solvableChallenges.length === 0}
-                  size="small"
-                  className={styles.solveAllBtn}
-                >
-                  {solvingAll ? "Starting..." : `Start Solving All (${solvableChallenges.length})`}
-                </Button>
-              </Tooltip>
-              <Button
-                icon={<SyncOutlined spin={syncing} />}
-                onClick={handleSync}
-                disabled={syncing}
-                size="small"
-                className={styles.syncBtn}
-              >
-                {syncing ? "Syncing..." : "Sync Challenges"}
-              </Button>
-              <Button
-                icon={<DisconnectOutlined />}
-                onClick={handleDisconnect}
-                size="small"
-                className={styles.disconnectBtn}
-              >
-                Disconnect
-              </Button>
-            </>
-          )}
-          {isCTF && !ctfConnected && (
-            <PrimaryButton
-              white
-              onClick={() => setShowCtfConnect(true)}
-              className={styles.compactBtn}
-            >
-              <LinkOutlined /> Connect CTF
-            </PrimaryButton>
-          )}
           <PrimaryButton purple onClick={() => setShowNewSession(true)} className={styles.compactBtn}>
             <PlusOutlined /> New Session
           </PrimaryButton>
@@ -449,47 +122,16 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
 
       <div className={styles.content}>
         <div className={styles.sectionHeader}>
-          <h2>{isCTF && ctfConnected ? "Challenges" : "Sessions"}</h2>
+          <h2>Sessions</h2>
           <span className={styles.sessionCount}>
-            {isCTF && ctfConnected
-              ? `${challenges.length} challenge${challenges.length !== 1 ? "s" : ""}`
-              : `${sessions.length} session${sessions.length !== 1 ? "s" : ""}`
-            }
+            {`${sessions.length} session${sessions.length !== 1 ? "s" : ""}`}
           </span>
         </div>
 
-        {isCTF && ctfConnected && syncing && syncProgress && (
-          <SyncProgressPanel progress={syncProgress} styles={styles} />
-        )}
-        {isCTF && ctfConnected && !syncing && syncResult && (
-          <SyncResultPanel result={syncResult} styles={styles} />
-        )}
-        {isCTF && ctfConnected && !syncing && syncError && (
-          <div className={styles.syncError}>{syncError}</div>
-        )}
-
-        {isCTF && ctfConnected && challengesLoading ? (
-          <div className={styles.challengeListLoading}>
-            <LoadingOutlined /> Loading challenges...
-          </div>
-        ) : isCTF && ctfConnected && challenges.length > 0 ? (
-          <ChallengeTable
-            challenges={challenges}
-            activeSolveName={activeSolve?.name}
-            submittingFlag={submittingFlag}
-            onSolve={handleChallengeSolve}
-            onSubmit={handleSubmitFlag}
-            onRowClick={handleChallengeRowClick}
-            renderExtraActions={renderChallengeExtraActions}
-          />
-        ) : sessions.length === 0 ? (
+        {sessions.length === 0 ? (
           <div className={styles.emptyState}>
             <Empty
-              description={
-                isCTF && ctfConnected
-                  ? "Sync challenges to auto-create sessions"
-                  : "Create a session to get started"
-              }
+              description="Create a session to get started"
             />
           </div>
         ) : (
@@ -576,9 +218,6 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
             >
               <Input placeholder="e.g. buffer-overflow, Target A" />
             </Form.Item>
-            <Form.Item name="description" label="Description">
-              <Input.TextArea placeholder="Optional description" rows={2} />
-            </Form.Item>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
               <PrimaryButton white onClick={() => { setShowNewSession(false); newSessionForm.resetFields(); }}>
                 Cancel
@@ -590,109 +229,6 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           </Form>
         </div>
       </ModalComponent>
-
-      {/* CTF Connect Modal */}
-      <ModalComponent
-        show={showCtfConnect}
-        setShow={setShowCtfConnect}
-        heading="Connect CTF"
-        subheading="Enter your CTFd platform credentials"
-        onCancel={() => { setShowCtfConnect(false); setSyncStatus(""); }}
-        footer={false}
-        destroyOnClose
-        width={500}
-      >
-        <div className={styles.formWrap}>
-          <Form layout="vertical" onFinish={handleCtfConnect}>
-            <Form.Item
-              name="ctfUrl"
-              label="CTFd URL"
-              rules={[{ required: true, message: "URL is required" }]}
-            >
-              <Input placeholder="https://your-ctf.ctfd.io" />
-            </Form.Item>
-            <Form.Item label="Auth method">
-              <Radio.Group
-                value={ctfAuthMethod}
-                onChange={(e) => setCtfAuthMethod(e.target.value)}
-              >
-                <Radio value="token"><FiKey size={12} /> API Token</Radio>
-                <Radio value="credentials"><FiLock size={12} /> Credentials</Radio>
-              </Radio.Group>
-            </Form.Item>
-            {ctfAuthMethod === "token" ? (
-              <Form.Item name="apiToken" label="API Token" rules={[{ required: true }]}>
-                <Input.Password placeholder="ctfd_xxx..." />
-              </Form.Item>
-            ) : (
-              <>
-                <Form.Item name="username" label="Username" rules={[{ required: true }]}>
-                  <Input />
-                </Form.Item>
-                <Form.Item name="password" label="Password" rules={[{ required: true }]}>
-                  <Input.Password />
-                </Form.Item>
-              </>
-            )}
-            {syncStatus && <div className={styles.syncStatusBox}>{syncStatus}</div>}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <PrimaryButton purple htmlType="submit" loading={syncing}>
-                Connect &amp; Sync
-              </PrimaryButton>
-            </div>
-          </Form>
-        </div>
-      </ModalComponent>
-    </div>
-  );
-};
-
-const SyncProgressPanel = ({ progress, styles }) => {
-  const { phase, current, total, name, action } = progress;
-  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-  const phaseLabel = phase === "fetch" ? "Fetching challenges" : "Syncing to workspace";
-  const actionIcon =
-    action === "new" ? "+" : action === "updated" ? "~" : action === "skipped" ? "-" : "";
-  const actionClass =
-    action === "new" ? styles.actionNew :
-    action === "updated" ? styles.actionUpdated :
-    action === "skipped" ? styles.actionSkipped : "";
-
-  return (
-    <div className={styles.progressPanel}>
-      <div className={styles.progressHeader}>
-        <span className={styles.progressPhase}>{phaseLabel}</span>
-        <span className={styles.progressCount}>{current}/{total}</span>
-      </div>
-      <div className={styles.progressBarTrack}>
-        <div className={styles.progressBarFill} style={{ width: `${pct}%` }} />
-      </div>
-      {name && (
-        <div className={styles.progressCurrent}>
-          {actionIcon && (
-            <span className={`${styles.progressAction} ${actionClass}`}>{actionIcon}</span>
-          )}
-          <span className={styles.progressName}>{name}</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const SyncResultPanel = ({ result, styles }) => {
-  const parts = [];
-  if (result.synced > 0) parts.push(`${result.synced} new`);
-  if (result.updated > 0) parts.push(`${result.updated} updated`);
-  if (result.skipped > 0) parts.push(`${result.skipped} unchanged`);
-
-  return (
-    <div className={styles.syncSuccess}>
-      <span className={styles.resultSummary}>
-        {result.total} challenge{result.total !== 1 ? "s" : ""} processed
-      </span>
-      {parts.length > 0 && (
-        <span className={styles.resultBreakdown}>{parts.join(" · ")}</span>
-      )}
     </div>
   );
 };

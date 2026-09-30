@@ -27,10 +27,6 @@ import {
   repairVNC,
   getBurpConfig,
   updateBurpConfig,
-  getCaidoConfig,
-  updateCaidoConfig,
-  getMythicConfig,
-  updateMythicConfig,
   getMagnitudeConfig,
   updateMagnitudeConfig,
   startMagnitudeAgent,
@@ -90,10 +86,6 @@ router.post("/repair-vnc", [verifySess], repairVNC);
 
 router.get("/get-burp-config", [verifySess], getBurpConfig);
 router.post("/update-burp-config", [verifySess], updateBurpConfig);
-router.get("/get-caido-config", [verifySess], getCaidoConfig);
-router.post("/update-caido-config", [verifySess], updateCaidoConfig);
-router.get("/get-mythic-config", [verifySess], getMythicConfig);
-router.post("/update-mythic-config", [verifySess, requireHostOwner], updateMythicConfig);
 
 router.get("/get-magnitude-config", [verifySess], getMagnitudeConfig);
 router.post("/update-magnitude-config", [verifySess], updateMagnitudeConfig);

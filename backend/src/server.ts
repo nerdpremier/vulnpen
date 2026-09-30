@@ -16,14 +16,12 @@ import { shellRoutes } from "./routes/shell.routes";
 import { vpnRoutes } from "./routes/vpn.routes";
 import { vncRoutes } from "./routes/vnc.routes";
 import { burpRoutes } from "./routes/burp.routes";
-import { caidoRoutes } from "./routes/caido.routes";
-import { mythicRoutes } from "./routes/mythic.routes";
-import { ctfRoutes } from "./routes/ctf.routes";
 import { workspaceRoutes } from "./routes/workspace.routes";
 import { mcpRoutes } from "./routes/mcp.routes";
 import { mcpHttpRoutes } from "./routes/mcp-http.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
+import { verifySess } from "./middlewares/VerifySession.middleware";
 import { setupShellWebSocket } from "./services/shell.socket";
 import { sessionLifecycle } from "./services/session.lifecycle";
 import { migrateSessionsToWorkspaces } from "./migrations/001-create-workspaces";
@@ -50,6 +48,7 @@ const initializeApp = async () => {
     redisClient = createClient({ url: REDIS_URL });
 
     const SESS_SECRET = await getSecrets("SESS_SECRET");
+    const SESS_LIFETIME = await getSecrets("SESS_LIFETIME");
     const productionDeployment = DEPLOYMENT !== "LOCAL";
     if (productionDeployment) {
       const configuredOrigins = (process.env.CORS_ORIGINS || "")
@@ -163,6 +162,10 @@ const initializeApp = async () => {
     // @ts-expect-error connect-redis's client type does not include this Redis client version.
     const redisStore = new RedisStore({ client: redisClient });
 
+    // SESS_LIFETIME is configured in seconds (config.toml [session].lifetime); default 12h.
+    const sessionMaxAgeMs =
+      Number(SESS_LIFETIME) > 0 ? Number(SESS_LIFETIME) * 1000 : 1000 * 60 * 60 * 12;
+
     const sessionConfig = {
       secret: SESS_SECRET as string,
       resave: false,
@@ -173,7 +176,7 @@ const initializeApp = async () => {
       cookie: {
         sameSite: true as const,
         secure: DEPLOYMENT === "LOCAL" ? false : true,
-        maxAge: 1000 * 60 * 60 * 12,
+        maxAge: sessionMaxAgeMs,
       },
     };
 
@@ -200,36 +203,6 @@ const initializeApp = async () => {
       });
     });
 
-    app.get("/api/test/google-search", async (_req, res) => {
-      try {
-        const apiKey = await getSecrets("GOOGLE-API-KEY");
-        const cx = await getSecrets("CUSTOM-SEARCH-ENGINE-ID");
-
-        if (!apiKey || !cx) {
-          const missing = [!apiKey && "GOOGLE-API-KEY", !cx && "CUSTOM-SEARCH-ENGINE-ID"].filter(Boolean);
-          console.error("[Google Search Test] Missing env vars:", missing.join(", "));
-          return res.status(500).json({ success: false, error: `Missing configuration: ${missing.join(", ")}` });
-        }
-
-        const { google: googleapis } = require("googleapis");
-        const customSearch = googleapis.customsearch("v1");
-        const result = await customSearch.cse.list({ auth: apiKey, cx, q: "test", num: 1 });
-
-        const items = result.data.items ?? [];
-        console.log("[Google Search Test] Success -", items.length, "result(s) returned");
-        return res.status(200).json({ success: true, resultCount: items.length, items });
-      } catch (err: any) {
-        console.error("[Google Search Test] Error:", err.message);
-        if (err?.response?.data) {
-          console.error("[Google Search Test] API response:", JSON.stringify(err.response.data, null, 2));
-        }
-        return res.status(500).json({
-          success: false,
-          error: err.message,
-          details: err?.response?.data || null,
-        });
-      }
-    });
 
     // Routes
     app.use("/api/auth", authRoutes);
@@ -240,16 +213,11 @@ const initializeApp = async () => {
     app.use("/api/infra", vpnRoutes);
     app.use("/api/infra", vncRoutes);
     app.use("/api/burp", burpRoutes);
-    app.use("/api/caido", caidoRoutes);
-    app.use("/api/mythic", mythicRoutes);
-    app.use("/api/ctf", ctfRoutes);
     app.use("/api/workspace", workspaceRoutes);
     app.use("/api/mcp", mcpRoutes);
     app.use("/mcp", mcpHttpRoutes);
 
     app.use(function (err: any, _req: any, res: any, _next: any) {
-      console.log("Error occurred but handled - ", err);
-
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({ message: "File size limit exceeded" });
@@ -259,7 +227,9 @@ const initializeApp = async () => {
         }
         return res.status(400).json({ message: "Error occurred uploading file" });
       }
-      return res.status(400).json({
+      console.error("Unhandled error:", err);
+      const status = typeof err?.status === "number" && err.status >= 400 && err.status < 600 ? err.status : 500;
+      return res.status(status).json({
         message: "Something went wrong, please try again later",
       });
     });

@@ -28,7 +28,6 @@ import {
   ExportOutlined,
   InfoCircleOutlined,
   PlusOutlined,
-  ThunderboltFilled,
   WarningOutlined,
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
@@ -36,11 +35,8 @@ import Loader from "@/components/common/loader/Loader";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
-  connectSubscriptionProvider,
   getAvailableModels,
   getModels,
-  getSubscriptionProviders,
-  testSubscriptionProvider,
   updateModels,
 } from "@/services/user.service";
 import {
@@ -219,7 +215,6 @@ function assignedIds(assignments) {
     [
       assignments?.orchestratorModelId,
       assignments?.browserModelId,
-      ...(assignments?.racerModelIds || []),
     ].filter(Boolean),
   );
 }
@@ -367,7 +362,7 @@ const ModelModal = ({
           <div className={styles.warningBox} style={{ marginBottom: "1rem" }}>
             <WarningOutlined />
             <span>
-              This preset can still be used for orchestrator or racers, but it
+              This preset can still be used for the orchestrator, but it
               will not appear in the Browser Agent selector.{" "}
               {browserModelIssue}
             </span>
@@ -425,16 +420,10 @@ const ModelsPage = () => {
     cacheTime: 6 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
-  const { data: subscriptionData, isLoading: subscriptionLoading } = useQuery(
-    "subscription-providers",
-    getSubscriptionProviders,
-    { refetchOnWindowFocus: false, retry: false },
-  );
-
   const [editingModel, setEditingModel] = useState(null);
 
   const models = data?.models || [];
-  const assignments = data?.assignments || { racerModelIds: [] };
+  const assignments = data?.assignments || {};
   const protectedIds = assignedIds(assignments);
 
   const modelSuggestions = useMemo(() => {
@@ -472,35 +461,7 @@ const ModelsPage = () => {
     },
   });
 
-  const connectSubscriptionMutation = useMutation(connectSubscriptionProvider, {
-    onSuccess: (res) => {
-      message.success(res.message || "Subscription provider connected");
-      queryClient.invalidateQueries("unified-models");
-      queryClient.invalidateQueries("subscription-providers");
-    },
-    onError: (err) => {
-      notification.error({
-        message: "Connection failed",
-        description:
-          err?.response?.data?.message ??
-          "Failed to connect the local subscription provider",
-      });
-    },
-  });
 
-  const testSubscriptionMutation = useMutation(testSubscriptionProvider, {
-    onSuccess: (res) => {
-      if (res.ok) message.success(`${res.model} inference is working`);
-      else message.warning(`${res.model} responded, but the sanity reply was unexpected`);
-    },
-    onError: (err) => {
-      notification.error({
-        message: "Inference test failed",
-        description:
-          err?.response?.data?.message ?? "The local CLI inference test failed",
-      });
-    },
-  });
 
   const persist = (nextModels, nextAssignments = assignments) => {
     persistMutation.mutate({
@@ -549,110 +510,8 @@ const ModelsPage = () => {
         <InfoCircleOutlined />
         <span>
           Configure model credentials once, then choose which model runs the
-          orchestrator, Browser Agent, and optional racers.
+          orchestrator and Browser Agent.
         </span>
-      </div>
-
-      <div className={styles.warningBox}>
-        <WarningOutlined />
-        <span>
-          Browser Agent only shows Magnitude-compatible presets. For MiniMax,
-          use provider <strong>OpenAI-Compatible</strong> with base URL{" "}
-          <code>https://api.minimax.io/v1</code>. Anthropic-Compatible MiniMax
-          presets can still be used by orchestrator/racers, but not by Browser
-          Agent.
-        </span>
-      </div>
-
-      <div className={styles.settingSectionHeader}>
-        <div className={styles.heading}>Use an Existing Subscription</div>
-        <div className={styles.divider} />
-      </div>
-      <div className={styles.mcpTokenList}>
-        {subscriptionLoading && <Loader />}
-        {(subscriptionData?.providers || []).map((provider) => {
-          const connected = models.some(
-            (model) => model.provider === provider.provider,
-          );
-          const displayName =
-            provider.provider === "codex-subscription"
-              ? "Codex"
-              : "Claude Code";
-          return (
-            <div key={provider.provider} className={styles.mcpTokenItem}>
-              <div className={styles.mcpTokenHeader}>
-                <div className={styles.mcpTokenTitle}>
-                  <ApiOutlined /> {displayName}
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <Tag color={provider.installed ? "green" : "default"}>
-                    {provider.installed ? provider.version : "NOT INSTALLED"}
-                  </Tag>
-                  <Tag color={provider.authenticated ? "green" : "warning"}>
-                    {provider.authenticated ? "SIGNED IN" : "SIGN-IN NEEDED"}
-                  </Tag>
-                  {connected && <Tag color="purple">CONFIGURED</Tag>}
-                </div>
-              </div>
-              <div className={styles.mcpTokenMeta}>
-                {provider.authenticated
-                  ? `Uses the existing ${displayName} login for normal VulnPen inference. Default: ${provider.defaultModel}.`
-                  : provider.detail || `Run ${provider.loginCommand} on the backend host.`}
-              </div>
-              {provider.provider === "claude-subscription" && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: "0.68rem",
-                    color: "var(--secondary-text)",
-                  }}
-                >
-                  Local CLI control only. Confirm your use complies with
-                  Anthropic&apos;s current third-party product and subscription
-                  terms.
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <PrimaryButton
-                  purpleFilled
-                  disabled={!provider.installed || !provider.authenticated}
-                  loading={
-                    connectSubscriptionMutation.isLoading &&
-                    connectSubscriptionMutation.variables?.provider ===
-                      provider.provider
-                  }
-                  onClick={() =>
-                    connectSubscriptionMutation.mutate({
-                      provider: provider.provider,
-                      model: provider.defaultModel,
-                    })
-                  }
-                  style={{ height: 30, fontSize: "0.72rem" }}
-                >
-                  {connected ? "Refresh Configuration" : `Use ${displayName}`}
-                </PrimaryButton>
-                {connected && provider.authenticated && (
-                  <PrimaryButton
-                    loading={
-                      testSubscriptionMutation.isLoading &&
-                      testSubscriptionMutation.variables?.provider ===
-                        provider.provider
-                    }
-                    onClick={() =>
-                      testSubscriptionMutation.mutate({
-                        provider: provider.provider,
-                        model: provider.defaultModel,
-                      })
-                    }
-                    style={{ height: 30, fontSize: "0.72rem" }}
-                  >
-                    Test Inference
-                  </PrimaryButton>
-                )}
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       <div className={styles.settingSectionHeader}>
@@ -680,9 +539,6 @@ const ModelsPage = () => {
               persist(models, {
                 ...assignments,
                 orchestratorModelId: value,
-                racerModelIds: (assignments.racerModelIds || []).filter(
-                  (id) => id !== value,
-                ),
               })
             }
           />
@@ -713,30 +569,6 @@ const ModelsPage = () => {
             </span>
           </div>
         )}
-
-        <Form.Item
-          label={
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              Racers
-              <Tooltip title="Racers are optional parallel agents. Only selected models run as racers.">
-                <InfoCircleOutlined
-                  style={{ color: "var(--secondary-text)", fontSize: 11 }}
-                />
-              </Tooltip>
-            </span>
-          }
-        >
-          <Select
-            mode="multiple"
-            allowClear
-            placeholder="Select optional racer models"
-            value={assignments.racerModelIds || []}
-            options={options}
-            onChange={(value) =>
-              persist(models, { ...assignments, racerModelIds: value })
-            }
-          />
-        </Form.Item>
       </Form>
 
       <div className={styles.settingSectionHeader}>
@@ -769,11 +601,6 @@ const ModelsPage = () => {
                     )}
                     {assignments.browserModelId === model.id && (
                       <Tag color="blue">Browser</Tag>
-                    )}
-                    {(assignments.racerModelIds || []).includes(model.id) && (
-                      <Tag color="gold">
-                        <ThunderboltFilled /> Racer
-                      </Tag>
                     )}
                   </div>
                 </div>

@@ -147,6 +147,46 @@ start_websockify() {
 start_xvfb && start_x11vnc
 start_websockify
 
+# Pre-launch a placeholder Chromium on the display so the noVNC live view shows
+# a real browser from boot instead of a black framebuffer. The browser agent
+# opens its own window on top; the placeholder is the idle backdrop — and is
+# also the browser you drive manually. When MAGNITUDE_PROXY_URL is set (Burp),
+# the placeholder routes through it too, with the Burp-trusted profile, so
+# manual browsing shows up in Burp's history just like agent traffic.
+CHROMIUM_BIN="$(ls -1 /root/.cache/ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | head -1)"
+PLACEHOLDER_PID=""
+CHROMIUM_HOME="${DATA_DIR:-/srv/data}/chromium-home"
+MANUAL_PROXY="$(grep -E '^MAGNITUDE_PROXY_URL=' /srv/data/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\"' | tr -d "'" )"
+launch_placeholder_chromium() {
+  if [ -z "$CHROMIUM_BIN" ] || ! [ -x "$CHROMIUM_BIN" ]; then
+    return 0
+  fi
+  local proxy_args=()
+  if [ -n "$MANUAL_PROXY" ]; then
+    proxy_args=(--proxy-server="$MANUAL_PROXY")
+  fi
+  # Own user-data-dir: the default profile carries a SingletonLock bound to the
+  # hostname of the container that last used it, so after every restart Chromium
+  # refuses to start ("profile appears to be in use") and the watchdog would
+  # respawn it forever. HOME stays shared so the Burp CA in the NSS db is still
+  # trusted here.
+  local placeholder_profile="/tmp/chromium-placeholder"
+  rm -rf "$placeholder_profile/SingletonLock" "$placeholder_profile/SingletonCookie" \
+    "$placeholder_profile/SingletonSocket" 2>/dev/null
+  HOME="$CHROMIUM_HOME" DISPLAY="$DISPLAY" "$CHROMIUM_BIN" --no-sandbox \
+    --disable-dev-shm-usage --disable-gpu --no-first-run \
+    --disable-features=Translate --start-maximized \
+    --user-data-dir="$placeholder_profile" \
+    "${proxy_args[@]}" about:blank >/dev/null 2>&1 &
+  PLACEHOLDER_PID=$!
+  if [ -n "$MANUAL_PROXY" ]; then
+    log "placeholder Chromium up on $DISPLAY via proxy $MANUAL_PROXY (pid $PLACEHOLDER_PID)"
+  else
+    log "placeholder Chromium up on $DISPLAY (pid $PLACEHOLDER_PID)"
+  fi
+}
+launch_placeholder_chromium
+
 # Watchdog: restart any component that dies. Xvfb dying invalidates everything
 # above it, so its restart cascades down to x11vnc.
 #
@@ -224,6 +264,12 @@ watchdog() {
         fi
       fi
     fi
+
+    # The placeholder must die only when the display dies; keep one alive so the
+    # idle view is never a black screen. No backoff needed — it exits cleanly.
+    if [ -n "$CHROMIUM_BIN" ] && [ -n "$XVFB_PID" ] && ! alive "$PLACEHOLDER_PID"; then
+      launch_placeholder_chromium
+    fi
   done
 }
 
@@ -236,7 +282,7 @@ shutdown() {
   trap - EXIT INT TERM
   kill "$WATCHDOG_PID" 2>/dev/null
   kill "$SERVER_PID" 2>/dev/null
-  kill "$X11VNC_PID" "$WEBSOCKIFY_PID" "$XVFB_PID" 2>/dev/null
+  kill "$X11VNC_PID" "$WEBSOCKIFY_PID" "$XVFB_PID" "$PLACEHOLDER_PID" 2>/dev/null
 }
 trap shutdown EXIT INT TERM
 

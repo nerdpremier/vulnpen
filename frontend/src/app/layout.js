@@ -1,3 +1,9 @@
+// antd v5 targets React 16-18. This official patch restores the static
+// methods and the wave/render callbacks React 19 removed, and silences the
+// "[antd: compatible] antd v5 support React is 16 ~ 18" warning.
+// Must be imported before any antd component renders.
+import "@ant-design/v5-patch-for-react-19";
+
 // styles
 import "./globals.scss";
 import "antd/dist/reset.css";

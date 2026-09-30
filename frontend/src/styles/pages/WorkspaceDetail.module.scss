@@ -109,26 +109,6 @@
   max-width: 36rem;
 }
 
-.ctfSubtitle {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-  font-size: 0.7rem;
-  color: var(--secondary-text);
-  flex-wrap: wrap;
-}
-
-.ctfSubtitleName {
-  font-weight: 600;
-  color: var(--primary-text);
-}
-
-.ctfSubtitleUrl {
-  font-family: ui-monospace, monospace;
-  font-size: 0.68rem;
-}
-
 .flagFormat {
   background: rgba(153, 51, 255, 0.08);
   color: var(--primary-purple);
@@ -258,7 +238,7 @@
   }
 }
 
-// Session action button (delete) for extra actions in ChallengeTable
+// Session action button (delete)
 .sessionActionBtn {
   width: 1.4rem;
   height: 1.4rem;
@@ -276,7 +256,7 @@
   }
 }
 
-// Non-CTF session table
+// Session table
 .sessionTable {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
@@ -468,18 +448,8 @@
   color: var(--secondary-text);
 }
 
-// Sync progress panel (matches CTF page style)
+// Sync progress panel
 
-.challengeListLoading {
-  padding: 1.5rem 0;
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--secondary-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
 
 .progressPanel {
   margin-bottom: 1rem;

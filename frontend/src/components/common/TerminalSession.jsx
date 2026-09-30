@@ -10,7 +10,7 @@ import { useSocketContext } from "@/context/SocketContext";
 import { closeSession } from "@/store/user.slice";
 import { updateActiveTerminal } from "@/store/socket.slice";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI;
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI || "http://localhost:8080";
 
 const TerminalSession = ({
   session,

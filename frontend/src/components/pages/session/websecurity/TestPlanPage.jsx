@@ -6,14 +6,16 @@ import { Alert, App, Button, Empty, Form, Input, Modal, Select, Spin } from "ant
 import {
   CopyOutlined,
   DownloadOutlined,
+  EditOutlined,
   FileTextOutlined,
+  PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  addTestCase,
   generateTestPlan,
-  getOwaspCoverage,
   getReportDraft,
   getTestPlan,
   updateTestCase,
@@ -38,19 +40,6 @@ const STATUS_STYLE = {
   skipped: styles.statusSkipped,
 };
 
-function OwaspTags({ ids }) {
-  if (!ids?.length) return <span className={styles.muted}>—</span>;
-  return (
-    <span className={styles.owaspTags}>
-      {ids.map((id) => (
-        <span key={id} className={styles.owaspTag}>
-          {id}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 function CoverageBar({ value, tone }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
   return (
@@ -67,23 +56,24 @@ export default function TestPlanPage({ sessionId }) {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
+  const [addForm] = Form.useForm();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingCase, setEditingCase] = useState(null);
 
   const planQuery = useQuery(["test-plan", sessionId], () => getTestPlan(sessionId));
-  const owaspQuery = useQuery(["owasp-coverage", sessionId], () => getOwaspCoverage(sessionId));
 
   const plan = planQuery.data?.plan ?? null;
   const catalog = planQuery.data?.catalog;
   const coverage = planQuery.data?.coverage ?? null;
-  const owaspCategories = owaspQuery.data?.framework?.categories ?? [];
 
   const invalidate = () => {
     queryClient.invalidateQueries(["test-plan", sessionId]);
-    queryClient.invalidateQueries(["owasp-coverage", sessionId]);
   };
 
   const generateMutation = useMutation(generateTestPlan, {
@@ -95,6 +85,27 @@ export default function TestPlanPage({ sessionId }) {
     },
     onError: (error) =>
       message.error(error?.response?.data?.message || "Could not build the test plan"),
+  });
+
+  const addCaseMutation = useMutation(addTestCase, {
+    onSuccess: (data) => {
+      message.success(`Test case ${data.testCase?.testId ?? ""} added`);
+      setAddOpen(false);
+      addForm.resetFields();
+      invalidate();
+    },
+    onError: (error) =>
+      message.error(error?.response?.data?.message || "Could not add the test case"),
+  });
+
+  const updateCaseMutation = useMutation(updateTestCase, {
+    onSuccess: (data) => {
+      message.success(`${data.testCase?.testId} updated`);
+      setEditingCase(null);
+      invalidate();
+    },
+    onError: (error) =>
+      message.error(error?.response?.data?.message || "Could not update the test case"),
   });
 
   const statusMutation = useMutation(updateTestCase, {
@@ -133,8 +144,40 @@ export default function TestPlanPage({ sessionId }) {
       sessionId,
       target: values.target?.trim() || undefined,
       scope: values.scope?.trim() || undefined,
-      depth: values.depth,
       categories: values.categories?.length ? values.categories : undefined,
+    });
+  };
+
+  const handleAddCase = (values) => {
+    addCaseMutation.mutate({
+      sessionId,
+      action: "add_case",
+      title: values.title?.trim(),
+      objective: values.objective?.trim() || undefined,
+      howToTest: values.howToTest?.trim() || undefined,
+      categoryCode: values.categoryCode || undefined,
+    });
+  };
+
+  const openEdit = (testCase) => {
+    setEditingCase(testCase);
+    editForm.setFieldsValue({
+      title: testCase.title,
+      objective: testCase.objective,
+      howToTest: testCase.howToTest,
+      notes: testCase.notes,
+    });
+  };
+
+  const handleEditCase = (values) => {
+    updateCaseMutation.mutate({
+      sessionId,
+      testId: editingCase.testId,
+      action: "update_case",
+      title: values.title?.trim(),
+      objective: values.objective?.trim() || undefined,
+      howToTest: values.howToTest?.trim() || undefined,
+      notes: values.notes?.trim() || undefined,
     });
   };
 
@@ -160,7 +203,9 @@ export default function TestPlanPage({ sessionId }) {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-  };  if (planQuery.isLoading) {
+  };
+
+  if (planQuery.isLoading) {
     return (
       <div className={styles.fullState}>
         <Spin />
@@ -189,6 +234,16 @@ export default function TestPlanPage({ sessionId }) {
             Refresh
           </Button>
           <Button
+            icon={<PlusOutlined />}
+            disabled={!plan}
+            onClick={() => {
+              addForm.resetFields();
+              setAddOpen(true);
+            }}
+          >
+            Add custom case
+          </Button>
+          <Button
             type="primary"
             icon={<FileTextOutlined />}
             disabled={!plan}
@@ -209,16 +264,10 @@ export default function TestPlanPage({ sessionId }) {
           <h2>Plan the assessment</h2>
           <p className={styles.muted}>
             {catalog?.totalTests ?? 97} WSTG v{catalog?.version ?? "4.2"} test cases are available
-            across {(catalog?.categories ?? []).length} categories. Pick the depth that matches the
-            time you have, then restrict to specific categories if the engagement only covers part of
-            the application.
+            across {(catalog?.categories ?? []).length} categories. Restrict to specific categories
+            if the engagement only covers part of the application.
           </p>
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={handleGenerate}
-            initialValues={{ depth: "standard" }}
-          >
+          <Form form={form} layout="vertical" onFinish={handleGenerate}>
             <div className={styles.setupGrid}>
               <Form.Item
                 label="Target"
@@ -229,14 +278,6 @@ export default function TestPlanPage({ sessionId }) {
               </Form.Item>
               <Form.Item label="Scope" name="scope">
                 <Input placeholder="Storefront, REST API, user and admin roles" />
-              </Form.Item>
-              <Form.Item label="Depth" name="depth">
-                <Select
-                  options={(catalog?.depths ?? []).map((depth) => ({
-                    value: depth.id,
-                    label: `${depth.label} — ${depth.testCount} cases`,
-                  }))}
-                />
               </Form.Item>
               <Form.Item label="Restrict to categories (optional)" name="categories">
                 <Select
@@ -287,44 +328,29 @@ export default function TestPlanPage({ sessionId }) {
             </div>
           </section>
 
-          <section className={styles.panels}>
-            <div className={styles.panel}>
-              <h3>Coverage by WSTG category</h3>
-              <ul className={styles.coverageList}>
-                {coverage.byCategory.map((row) => (
-                  <li key={row.key}>
-                    <span className={styles.coverageLabel}>
-                      <strong>{row.key}</strong> {row.label}
-                    </span>
-                    <CoverageBar
-                      value={row.total ? (row.executed / row.total) * 100 : 0}
-                      tone="barPurple"
-                    />
-                    <span className={styles.coverageValue}>
-                      {row.executed}/{row.total}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className={styles.panel}>
-              <h3>OWASP Top 10:2025</h3>
-              <ul className={styles.owaspList}>
-                {owaspCategories.map((category) => (
-                  <li key={category.id}>
-                    <span className={styles.owaspId}>{category.id}</span>
-                    <span className={styles.owaspTitle}>{category.title}</span>
-                    <span className={category.findings ? styles.owaspCount : styles.muted}>
-                      {category.findings} findings
-                    </span>
-                    <span className={styles.muted}>
-                      {category.testsExecuted}/{category.testsPlanned} tests
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
+          {coverage.byCategory?.length > 0 && (
+            <section className={styles.panels}>
+              <div className={styles.panel}>
+                <h3>Coverage by WSTG category</h3>
+                <ul className={styles.coverageList}>
+                  {coverage.byCategory.map((row) => (
+                    <li key={row.key}>
+                      <span className={styles.coverageLabel}>
+                        <strong>{row.key}</strong> {row.label}
+                      </span>
+                      <CoverageBar
+                        value={row.total ? (row.executed / row.total) * 100 : 0}
+                        tone="barPurple"
+                      />
+                      <span className={styles.coverageValue}>
+                        {row.executed}/{row.total}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
 
           <section className={styles.tableCard}>
             <div className={styles.toolbar}>
@@ -370,9 +396,9 @@ export default function TestPlanPage({ sessionId }) {
                       <th>Test case</th>
                       <th>Objective</th>
                       <th>Status</th>
-                      <th>OWASP Top 10:2025</th>
                       <th>Findings</th>
                       <th>Record result</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -398,9 +424,6 @@ export default function TestPlanPage({ sessionId }) {
                               >
                                 {String(testCase.status).replace("_", " ")}
                               </span>
-                            </td>
-                            <td>
-                              <OwaspTags ids={testCase.owasp} />
                             </td>
                             <td>
                               {testCase.linkedVulnerabilityIds?.length ? (
@@ -429,6 +452,16 @@ export default function TestPlanPage({ sessionId }) {
                                 }
                               />
                             </td>
+                            <td onClick={(event) => event.stopPropagation()}>
+                              <Button
+                                size="small"
+                                type="text"
+                                icon={<EditOutlined />}
+                                onClick={() => openEdit(testCase)}
+                              >
+                                Edit
+                              </Button>
+                            </td>
                           </tr>
                           {isOpen && (
                             <tr className={styles.detailRow}>
@@ -445,10 +478,6 @@ export default function TestPlanPage({ sessionId }) {
                                   <div>
                                     <h4>Tools</h4>
                                     <p>{(testCase.tools ?? []).join(", ") || "—"}</p>
-                                  </div>
-                                  <div>
-                                    <h4>CWE</h4>
-                                    <p>{(testCase.cwe ?? []).join(", ") || "—"}</p>
                                   </div>
                                   <div className={styles.detailWide}>
                                     <h4>Observations recorded</h4>
@@ -506,6 +535,75 @@ export default function TestPlanPage({ sessionId }) {
         <div className={styles.reportBody}>
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{report?.markdown ?? ""}</ReactMarkdown>
         </div>
+      </Modal>
+
+      <Modal
+        open={addOpen}
+        onCancel={() => setAddOpen(false)}
+        title="Add custom test case"
+        confirmLoading={addCaseMutation.isLoading}
+        okText="Add case"
+        onOk={() => addForm.submit()}
+      >
+        <Form form={addForm} layout="vertical" onFinish={handleAddCase}>
+          <Form.Item
+            label="Title"
+            name="title"
+            rules={[{ required: true, message: "Enter a title for the test case" }]}
+          >
+            <Input placeholder="e.g. Check password reset rate limiting" />
+          </Form.Item>
+          <Form.Item label="Objective (optional)" name="objective">
+            <Input.TextArea
+              rows={2}
+              placeholder="What this test aims to verify"
+            />
+          </Form.Item>
+          <Form.Item label="How to test (optional)" name="howToTest">
+            <Input.TextArea
+              rows={3}
+              placeholder="Steps, tools and requests to run"
+            />
+          </Form.Item>
+          <Form.Item label="Category (optional)" name="categoryCode">
+            <Select
+              allowClear
+              placeholder="WSTG category"
+              options={(catalog?.categories ?? []).map((category) => ({
+                value: category.code,
+                label: `${category.section} ${category.name}`,
+              }))}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={Boolean(editingCase)}
+        onCancel={() => setEditingCase(null)}
+        title={`Edit test case ${editingCase?.testId ?? ""}`}
+        confirmLoading={updateCaseMutation.isLoading}
+        okText="Save changes"
+        onOk={() => editForm.submit()}
+      >
+        <Form form={editForm} layout="vertical" onFinish={handleEditCase}>
+          <Form.Item
+            label="Title"
+            name="title"
+            rules={[{ required: true, message: "Title cannot be empty" }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item label="Objective" name="objective">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item label="How to test" name="howToTest">
+            <Input.TextArea rows={4} />
+          </Form.Item>
+          <Form.Item label="Notes" name="notes">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );

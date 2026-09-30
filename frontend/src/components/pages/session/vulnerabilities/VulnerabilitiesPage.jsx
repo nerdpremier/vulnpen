@@ -96,7 +96,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
         <div>
           <span className={styles.eyebrow}>Engagement findings</span>
           <h1>Vulnerabilities</h1>
-          <p>Security findings recorded by the orchestrator and racers.</p>
+          <p>Security findings recorded by the orchestrator.</p>
         </div>
         <div className={styles.totalBadge}>{vulnerabilities.length} findings</div>
       </header>

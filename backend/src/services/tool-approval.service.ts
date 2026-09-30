@@ -50,7 +50,7 @@ export function shouldBlockAutonomousTool(
   mode: ToolExecutionMode,
 ): boolean {
   if (!safetyTriggered) return false;
-  return !(mode === "auto" && toolName.startsWith("mythic_"));
+  return true;
 }
 
 export async function decideToolConsent(params: {

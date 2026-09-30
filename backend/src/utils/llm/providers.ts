@@ -261,7 +261,6 @@ const userProviderCache = new Map<
 
 export interface UserModelsResult {
   orchestrator: ModelPreset;
-  racers: ModelPreset[];
   all: ModelPreset[];
 }
 
@@ -277,9 +276,6 @@ export function restrictHostSubscriptionModels(
   }
   return {
     orchestrator: models.orchestrator,
-    racers: models.racers.filter(
-      (preset) => !isSubscriptionProvider(preset.provider),
-    ),
     all: models.all.filter(
       (preset) => !isSubscriptionProvider(preset.provider),
     ),
@@ -302,12 +298,12 @@ export async function getUserModels(
       apiKey: envConfig.apiKey,
     };
     return restrictHostSubscriptionModels(
-      { orchestrator: fallback, racers: [], all: [fallback] },
+      { orchestrator: fallback, all: [fallback] },
       owner,
     );
   }
 
-  const unverifiedAssigned = [registry.orchestrator, ...registry.racers].find(
+  const unverifiedAssigned = [registry.orchestrator].find(
     (model) => !model.verifiedAt,
   );
   if (unverifiedAssigned) {
@@ -318,7 +314,6 @@ export async function getUserModels(
 
   const models = {
     orchestrator: registry.orchestrator,
-    racers: registry.racers,
     all: registry.all,
   };
   return restrictHostSubscriptionModels(models, owner);

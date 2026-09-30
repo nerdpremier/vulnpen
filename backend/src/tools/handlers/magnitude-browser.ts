@@ -122,7 +122,7 @@ const magnitudeBrowser: ToolDefinition = {
 
       const agentConfig: any = {
         url,
-        narrate: true,
+        narrate: false,
         browser: {
           launchOptions,
           contextOptions: { ignoreHTTPSErrors: true },

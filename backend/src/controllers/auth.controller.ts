@@ -7,9 +7,6 @@ import {
 } from "../utils/registrationPolicy";
 
 import bcrypt from "bcrypt";
-
-require("dotenv").config();
-
 import geoip from "geoip-lite";
 
 export const logout = async (req: Request, res: Response) => {
@@ -158,12 +155,39 @@ export const getRegistrationStatus = async (_req: Request, res: Response) => {
   }
 };
 
+// Simple in-memory login rate limiter: per-IP, sliding window.
+const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_RATE_MAX = 10;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+const loginRateLimited = (ip: string): boolean => {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_RATE_WINDOW_MS });
+    // Opportunistic cleanup of expired entries.
+    for (const [key, value] of loginAttempts) {
+      if (value.resetAt <= now) loginAttempts.delete(key);
+    }
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > LOGIN_RATE_MAX;
+};
+
 export const loginUser = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // req.ip honors X-Forwarded-For only when the app trusts a proxy (PROD); in LOCAL
+    // mode a spoofed header cannot influence the limiter or the stored IP.
+    const clientIp = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    if (loginRateLimited(clientIp)) {
+      return res.status(429).json({ message: "Too many login attempts, please try again later" });
     }
 
     const user = await UserModel.findOne({ email });
@@ -176,24 +200,15 @@ export const loginUser = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const head = req.headers["x-forwarded-for"] as string;
-    let headIp = null;
-    if (head) {
-      headIp = head.split(",")[0];
-    }
+    const ip = clientIp;
+    user.ip = ip;
+    const geo = geoip.lookup(ip);
 
-    const ip = headIp ?? req.socket.remoteAddress;
-
-    if (ip) {
-      user.ip = ip;
-      const geo = geoip.lookup(ip);
-
-      if (geo) {
-        user.ipLocation = {
-          ...geo,
-          ip: ip,
-        };
-      }
+    if (geo) {
+      user.ipLocation = {
+        ...geo,
+        ip: ip,
+      };
     }
 
     await user.save();

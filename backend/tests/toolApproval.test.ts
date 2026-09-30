@@ -63,20 +63,10 @@ test("built-in safety block still requires review in automatic mode", async () =
   assert.equal(called, false);
 });
 
-test("Auto run permits delegated Mythic operations without weakening host safeguards", () => {
-  assert.equal(
-    shouldBlockAutonomousTool("mythic_task", true, "auto"),
-    false,
-  );
-  assert.equal(
-    shouldBlockAutonomousTool("mythic_task", true, "auto_approve"),
-    true,
-  );
-  assert.equal(
-    shouldBlockAutonomousTool("mythic_task", true, "requires_consent"),
-    true,
-  );
+test("Safety-triggered tools are blocked outside explicit safe verdicts", () => {
   assert.equal(shouldBlockAutonomousTool("run_bash", true, "auto"), true);
+  assert.equal(shouldBlockAutonomousTool("run_bash", true, "auto_approve"), true);
+  assert.equal(shouldBlockAutonomousTool("run_bash", true, "requires_consent"), true);
   assert.equal(shouldBlockAutonomousTool("run_bash", false, "auto"), false);
 });
 

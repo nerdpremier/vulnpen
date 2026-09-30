@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { App, Tooltip } from "antd";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
-import vpn from "@/assets/sidebar/vpn.svg";
 import quad from "@/assets/sidebar/quad.svg";
 
 import rect from "@/assets/sidebar/rect.svg";
@@ -17,66 +16,10 @@ import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
 import { FiCheckSquare, FiMonitor, FiShield } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
-import { TbPlugConnected, TbRadar, TbTopologyStar3, TbWorldWww } from "react-icons/tb";
+import { TbRadar } from "react-icons/tb";
 import { HiOutlineChevronLeft } from "react-icons/hi";
-import {
-  LoadingOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  ThunderboltFilled,
-  TrophyOutlined,
-} from "@ant-design/icons";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
-
-const EMPTY_RACERS = [];
-
-function deriveRacers(swarms) {
-  if (!swarms || swarms.length === 0) return EMPTY_RACERS;
-  const activeSwarms = swarms.filter((sw) => sw.status === "running");
-  const display = activeSwarms.length > 0
-    ? activeSwarms
-    : [swarms[swarms.length - 1]];
-  const seen = new Map();
-  for (const sw of display) {
-    for (const a of sw.agents || []) {
-      seen.set(a.agentId, {
-        agentId: a.agentId,
-        status: a.status,
-        model: a.model,
-        isWinner: sw.winner === a.agentId,
-        tokenUsage: a.tokenUsage ?? null,
-      });
-    }
-  }
-  return Array.from(seen.values());
-}
-
-function racerFingerprint(swarms) {
-  if (!swarms || swarms.length === 0) return "";
-  const activeSwarms = swarms.filter((sw) => sw.status === "running");
-  const display = activeSwarms.length > 0
-    ? activeSwarms
-    : [swarms[swarms.length - 1]];
-  const parts = [];
-  for (const sw of display) {
-    for (const a of sw.agents || []) {
-      const tu = a.tokenUsage;
-      parts.push(
-        `${a.agentId}:${a.status}:${a.model || ""}:${sw.winner === a.agentId ? 1 : 0}:${tu ? `${tu.totalTokens},${tu.iteration},${tu.maxIterations}` : ""}`
-      );
-    }
-  }
-  return parts.join("|");
-}
-
-const RACER_STATUS = {
-  running: { icon: <LoadingOutlined spin style={{ fontSize: 8 }} />, color: "#58a6ff" },
-  completed: { icon: <CheckCircleOutlined style={{ fontSize: 8 }} />, color: "#7ee787" },
-  failed: { icon: <CloseCircleOutlined style={{ fontSize: 8 }} />, color: "#f85149" },
-  cancelled: { icon: <CloseCircleOutlined style={{ fontSize: 8 }} />, color: "#d29922" },
-  timed_out: { icon: <CloseCircleOutlined style={{ fontSize: 8 }} />, color: "#d29922" },
-};
 
 const Sidebar = ({ sessionId, workspaceId }) => {
   const router = useRouter();
@@ -119,12 +62,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     (state) => state.sessions[sessionId]?.tokenUsage ?? null,
   );
 
-  useAgentStreamStore(
-    (state) => racerFingerprint(state.sessions[sessionId]?.swarms),
-  );
-  const swarmsRef = useAgentStreamStore.getState().sessions[sessionId]?.swarms;
-  const allRacers = deriveRacers(swarmsRef);
-  const activeRacerCount = allRacers.filter((a) => a.status === "running").length;
 
   const handleClickTab = (id) => {
     dispatch(updateCurrentSession(id));
@@ -132,18 +69,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     if (selectedSession.length > 0) {
       router.push(`/session/${id}`);
     }
-  };
-
-  const navigateToVPN = () => {
-    const vpnId = `${sessionId}/vpn`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === vpnId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: vpnId, is_main: false, is_active: true, type: "vpn" });
-      dispatch(updateSessions(updatedSess));
-    }
-    router.push(`/session/${sessionId}/vpn`);
   };
 
   const navigateToGUI = () => {
@@ -170,62 +95,16 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     router.push(`/session/${sessionId}/burp`);
   };
 
-  const navigateToCaido = () => {
-    const caidoId = `${sessionId}/caido`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === caidoId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: caidoId, is_main: false, is_active: true, type: "caido" });
-      dispatch(updateSessions(updatedSess));
-    }
-    router.push(`/session/${sessionId}/caido`);
-  };
-
-  const navigateToMythic = () => {
-    const mythicId = `${sessionId}/mythic`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === mythicId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: mythicId, is_main: false, is_active: true, type: "mythic" });
-      dispatch(updateSessions(updatedSess));
-    }
-    router.push(`/session/${sessionId}/mythic`);
-  };
-
-  const navigateToBrowserAgent = () => {
-    const baId = `${sessionId}/browser-agent`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === baId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: baId, is_main: false, is_active: true, type: "browser-agent" });
-      dispatch(updateSessions(updatedSess));
-    }
-    router.push(`/session/${sessionId}/browser-agent`);
-  };
-
   const exitTarget = workspaceId
     ? `/workspace/${workspaceId}`
     : "/dashboard";
 
   const isOnWorkspace = pathname === `/session/${sessionId}`;
-  const isOnVPN = pathname?.includes("/vpn");
   const isOnGUI = pathname?.includes("/gui");
   const isOnBurp = pathname?.includes("/burp");
-  const isOnCaido = pathname?.includes("/caido");
-  const isOnMythic = pathname?.includes("/mythic");
-  const isOnBrowserAgent = pathname?.includes("/browser-agent");
   const isOnVulnerabilities = pathname?.includes("/vulnerabilities");
   const isOnTestPlan = pathname?.includes("/test-plan");
-  const isOnConnection = pathname?.includes("/connection");
-  const activeRacerPath = pathname?.match(/\/racer\/([^/]+)/)?.[1] ?? null;
-  const activeRacerTokenUsage = useMemo(() => {
-    if (!activeRacerPath) return null;
-    return allRacers.find((a) => a.agentId === activeRacerPath)?.tokenUsage ?? null;
-  }, [activeRacerPath, allRacers]);
-  const contextUsageForTab = activeRacerTokenUsage || orchestratorTokenUsage;
+  const contextUsageForTab = orchestratorTokenUsage;
 
   return (
     <div className={styles.sidebar}>
@@ -288,6 +167,8 @@ const Sidebar = ({ sessionId, workspaceId }) => {
               outline: 0,
               cursor: "pointer",
               fontSize: "0.72rem",
+              // Makes the native option popup render dark instead of white.
+              colorScheme: "dark",
             }}
           >
             <option value="auto">Auto run</option>
@@ -334,72 +215,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             Orchestrator
           </div>
 
-          {allRacers.length > 0 && (
-            <div className={styles.racerSection}>
-              <div className={styles.racerHeader}>
-                <ThunderboltFilled style={{ color: "#f0c000", fontSize: 10 }} />
-                <span>Racers</span>
-                <span className={styles.racerBadge}>
-                  {activeRacerCount > 0
-                    ? `${activeRacerCount}/${allRacers.length}`
-                    : `${allRacers.length}`}
-                </span>
-              </div>
-              {allRacers.map((racer) => {
-                const cfg = RACER_STATUS[racer.status] || RACER_STATUS.running;
-                const isActive = activeRacerPath === racer.agentId;
-                return (
-                  <div
-                    key={racer.agentId}
-                    onClick={() => router.push(`/session/${sessionId}/racer/${racer.agentId}`)}
-                    className={isActive ? styles.activeTab : styles.tab}
-                    style={{ paddingLeft: "1.5rem" }}
-                  >
-                    {racer.isWinner ? (
-                      <TrophyOutlined style={{ fontSize: 10, color: "#f0c000", flexShrink: 0 }} />
-                    ) : (
-                      <span style={{
-                        display: "inline-flex", alignItems: "center",
-                        width: 10, height: 10, borderRadius: "50%",
-                        backgroundColor: `${cfg.color}22`,
-                        border: `1px solid ${cfg.color}`,
-                        justifyContent: "center", flexShrink: 0,
-                      }}>
-                        {cfg.icon}
-                      </span>
-                    )}
-                    <span style={{
-                      overflow: "hidden", textOverflow: "ellipsis",
-                      whiteSpace: "nowrap", flex: 1,
-                      color: racer.isWinner ? "#f0c000" : cfg.color,
-                    }}>
-                      {racer.model || racer.agentId?.slice(0, 8)}
-                    </span>
-                    {racer.isWinner && (
-                      <span style={{
-                        fontSize: "0.55rem", color: "#f0c000",
-                        padding: "0 3px", borderRadius: 3,
-                        backgroundColor: "#f0c00015",
-                        fontWeight: 600,
-                      }}>
-                        Winner
-                      </span>
-                    )}
-                    {racer.status === "failed" && !racer.isWinner && (
-                      <span style={{
-                        fontSize: "0.55rem", color: "#f85149",
-                        padding: "0 3px", borderRadius: 3,
-                        backgroundColor: "#f8514915",
-                      }}>
-                        Failed
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
           <div
             onClick={() => router.push(`/session/${sessionId}/test-plan`)}
             className={isOnTestPlan ? styles.activeTab : styles.tab}
@@ -425,22 +240,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           </div>
 
           <div
-            onClick={() => router.push(`/session/${sessionId}/connection`)}
-            className={isOnConnection ? styles.activeTab : styles.tab}
-          >
-            <TbPlugConnected />
-            Connection
-          </div>
-
-          <div
-            onClick={navigateToVPN}
-            className={isOnVPN ? styles.activeTab : styles.tab}
-          >
-            <Image src={vpn} width={14} height={14} alt="" />
-            VPN
-          </div>
-
-          <div
             onClick={navigateToGUI}
             className={isOnGUI ? styles.activeTab : styles.tab}
           >
@@ -454,30 +253,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           >
             <TbRadar />
             Burp
-          </div>
-
-          <div
-            onClick={navigateToCaido}
-            className={isOnCaido ? styles.activeTab : styles.tab}
-          >
-            <TbRadar />
-            Caido
-          </div>
-
-          <div
-            onClick={navigateToMythic}
-            className={isOnMythic ? styles.activeTab : styles.tab}
-          >
-            <TbTopologyStar3 />
-            Mythic C2
-          </div>
-
-          <div
-            onClick={navigateToBrowserAgent}
-            className={isOnBrowserAgent ? styles.activeTab : styles.tab}
-          >
-            <TbWorldWww />
-            Browser Agent
           </div>
         </div>
       </div>

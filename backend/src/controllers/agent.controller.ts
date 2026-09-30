@@ -309,27 +309,6 @@ export const getHistory = async (req: Request, res: Response) => {
         createdAt: s.createdAt,
         completedAt: s.completedAt,
       })),
-      swarms: (session.swarms ?? []).map((sw) => ({
-        swarmId: sw.swarmId,
-        goal: sw.goal,
-        winCondition: sw.winCondition,
-        status: sw.status,
-        winner: sw.winner,
-        findings: sw.findings,
-        createdAt: sw.createdAt,
-        completedAt: sw.completedAt,
-        agents: (sw.agents ?? []).map((a) => ({
-          agentId: a.agentId,
-          task: a.task,
-          model: a.modelLabel,
-          modelLabel: a.modelLabel,
-          status: a.status,
-          result: a.result,
-          messages: a.messages,
-          createdAt: a.createdAt,
-          completedAt: a.completedAt,
-        })),
-      })),
       connectionState: session.connectionState ?? { sshConnected: false, hostConnected: false },
     });
   } catch (err: any) {
@@ -350,28 +329,6 @@ export const getSessionInfo = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    const ctfConfig = session.ctfConfig;
-    const isCTF = !!ctfConfig?.ctfName;
-    let ctf: Record<string, any> | undefined;
-
-    if (isCTF) {
-      const activeSolve = ctfConfig!.activeSolve as any;
-      const solveHistory = (ctfConfig as any)?.solveHistory ?? [];
-      const solve = solveHistory.find(
-        (r: any) => r.challengeName === session.name,
-      );
-
-      ctf = {
-        ctfName: ctfConfig!.ctfName,
-        category: activeSolve?.category || solve?.category || null,
-        points: activeSolve?.points ?? solve?.points ?? null,
-        status: solve?.status || "pending",
-        flag: solve?.confirmedFlag || null,
-        submittedToCtfd: solve?.submittedToCtfd || false,
-        flagFormat: ctfConfig!.flagFormat || null,
-      };
-    }
-
     return res.status(200).json({
       sessionId: session.sessionId,
       workspaceId: session.workspaceId,
@@ -382,8 +339,6 @@ export const getSessionInfo = async (req: Request, res: Response) => {
       totalTokens: session.totalTokens,
       messageCount: session.messages.length,
       connectionState: session.connectionState ?? { sshConnected: false },
-      isCTF,
-      ...(ctf ? { ctf } : {}),
     });
   } catch (err: any) {
     console.error("[agent] getSessionInfo error:", err);
@@ -431,15 +386,12 @@ export const clearContext = async (req: Request, res: Response) => {
         $set: {
           messages: systemMsg ? [systemMsg] : [],
           subagents: [],
-          swarms: [],
           agentState: "idle",
           pendingConsent: null,
           pendingManualExecution: null,
           turnIndex: 0,
           totalTokens: 0,
           tokenHistory: [],
-          "ctfConfig.activeSolve": null,
-          "ctfConfig.solveHistory": [],
         },
       },
     );

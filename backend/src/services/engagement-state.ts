@@ -1,4 +1,4 @@
-export type EngagementMode = "pentest" | "ctf";
+export type EngagementMode = "pentest";
 
 // ─── Shared types ───────────────────────────────────────────────────
 
@@ -75,8 +75,7 @@ export interface ActiveShell {
 
 /**
  * A C2 callback the agent is currently working through. Lives here — not in Mongo —
- * so the agent keeps track of its own implants across a long engagement; Mythic
- * remains the system of record for everything about them.
+ * so the agent keeps track of its own implants across a long engagement.
  */
 export interface ActiveImplant {
   callbackDisplayId: number;
@@ -88,19 +87,6 @@ export interface ActiveImplant {
   agentType?: string;
   /** host:port of a live SOCKS proxy through this implant, if one is open. */
   socksProxy?: string;
-}
-
-// ─── CTF types ──────────────────────────────────────────────────────
-
-export interface FlagAttempt {
-  value: string;
-  result: "correct" | "incorrect" | "already_solved" | "rate_limited";
-}
-
-export interface DistfileAnalysis {
-  filename: string;
-  fileType: string;
-  findings: string;
 }
 
 // ─── EngagementState class ──────────────────────────────────────────
@@ -116,16 +102,6 @@ export class EngagementState {
   vulnerabilities: Vulnerability[] = [];
   shells: ActiveShell[] = [];
   implants: ActiveImplant[] = [];
-
-  // CTF fields
-  challengeName?: string;
-  category?: string;
-  points?: number;
-  connectionInfo?: string;
-  challengeStatus: string = "unsolved";
-  confirmedFlag?: string;
-  flagAttempts: FlagAttempt[] = [];
-  distfiles: DistfileAnalysis[] = [];
   keyDiscoveries: string[] = [];
 
   // Shared fields
@@ -134,12 +110,11 @@ export class EngagementState {
   approachesTried: AttemptedApproach[] = [];
   nextSteps: string[] = [];
 
-  constructor(mode: EngagementMode) {
+  constructor(mode: EngagementMode = "pentest") {
     this.mode = mode;
   }
 
   toPromptBlock(): string {
-    if (this.mode === "ctf") return this.renderCtfState();
     return this.renderPentestState();
   }
 
@@ -151,8 +126,6 @@ export class EngagementState {
       this.vulnerabilities.length === 0 &&
       this.shells.length === 0 &&
       this.implants.length === 0 &&
-      this.flagAttempts.length === 0 &&
-      this.distfiles.length === 0 &&
       this.keyDiscoveries.length === 0 &&
       this.files.length === 0 &&
       this.approachesTried.length === 0 &&
@@ -226,7 +199,7 @@ export class EngagementState {
     }
 
     if (this.implants.length) {
-      sections.push("## Mythic C2 Implants");
+      sections.push("## C2 Implants");
       for (const i of this.implants) {
         const principal = [i.domain, i.user].filter(Boolean).join("\\") || "?";
         const integrity = i.integrityLevel ? ` [${i.integrityLevel}]` : "";
@@ -235,6 +208,13 @@ export class EngagementState {
         sections.push(
           `- callback ${i.callbackDisplayId}: ${principal}@${i.host}${integrity}${agent}${socks}`,
         );
+      }
+    }
+
+    if (this.keyDiscoveries.length) {
+      sections.push("## Key Discoveries");
+      for (const kd of this.keyDiscoveries) {
+        sections.push(`- ${kd}`);
       }
     }
 
@@ -253,51 +233,6 @@ export class EngagementState {
       return;
     }
     this.implants.push(implant);
-  }
-
-  private renderCtfState(): string {
-    const sections: string[] = [
-      `<engagement_state type="ctf" status="${this.challengeStatus}">`,
-      `Challenge: ${this.challengeName ?? "unknown"} | Category: ${this.category ?? "?"} | Points: ${this.points ?? "?"}`,
-    ];
-
-    if (this.confirmedFlag) {
-      sections.push(`CONFIRMED FLAG: ${this.confirmedFlag}`);
-    }
-
-    if (this.flagAttempts.length) {
-      sections.push("## Flag Attempts");
-      for (const f of this.flagAttempts) {
-        sections.push(`- "${f.value}" → ${f.result}`);
-      }
-    }
-
-    if (this.distfiles.length) {
-      sections.push("## Distfile Analysis");
-      for (const d of this.distfiles) {
-        sections.push(`- ${d.filename} (${d.fileType}): ${d.findings}`);
-      }
-    }
-
-    if (this.keyDiscoveries.length) {
-      sections.push("## Key Discoveries");
-      for (const kd of this.keyDiscoveries) {
-        sections.push(`- ${kd}`);
-      }
-    }
-
-    if (this.credentials.length) {
-      sections.push("## Credentials Found");
-      for (const c of this.credentials) {
-        sections.push(
-          `- ${c.username}:${c.secret} (${c.secretType}) — from: ${c.source}`,
-        );
-      }
-    }
-
-    this.renderShared(sections);
-    sections.push("</engagement_state>");
-    return sections.join("\n");
   }
 
   private renderShared(sections: string[]): void {

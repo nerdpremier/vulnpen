@@ -2,14 +2,14 @@ import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import type { WebAppTestPlanDoc } from "../../models/Sessions/Sessions.model";
 import {
-  TEST_PLAN_DEPTHS,
   TEST_STATUSES,
   computeCoverage,
   createTestPlan,
   nextTestsToRun,
+  addTestCase,
   updateTestCase,
 } from "../../services/web-security/test-plan.service";
-import { WSTG_VERSION, getOwaspCategory, getWstgTest } from "../../knowledge";
+import { WSTG_VERSION, getWstgTest } from "../../knowledge";
 
 async function loadPlan(sessionId: string): Promise<WebAppTestPlanDoc | null> {
   const session = await SessionsModel.findOne({ sessionId })
@@ -36,18 +36,17 @@ function coverageLine(plan: WebAppTestPlanDoc): string {
 
 function caseLine(plan: WebAppTestPlanDoc, testId: string, verbose: boolean): string {
   const testCase = plan.cases.find((item) => item.testId === testId)!;
-  const owasp = testCase.owasp
-    .map((id) => `${id} ${getOwaspCategory(id)?.title ?? ""}`.trim())
-    .join(", ");
   const lines = [
     `${testCase.testId} (${testCase.section}) ${testCase.title}`,
-    `  status: ${testCase.status} | owasp: ${owasp} | cwe: ${testCase.cwe.join(", ") || "—"}`,
+    `  status: ${testCase.status} | category: ${testCase.categoryCode || "—"}`,
     `  objective: ${testCase.objective}`,
   ];
   if (verbose) {
     lines.push(`  method: ${testCase.howToTest}`);
-    lines.push(`  tools: ${testCase.tools.join(", ")}`);
-    lines.push(`  expected evidence: ${testCase.evidenceExpectation}`);
+    if (testCase.tools.length) lines.push(`  tools: ${testCase.tools.join(", ")}`);
+    if (testCase.evidenceExpectation) {
+      lines.push(`  expected evidence: ${testCase.evidenceExpectation}`);
+    }
     if (testCase.notes) lines.push(`  notes: ${testCase.notes}`);
     if (testCase.observations) lines.push(`  observations: ${testCase.observations}`);
     if (testCase.linkedVulnerabilityIds?.length) {
@@ -61,9 +60,11 @@ const wstgTestPlan: ToolDefinition = {
   name: "wstg_test_plan",
   description:
     `Plan and track OWASP WSTG v${WSTG_VERSION} test cases for this web application engagement. ` +
-    'Use action "generate" to build or refresh the plan for a target, "list" to see what is planned, ' +
-    '"get" to read one test case in full, "update_case" to record the result of a test ' +
-    '(status plus observations and linked findings), and "coverage" to report progress. ' +
+    'Use action "generate" to build or refresh the plan for a target (full WSTG catalogue by default, ' +
+    'optionally narrowed by categories or an explicit list of test ids), "list" to see what is planned, ' +
+    '"get" to read one test case in full, "update_case" to record the result of a test or edit its text ' +
+    '(status, observations, title, objective, method, notes and linked findings), "add_case" to add a ' +
+    'custom case that is not part of the WSTG catalogue, and "coverage" to report progress. ' +
     "The plan is persisted in the session and returned to you in the system prompt, so keep it current: " +
     "mark a case in_progress before you start it, and set it to passed or failed as soon as you know the result.",
   parameters: {
@@ -71,7 +72,7 @@ const wstgTestPlan: ToolDefinition = {
     properties: {
       action: {
         type: "string",
-        enum: ["generate", "list", "get", "update_case", "coverage"],
+        enum: ["generate", "list", "get", "update_case", "add_case", "coverage"],
         description: "What to do with the WSTG test plan.",
       },
       target: {
@@ -83,12 +84,6 @@ const wstgTestPlan: ToolDefinition = {
         description:
           "Scope statement for the plan: in-scope hosts, applications, API surface and any exclusions.",
       },
-      depth: {
-        type: "string",
-        enum: TEST_PLAN_DEPTHS.map((depth) => depth.id),
-        description:
-          "How much of WSTG v4.2 to plan. smoke = highest-yield tests, standard = all categories, deep = standard plus low-yield tests, full = all test cases.",
-      },
       categories: {
         type: "array",
         items: { type: "string" },
@@ -99,11 +94,32 @@ const wstgTestPlan: ToolDefinition = {
         type: "array",
         items: { type: "string" },
         description:
-          'Optional explicit list of test ids to plan instead of a depth tier, e.g. ["WSTG-INPV-05", "WSTG-ATHZ-04"].',
+          'Optional explicit list of WSTG test ids to plan instead of the full catalogue, e.g. ["WSTG-INPV-05", "WSTG-ATHZ-04"].',
       },
       test_id: {
         type: "string",
-        description: "Test id for action \"get\" or \"update_case\", e.g. WSTG-INPV-05.",
+        description:
+          'Test id for action "get" or "update_case", e.g. WSTG-INPV-05 or a custom id like CUSTOM-01.',
+      },
+      title: {
+        type: "string",
+        description:
+          'Title of the case. Required for action "add_case"; optional for "update_case" to rename a case.',
+      },
+      objective: {
+        type: "string",
+        description:
+          'What the case is trying to establish. Optional for "add_case" and "update_case".',
+      },
+      how_to_test: {
+        type: "string",
+        description:
+          'How to execute the case: steps, payloads, tooling. Optional for "add_case" and "update_case".',
+      },
+      category_code: {
+        type: "string",
+        description:
+          'Category for action "add_case": a WSTG category code (e.g. INPV) or free text. Optional.',
       },
       status: {
         type: "string",
@@ -145,7 +161,6 @@ const wstgTestPlan: ToolDefinition = {
           target: typeof args.target === "string" ? args.target : undefined,
           scope: typeof args.scope === "string" ? args.scope : undefined,
           notes: typeof args.notes === "string" ? args.notes : undefined,
-          depth: args.depth,
           categories: Array.isArray(args.categories) ? args.categories : undefined,
           testIds: Array.isArray(args.test_ids) ? args.test_ids : undefined,
           existing,
@@ -154,18 +169,17 @@ const wstgTestPlan: ToolDefinition = {
 
         const next = nextTestsToRun(result.plan, 8);
         const lines = [
-          `Test plan ${existing ? "updated" : "created"}: ${result.plan.cases.length} WSTG v${WSTG_VERSION} test cases (depth: ${result.plan.depth}). ${result.added} added, ${result.kept} kept with their previous status.`,
+          `Test plan ${existing ? "updated" : "created"}: ${result.plan.cases.length} WSTG v${WSTG_VERSION} test cases. ${result.added} added, ${result.kept} kept with their previous status.`,
           result.plan.target ? `Target: ${result.plan.target}` : "",
           result.plan.scope ? `Scope: ${result.plan.scope}` : "",
           coverageLine(result.plan),
           "",
-          "Start with these (highest yield first):",
+          "Start with these (plan order):",
           ...next.map(
-            (testCase) =>
-              `- ${testCase.testId} (${testCase.section}) ${testCase.title} — ${testCase.owasp.join(", ")}`,
+            (testCase) => `- ${testCase.testId} (${testCase.section}) ${testCase.title}`,
           ),
           "",
-          'Update each case with action "update_case" as you work through it.',
+          'Update each case with action "update_case" as you work through it. Add custom cases with action "add_case".',
         ];
         return { output: lines.filter(Boolean).join("\n"), exitCode: 0 };
       }
@@ -174,7 +188,7 @@ const wstgTestPlan: ToolDefinition = {
       if (!plan) {
         return {
           output:
-            'No WSTG test plan exists for this session yet. Call wstg_test_plan with action "generate" (optionally with target, scope and depth) first.',
+            'No WSTG test plan exists for this session yet. Call wstg_test_plan with action "generate" (optionally with target, scope and categories) first.',
           exitCode: 1,
         };
       }
@@ -187,12 +201,7 @@ const wstgTestPlan: ToolDefinition = {
           "By category:",
           ...coverage.byCategory.map(
             (row) =>
-              `- ${row.key} ${row.executed}/${row.total} (${row.passed} passed, ${row.failed} failed, ${row.blocked} blocked)`,
-          ),
-          "",
-          "By OWASP Top 10:2025:",
-          ...coverage.byOwasp.map(
-            (row) => `- ${row.key} ${row.label}: ${row.executed}/${row.total}`,
+              `- ${row.key} ${row.label}: ${row.executed}/${row.total} (${row.passed} passed, ${row.failed} failed, ${row.blocked} blocked)`,
           ),
         ];
         const failures = plan.cases.filter((testCase) => testCase.status === "failed");
@@ -214,6 +223,35 @@ const wstgTestPlan: ToolDefinition = {
         return { output: lines.join("\n"), exitCode: 0 };
       }
 
+      if (action === "add_case") {
+        const added = addTestCase(plan, {
+          testId: typeof args.test_id === "string" ? args.test_id : undefined,
+          title: args.title,
+          objective: args.objective,
+          howToTest: typeof args.how_to_test === "string" ? args.how_to_test : args.howToTest,
+          categoryCode: args.category_code ?? args.categoryCode,
+          notes: args.notes,
+        });
+        if (!added) {
+          return {
+            output:
+              args.title
+                ? "Could not add the case: a case with that test_id already exists."
+                : '"add_case" requires a title.',
+            exitCode: 1,
+          };
+        }
+        await persistPlan(sessionId, added.plan);
+        const lines = [
+          `Added case ${added.testCase.testId}: ${added.testCase.title}`,
+          added.testCase.objective ? `  objective: ${added.testCase.objective}` : "",
+          coverageLine(added.plan),
+          "",
+          'Work it like any other case: action "update_case" with test_id when you run it.',
+        ];
+        return { output: lines.filter(Boolean).join("\n"), exitCode: 0 };
+      }
+
       if (action === "get") {
         const testId = typeof args.test_id === "string" ? args.test_id : "";
         const testCase = plan.cases.find(
@@ -223,8 +261,8 @@ const wstgTestPlan: ToolDefinition = {
           const known = getWstgTest(testId);
           return {
             output: known
-              ? `${known.id} is a valid WSTG test but it is not part of this plan (plan depth: ${plan.depth}). Regenerate the plan with a deeper tier or pass test_ids to add it.`
-              : `Unknown test id "${testId}". Use action "list" to see planned test ids.`,
+              ? `${known.id} is a valid WSTG test but it is not part of this plan. Regenerate the plan with test_ids (or without a category filter) to include it.`
+              : `Unknown test id "${testId}". Use action "list" to see planned test ids, or action "add_case" to add it as a custom case.`,
             exitCode: 1,
           };
         }
@@ -238,6 +276,14 @@ const wstgTestPlan: ToolDefinition = {
         }
         const updated = updateTestCase(plan, testId, {
           status: args.status,
+          title: typeof args.title === "string" ? args.title : undefined,
+          objective: typeof args.objective === "string" ? args.objective : undefined,
+          howToTest:
+            typeof args.how_to_test === "string"
+              ? args.how_to_test
+              : typeof args.howToTest === "string"
+                ? args.howToTest
+                : undefined,
           notes: typeof args.notes === "string" ? args.notes : undefined,
           observations: typeof args.observations === "string" ? args.observations : undefined,
           addLinkedVulnerabilityId:
@@ -245,7 +291,7 @@ const wstgTestPlan: ToolDefinition = {
         });
         if (!updated) {
           return {
-            output: `${testId} is not in this plan. Use action "list" to see planned test ids, or regenerate the plan to include it.`,
+            output: `${testId} is not in this plan. Use action "list" to see planned test ids, regenerate the plan to include it, or add it with action "add_case".`,
             exitCode: 1,
           };
         }
@@ -278,10 +324,10 @@ const wstgTestPlan: ToolDefinition = {
         if (statusFilter) {
           cases = cases.filter((testCase) => testCase.status === statusFilter);
         }
-        const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(97, Number(args.limit))) : 25;
+        const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(200, Number(args.limit))) : 25;
         const shown = cases.slice(0, limit);
         const lines = [
-          `WSTG v${WSTG_VERSION} plan (depth: ${plan.depth}) — ${coverageLine(plan)}`,
+          `WSTG v${WSTG_VERSION} plan — ${coverageLine(plan)}`,
           requestedCategories.length || statusFilter
             ? `Filtered to ${cases.length} case(s)${statusFilter ? ` with status ${statusFilter}` : ""}.`
             : "",

@@ -116,7 +116,7 @@ export const WSTG_TESTS: WstgTest[] = [
       "Run dork queries (site:, intitle:, inurl:, filetype:, cache:) against the target domain on Google, Bing and DuckDuckGo, then repeat against non-search engines: Wayback Machine, Google/Bing cache and archive/history services. Open every interesting hit and check whether the resource is still live instead of cached.",
     owasp: ["A02:2025", "A01:2025"],
     cwe: ["CWE-200", "CWE-538"],
-    tools: ["google_search", "browser_action", "curl", "jq"],
+    tools: ["browser_action", "curl", "jq"],
     evidence: "Screenshot or saved request/response for each leaked artefact, together with the exact query that surfaced it.",
   },
   {
@@ -227,7 +227,7 @@ export const WSTG_TESTS: WstgTest[] = [
       "Establish the application identity from titles, headers, JS bundles and file paths, then enumerate components: CMS plug-ins and themes, JavaScript libraries and their versions, and changelog or readme files that reveal release numbers. Map each component version to known vulnerabilities.",
     owasp: ["A03:2025", "A02:2025"],
     cwe: ["CWE-1104", "CWE-200"],
-    tools: ["nuclei", "ffuf", "browser_action", "google_search"],
+    tools: ["nuclei", "ffuf", "browser_action"],
     evidence: "A component table (product, version, source file) with the request/response or file that proves each version.",
   },
   {
@@ -380,7 +380,7 @@ export const WSTG_TESTS: WstgTest[] = [
       "Enumerate subdomains from certificate transparency, DNS brute force and search engines, then resolve them to find dangling CNAMEs pointing at unclaimed third-party services (S3, GitHub Pages, Heroku, Azure, Shopify, Fastly). Confirm the provider's unregistered-resource error signature without actually claiming the resource.",
     owasp: ["A03:2025", "A08:2025"],
     cwe: ["CWE-350", "CWE-284"],
-    tools: ["curl", "nmap", "run_python_script", "google_search"],
+    tools: ["curl", "nmap", "run_python_script"],
     evidence: "The dangling DNS record, the provider's unclaimed-resource response and a takeover proof-of-concept landing page screenshot.",
   },
   {
@@ -1046,7 +1046,7 @@ export const WSTG_TESTS: WstgTest[] = [
       "Fuzz URL-like parameters (webhooks, importers, image and PDF generators, SSO metadata, link previews) with internal targets (127.0.0.1, localhost aliases, 169.254.169.254, RFC1918 ranges, [::1], decimal, octal and IPv6-mapped forms) and a collaborator host. Bypass filters with redirects, DNS rebinding, URL parsing differences, protocol wrappers (gopher, file, dict, sftp) and case or credential-prefix tricks.",
     owasp: ["A01:2025", "A05:2025"],
     cwe: ["CWE-918"],
-    tools: ["send_to_burp_repeater", "burp_collaborator", "caido_oast", "run_python_script"],
+    tools: ["send_to_burp_repeater", "burp_collaborator", "run_python_script"],
     evidence: "The collaborator interaction, cloud metadata response or internal service response returned through the SSRF, with the destination used.",
   },
   {
@@ -1185,7 +1185,7 @@ export const WSTG_TESTS: WstgTest[] = [
       "Measure response times for user enumeration, token or OTP comparison, coupon validation and expensive operations to find statistically significant leaks, then race critical sections by firing simultaneous requests (single-packet or high-concurrency bursts) to win a time-of-check to time-of-use window on limits, balances or votes.",
     owasp: ["A06:2025", "A10:2025"],
     cwe: ["CWE-208", "CWE-362", "CWE-367"],
-    tools: ["run_python_script", "send_to_burp_intruder", "send_to_caido_automate", "jq"],
+    tools: ["run_python_script", "send_to_burp_intruder", "jq"],
     evidence: "Timing distribution tables for valid versus invalid input, or parallel-request output showing the duplicated business effect.",
   },
   {
@@ -1199,7 +1199,7 @@ export const WSTG_TESTS: WstgTest[] = [
       "Identify functions with an intended limit (vouchers, OTPs, password resets, invitations, votes, API quotas, downloads) and exceed it deliberately, then bypass the counter with parallel requests, parameter variations, session or IP rotation, alternating accounts and resetting the counter through a successful action or a new session.",
     owasp: ["A09:2025", "A06:2025"],
     cwe: ["CWE-799", "CWE-770", "CWE-307"],
-    tools: ["send_to_burp_intruder", "run_python_script", "send_to_caido_automate", "jq"],
+    tools: ["send_to_burp_intruder", "run_python_script", "jq"],
     evidence: "A log of successful uses beyond the documented limit plus the request pattern that bypassed the counter.",
   },  {
     id: "WSTG-BUSL-06",
@@ -1392,7 +1392,7 @@ export const WSTG_TESTS: WstgTest[] = [
       "Estimate the data exchanged, then test the handshake for Origin validation, cookie-based authentication, arbitrary subprotocols and protocol version handling. Replay and tamper with messages, including binary and fragmented frames, to check server-side validation, and finish with a cross-site WebSocket hijacking proof of concept.",
     owasp: ["A05:2025", "A01:2025"],
     cwe: ["CWE-1385", "CWE-346"],
-    tools: ["browser_action", "send_to_caido_replay", "run_python_script", "search_burp_proxy_history"],
+    tools: ["browser_action", "run_python_script", "search_burp_proxy_history"],
     evidence: "The handshake and message frames, including a tampered frame the server accepted, or the cross-site hijacking output.",
   },
   {

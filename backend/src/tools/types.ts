@@ -16,7 +16,7 @@ export interface ToolResult {
   installSuggestion?: InstallSuggestion;
 }
 
-export type AgentRole = "main" | "swarm_agent" | "subagent" | "orchestrator";
+export type AgentRole = "main" | "subagent" | "orchestrator";
 
 export interface ExecutionContext {
   sessionId: string;
@@ -32,19 +32,6 @@ export interface ExecutionContext {
   listShells: () => ShellInfo[];
   getShellInfo: (shellId: string) => ShellInfo | undefined;
   spawnSubagent?: (task: string) => Promise<string>;
-  spawnSwarm?: (params: {
-    goal: string;
-    agents: Array<{ task: string; context?: string }>;
-    winCondition?: string;
-    timeoutMinutes?: number;
-  }) => Promise<string>;
-  reportFinding?: (finding: string, isSuccess?: boolean) => void;
-  checkFindings?: () => string;
-  getSwarmStatus?: () => any[];
-  bumpRacer?: (racerId: string, insights: string) => string;
-  broadcastToRacers?: (message: string) => string;
-  readRacerTrace?: (racerId: string, lastN: number) => any[];
-  waitForRacers?: (seconds: number) => Promise<void>;
   onOutput?: (chunk: string) => void;
   engagementState?: EngagementState;
 }

@@ -1,24 +1,25 @@
 /**
  * OWASP WSTG v4.2 test planning for the Web Application Security Testing assistant.
  *
- * A session owns one test plan. The plan is generated from the static WSTG v4.2
- * catalogue (see ../../knowledge) at a chosen depth, then the agent works
- * through it: it marks cases in progress, records observations, links the
- * findings they produced and finally reports what was never tested. The plan is
- * persisted in the session document and re-injected into the system prompt on
- * every turn, so coverage survives context summarisation.
+ * A session owns one test plan. By default the plan covers the full WSTG v4.2
+ * catalogue (see ../../knowledge), optionally narrowed to a few categories or a
+ * shortlist of test ids. The agent and the user can also add custom cases that
+ * are not part of the catalogue. The plan is persisted in the session document
+ * and re-injected into the system prompt on every turn, so coverage survives
+ * context summarisation.
+ *
+ * The plan deliberately carries no OWASP Top 10 / CWE pre-mapping: mapping
+ * belongs to actual findings on the Vulnerabilities page, not to planned tests.
  */
 
 import {
   WSTG_CATEGORIES,
   WSTG_TESTS,
   WSTG_VERSION,
-  getOwaspCategory,
   getWstgTest,
-  normalizeOwaspTop10Id,
   normalizeWstgId,
 } from "../../knowledge";
-import type { OwaspTop10Id, TestPlanDepth, WstgTest, WstgTestStatus } from "../../knowledge";
+import type { WstgTest, WstgTestStatus } from "../../knowledge";
 import type {
   SessionTestCaseDoc,
   WebAppTestPlanDoc,
@@ -33,175 +34,6 @@ export const TEST_STATUSES: WstgTestStatus[] = [
   "failed",
   "blocked",
   "skipped",
-];
-
-/**
- * Depth tiers are cumulative. They exist because a web application assessment
- * is a budget: the smoke tier is the set of tests that historically find the
- * most impact per hour, and each later tier adds the tests that need more
- * access, more time or a lower tolerance for noise.
- */
-const SMOKE_TEST_IDS = [
-  "WSTG-INFO-01",
-  "WSTG-INFO-03",
-  "WSTG-INFO-05",
-  "WSTG-INFO-08",
-  "WSTG-CONF-01",
-  "WSTG-CONF-02",
-  "WSTG-CONF-06",
-  "WSTG-CONF-07",
-  "WSTG-ATHN-02",
-  "WSTG-ATHN-04",
-  "WSTG-ATHZ-01",
-  "WSTG-ATHZ-02",
-  "WSTG-ATHZ-04",
-  "WSTG-SESS-02",
-  "WSTG-SESS-05",
-  "WSTG-INPV-01",
-  "WSTG-INPV-05",
-  "WSTG-INPV-12",
-  "WSTG-INPV-17",
-  "WSTG-INPV-19",
-  "WSTG-CLNT-01",
-  "WSTG-CLNT-09",
-  "WSTG-ERRH-02",
-  "WSTG-APIT-01",
-];
-
-const STANDARD_EXTRA_TEST_IDS = [
-  "WSTG-INFO-02",
-  "WSTG-INFO-09",
-  "WSTG-INFO-10",
-  "WSTG-CONF-03",
-  "WSTG-CONF-04",
-  "WSTG-CONF-05",
-  "WSTG-CONF-10",
-  "WSTG-IDNT-04",
-  "WSTG-ATHN-01",
-  "WSTG-ATHN-03",
-  "WSTG-ATHN-07",
-  "WSTG-ATHN-09",
-  "WSTG-ATHZ-03",
-  "WSTG-SESS-01",
-  "WSTG-SESS-03",
-  "WSTG-SESS-06",
-  "WSTG-SESS-07",
-  "WSTG-INPV-02",
-  "WSTG-INPV-04",
-  "WSTG-INPV-07",
-  "WSTG-INPV-11",
-  "WSTG-INPV-15",
-  "WSTG-INPV-18",
-  "WSTG-CRYP-01",
-  "WSTG-CRYP-03",
-  "WSTG-BUSL-01",
-  "WSTG-BUSL-05",
-  "WSTG-BUSL-08",
-  "WSTG-CLNT-02",
-  "WSTG-CLNT-03",
-  "WSTG-CLNT-07",
-  "WSTG-CLNT-12",
-];
-
-const DEEP_EXTRA_TEST_IDS = [
-  "WSTG-INFO-04",
-  "WSTG-INFO-06",
-  "WSTG-INFO-07",
-  "WSTG-CONF-08",
-  "WSTG-CONF-09",
-  "WSTG-CONF-11",
-  "WSTG-IDNT-01",
-  "WSTG-IDNT-02",
-  "WSTG-IDNT-03",
-  "WSTG-IDNT-05",
-  "WSTG-ATHN-05",
-  "WSTG-ATHN-06",
-  "WSTG-ATHN-08",
-  "WSTG-ATHN-10",
-  "WSTG-SESS-04",
-  "WSTG-SESS-08",
-  "WSTG-SESS-09",
-  "WSTG-INPV-03",
-  "WSTG-INPV-06",
-  "WSTG-INPV-08",
-  "WSTG-INPV-13",
-  "WSTG-INPV-14",
-  "WSTG-INPV-16",
-  "WSTG-CRYP-02",
-  "WSTG-CRYP-04",
-  "WSTG-BUSL-02",
-  "WSTG-BUSL-03",
-  "WSTG-BUSL-07",
-  "WSTG-CLNT-05",
-  "WSTG-CLNT-06",
-  "WSTG-CLNT-08",
-  "WSTG-CLNT-10",
-  "WSTG-CLNT-11",
-  "WSTG-CLNT-13",
-];
-
-const FULL_EXTRA_TEST_IDS = [
-  "WSTG-INPV-09",
-  "WSTG-INPV-10",
-  "WSTG-ERRH-01",
-  "WSTG-BUSL-04",
-  "WSTG-BUSL-06",
-  "WSTG-BUSL-09",
-  "WSTG-CLNT-04",
-];
-
-const TIER_TEST_IDS: Record<TestPlanDepth, string[]> = {
-  smoke: SMOKE_TEST_IDS,
-  standard: [...SMOKE_TEST_IDS, ...STANDARD_EXTRA_TEST_IDS],
-  deep: [...SMOKE_TEST_IDS, ...STANDARD_EXTRA_TEST_IDS, ...DEEP_EXTRA_TEST_IDS],
-  full: [
-    ...SMOKE_TEST_IDS,
-    ...STANDARD_EXTRA_TEST_IDS,
-    ...DEEP_EXTRA_TEST_IDS,
-    ...FULL_EXTRA_TEST_IDS,
-  ],
-};
-
-/** Catalogue order, reordered so the highest-yield tests come first. */
-const PLAN_PRIORITY: ReadonlyMap<string, number> = new Map(
-  TIER_TEST_IDS.full.map((id, index) => [id, index] as const),
-);
-
-export interface TestPlanDepthOption {
-  id: TestPlanDepth;
-  label: string;
-  description: string;
-  testCount: number;
-}
-
-export const TEST_PLAN_DEPTHS: TestPlanDepthOption[] = [
-  {
-    id: "smoke",
-    label: "Smoke",
-    description:
-      "Highest-yield tests only — fast pass to find the obvious critical and high findings.",
-    testCount: TIER_TEST_IDS.smoke.length,
-  },
-  {
-    id: "standard",
-    label: "Standard",
-    description:
-      "Balanced coverage across every WSTG v4.2 category, suitable for most engagements.",
-    testCount: TIER_TEST_IDS.standard.length,
-  },
-  {
-    id: "deep",
-    label: "Deep",
-    description:
-      "Standard coverage plus the low-yield, high-effort tests and client-side edge cases.",
-    testCount: TIER_TEST_IDS.deep.length,
-  },
-  {
-    id: "full",
-    label: "Full",
-    description: `Complete WSTG v${WSTG_VERSION} coverage: all ${WSTG_TESTS.length} test cases.`,
-    testCount: TIER_TEST_IDS.full.length,
-  },
 ];
 
 export interface TestPlanCoverageRow {
@@ -227,20 +59,21 @@ export interface TestPlanCoverage {
   percentExecuted: number;
   percentPassed: number;
   byCategory: TestPlanCoverageRow[];
-  byOwasp: TestPlanCoverageRow[];
 }
 
 export interface CreateTestPlanInput {
   target?: string;
   scope?: string;
   notes?: string;
-  depth?: unknown;
   categories?: string[];
   testIds?: string[];
   existing?: WebAppTestPlanDoc | null;
 }
 
 export interface UpdateTestCasePatch {
+  title?: string;
+  objective?: string;
+  howToTest?: string;
   status?: unknown;
   notes?: string;
   observations?: string;
@@ -248,10 +81,13 @@ export interface UpdateTestCasePatch {
   addLinkedVulnerabilityId?: string;
 }
 
-export function normalizeDepth(value: unknown): TestPlanDepth {
-  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
-  const match = TEST_PLAN_DEPTHS.find((depth) => depth.id === raw);
-  return match ? match.id : "standard";
+export interface AddTestCaseInput {
+  testId?: string;
+  title?: unknown;
+  objective?: unknown;
+  howToTest?: unknown;
+  categoryCode?: unknown;
+  notes?: unknown;
 }
 
 export function normalizeTestStatus(value: unknown): WstgTestStatus | undefined {
@@ -283,17 +119,15 @@ export function isWstgCategoryCode(value: unknown): boolean {
   );
 }
 
-/** Test ids selected by a depth tier, optionally narrowed to WSTG categories. */
+/** Test ids from the WSTG catalogue, optionally narrowed to categories, in catalogue order. */
 export function selectTestIds(options: {
-  depth?: unknown;
   categories?: string[];
   testIds?: string[];
 }): string[] {
-  const depth = normalizeDepth(options.depth);
   const explicit = (options.testIds ?? [])
     .map((id) => normalizeWstgId(id))
     .filter((id) => !!getWstgTest(id));
-  const baseIds = explicit.length ? explicit : TIER_TEST_IDS[depth];
+  const baseIds = explicit.length ? explicit : WSTG_TESTS.map((test) => test.id);
 
   const categories = new Set(
     (options.categories ?? [])
@@ -308,16 +142,11 @@ export function selectTestIds(options: {
       })
     : [...baseIds];
 
+  // Keep catalogue order: WSTG_TESTS defines the sequence, so sort by it.
+  const catalogueIndex = new Map(WSTG_TESTS.map((test, index) => [test.id, index] as const));
   return ids
     .filter((id, index) => ids.indexOf(id) === index)
-    .sort((a, b) => priorityIndex(a) - priorityIndex(b));
-}
-
-function priorityIndex(testId: string): number {
-  const rank = PLAN_PRIORITY.get(testId);
-  if (rank !== undefined) return rank;
-  const catalogIndex = WSTG_TESTS.findIndex((test) => test.id === testId);
-  return WSTG_TESTS.length + (catalogIndex < 0 ? 0 : catalogIndex);
+    .sort((a, b) => (catalogueIndex.get(a) ?? 0) - (catalogueIndex.get(b) ?? 0));
 }
 
 export function buildTestCase(test: WstgTest): SessionTestCaseDoc {
@@ -329,8 +158,6 @@ export function buildTestCase(test: WstgTest): SessionTestCaseDoc {
     title: test.title,
     objective: test.objective,
     howToTest: test.howToTest,
-    owasp: [...test.owasp],
-    cwe: [...test.cwe],
     tools: [...test.tools],
     evidenceExpectation: test.evidence,
     status: "not_started",
@@ -345,17 +172,67 @@ function categoryNameFor(code: string): string {
   return WSTG_CATEGORIES.find((category) => category.code === code)?.name ?? code;
 }
 
+/** A test id that does not belong to the static WSTG catalogue (e.g. CUSTOM-01). */
+export function isCustomTestId(testId: string): boolean {
+  return !getWstgTest(testId);
+}
+
+/**
+ * Create a SessionTestCaseDoc for a custom case that is not part of the WSTG
+ * catalogue. The testId is not validated against the catalogue: the caller may
+ * pass a deterministic id or let the service generate CUSTOM-NN.
+ */
+export function addTestCase(
+  plan: WebAppTestPlanDoc,
+  input: AddTestCaseInput,
+): { plan: WebAppTestPlanDoc; testCase: SessionTestCaseDoc } | undefined {
+  const title = typeof input.title === "string" ? input.title.trim() : "";
+  if (!title) return undefined;
+
+  const existingIds = new Set(plan.cases.map((testCase) => testCase.testId.toUpperCase()));
+  let testId =
+    typeof input.testId === "string" ? input.testId.trim() : "";
+  if (testId && existingIds.has(testId.toUpperCase())) return undefined;
+  if (!testId) {
+    const prefix = "CUSTOM-";
+    let counter = 1;
+    while (existingIds.has(`${prefix}${String(counter).padStart(2, "0")}`)) counter += 1;
+    testId = `${prefix}${String(counter).padStart(2, "0")}`;
+  }
+
+  const rawCategory = typeof input.categoryCode === "string" ? input.categoryCode.trim() : "";
+  const categoryCode = isWstgCategoryCode(rawCategory) ? rawCategory.toUpperCase() : rawCategory;
+
+  const testCase: SessionTestCaseDoc = {
+    testId,
+    section: "",
+    categoryCode,
+    categoryName: categoryNameFor(categoryCode),
+    title,
+    objective: typeof input.objective === "string" ? input.objective.trim() : "",
+    howToTest: typeof input.howToTest === "string" ? input.howToTest.trim() : "",
+    tools: [],
+    evidenceExpectation: "",
+    status: "not_started",
+    notes: typeof input.notes === "string" ? input.notes.trim() : "",
+    observations: "",
+    linkedVulnerabilityIds: [],
+    updatedAt: new Date(),
+  };
+
+  return { plan: { ...plan, cases: [...plan.cases, testCase], updatedAt: new Date() }, testCase };
+}
+
 export function createTestPlan(input: CreateTestPlanInput): {
   plan: WebAppTestPlanDoc;
   added: number;
   kept: number;
   coverage: TestPlanCoverage;
 } {
-  const depth = normalizeDepth(input.depth ?? input.existing?.depth);
   const categories = (input.categories ?? [])
     .map((code) => String(code).trim().toUpperCase())
     .filter((code) => isWstgCategoryCode(code));
-  const testIds = selectTestIds({ depth, categories, testIds: input.testIds });
+  const testIds = selectTestIds({ categories, testIds: input.testIds });
 
   const previous = new Map(
     (input.existing?.cases ?? []).map((testCase) => [testCase.testId, testCase] as const),
@@ -378,8 +255,6 @@ export function createTestPlan(input: CreateTestPlanInput): {
         title: test.title,
         objective: test.objective,
         howToTest: test.howToTest,
-        owasp: [...test.owasp],
-        cwe: [...test.cwe],
         tools: [...test.tools],
         evidenceExpectation: test.evidence,
       });
@@ -389,6 +264,14 @@ export function createTestPlan(input: CreateTestPlanInput): {
     cases.push(buildTestCase(test));
   }
 
+  // Keep custom cases (not part of the catalogue) across regenerations.
+  for (const existingCase of input.existing?.cases ?? []) {
+    if (!getWstgTest(existingCase.testId) && !cases.some((c) => c.testId === existingCase.testId)) {
+      kept += 1;
+      cases.push(existingCase);
+    }
+  }
+
   const now = new Date();
   const plan: WebAppTestPlanDoc = {
     source: TEST_PLAN_SOURCE,
@@ -396,7 +279,6 @@ export function createTestPlan(input: CreateTestPlanInput): {
     target: input.target ?? input.existing?.target ?? "",
     scope: input.scope ?? input.existing?.scope ?? "",
     notes: input.notes ?? input.existing?.notes ?? "",
-    depth,
     categories: categories.length
       ? categories
       : (input.existing?.categories ?? []).filter((code) => isWstgCategoryCode(code)),
@@ -413,8 +295,11 @@ export function updateTestCase(
   testId: string,
   patch: UpdateTestCasePatch,
 ): { plan: WebAppTestPlanDoc; testCase: SessionTestCaseDoc } | undefined {
+  // Match any id present in the plan (WSTG or custom); normalize only as a hint.
   const id = normalizeWstgId(testId);
-  const index = plan.cases.findIndex((testCase) => testCase.testId === id);
+  const index = plan.cases.findIndex(
+    (testCase) => testCase.testId === id || testCase.testId.toUpperCase() === testId.trim().toUpperCase(),
+  );
   if (index < 0) return undefined;
 
   const current = plan.cases[index];
@@ -431,6 +316,9 @@ export function updateTestCase(
 
   const testCase: SessionTestCaseDoc = {
     ...current,
+    title: patch.title?.trim() || current.title,
+    objective: patch.objective !== undefined ? patch.objective : current.objective,
+    howToTest: patch.howToTest !== undefined ? patch.howToTest : current.howToTest,
     status,
     notes: patch.notes ?? current.notes,
     observations: patch.observations ?? current.observations,
@@ -507,24 +395,16 @@ export function computeCoverage(cases: SessionTestCaseDoc[]): TestPlanCoverage {
       (testCase) => [testCase.categoryCode],
       (code) => categoryNameFor(code),
     ).sort((a, b) => a.key.localeCompare(b.key)),
-    byOwasp: groupBy(
-      (testCase) =>
-        testCase.owasp
-          .map((id) => normalizeOwaspTop10Id(id))
-          .filter((id): id is OwaspTop10Id => !!id),
-      (id) => getOwaspCategory(id)?.title ?? id,
-    ).sort((a, b) => a.key.localeCompare(b.key)),
   };
 }
 
-/** Tests the agent should run next: highest-yield work that has not been touched. */
+/** Tests the agent should run next: untouched work, in plan order. */
 export function nextTestsToRun(
   plan: WebAppTestPlanDoc,
   limit = 10,
 ): SessionTestCaseDoc[] {
   return plan.cases
     .filter((testCase) => testCase.status === "not_started")
-    .sort((a, b) => priorityIndex(a.testId) - priorityIndex(b.testId))
     .slice(0, limit);
 }
 
@@ -553,7 +433,7 @@ export function renderTestPlanPrompt(
   const maxFailures = options?.maxFailures ?? 12;
 
   const lines: string[] = [
-    `<wstg_test_plan source="${plan.source}" depth="${plan.depth}" target="${plan.target || "undefined"}">`,
+    `<wstg_test_plan source="${plan.source}" target="${plan.target || "undefined"}">`,
     `Coverage: ${coverage.executed}/${coverage.total} executed (${coverage.percentExecuted}%) — ${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ${coverage.inProgress} in progress, ${coverage.notStarted} not started, ${coverage.skipped} skipped.`,
   ];
 
@@ -571,7 +451,7 @@ export function renderTestPlanPrompt(
     lines.push("", "Tests that produced findings (link every finding to its test):");
     for (const testCase of failed.slice(0, maxFailures)) {
       lines.push(
-        `- ${statusGlyph(testCase.status)} ${testCase.testId} (${testCase.section}) ${testCase.title} — ${testCase.owasp.join(", ")}${
+        `- ${statusGlyph(testCase.status)} ${testCase.testId} (${testCase.section}) ${testCase.title}${
           testCase.observations ? ` — observed: ${truncate(testCase.observations, 160)}` : ""
         }`,
       );
@@ -591,10 +471,10 @@ export function renderTestPlanPrompt(
 
   const next = nextTestsToRun(plan, maxNext);
   if (next.length) {
-    lines.push("", "Next tests by priority:");
+    lines.push("", "Next tests (plan order):");
     for (const testCase of next) {
       lines.push(
-        `- ${testCase.testId} (${testCase.section}) ${testCase.title} — ${testCase.owasp.join(", ")} — objective: ${testCase.objective}`,
+        `- ${testCase.testId} (${testCase.section}) ${testCase.title} — objective: ${testCase.objective}`,
       );
     }
     if (coverage.notStarted > next.length) {
@@ -604,7 +484,7 @@ export function renderTestPlanPrompt(
 
   lines.push(
     "",
-    'Update progress with the `wstg_test_plan` tool: action "update_case" (test_id + status) after every test, action "get" when you need the full method for a case, and action "coverage" to re-check where you are.',
+    'Update progress with the `wstg_test_plan` tool: action "update_case" (test_id + status) after every test, action "add_case" for custom cases that are not in the catalogue, action "get" when you need the full method for a case, and action "coverage" to re-check where you are.',
     "</wstg_test_plan>",
   );
 

@@ -82,7 +82,7 @@ show_commands() {
     echo -e "   ${BOLD}Commands:${NC}"
     echo -e "     ${CYAN}start${NC}        Guided start: choose normal or developer mode"
     echo -e "     ${CYAN}start -q${NC}     Quick start: skip prompts, use existing config"
-    echo -e "     ${CYAN}config${NC}       Update Google search, tracing, exploit box, or developer server settings"
+    echo -e "     ${CYAN}config${NC}       Update tracing, exploit box, or developer server settings"
     echo -e "     ${CYAN}dev${NC}          Start directly in developer mode"
     echo -e "     ${CYAN}dev -q${NC}       Quick dev start: skip prompts"
     echo -e "     ${CYAN}stop${NC}         Stop all containers"
@@ -577,13 +577,6 @@ is_model_configured() {
     [[ -n "$legacy_presets" && "$legacy_presets" != "[]" ]] || [[ -n "$legacy_key" ]]
 }
 
-is_google_configured() {
-    local key cx
-    key=$(get_env "$DYNAMIC_ENV" "GOOGLE-API-KEY")
-    cx=$(get_env "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID")
-    [[ -n "$key" && -n "$cx" ]]
-}
-
 is_langfuse_configured() {
     local enabled
     enabled=$(get_toml_var "$CONFIG_TOML" "enabled")
@@ -609,16 +602,6 @@ show_current_config_summary() {
         echo -e "   ${GREEN}●${NC} Models: ${BOLD}legacy config detected${NC}  ${DIM}will migrate on backend start${NC}"
     else
         echo -e "   ${RED}●${NC} Models: ${BOLD}not configured${NC}  ${YELLOW}← required${NC}"
-    fi
-
-    # Google
-    local gkey gcx
-    gkey=$(get_env "$DYNAMIC_ENV" "GOOGLE-API-KEY")
-    gcx=$(get_env "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID")
-    if [[ -n "$gkey" && -n "$gcx" ]]; then
-        echo -e "   ${GREEN}●${NC} Google Search: configured"
-    else
-        echo -e "   ${DIM}○${NC} Google Search: not set  ${DIM}(optional)${NC}"
     fi
 
     # Langfuse
@@ -659,16 +642,6 @@ configure_required_startup_smart() {
     if ! is_model_configured; then
         warn "No model is configured yet."
         hint "Start VulnPen, then open Settings -> Models to add a model preset and assign the orchestrator."
-    fi
-
-    if ! is_google_configured; then
-        echo
-        hint "Google Search enables web search during pentesting. (optional, set up later via Settings UI)"
-        if confirm "Configure Google Search API now?" "n"; then
-            configure_google_search
-        else
-            info "Skipped — configure anytime via Settings UI or ./run.sh config"
-        fi
     fi
 
     if ! is_langfuse_configured; then
@@ -785,32 +758,6 @@ configure_static_full() {
 }
 
 # ── Config options ─────────────────────────────────────────
-configure_google_search() {
-    hint "Optional. You can set this up later via the Settings UI."
-    ensure_env_defaults
-    local cur_key cur_cx key_status
-
-    echo
-    echo -e "   ${DIM}Required only if you want the Google search tool to work.${NC}"
-    echo -e "   ${DIM}You need both a Google API key and a Custom Search Engine ID.${NC}"
-
-    cur_key=$(get_env "$DYNAMIC_ENV" "GOOGLE-API-KEY")
-    if [[ -n "$cur_key" ]]; then
-        key_status="configured ($(mask_key "$cur_key"))"
-    else
-        key_status="not set"
-    fi
-    prompt_input "Google API key [${key_status}]:"
-    read -rs val; echo
-    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "GOOGLE-API-KEY" "$val"
-
-    cur_cx=$(get_env "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID")
-    prompt_input "Custom Search Engine ID [${cur_cx:-not set}]:"
-    read -r val
-    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID" "$val"
-
-    info "Google search settings saved"
-}
 
 configure_claude_oauth() {
     section "Claude OAuth (PKCE)"
@@ -1380,25 +1327,22 @@ cmd_config() {
 
     section "Configuration"
     echo
-    echo -e "   ${BOLD}1)${NC} Google search             ${DIM}(changeable at runtime via Settings UI)${NC}"
-    echo -e "   ${BOLD}2)${NC} Langfuse tracing          ${DIM}(requires container restart)${NC}"
-    echo -e "   ${BOLD}3)${NC} Exploit box               ${DIM}(changeable at runtime via Settings UI)${NC}"
-    echo -e "   ${BOLD}4)${NC} All of the above"
+    echo -e "   ${BOLD}1)${NC} Langfuse tracing          ${DIM}(requires container restart)${NC}"
+    echo -e "   ${BOLD}2)${NC} Exploit box               ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}3)${NC} All of the above"
     if [[ "${DEV_MODE:-false}" == true ]]; then
         echo -e "   ${BOLD}5)${NC} Server / Database / CORS  ${DIM}(requires process restart)${NC}"
     fi
     echo
-    local max_choice=4
+    local max_choice=3
     [[ "${DEV_MODE:-false}" == true ]] && max_choice=5
     prompt_input "Choose [1-${max_choice}]:"
     read -r choice
 
     case "$choice" in
-        1) configure_google_search ;;
-        2) configure_langfuse ;;
-        3) configure_exploit_box ;;
-        4)
-            configure_google_search
+        1) configure_langfuse ;;
+        2) configure_exploit_box ;;
+        3)
             configure_langfuse
             configure_exploit_box
             ;;
@@ -1421,7 +1365,7 @@ cmd_config() {
             compose restart
             info "Containers restarted"
         else
-            hint "Runtime-editable settings (Models, Google, SSH) take effect without restart."
+            hint "Runtime-editable settings (Models, SSH) take effect without restart."
             hint "Langfuse & server settings require a restart: ./run.sh stop && ./run.sh start"
         fi
     else

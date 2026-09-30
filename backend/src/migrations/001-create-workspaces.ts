@@ -3,8 +3,7 @@
  *
  * For each Session that does not yet have a workspaceId, this script:
  *   1. Creates a Workspace (same name / description / uid).
- *   2. If the Session had ctfConfig, sets workspace type to "ctf" and copies ctfConfig.
- *   3. Sets session.workspaceId to the new workspace's workspaceId.
+ *   2. Sets session.workspaceId to the new workspace's workspaceId.
  *
  * Safe to run multiple times — skips sessions that already have a workspaceId.
  *
@@ -29,7 +28,6 @@ export async function migrateSessionsToWorkspaces() {
   let created = 0;
   for (const session of sessions) {
     const workspaceId = `legacy-${session.sessionId}`;
-    const hasCTF = !!session.ctfConfig?.ctfName;
 
     await WorkspaceModel.updateOne(
       { workspaceId },
@@ -39,10 +37,9 @@ export async function migrateSessionsToWorkspaces() {
           workspaceId,
           name: session.name,
           description: session.description || "",
-          type: hasCTF ? "ctf" : "general",
+          type: "pentest",
           createdAt: session.createdAt,
           status: session.status,
-          ctfConfig: hasCTF ? session.ctfConfig : undefined,
         },
       },
       { upsert: true },

@@ -26,8 +26,6 @@ import {
   writeModelRegistry,
 } from "../utils/modelRegistryStore";
 import { getMagnitudeModelIssue } from "../utils/magnitudeLlm";
-import { getCaidoHealth } from "./caido.client";
-import { getMythicHealth } from "./mythic.client";
 import { isHostOwner } from "./host-owner.service";
 import {
   abortSession,
@@ -488,7 +486,7 @@ async function collectPlatformHealth(
   const checks: HealthCheckResult[] = [];
   const selected =
     component === "all"
-      ? ["ssh", "shell", "burp", "caido", "mythic", "magnitude", "vpn", "google_search"]
+      ? ["ssh", "shell", "burp", "magnitude", "vpn"]
       : [component];
 
   if (selected.includes("ssh") || selected.includes("shell")) {
@@ -570,61 +568,6 @@ async function collectPlatformHealth(
             "Open Burp locally, load the Burp RPC extension, and ensure the configured host/port are correct.",
         });
       }
-    }
-  }
-
-  if (selected.includes("caido")) {
-    if (!env.CAIDO_URL || !env.CAIDO_PAT) {
-      checks.push({
-        component: "caido",
-        status: "missing",
-        canAutoRepair: false,
-        summary: "Integration is not configured",
-        missingItems: ["CAIDO_URL", "CAIDO_PAT"],
-        nextAction: "Set URL/PAT in platform_setup or Settings.",
-      });
-    } else {
-      const health = await getCaidoHealth();
-      checks.push({
-        component: "caido",
-        status: health.connected ? "ready" : "unreachable",
-        canAutoRepair: false,
-        summary: health.connected
-          ? `Reachable (${health.url || env.CAIDO_URL})`
-          : `Configured but unreachable: ${health.message || "connection failed"}`,
-        missingItems: [],
-        nextAction: health.connected
-          ? "None"
-          : "Start the local instance, bind it to an address WSL can reach, and verify CAIDO_URL/CAIDO_PAT.",
-      });
-    }
-  }
-
-  if (selected.includes("mythic")) {
-    if (!env.MYTHIC_URL || !env.MYTHIC_API_TOKEN) {
-      checks.push({
-        component: "mythic",
-        status: "missing",
-        canAutoRepair: false,
-        summary: "Mythic C2 is not configured",
-        missingItems: ["MYTHIC_URL", "MYTHIC_API_TOKEN"],
-        nextAction: "Set the Mythic URL and API token in Settings -> Mythic C2.",
-      });
-    } else {
-      const health = await getMythicHealth();
-      checks.push({
-        component: "mythic",
-        status: health.connected ? "ready" : "unreachable",
-        canAutoRepair: false,
-        summary: health.connected
-          ? `Reachable (${health.url})${health.operation ? ` — operation "${health.operation}"` : ""}, ` +
-            `${health.callbackCount ?? 0} callback(s)`
-          : `Configured but unreachable: ${health.error || "connection failed"}`,
-        missingItems: [],
-        nextAction: health.connected
-          ? "None"
-          : "Start Mythic, confirm the URL is reachable from VulnPen, and verify the API token.",
-      });
     }
   }
 
@@ -717,28 +660,6 @@ async function collectPlatformHealth(
     }
   }
 
-  if (selected.includes("google_search")) {
-    const missing = [
-      !env["GOOGLE-API-KEY"] && "GOOGLE-API-KEY",
-      !env["CUSTOM-SEARCH-ENGINE-ID"] && "CUSTOM-SEARCH-ENGINE-ID",
-    ].filter(Boolean) as string[];
-
-    checks.push({
-      component: "google_search",
-      status: missing.length > 0 ? "missing" : "ready",
-      canAutoRepair: false,
-      summary:
-        missing.length > 0
-          ? "Google Custom Search is not fully configured"
-          : "Google Custom Search is configured",
-      missingItems: missing,
-      nextAction:
-        missing.length > 0
-          ? "Run platform_setup with google_search settings."
-          : "None",
-    });
-  }
-
   return checks.filter(
     (check) => component === "all" || check.component === component,
   );
@@ -763,15 +684,6 @@ function buildRepairSteps(
     "5. Re-run platform_health for burp.",
   ].join("\n");
 
-  const caidoStep = [
-    "1. Start the local instance.",
-    "2. Edit the instance to listen on 0.0.0.0:8096 if VulnPen is running in WSL.",
-    "3. Allow caido-cli through Windows Firewall.",
-    "4. Create a Personal Access Token.",
-    "5. Save CAIDO_URL, CAIDO_PAT, and optionally CAIDO_PROXY_URL via platform_setup or Settings.",
-    "6. Re-run platform_health for caido.",
-  ].join("\n");
-
   const magnitudeStep = [
     "1. Set MAGNITUDE_ENABLED=true.",
     "2. Configure a reusable model preset in Settings -> Models.",
@@ -786,14 +698,6 @@ function buildRepairSteps(
     "3. Ensure openvpn is installed on the attack box.",
     "4. Use vpn_manage action=connect when ready.",
   ].join("\n");
-
-  const googleStep = [
-    "1. Create or retrieve a Google Custom Search API key.",
-    "2. Create a Custom Search Engine and copy its engine ID.",
-    "3. Save GOOGLE-API-KEY and CUSTOM-SEARCH-ENGINE-ID via platform_setup.",
-    "4. Re-run platform_health for google_search.",
-  ].join("\n");
-
   if (component === "all") {
     return health
       .map(
@@ -807,10 +711,8 @@ function buildRepairSteps(
     ssh: sshStep,
     shell: sshStep,
     burp: burpStep,
-    caido: caidoStep,
     magnitude: magnitudeStep,
     vpn: vpnStep,
-    google_search: googleStep,
   };
 
   return mapping[component] || "";
@@ -850,9 +752,7 @@ async function applyRepair(component: string, sessionId?: string): Promise<strin
 async function applyPlatformSetup(input: {
   ssh?: Record<string, unknown>;
   burp?: Record<string, unknown>;
-  caido?: Record<string, unknown>;
   magnitude?: Record<string, unknown>;
-  google_search?: Record<string, unknown>;
   safety?: Record<string, unknown>;
 }, userId: string) {
   const env = readEnvFile();
@@ -883,15 +783,6 @@ async function applyPlatformSetup(input: {
       updates.BURP_RPC_PORT = String(burp.port || "50051");
   }
 
-  if (input.caido) {
-    const caido = input.caido;
-    if (caido.url !== undefined)
-      updates.CAIDO_URL = String(caido.url || "").replace(/\/+$/, "");
-    if (caido.pat !== undefined) updates.CAIDO_PAT = String(caido.pat || "");
-    if (caido.proxyUrl !== undefined)
-      updates.CAIDO_PROXY_URL = String(caido.proxyUrl || "").replace(/\/+$/, "");
-  }
-
   if (input.magnitude) {
     const magnitude = input.magnitude;
     if (magnitude.enabled !== undefined)
@@ -918,15 +809,6 @@ async function applyPlatformSetup(input: {
         ...registry.assignments,
         browserModelId,
       });
-    }
-  }
-
-  if (input.google_search) {
-    const google = input.google_search;
-    if (google.apiKey !== undefined)
-      updates["GOOGLE-API-KEY"] = String(google.apiKey || "");
-    if (google.searchEngineId !== undefined) {
-      updates["CUSTOM-SEARCH-ENGINE-ID"] = String(google.searchEngineId || "");
     }
   }
 
@@ -1195,20 +1077,11 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "platform_health",
     {
       description:
-        "Check whether SSH, shell, Burp, Caido, Magnitude, VPN, and Google search are correctly configured and reachable.",
+        "Check whether SSH, shell, Burp, Magnitude, and VPN are correctly configured and reachable.",
       inputSchema: {
         engagement_id: z.string().optional(),
         component: z
-          .enum([
-            "all",
-            "ssh",
-            "shell",
-            "burp",
-            "caido",
-            "magnitude",
-            "vpn",
-            "google_search",
-          ])
+          .enum(["all", "ssh", "shell", "burp", "magnitude", "vpn"])
           .optional(),
       },
     },
@@ -1228,7 +1101,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "platform_setup",
     {
       description:
-        "Persist platform configuration for SSH, Burp, Caido, Browser Agent, Google search, and MCP safety flags.",
+        "Persist platform configuration for SSH, Burp, Browser Agent, Google search, and MCP safety flags.",
       inputSchema: {
         ssh: z
           .object({
@@ -1246,13 +1119,6 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
             port: z.union([z.string(), z.number()]).optional(),
           })
           .optional(),
-        caido: z
-          .object({
-            url: z.string().optional(),
-            pat: z.string().optional(),
-            proxyUrl: z.string().optional(),
-          })
-          .optional(),
         magnitude: z
           .object({
             enabled: z.boolean().optional(),
@@ -1260,12 +1126,6 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
             headless: z.boolean().optional(),
             display: z.string().optional(),
             browserModelId: z.string().optional(),
-          })
-          .optional(),
-        google_search: z
-          .object({
-            apiKey: z.string().optional(),
-            searchEngineId: z.string().optional(),
           })
           .optional(),
         safety: z
@@ -1293,19 +1153,10 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "platform_repair",
     {
       description:
-        "Explain or apply repair steps for Burp, Magnitude, VPN, SSH, shell, or Google search setup issues.",
+        "Explain or apply repair steps for Burp, Magnitude, VPN, SSH, or shell setup issues.",
       inputSchema: {
         engagement_id: z.string().optional(),
-        component: z.enum([
-          "all",
-          "ssh",
-          "shell",
-          "burp",
-          "caido",
-          "magnitude",
-          "vpn",
-          "google_search",
-        ]),
+        component: z.enum(["all", "ssh", "shell", "burp", "magnitude", "vpn"]),
         mode: z.enum(["explain", "apply_safe", "apply"]).default("explain"),
       },
     },
@@ -1780,155 +1631,6 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         collaborator_action,
       });
       return textResult(formatToolResult(result), structured);
-    },
-  );
-
-  registerMcpTool(
-    server,
-    user,
-    "caido",
-    {
-      description:
-        "Operate the configured Caido integration. Actions: status, request, replay, automate, history, intercept, oast.",
-      inputSchema: {
-        engagement_id: z.string().optional(),
-        agent_id: z.string().optional(),
-        action: z.enum([
-          "status",
-          "request",
-          "replay",
-          "automate",
-          "history",
-          "intercept",
-          "oast",
-        ]),
-        host: z.string().optional(),
-        port: z.number().optional(),
-        secure: z.boolean().optional(),
-        raw_request: z.string().optional(),
-        tab_name: z.string().optional(),
-        placeholders: z
-          .array(z.object({ start: z.number(), end: z.number() }))
-          .optional(),
-        payloads: z.array(z.string()).optional(),
-        strategy: z
-          .enum(["SEQUENTIAL", "ALL", "PARALLEL", "MATRIX"])
-          .optional(),
-        run: z.boolean().optional(),
-        search: z.string().optional(),
-        methods: z.string().optional(),
-        status_min: z.number().optional(),
-        status_max: z.number().optional(),
-        hide_assets: z.boolean().optional(),
-        entry_id: z.string().optional(),
-        intercept_action: z.enum(["status", "enable", "disable"]).optional(),
-        oast_action: z
-          .enum(["status", "install", "providers", "generate", "poll", "interactions", "sessions"])
-          .optional(),
-        provider_id: z.string().optional(),
-        session_id: z.string().optional(),
-        title: z.string().optional(),
-        force: z.boolean().optional(),
-      },
-    },
-    async ({ action, intercept_action, oast_action, ...rest }) => {
-      if (action === "status") {
-        const health = await collectPlatformHealth("caido");
-        return textResult(health[0]?.summary || "Status unavailable.", {
-          health,
-        });
-      }
-      if (action === "request" || action === "replay") {
-        const { result } = await executeBackendTool(
-          "send_to_caido_replay",
-          rest,
-        );
-        const structured = toolResultPayload(result, { action, ...rest });
-        return textResult(formatToolResult(result), structured);
-      }
-      if (action === "automate") {
-        const { result } = await executeBackendTool(
-          "send_to_caido_automate",
-          rest,
-        );
-        const structured = toolResultPayload(result, { action, ...rest });
-        return textResult(formatToolResult(result), structured);
-      }
-      if (action === "history") {
-        const toolArgs =
-          rest.entry_id != null
-            ? { action: "get", entry_id: rest.entry_id }
-            : { action: "search", ...rest };
-        const { result } = await executeBackendTool(
-          "search_caido_http_history",
-          toolArgs,
-        );
-        const structured = toolResultPayload(result, { action, ...toolArgs });
-        return textResult(formatToolResult(result), structured);
-      }
-      if (action === "oast") {
-        const { result } = await executeBackendTool("caido_oast", {
-          action: oast_action || "status",
-          provider_id: rest.provider_id,
-          session_id: rest.session_id,
-          title: rest.title,
-          force: rest.force,
-        });
-        const structured = toolResultPayload(result, {
-          action,
-          oast_action,
-          ...rest,
-        });
-        return textResult(formatToolResult(result), structured);
-      }
-      const { result } = await executeBackendTool("caido_intercept_control", {
-        action: intercept_action || "status",
-      });
-      const structured = toolResultPayload(result, {
-        action,
-        intercept_action,
-      });
-      return textResult(formatToolResult(result), structured);
-    },
-  );
-
-  registerMcpTool(
-    server,
-    user,
-    "mythic",
-    {
-      description:
-        "Operate the configured Mythic C2 server. Actions map onto the same tools the agent uses: " +
-        "callbacks, task, task_results, pivot, payload, listener, loot, graphql. All C2 state stays in Mythic. " +
-        "Actions that task an implant, open a pivot, build a payload or write to a target are consent-gated " +
-        'and require "Allow Consent-Gated MCP Tools" to be enabled.',
-      inputSchema: {
-        engagement_id: z.string(),
-        agent_id: z.string().optional(),
-        action: z.enum([
-          "callbacks",
-          "task",
-          "task_results",
-          "pivot",
-          "payload",
-          "listener",
-          "loot",
-          "graphql",
-        ]),
-        // Forwarded verbatim to the underlying tool; see each tool's own schema.
-        args: z.record(z.any()).optional(),
-      },
-    },
-    async ({ engagement_id, agent_id = "mcp", action, args = {} }) => {
-      const { result } = await executeLowLevelTool(
-        engagement_id,
-        agent_id,
-        `mythic_${action}`,
-        args as Record<string, unknown>,
-        user._id.toString(),
-      );
-      const structured = toolResultPayload(result, { action, ...args });
-      return textResult(formatToolResult(result), structured, result.exitCode !== 0);
     },
   );
 

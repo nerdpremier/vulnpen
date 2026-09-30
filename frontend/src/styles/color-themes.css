@@ -1,4 +1,7 @@
 :root {
+  /* Native controls (select popups, scrollbars, inputs) render dark. */
+  color-scheme: dark;
+
   --primary-grey: #6d6d6d;
   --primary-purple: #9933ff;
   --purple-background: #8e35ff14;
@@ -50,4 +53,12 @@
   --transition-fast: 150ms ease;
   --transition-default: 200ms ease;
   --transition-slow: 300ms ease;
+}
+
+/* Native <select> popups: Chromium honours color-scheme, but style the
+   options explicitly too so the dropdown never flashes white. */
+select option,
+select optgroup {
+  background-color: var(--black-bg, #111111);
+  color: var(--primary-text, #ffffff);
 }

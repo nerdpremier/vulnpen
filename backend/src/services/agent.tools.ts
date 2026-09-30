@@ -3,11 +3,8 @@ import { ExecutionContext, ToolResult, AgentRole } from "../tools/types";
 import { ToolCallData } from "../utils/llm/providers";
 import { ShellManager, ShellPurpose } from "./shell.manager";
 import { SubagentManager } from "./subagent.manager";
-import { SwarmManager, CtfSwarmContext, ModelPreset } from "./swarm.manager";
 import { SSEWriter } from "./agent.service";
 import { EngagementState } from "./engagement-state";
-import { SwarmWinCondition } from "../models/Sessions/Sessions.model";
-import { AgentPromptConfig } from "../utils/assistant/prompts";
 import { parseToolArguments } from "../utils/toolArguments";
 import type { ToolExecutionMode } from "../models/User/User.model";
 import {
@@ -104,21 +101,15 @@ export function buildExecutionContext(params: {
   agentRole?: AgentRole;
   shellManager: ShellManager;
   subagentManager?: SubagentManager;
-  swarmManager?: SwarmManager;
   sse?: SSEWriter;
   userId?: string;
   onChunk?: (chunk: string) => void;
   abortSignal?: AbortSignal;
   engagementState?: EngagementState;
-  swarmDefaults?: {
-    modelPresets: ModelPreset[];
-    ctfContext?: CtfSwarmContext;
-    agentPromptConfig?: AgentPromptConfig;
-  };
 }): ExecutionContext {
   const {
-    sessionId, agentId, shellManager, subagentManager, swarmManager,
-    sse, userId, onChunk, abortSignal, engagementState, swarmDefaults,
+    sessionId, agentId, shellManager, subagentManager,
+    sse, userId, onChunk, abortSignal, engagementState,
   } = params;
   const agentRole = params.agentRole ?? "main";
 
@@ -152,60 +143,6 @@ export function buildExecutionContext(params: {
             userId,
           })
       : undefined,
-    spawnSwarm: swarmManager && sse && userId
-      ? async (swarmParams) => {
-          if (agentRole === "main" && !swarmDefaults?.modelPresets.length) {
-            throw new Error("No racer models are configured in Settings > Models.");
-          }
-
-          const modelPresets = swarmDefaults?.modelPresets;
-          const requestedSpecs = swarmParams.agents;
-          // The configured roster is authoritative: launch each selected racer
-          // once, using orchestrator-authored strategies where available.
-          const agentSpecs = modelPresets?.length
-            ? modelPresets.map((preset, index) => {
-                const requested = requestedSpecs[index] ?? requestedSpecs[0];
-                return {
-                  task: requested?.task ?? swarmParams.goal,
-                  context: [
-                    requested?.context,
-                    `Configured racer: ${preset.label}`,
-                  ].filter(Boolean).join("\n"),
-                };
-              })
-            : requestedSpecs;
-
-          return swarmManager.spawn({
-            goal: swarmParams.goal,
-            agentSpecs,
-            winCondition: (swarmParams.winCondition as SwarmWinCondition) || "all_complete",
-            timeoutMs: swarmParams.timeoutMinutes ? swarmParams.timeoutMinutes * 60 * 1000 : undefined,
-            sse,
-            userId,
-            modelPresets,
-            ctfContext: swarmDefaults?.ctfContext,
-            agentPromptConfig: swarmDefaults?.agentPromptConfig,
-          });
-        }
-      : undefined,
-    checkFindings: swarmManager
-      ? () => swarmManager.checkAllFindings()
-      : undefined,
-    getSwarmStatus: swarmManager
-      ? () => swarmManager.getSwarmStatus(swarmManager.getRunningSwarmIds())
-      : undefined,
-    bumpRacer: swarmManager
-      ? (racerId: string, insights: string) => swarmManager.bumpAgent(racerId, insights)
-      : undefined,
-    broadcastToRacers: swarmManager
-      ? (message: string) => swarmManager.broadcastToAll(swarmManager.getRunningSwarmIds(), message)
-      : undefined,
-    readRacerTrace: swarmManager
-      ? (racerId: string, lastN: number) => swarmManager.getAgentMessages(racerId, lastN)
-      : undefined,
-    waitForRacers: async (seconds: number) => {
-      await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
-    },
     onOutput: onChunk,
     engagementState,
   };

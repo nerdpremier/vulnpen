@@ -30,7 +30,6 @@ import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model"
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
-import { SwarmManager, CtfSwarmContext, SwarmResult } from "./swarm.manager";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
@@ -42,7 +41,6 @@ import {
 } from "./tool-approval.service";
 
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
-const RACER_ORCHESTRATOR_PROMPT_ID = "sys_racer_orchestrator";
 
 // ─── Abort controller registry (for immediate pause) ───────────────────
 
@@ -88,7 +86,7 @@ export function createSSEWriter(res: Response): SSEWriter {
 
 /**
  * An SSEWriter with no client attached, for agent runs started by the server
- * rather than by a streaming request (e.g. CTF "solve all"). The agent loop
+ * rather than by a streaming request. The agent loop
  * already persists messages and state to the session document, so the UI picks
  * the run up from session history — these events simply have nowhere to go.
  *
@@ -201,7 +199,7 @@ async function buildAgentPromptConfig(
 ): Promise<AgentPromptConfig> {
   const user = await UserModel.findById(userId);
   const session = await SessionsModel.findOne({ sessionId })
-    .select("ctfConfig workspaceId webAppTestPlan vulnerabilities")
+    .select("workspaceId webAppTestPlan vulnerabilities")
     .lean();
   const now = new Date();
   const promptConfig: AgentPromptConfig = {
@@ -213,52 +211,6 @@ async function buildAgentPromptConfig(
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     envInfo,
   };
-
-  try {
-    const models = await getUserModels(userId);
-    promptConfig.racerModels = models.racers.map((r) => ({
-      label: r.label,
-      provider: r.provider,
-      model: r.model,
-    }));
-  } catch {
-    // Model setup is handled by the normal setup gate. Prompt construction
-    // should remain available for sessions created before configuration.
-  }
-
-  let ctfConfig = session?.ctfConfig;
-  if (!ctfConfig?.ctfName && session?.workspaceId) {
-    const WorkspaceModel = (await import("../models/Workspace/Workspace.model")).default;
-    const workspace = await WorkspaceModel.findOne({ workspaceId: session.workspaceId }).select("ctfConfig").lean();
-    if (workspace?.ctfConfig?.ctfName) {
-      ctfConfig = workspace.ctfConfig as any;
-    }
-  }
-
-  if (ctfConfig?.ctfName) {
-    const safeName = ctfConfig.ctfName
-      .replace(/[/\\:*?"<>|]/g, "_")
-      .replace(/\s+/g, "_");
-    const wsBase = envInfo?.workspacePath ?? "~/pentest-workspace";
-    promptConfig.ctfConfig = {
-      ctfName: ctfConfig.ctfName,
-      workspacePath: `${wsBase}/${safeName}`,
-      flagFormat: ctfConfig.flagFormat,
-    };
-
-    if (ctfConfig.activeSolve) {
-      promptConfig.ctfConfig.activeSolve = {
-        name: ctfConfig.activeSolve.name,
-        challengeTxt: ctfConfig.activeSolve.challengeTxt,
-        files: ctfConfig.activeSolve.files,
-        challengeDir: `${wsBase}/${safeName}/${ctfConfig.activeSolve.safeDir}`,
-        category: ctfConfig.activeSolve.category,
-        connectionInfo: ctfConfig.activeSolve.connectionInfo,
-        points: ctfConfig.activeSolve.points,
-        userNotes: ctfConfig.activeSolve.userNotes,
-      };
-    }
-  }
 
   const storedVulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
   promptConfig.webAppSecurity = {
@@ -324,138 +276,6 @@ export function buildTraceTags(
   return { tags, phase: "analyze" };
 }
 
-function buildRacerOrchestratorMessage(
-  turnIndex: number,
-  roster: Array<{ agentId: string; modelLabel: string }>,
-  sessionContext?: { sessionId?: string; ctfName?: string; challengeName?: string },
-  depthInfo?: { iteration: number; maxIterations: number; racerMaxIterations: number },
-): AgentMessageDoc {
-  const rosterBlock = roster.length > 0
-    ? roster.map((r) => `- Racer ${r.modelLabel} (${r.agentId})`).join("\n")
-    : "- (no racers registered yet)";
-
-  const ctfLine = sessionContext?.ctfName
-    ? `\nCTF: ${sessionContext.ctfName}${sessionContext.challengeName ? ` — Challenge: ${sessionContext.challengeName}` : ""}`
-    : "";
-
-  return {
-    id: RACER_ORCHESTRATOR_PROMPT_ID,
-    role: "system",
-    content: `<role>
-You are the VulnPen orchestrator. You coordinate racer agents — you do NOT solve tasks yourself.
-</role>
-${ctfLine ? `\n<context>${ctfLine}\nSession: ${sessionContext?.sessionId ?? "unknown"}\n</context>\n` : ""}
-<roster>
-${rosterBlock}
-</roster>
-
-<tools>
-You have EXACTLY these tools: get_solve_status, bump_racer, broadcast, read_racer_trace, wait
-
-MANDATORY: You MUST call at least one tool every turn. NEVER produce a text-only response.
-If you have nothing specific to do, call wait(seconds=30).
-</tools>
-
-<workflow>
-Phase 1 — INITIAL (iterations 1-2):
-  1. Call get_solve_status to see the initial state.
-  2. Call wait(seconds=30) to let racers start working. Do NOT bump or read traces yet.
-
-Phase 2 — MONITORING (iterations 3+):
-  Loop: wait(seconds=30) → get_solve_status → DECIDE:
-    - If a racer's iteration >= 8 with no findings → read_racer_trace, then consider bump_racer.
-    - If a racer reported a SUCCESS finding → present result to user immediately.
-    - If all racers completed → summarize results and stop.
-    - Otherwise → wait(seconds=30) again. Patience is critical.
-
-WHEN TO BUMP (and ONLY when):
-  - A racer has used 8+ iterations without ANY findings or progress.
-  - A racer is clearly stuck in a loop (repeating the same approach).
-  - Cross-racer intel would meaningfully change a racer's direction.
-  Do NOT bump racers that are making steady progress. Do NOT bump before iteration 5.
-
-WHEN NOT TO BUMP:
-  - Racer is on iteration 1-5 (let it explore independently first).
-  - Racer is actively running tools and making progress.
-  - You just want to "encourage" or provide generic advice.
-</workflow>
-
-<depth>
-${depthInfo ? `Orchestrator iteration ${depthInfo.iteration}/${depthInfo.maxIterations}. Racers have ${depthInfo.racerMaxIterations} iterations each.` : ""}
-YOUR iterations are precious. Every LLM call costs money and time.
-- Prefer long waits (20-30s) over short ones.
-- Most turns should be: wait → get_solve_status → wait again.
-- Only ~20% of your turns should involve bump_racer or broadcast.
-</depth>
-
-<rules>
-CRITICAL:
-- NEVER produce a text-only response. Always call a tool.
-- NEVER solve tasks yourself — no exploit commands, scans, or scripts.
-- You are NOT a racer — do not count yourself in the racer list.
-- Refer to racers by their exact model names from the roster.
-- NEVER rename racers as "Racer A", "Racer B", etc.
-- When a racer succeeds, credit it clearly: "Racer {model_name} found the flag: ..."
-- When all racers complete, summarize and stop.
-</rules>`,
-    timestamp: new Date(),
-    turnIndex,
-    isSummary: false,
-  };
-}
-
-function upsertRacerOrchestratorPrompt(
-  messages: AgentMessageDoc[],
-  turnIndex: number,
-  roster: Array<{ agentId: string; modelLabel: string }>,
-  sessionContext?: { sessionId?: string; ctfName?: string; challengeName?: string },
-  depthInfo?: { iteration: number; maxIterations: number; racerMaxIterations: number },
-): boolean {
-  const idx = messages.findIndex((m) => m.id === RACER_ORCHESTRATOR_PROMPT_ID);
-  const prompt = buildRacerOrchestratorMessage(turnIndex, roster, sessionContext, depthInfo);
-  if (idx === -1) {
-    messages.push(prompt);
-    return true;
-  }
-  messages[idx] = prompt;
-  return false;
-}
-
-function removeRacerOrchestratorPrompt(messages: AgentMessageDoc[]): void {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].id === RACER_ORCHESTRATOR_PROMPT_ID) messages.splice(i, 1);
-  }
-}
-
-function appendSwarmResultMessages(
-  messages: AgentMessageDoc[],
-  newMessages: AgentMessageDoc[],
-  sr: SwarmResult,
-  turnIndex: number,
-): void {
-  for (const ar of sr.agentResults ?? []) {
-    const racerTranscriptMsg: AgentMessageDoc = {
-      id: uuidv4(),
-      role: "assistant",
-      content: `**[Racer ${ar.modelLabel}]** ${ar.status}${sr.winner === ar.agentId ? " (winner)" : ""}\n\n${ar.result || "(no result)"}`,
-      timestamp: new Date(),
-      turnIndex,
-    };
-    messages.push(racerTranscriptMsg);
-    newMessages.push(racerTranscriptMsg);
-  }
-
-  const swarmSummaryMsg: AgentMessageDoc = {
-    id: uuidv4(),
-    role: "user",
-    content: `[Swarm ${sr.swarmId} completed (${sr.status})${sr.winner ? ` — Winner: ${sr.winner}` : ""}]\n\n${sr.summary}`,
-    timestamp: new Date(),
-    turnIndex,
-  };
-  messages.push(swarmSummaryMsg);
-  newMessages.push(swarmSummaryMsg);
-}
-
 // ─── Core agent loop ─────────────────────────────────────────────────
 
 export async function runAgentLoop(params: {
@@ -519,19 +339,7 @@ export async function runAgentLoop(params: {
 
   let messages = [...session.messages];
 
-  // Racer coordination is transient execution context. Older versions stored
-  // this prompt in session history, where its mandatory-tool instruction could
-  // keep affecting normal chat after a swarm had finished.
-  const hadPersistedRacerPrompt = messages.some((m) => m.id === RACER_ORCHESTRATOR_PROMPT_ID);
-  removeRacerOrchestratorPrompt(messages);
-  if (hadPersistedRacerPrompt) {
-    await SessionsModel.updateOne(
-      { sessionId },
-      { $pull: { messages: { id: RACER_ORCHESTRATOR_PROMPT_ID } } },
-    );
-  }
-
-  // Refresh the system message on every turn so model/racer assignments changed
+  // Refresh the system message on every turn so model assignments changed
   // in Settings are immediately visible to the orchestrator.
   if (messages.length > 0 && messages[0].role === "system") {
     const updatedSysMsg = await buildSystemMessage(sessionId, userId, envInfo);
@@ -540,10 +348,7 @@ export async function runAgentLoop(params: {
 
   const subagentManager = new SubagentManager(sessionId, shellManager);
   subagentManager.envInfo = envInfo;
-  const swarmManager = new SwarmManager(sessionId, shellManager);
-  swarmManager.envInfo = envInfo;
   const spawnedSubagentIds: string[] = [];
-  const spawnedSwarmIds: string[] = [];
   const turnIndex = session.turnIndex;
   let iteration = 0;
   let lastPromptTokens: number | undefined;
@@ -551,7 +356,7 @@ export async function runAgentLoop(params: {
   let completedNormally = false;
   const approvalRejections = new ApprovalRejectionTracker();
 
-  // ─── Resolve user model config for orchestrator + auto-spawn racers ──
+  // ─── Resolve user model config for the orchestrator ──
   const userModels = await getUserModels(userId);
   const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
   const orchestratorReasoningMode: ReasoningMode =
@@ -564,39 +369,7 @@ export async function runAgentLoop(params: {
       })
     : undefined;
 
-  let ctfSwarmContext: CtfSwarmContext | undefined;
-  const sessionCtf = session.ctfConfig;
-  if (sessionCtf?.activeSolve) {
-    const solve = sessionCtf.activeSolve;
-    const safeName = (sessionCtf.ctfName || "")
-      .replace(/[/\\:*?"<>|]/g, "_")
-      .replace(/\s+/g, "_");
-    const wsBase = envInfo?.workspacePath ?? "~/pentest-workspace";
-    ctfSwarmContext = {
-      challengeName: solve.name,
-      category: solve.category,
-      points: solve.points,
-      challengeTxt: solve.challengeTxt ?? "",
-      files: solve.files ?? [],
-      connectionInfo: solve.connectionInfo,
-      challengeDir: `${wsBase}/${safeName}/${solve.safeDir}`,
-      flagFormat: sessionCtf.flagFormat,
-      userNotes: solve.userNotes,
-    };
-  }
-
-  const racerPresets = userModels.racers.map((r) => ({
-    label: r.label,
-    provider: r.provider,
-    model: r.model,
-    apiKey: r.apiKey,
-    baseURL: r.baseURL,
-    reasoningMode: r.reasoningMode,
-  }));
-  const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
-
-  const engagementMode = session.ctfConfig?.ctfName ? "ctf" : "pentest";
-  const engagementState = new EngagementState(engagementMode as "pentest" | "ctf");
+  const engagementState = new EngagementState("pentest");
   engagementState.vulnerabilities = (session.vulnerabilities ?? []).map((vulnerability) => ({
     vulnerabilityId: vulnerability.vulnerabilityId,
     fingerprint: vulnerability.fingerprint,
@@ -620,20 +393,6 @@ export async function runAgentLoop(params: {
     createdAt: vulnerability.createdAt,
     updatedAt: vulnerability.updatedAt,
   }));
-  if (engagementMode === "ctf" && session.ctfConfig?.activeSolve) {
-    const solve = session.ctfConfig.activeSolve;
-    engagementState.challengeName = solve.name;
-    engagementState.category = solve.category;
-    engagementState.points = solve.points;
-    engagementState.connectionInfo = solve.connectionInfo;
-  } else if (engagementMode === "ctf" && session.ctfConfig?.solveHistory?.length) {
-    const sh = session.ctfConfig.solveHistory as { challengeName: string; status: string; category?: string }[];
-    const latest = [...sh].reverse().find((r) => r.status === "solving");
-    if (latest?.challengeName) {
-      engagementState.challengeName = latest.challengeName;
-      engagementState.category = latest.category;
-    }
-  }
 
   const executionCtx = buildExecutionContext({
     sessionId,
@@ -641,16 +400,10 @@ export async function runAgentLoop(params: {
     agentRole: "main",
     shellManager,
     subagentManager,
-    swarmManager,
     sse,
     userId,
     abortSignal: params.abortSignal,
     engagementState,
-    swarmDefaults: {
-      modelPresets: racerPresets,
-      ctfContext: ctfSwarmContext,
-      agentPromptConfig: racerPromptConfig,
-    },
   });
 
   try {
@@ -703,20 +456,6 @@ export async function runAgentLoop(params: {
         }
       }
 
-      // Collect completed swarm results and inject into messages
-      if (spawnedSwarmIds.length > 0) {
-        const completedSwarmIds = spawnedSwarmIds.filter((id) => !swarmManager.isRunning(id));
-        if (completedSwarmIds.length > 0) {
-          const swarmResults = await swarmManager.waitFor(completedSwarmIds);
-          for (const sr of swarmResults) {
-            appendSwarmResultMessages(messages, newMessages, sr, turnIndex);
-          }
-          for (const id of completedSwarmIds) {
-            spawnedSwarmIds.splice(spawnedSwarmIds.indexOf(id), 1);
-          }
-        }
-      }
-
       if (await shouldSummarize(messages, lastPromptTokens)) {
         sse.write("summarizing", { message: "Context approaching limit, summarizing..." });
 
@@ -754,37 +493,13 @@ export async function runAgentLoop(params: {
         }
       }
 
-      const hasActiveRacers =
-        spawnedSwarmIds.length > 0 && spawnedSwarmIds.some((id) => swarmManager.isRunning(id));
-      const racerOrchestratorMode = hasActiveRacers;
-      if (racerOrchestratorMode) {
-        const roster = swarmManager.getActiveRoster(spawnedSwarmIds);
-        const sessionCtfInfo = session.ctfConfig;
-        upsertRacerOrchestratorPrompt(messages, turnIndex, roster, {
-          sessionId,
-          ctfName: sessionCtfInfo?.ctfName,
-          challengeName: sessionCtfInfo?.activeSolve?.name,
-        }, {
-          iteration,
-          maxIterations: maxAgentIterations,
-          racerMaxIterations: swarmManager.getMaxIterations(),
-        });
-        // This system prompt is deliberately not persisted. It only applies
-        // while racers are active in the current execution loop.
-      } else {
-        removeRacerOrchestratorPrompt(messages);
-        removeRacerOrchestratorPrompt(newMessages);
-      }
-
       const openaiMessages = messagesToOpenAI(messages, orchestratorConfig.provider === "kimi");
       const unconfiguredTools = getUnconfiguredToolNames();
-      const tools = racerOrchestratorMode
-        ? toolRegistry.toOpenAISchemas({ agentRole: "orchestrator" })
-        : toolRegistry.toOpenAISchemas({
-          agentRole: "main",
-          disabledTools: disabledAgentTools,
-          unconfiguredTools,
-        });
+      const tools = toolRegistry.toOpenAISchemas({
+        agentRole: "main",
+        disabledTools: disabledAgentTools,
+        unconfiguredTools,
+      });
 
       let assistantContent = "";
       let assistantReasoning = "";
@@ -793,7 +508,7 @@ export async function runAgentLoop(params: {
       const { tags: traceTags, phase } = buildTraceTags("agent", messages, [
         `session_id:${sessionId}`,
         `workspace_id:${session.workspaceId ?? "unknown"}`,
-        racerOrchestratorMode ? "agent_role:racer_orchestrator" : "agent_role:main_orchestrator",
+        `agent_role:main_orchestrator`,
       ]);
 
       const result = await invoke_llm_streaming({
@@ -889,40 +604,6 @@ export async function runAgentLoop(params: {
       }
 
       if (result.finishReason === "stop" || assistantToolCalls.length === 0) {
-        if (hasActiveRacers) {
-          const completedSwarmIds = spawnedSwarmIds.filter((id) => !swarmManager.isRunning(id));
-          if (completedSwarmIds.length > 0) {
-            const swarmResults = await swarmManager.waitFor(completedSwarmIds);
-            for (const sr of swarmResults) {
-              appendSwarmResultMessages(messages, newMessages, sr, turnIndex);
-            }
-            for (const id of completedSwarmIds) {
-              spawnedSwarmIds.splice(spawnedSwarmIds.indexOf(id), 1);
-            }
-          }
-
-          // Orchestrator produced text but no tool calls — inject a nudge so the
-          // next LLM call sees it should use tools, and auto-wait to avoid a
-          // tight loop that burns iterations.
-          const nudge: AgentMessageDoc = {
-            id: `orch_nudge_${Date.now()}`,
-            role: "user",
-            content:
-              "[System] You produced text without calling any tools. As orchestrator you MUST " +
-              "call a tool every turn. Use `wait` to pause, `get_solve_status` to check progress, " +
-              "or `read_racer_trace` to inspect a racer. Do NOT generate text-only responses.",
-            timestamp: new Date(),
-            turnIndex,
-            isSummary: false,
-          };
-          messages.push(nudge);
-          newMessages.push(nudge);
-
-          // Auto-wait 15s to avoid burning iterations when the LLM is looping
-          await new Promise((resolve) => setTimeout(resolve, 15_000));
-
-          continue;
-        }
         completedNormally = true;
         break;
       }
@@ -978,18 +659,12 @@ export async function runAgentLoop(params: {
           approvalCircuitOpen;
       }
 
-      // Track spawned subagents and swarms
+      // Track spawned subagents
       for (const tr of toolResults) {
         if (tr.toolName === "spawn_subagent" && tr.result.output.includes("subagent_id:")) {
           const match = tr.result.output.match(/subagent_id:\s*(\S+)/);
           if (match) {
             spawnedSubagentIds.push(match[1]);
-          }
-        }
-        if (tr.toolName === "spawn_swarm" && tr.result.output.includes("swarm_id:")) {
-          const match = tr.result.output.match(/swarm_id:\s*(\S+)/);
-          if (match) {
-            spawnedSwarmIds.push(match[1]);
           }
         }
       }
@@ -1109,16 +784,6 @@ export async function runAgentLoop(params: {
         }
         spawnedSubagentIds.length = 0;
       }
-
-      // If swarms are running and the agent only spawned swarms this iteration,
-      // wait for them to complete before the next iteration
-      if (spawnedSwarmIds.length > 0 && assistantToolCalls.every((tc) => tc.name === "spawn_swarm" || tc.name === "spawn_subagent")) {
-        const swarmResults = await swarmManager.waitFor([...spawnedSwarmIds]);
-        for (const sr of swarmResults) {
-          appendSwarmResultMessages(messages, newMessages, sr, turnIndex);
-        }
-        spawnedSwarmIds.length = 0;
-      }
     }
 
     const reachedIterationLimit =
@@ -1139,18 +804,6 @@ export async function runAgentLoop(params: {
           turnIndex: session.turnIndex,
         };
         newMessages.push(resultMsg);
-      }
-    }
-
-    if (spawnedSwarmIds.length > 0) {
-      if (params.abortSignal?.aborted) {
-        await swarmManager.pauseAll();
-      } else {
-        await swarmManager.cancelAll();
-      }
-      const swarmResults = await swarmManager.waitFor([...spawnedSwarmIds]);
-      for (const sr of swarmResults) {
-        appendSwarmResultMessages(messages, newMessages, sr, session.turnIndex);
       }
     }
 
@@ -1182,11 +835,6 @@ export async function runAgentLoop(params: {
     await appendMessages(sessionId, newMessages);
     const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
     await subagentManager.cancelAll();
-    if (isAbort) {
-      await swarmManager.pauseAll();
-    } else {
-      await swarmManager.cancelAll();
-    }
     await setAgentState(sessionId, isAbort ? "paused" : "idle");
     if (isAbort) {
       sse.write("paused", { message: "Agent paused by user" });

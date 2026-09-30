@@ -9,7 +9,7 @@ import {
   isOwaspTop10Id,
 } from "../src/knowledge";
 import {
-  TEST_PLAN_DEPTHS,
+  addTestCase,
   computeCoverage,
   createTestPlan,
   nextTestsToRun,
@@ -170,36 +170,85 @@ test("planned findings are classified at ingestion time", () => {
   assert.ok(vulnerability.owaspMappedAt instanceof Date);
 });
 
-test("depth tiers are cumulative and cover the whole guide at full depth", () => {
-  const counts = TEST_PLAN_DEPTHS.map((depth) => depth.testCount);
-  assert.deepEqual(counts, [24, 56, 90, 97]);
-
-  for (const depth of TEST_PLAN_DEPTHS) {
-    const plan = createTestPlan({ depth: depth.id, target: "https://app.example.com" }).plan;
-    assert.equal(plan.cases.length, depth.testCount, depth.id);
-    assert.equal(plan.source, "OWASP WSTG v4.2");
-    assert.equal(plan.target, "https://app.example.com");
-  }
+test("a generated plan covers the full WSTG catalogue in catalogue order", () => {
+  const plan = createTestPlan({ target: "https://app.example.com" }).plan;
+  assert.equal(plan.cases.length, WSTG_TESTS.length);
+  assert.equal(plan.source, "OWASP WSTG v4.2");
+  assert.equal(plan.target, "https://app.example.com");
+  assert.deepEqual(
+    plan.cases.map((testCase) => testCase.testId),
+    WSTG_TESTS.map((test) => test.id),
+    "cases follow catalogue order",
+  );
+  assert.ok(plan.cases.every((testCase) => !("owasp" in testCase) && !("cwe" in testCase)));
 });
 
 test("a plan can be narrowed to WSTG categories", () => {
-  const plan = createTestPlan({ depth: "full", categories: ["inpv", "athz"] }).plan;
+  const plan = createTestPlan({ categories: ["inpv", "athz"] }).plan;
   assert.deepEqual(plan.categories, ["INPV", "ATHZ"]);
   assert.equal(plan.cases.length, 23);
   assert.ok(plan.cases.every((testCase) => ["INPV", "ATHZ"].includes(testCase.categoryCode)));
 });
 
+test("explicit test ids win over the full catalogue", () => {
+  const plan = createTestPlan({ testIds: ["WSTG-SESS-05", "inpv-5", "WSTG-INFO-01"] }).plan;
+  assert.deepEqual(
+    plan.cases.map((testCase) => testCase.testId),
+    ["WSTG-INFO-01", "WSTG-SESS-05", "WSTG-INPV-05"],
+    "explicit ids are normalised and re-ordered by catalogue order",
+  );
+});
+
+test("custom cases can be added with generated or explicit ids and are kept on regenerate", () => {
+  const first = createTestPlan({ target: "https://app.example.com" }).plan;
+  const custom = addTestCase(first, {
+    title: "Check GraphQL introspection is disabled",
+    objective: "Introspection should not expose the schema publicly.",
+    howToTest: "POST an introspection query to /graphql and inspect the response.",
+    categoryCode: "APIT",
+  })!;
+  assert.equal(custom.testCase.testId, "CUSTOM-01");
+  assert.equal(custom.testCase.status, "not_started");
+  assert.equal(custom.testCase.categoryCode, "APIT");
+
+  const second = addTestCase(custom.plan, { title: "Verify robots.txt does not leak admin paths" })!;
+  assert.equal(second.testCase.testId, "CUSTOM-02");
+
+  const explicit = addTestCase(second.plan, {
+    testId: "CUSTOM-BUSINESS-HOUR",
+    title: "Test out-of-hours workflow bypass",
+  })!;
+  assert.equal(explicit.testCase.testId, "CUSTOM-BUSINESS-HOUR");
+
+  // Duplicate explicit ids are rejected; no title is rejected.
+  assert.equal(addTestCase(explicit.plan, { testId: "CUSTOM-BUSINESS-HOUR", title: "dup" }), undefined);
+  assert.equal(addTestCase(explicit.plan, {}), undefined);
+
+  const executed = updateTestCase(explicit.plan, "CUSTOM-01", {
+    status: "failed",
+    observations: "Introspection returned the full schema.",
+  })!;
+  assert.equal(executed.testCase.status, "failed");
+
+  // Regenerating keeps custom cases and their recorded results.
+  const regenerated = createTestPlan({ existing: executed.plan });
+  assert.equal(regenerated.kept, WSTG_TESTS.length + 3);
+  const kept = regenerated.plan.cases.find((testCase) => testCase.testId === "CUSTOM-01")!;
+  assert.equal(kept.status, "failed");
+  assert.match(kept.observations, /full schema/);
+});
+
 test("regenerating a plan keeps recorded results", () => {
-  const first = createTestPlan({ depth: "smoke", target: "https://app.example.com" }).plan;
+  const first = createTestPlan({ target: "https://app.example.com" }).plan;
   const executed = updateTestCase(first, "WSTG-ATHZ-04", {
     status: "failed",
     observations: "Swapping the invoice id returned another tenant's invoice.",
     addLinkedVulnerabilityId: "vuln_123",
   })!;
 
-  const second = createTestPlan({ depth: "standard", existing: executed.plan });
-  assert.equal(second.added, 32);
-  assert.equal(second.kept, 24);
+  const second = createTestPlan({ categories: ["ATHZ"], existing: executed.plan });
+  assert.equal(second.added, 0);
+  assert.equal(second.kept, 4);
 
   const kept = second.plan.cases.find((testCase) => testCase.testId === "WSTG-ATHZ-04")!;
   assert.equal(kept.status, "failed");
@@ -207,11 +256,11 @@ test("regenerating a plan keeps recorded results", () => {
   assert.deepEqual(kept.linkedVulnerabilityIds, ["vuln_123"]);
   assert.equal(second.coverage.executed, 1);
   assert.equal(second.coverage.failed, 1);
-  assert.equal(second.coverage.notStarted, 55);
+  assert.equal(second.coverage.notStarted, 3);
 });
 
 test("status aliases normalise and unknown statuses are ignored", () => {
-  const plan = createTestPlan({ depth: "smoke" }).plan;
+  const plan = createTestPlan({}).plan;
   const passed = updateTestCase(plan, "wstg-info-1", { status: "pass" })!;
   assert.equal(passed.testCase.status, "passed");
 
@@ -219,8 +268,22 @@ test("status aliases normalise and unknown statuses are ignored", () => {
   assert.equal(unchanged.testCase.status, "passed");
 });
 
-test("coverage is reported per WSTG category and per Top 10 category", () => {
-  const plan = createTestPlan({ depth: "smoke" }).plan;
+test("case text can be edited through update_case", () => {
+  const plan = createTestPlan({}).plan;
+  const edited = updateTestCase(plan, "WSTG-INFO-01", {
+    title: "Review the SPF record (edited)",
+    objective: "Check the published mail policy.",
+    howToTest: "dig TXT example.com",
+    notes: "user asked to tailor this case",
+  })!;
+  assert.equal(edited.testCase.title, "Review the SPF record (edited)");
+  assert.equal(edited.testCase.objective, "Check the published mail policy.");
+  assert.equal(edited.testCase.howToTest, "dig TXT example.com");
+  assert.equal(edited.testCase.notes, "user asked to tailor this case");
+});
+
+test("coverage is reported per WSTG category without OWASP pre-mapping", () => {
+  const plan = createTestPlan({}).plan;
   const withResults = updateTestCase(
     updateTestCase(plan, "WSTG-INPV-05", { status: "failed" })!.plan,
     "WSTG-INPV-01",
@@ -228,20 +291,19 @@ test("coverage is reported per WSTG category and per Top 10 category", () => {
   )!.plan;
 
   const coverage = computeCoverage(withResults.cases);
-  assert.equal(coverage.total, 24);
+  assert.equal(coverage.total, WSTG_TESTS.length);
   assert.equal(coverage.executed, 2);
   assert.equal(coverage.passed, 1);
   assert.equal(coverage.failed, 1);
-  assert.equal(coverage.percentExecuted, 8.3);
+  assert.equal(coverage.percentExecuted, 2.1);
 
   const inpv = coverage.byCategory.find((row) => row.key === "INPV")!;
   assert.equal(inpv.executed, 2);
   assert.equal(inpv.failed, 1);
   assert.equal(inpv.label, "Input Validation Testing");
 
-  const injection = coverage.byOwasp.find((row) => row.key === "A05:2025")!;
-  assert.equal(injection.executed, 2);
-  assert.equal(injection.failed, 1);
+  // The plan does not carry OWASP/CWE pre-mapping: mapping lives on findings.
+  assert.equal((coverage as any).byOwasp, undefined);
 
   assert.equal(nextTestsToRun(withResults, 3).length, 3);
   assert.ok(
@@ -251,7 +313,7 @@ test("coverage is reported per WSTG category and per Top 10 category", () => {
 });
 
 test("the report draft is complete enough to hand to a reviewer", () => {
-  const plan = createTestPlan({ depth: "smoke", target: "https://app.example.com" }).plan;
+  const plan = createTestPlan({ target: "https://app.example.com" }).plan;
   const failed = updateTestCase(plan, "WSTG-INPV-05", {
     status: "failed",
     observations: "Payload returned a database error.",
@@ -328,7 +390,20 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   assert.match(markdown, /OWASP WSTG v4\.2/);
   assert.match(markdown, /CVSS 9\.1/);
   assert.match(markdown, /Use parameterised queries\./);
-  assert.match(markdown, /2 of 24 planned WSTG test cases were executed/);
+  assert.match(markdown, /2 of 97 planned WSTG test cases were executed/);
+});
+
+test("a finding is accepted without OWASP or CWE and stays unmapped", () => {
+  const vulnerability = normalizeVulnerability({
+    title: "Phase two walkthrough note",
+    target: "shop.example.test",
+    evidence: "Nothing conclusive was observed during the walkthrough.",
+  });
+  assert.ok(!vulnerability.cwe);
+  assert.equal(vulnerability.owaspTop10, undefined);
+  assert.equal(vulnerability.owaspMappedAt, undefined);
+  // No category was forced: the classifier leaves the finding unmapped.
+  assert.ok(!vulnerability.owaspTop10Title);
 });
 
 test("the assistant exposes the web application security tools", () => {
@@ -366,7 +441,7 @@ test("the assistant proposes a WSTG plan as soon as the user names a target", ()
 });
 
 test("an existing plan is re-injected with coverage, results and next cases", () => {
-  const plan = createTestPlan({ depth: "smoke", target: "https://abc.example.com" }).plan;
+  const plan = createTestPlan({ target: "https://abc.example.com" }).plan;
   const failed = updateTestCase(plan, "WSTG-INPV-05", {
     status: "failed",
     observations: "q=' returned a database error.",
@@ -386,13 +461,14 @@ test("an existing plan is re-injected with coverage, results and next cases", ()
 
   assert.match(
     prompt,
-    /<wstg_test_plan source="OWASP WSTG v4\.2" depth="smoke" target="https:\/\/abc\.example\.com">/,
+    /<wstg_test_plan source="OWASP WSTG v4\.2" target="https:\/\/abc\.example\.com">/,
   );
-  assert.match(prompt, /Coverage: 2\/24 executed \(8\.3%\)/);
-  assert.match(prompt, /\[x\] WSTG-INPV-05 \(4\.7\.5\) Testing for SQL Injection — A05:2025/);
+  assert.match(prompt, /Coverage: 2\/97 executed \(2\.1%\)/);
+  assert.match(prompt, /\[x\] WSTG-INPV-05 \(4\.7\.5\) Testing for SQL Injection/);
   assert.match(prompt, /Tests that produced findings \(link every finding to its test\)/);
-  assert.match(prompt, /Next tests by priority:/);
+  assert.match(prompt, /Next tests \(plan order\):/);
   assert.match(prompt, /Tracked findings: 3, of which 1 are not mapped/);
   assert.match(prompt, /Current risk spread: A05:2025 Injection \(2\)/);
   assert.match(prompt, /action "update_case" \(test_id \+ status\)/);
+  assert.match(prompt, /action "add_case"/);
 });

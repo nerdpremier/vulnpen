@@ -29,14 +29,14 @@ services:
 
   kali:
     container_name: vulnpen-kali
-    build: ./kali
+    build:
+      context: ./kali
+    image: vulnpen-kali-fixed:latest
     privileged: true
     ports:
       - "127.0.0.1:4242:22"
       - "127.0.0.1:4200:4200"
       - "127.0.0.1:1194:1194/udp"
-      - "127.0.0.1:9020:9020"
-      - "127.0.0.1:5901:5901"
     volumes:
       - ./kali-data:/kali-data
       - ./backend/.env:/run/vulnpen.env:ro

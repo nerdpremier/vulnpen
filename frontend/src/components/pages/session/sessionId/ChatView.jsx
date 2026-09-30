@@ -16,7 +16,6 @@ import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
-import { PENDING_CTF_SOLVE_KEY, PENDING_SOLVE_READY_EVENT } from "@/constants/ctfUi";
 import { useQueryClient } from "react-query";
 
 export default function ChatView({ sessionId }) {
@@ -59,7 +58,6 @@ export default function ChatView({ sessionId }) {
     pendingManualExecution,
     setPendingManualExecution,
     subagents,
-    setSwarms,
     setTokenUsage,
     startStream,
     abort,
@@ -99,45 +97,6 @@ export default function ChatView({ sessionId }) {
     }
   }, [historyLoaded, scrollToBottom]);
 
-  const flushPendingCtfSolve = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const raw = sessionStorage.getItem(PENDING_CTF_SOLVE_KEY);
-    if (!raw) return;
-    let payload;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      sessionStorage.removeItem(PENDING_CTF_SOLVE_KEY);
-      return;
-    }
-    if (payload.sessionId !== sessionId || !payload.challengeName) return;
-    sessionStorage.removeItem(PENDING_CTF_SOLVE_KEY);
-
-    const msg = `/solve "${payload.challengeName}"`;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: uuidv4(),
-        role: "user",
-        content: msg,
-        isSlashCommand: true,
-        timestamp: new Date(),
-      },
-    ]);
-    startStream({ message: msg, endpoint: "slash-command" });
-  }, [sessionId, startStream, setMessages]);
-
-  useEffect(() => {
-    if (!historyLoaded) return;
-    flushPendingCtfSolve();
-  }, [historyLoaded, flushPendingCtfSolve]);
-
-  useEffect(() => {
-    const onReady = () => flushPendingCtfSolve();
-    window.addEventListener(PENDING_SOLVE_READY_EVENT, onReady);
-    return () => window.removeEventListener(PENDING_SOLVE_READY_EVENT, onReady);
-  }, [flushPendingCtfSolve]);
-
   useEffect(() => {
     if (shouldStickToBottomRef.current) {
       scrollToBottom();
@@ -151,14 +110,13 @@ export default function ChatView({ sessionId }) {
       setAgentState("idle");
       setPendingConsent(null);
       setPendingManualExecution(null);
-      setSwarms([]);
       setTokenUsage(null);
       setIterationLimit(null);
       abort();
     };
     window.addEventListener("context-cleared", handleContextCleared);
     return () => window.removeEventListener("context-cleared", handleContextCleared);
-  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSwarms, setTokenUsage, abort]);
+  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setTokenUsage, abort]);
 
   const [burpAttachment, setBurpAttachment] = useState(null);
 
@@ -227,17 +185,6 @@ export default function ChatView({ sessionId }) {
   const handlePause = useCallback(async () => {
     try {
       await pauseAgent({ sessionId });
-      // Immediately mark all running swarm agents as paused in local state
-      // (the server will also emit swarm_paused SSE, but the stream is about to close)
-      setSwarms((prev) =>
-        prev.map((sw) => ({
-          ...sw,
-          status: sw.status === "running" ? "paused" : sw.status,
-          agents: sw.agents.map((a) =>
-            a.status === "running" ? { ...a, status: "paused" } : a,
-          ),
-        })),
-      );
       abort(); // disconnects SSE, internally sets agentState("idle")
       setAgentState("paused"); // override to "paused" so resume flow works
     } catch (err) {
@@ -248,7 +195,7 @@ export default function ChatView({ sessionId }) {
       abort();
       setAgentState("paused");
     }
-  }, [sessionId, abort, setSwarms, setAgentState]);
+  }, [sessionId, abort, setAgentState]);
 
   const handleConsent = useCallback(
     (approved) => {
@@ -271,12 +218,9 @@ export default function ChatView({ sessionId }) {
   const burpPendingProcessed = useRef(false);
   useEffect(() => {
     if (historyLoading || burpPendingProcessed.current) return;
-    const pending =
-      sessionStorage.getItem("burp-to-workspace") ||
-      sessionStorage.getItem("caido-to-workspace");
+    const pending = sessionStorage.getItem("burp-to-workspace");
     if (pending) {
       sessionStorage.removeItem("burp-to-workspace");
-      sessionStorage.removeItem("caido-to-workspace");
       burpPendingProcessed.current = true;
       try {
         const parsed = JSON.parse(pending);
@@ -320,9 +264,6 @@ export default function ChatView({ sessionId }) {
         {messages.map((msg) => {
           if (msg.role === "subagent") {
             return <SubagentBlock key={msg.id} message={msg} />;
-          }
-          if (msg.role === "swarm") {
-            return null;
           }
           if (msg.role === "slash_command_result") {
             return <SlashCommandResult key={msg.id} message={msg} />;

@@ -73,7 +73,6 @@ test("runtime rejects a subscription orchestrator for a non-owner", () => {
       restrictHostSubscriptionModels(
         {
           orchestrator: subscriptionModel,
-          racers: [],
           all: [subscriptionModel],
         },
         false,
@@ -82,24 +81,21 @@ test("runtime rejects a subscription orchestrator for a non-owner", () => {
   );
 });
 
-test("runtime filters subscription racers for a non-owner", () => {
+test("runtime filters subscription models from all for a non-owner", () => {
   const result = restrictHostSubscriptionModels(
     {
       orchestrator: apiModel,
-      racers: [apiModel, subscriptionModel],
       all: [apiModel, subscriptionModel],
     },
     false,
   );
 
-  assert.deepEqual(result.racers, [apiModel]);
   assert.deepEqual(result.all, [apiModel]);
 });
 
 test("runtime preserves host subscription models for the owner", () => {
   const models = {
     orchestrator: subscriptionModel,
-    racers: [subscriptionModel],
     all: [subscriptionModel],
   };
 

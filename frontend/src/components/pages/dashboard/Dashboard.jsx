@@ -13,7 +13,7 @@ import CreateWorkspaceModal from "./CreateWorkspaceModal";
 import { getUserWorkspaces, deleteWorkspace } from "@/services/workspace.service";
 import moment from "moment";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FiTrash, FiFolder, FiFlag, FiShield } from "react-icons/fi";
+import { FiTrash, FiFolder, FiShield } from "react-icons/fi";
 import Image from "next/image";
 import emptyBox from "@/assets/empty-box.svg";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
@@ -22,7 +22,6 @@ import { useEffect } from "react";
 import { resetSessions } from "@/store/user.slice";
 
 const TYPE_CONFIG = {
-  ctf: { label: "CTF", color: "#f59e0b", icon: <FiFlag size={14} /> },
   pentest: { label: "Pentest", color: "#8b5cf6", icon: <FiShield size={14} /> },
   general: { label: "General", color: "#6b7280", icon: <FiFolder size={14} /> },
 };
@@ -140,7 +139,7 @@ const DashboardPage = () => {
               <p>
                 {workspacesData?.length
                   ? "Try a different search term."
-                  : "Organize your pentests and CTF challenges into workspaces."}
+                  : "Organize your pentest engagements into workspaces."}
               </p>
               <PrimaryButton
                 white

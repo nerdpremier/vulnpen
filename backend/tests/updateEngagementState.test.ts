@@ -13,7 +13,7 @@ function context(state: EngagementState): any {
 }
 
 test("add_key_discovery records titled discoveries from title and description", async () => {
-  const state = new EngagementState("ctf");
+  const state = new EngagementState("pentest");
   const result = await updateEngagementState.execute(
     {
       action: "add_key_discovery",
@@ -33,7 +33,7 @@ test("add_key_discovery records titled discoveries from title and description", 
 });
 
 test("add_key_discovery preserves legacy discovery/value payloads", async () => {
-  const state = new EngagementState("ctf");
+  const state = new EngagementState("pentest");
   await updateEngagementState.execute(
     { action: "add_key_discovery", data: { discovery: "Recovered flag" } },
     context(state),
@@ -47,7 +47,7 @@ test("add_key_discovery preserves legacy discovery/value payloads", async () => 
 });
 
 test("add_key_discovery rejects empty payloads instead of recording a placeholder", async () => {
-  const state = new EngagementState("ctf");
+  const state = new EngagementState("pentest");
   const result = await updateEngagementState.execute(
     { action: "add_key_discovery", data: {} },
     context(state),

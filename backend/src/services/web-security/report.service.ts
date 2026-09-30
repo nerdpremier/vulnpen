@@ -502,7 +502,7 @@ function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
 
   const coverage = computeCoverage(plan.cases);
   lines.push(
-    `Plan source: ${TEST_PLAN_SOURCE}, depth \`${plan.depth}\`, generated ${formatDate(plan.createdAt)}. Executed ${coverage.executed}/${coverage.total} cases (${coverage.percentExecuted}%): ${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ${coverage.inProgress} in progress, ${coverage.skipped} skipped, ${coverage.notStarted} not started.`,
+    `Plan source: ${TEST_PLAN_SOURCE}, generated ${formatDate(plan.createdAt)}. Executed ${coverage.executed}/${coverage.total} cases (${coverage.percentExecuted}%): ${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ${coverage.inProgress} in progress, ${coverage.skipped} skipped, ${coverage.notStarted} not started.`,
     "",
     "| WSTG section | Category | Planned | Executed | Passed | Failed | Blocked |",
     "| --- | --- | --- | --- | --- | --- | --- |",
@@ -520,7 +520,7 @@ function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
     lines.push("### 7.1 Tests that produced findings", "");
     for (const testCase of failed) {
       lines.push(
-        `- ${testCase.testId} (${testCase.section}) ${testCase.title} — ${owaspTitle(normalizeOwaspTop10Id(testCase.owasp[0]))}; linked findings: ${testCase.linkedVulnerabilityIds?.length ? testCase.linkedVulnerabilityIds.join(", ") : "none recorded"}`,
+        `- ${testCase.testId} (${testCase.section}) ${testCase.title}; linked findings: ${testCase.linkedVulnerabilityIds?.length ? testCase.linkedVulnerabilityIds.join(", ") : "none recorded"}`,
       );
     }
     lines.push("");
@@ -554,32 +554,23 @@ function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
   return lines;
 }
 
-function owaspMappingSection(stats: ReportStats, plan?: WebAppTestPlanDoc | null): string[] {
+function owaspMappingSection(stats: ReportStats): string[] {
   const lines: string[] = [
     "## 8. OWASP Top 10:2025 mapping",
     "",
-    "Every finding is mapped to a 2025 category. The mapping basis (explicit tester classification, WSTG test case, CWE or keyword classification) is recorded per finding in section 6.",
+    'The OWASP Top 10:2025 mapping is recorded on the findings themselves (section 6). A finding is only classified when the evidence supports a category; findings with no well-fitting category are listed as "Unmapped" rather than forced into one.',
     "",
-    "| Category | Findings | Executed WSTG tests | Notable WSTG tests in this plan |",
-    "| --- | --- | --- | --- |",
+    "| Category | Findings | Notable WSTG tests |",
+    "| --- | --- | --- |",
   ];
 
   for (const category of OWASP_TOP10_2025) {
-    const tests = (plan?.cases ?? [])
-      .filter((testCase) => testCase.owasp.includes(category.id))
-      .map((testCase) => testCase.testId);
-    const executedTests = (plan?.cases ?? []).filter(
-      (testCase) =>
-        testCase.owasp.includes(category.id) && testCase.status !== "not_started",
-    );
     const findings = stats.byOwasp.find((entry) => entry.id === category.id)?.findings ?? 0;
-    lines.push(
-      `| ${category.id} ${category.title} | ${findings} | ${executedTests.length}/${tests.length} | ${tests.slice(0, 4).join(", ") || "—"} |`,
-    );
-
+    const tests = (category.wstgFocus ?? []).slice(0, 4).join(", ") || "—";
+    lines.push(`| ${category.id} ${category.title} | ${findings} | ${tests} |`);
   }
   if (stats.unmapped > 0) {
-    lines.push(`| Unmapped | ${stats.unmapped} | — | Add a CWE or WSTG test reference to classify |`);
+    lines.push(`| Unmapped | ${stats.unmapped} | Add a CWE or WSTG test reference to classify — or leave unmapped when nothing fits |`);
   }
   lines.push("");
 
@@ -719,7 +710,7 @@ export function buildWebAppPentestReport(options: ReportOptions): WebAppPentestR
     ...findingsSummarySection(findings),
     ...detailedFindingsSection(findings, vulnerabilities),
     ...wstgCoverageSection(options.testPlan),
-    ...owaspMappingSection(stats, options.testPlan),
+    ...owaspMappingSection(stats),
     ...recommendationsSection(findings, vulnerabilities),
     ...appendixSection(options.testPlan),
   ].join("\n");

@@ -15,7 +15,7 @@ const TOOL_GROUPS = [
   {
     label: "Intelligence",
     description: "Search, reasoning, delegation",
-    tools: ["google_search", "ask_user", "spawn_subagent"],
+    tools: ["ask_user", "spawn_subagent"],
   },
   {
     label: "Analysis",
@@ -28,20 +28,6 @@ const TOOL_GROUPS = [
     tools: ["search_burp_proxy_history", "send_to_burp_repeater", "send_to_burp_intruder", "burp_collaborator"],
   },
   {
-    label: "Mythic C2",
-    description: "Callbacks, tasking, pivoting, loot",
-    tools: [
-      "mythic_callbacks",
-      "mythic_task",
-      "mythic_task_results",
-      "mythic_pivot",
-      "mythic_payload",
-      "mythic_listener",
-      "mythic_loot",
-      "mythic_graphql",
-    ],
-  },
-  {
     label: "Browser",
     description: "Magnitude automation",
     tools: ["browser_action"],
@@ -52,7 +38,6 @@ const TOOL_LABELS = {
   run_bash: "Run Bash",
   run_python_script: "Run Python",
   run_install_tool: "Install Tool",
-  google_search: "Google Search",
   ask_user: "Ask User",
   spawn_shell: "Spawn Shell",
   write_to_shell: "Write to Shell",
@@ -66,14 +51,6 @@ const TOOL_LABELS = {
   send_to_burp_intruder: "Burp Intruder",
   burp_collaborator: "Burp Collaborator",
   browser_action: "Browser Action",
-  mythic_callbacks: "Callbacks",
-  mythic_task: "Task Implant",
-  mythic_task_results: "Task Output",
-  mythic_pivot: "Pivot (SOCKS/rpfwd)",
-  mythic_payload: "Payloads",
-  mythic_listener: "Listeners",
-  mythic_loot: "Files & Credentials",
-  mythic_graphql: "Raw GraphQL",
 };
 
 const AgentToolsPanel = ({ sessionId }) => {

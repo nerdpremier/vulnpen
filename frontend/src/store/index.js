@@ -1,10 +1,9 @@
-import { configureStore } from "@reduxjs/toolkit";
-import { combineReducers } from "redux";
+import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import userReducer from "./user.slice";
 import vpnReducer from "./vpn.slice";
 
 import { persistReducer } from "redux-persist";
-import { thunk } from "redux-thunk";
+import storage from "redux-persist/lib/storage";
 
 const isClient = typeof window !== "undefined";
 
@@ -13,14 +12,13 @@ const reducers = combineReducers({
   vpn: vpnReducer,
 });
 
-let store = configureStore({
-  reducer: reducers,
-  middleware: [thunk],
-  devTools: true,
-});
-
-if (isClient) {
-  const storage = require("redux-persist/lib/storage").default;
+const createAppStore = () => {
+  if (!isClient) {
+    // Server: plain store, no persistence (storage needs window).
+    return configureStore({
+      reducer: reducers,
+    });
+  }
 
   const persistConfig = {
     key: "root",
@@ -28,12 +26,18 @@ if (isClient) {
     whitelist: ["user", "vpn"],
   };
 
-  const persistedReducer = persistReducer(persistConfig, reducers);
-
-  store = configureStore({
-    reducer: persistedReducer,
-    middleware: [thunk],
+  return configureStore({
+    reducer: persistReducer(persistConfig, reducers),
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware({
+        serializabilityCheck: {
+          ignoredActions: ["persist/PERSIST", "persist/REHYDRATE"],
+        },
+      }),
+    devTools: process.env.NODE_ENV !== "production",
   });
-}
+};
+
+const store = createAppStore();
 
 export default store;

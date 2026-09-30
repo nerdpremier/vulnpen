@@ -1,25 +1,45 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Result } from "antd";
 import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
 import {
   TbTools,
   TbBrain,
   TbRadar,
-  TbTopologyStar3,
   TbWorldWww,
   TbAdjustmentsHorizontal,
+  TbPlugConnected,
 } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
-import CaidoSettingsPage from "@/components/pages/settings/CaidoSettings";
-import MythicSettingsPage from "@/components/pages/settings/MythicSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
 import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
+import SSHConnectionPage from "@/components/pages/session/connection/SSHConnectionPage";
+import VPNMainPage from "@/components/pages/session/vpn/VPNMainPage";
+
+// Session-scoped tabs only render meaningful content inside a session
+// (HeaderLinks passes sessionId). Hidden from the tab list otherwise.
+const SESSION_TABS = [
+  {
+    key: "connection",
+    label: "Connection",
+    description: "Workspace host and exploit-box connection for this session.",
+    icon: TbPlugConnected,
+    component: SSHConnectionPage,
+  },
+  {
+    key: "vpn",
+    label: "VPN",
+    description: "OpenVPN status and control for this session's workspace.",
+    icon: TbWorldWww,
+    component: VPNMainPage,
+  },
+];
 
 const TABS = [
   {
@@ -40,7 +60,7 @@ const TABS = [
     key: "models",
     label: "Models",
     description:
-      "Configure reusable model presets and assign them to orchestrator, racers, and browser agent.",
+      "Configure reusable model presets and assign them to the orchestrator and browser agent.",
     icon: TbBrain,
     component: ModelsPage,
   },
@@ -60,21 +80,6 @@ const TABS = [
     component: BurpSettingsPage,
   },
   {
-    key: "caido",
-    label: "Caido",
-    description: "Configure URL, token, and proxy settings.",
-    icon: TbRadar,
-    component: CaidoSettingsPage,
-  },
-  {
-    key: "mythic",
-    label: "Mythic C2",
-    description:
-      "Connect a Mythic command-and-control server for post-exploitation and pivoting.",
-    icon: TbTopologyStar3,
-    component: MythicSettingsPage,
-  },
-  {
     key: "magnitude",
     label: "Browser Agent",
     description:
@@ -92,8 +97,10 @@ const TABS = [
   },
 ];
 
-const SettingsOverlay = ({ open, onClose, initialTab }) => {
+const SettingsOverlay = ({ open, onClose, initialTab, sessionId }) => {
   const [activeTab, setActiveTab] = useState(initialTab || "account");
+
+  const visibleTabs = [...TABS, ...(sessionId ? SESSION_TABS : [])];
 
   useEffect(() => {
     if (initialTab && open) {
@@ -123,7 +130,7 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
 
   if (!open) return null;
 
-  const currentTab = TABS.find((t) => t.key === activeTab) || TABS[0];
+  const currentTab = visibleTabs.find((t) => t.key === activeTab) || TABS[0];
   const ActiveComponent = currentTab.component;
 
   return (
@@ -132,7 +139,7 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
         <div className={styles.sidebar}>
           <div className={styles.sidebarTitle}>Settings</div>
           <div className={styles.navItems}>
-            {TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <div
                 key={tab.key}
                 className={
@@ -162,7 +169,15 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
             </button>
           </div>
           <div className={styles.contentBody}>
-            <ActiveComponent onNavigate={setActiveTab} />
+            {sessionId || !SESSION_TABS.some((t) => t.key === currentTab.key) ? (
+              <ActiveComponent onNavigate={setActiveTab} sessionId={sessionId} />
+            ) : (
+              <Result
+                status="info"
+                title="Session required"
+                subTitle="This setting is per-session. Open it from inside a session via the gear icon."
+              />
+            )}
           </div>
         </div>
       </div>

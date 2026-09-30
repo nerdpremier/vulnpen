@@ -136,24 +136,12 @@ export const getWorkspaceDetail = async (req: Request, res: Response) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const ctfInfo = workspace.ctfConfig
-      ? {
-          connected: true,
-          url: workspace.ctfConfig.url,
-          ctfName: workspace.ctfConfig.ctfName,
-          authMethod: workspace.ctfConfig.authMethod,
-          lastSynced: workspace.ctfConfig.lastSynced || null,
-          flagFormat: workspace.ctfConfig.flagFormat || null,
-        }
-      : { connected: false };
-
     return res.status(200).json({
       workspaceId: workspace.workspaceId,
       name: workspace.name,
       description: workspace.description,
       type: workspace.type,
       createdAt: workspace.createdAt,
-      ctf: ctfInfo,
       workHost: workspace.workHost || {
         kind: "local",
         workFolder: defaultWorkFolder(workspace.workspaceId),
@@ -376,10 +364,6 @@ export const createSessionInWorkspace = async (req: Request, res: Response) => {
       description: description?.substring(0, 500) ?? "",
       createdAt: new Date(),
     });
-
-    if (workspace.type === "ctf" && workspace.ctfConfig) {
-      session.ctfConfig = workspace.ctfConfig;
-    }
 
     await session.save();
 

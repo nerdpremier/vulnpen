@@ -93,7 +93,7 @@ test("keyless subscription presets and max reasoning survive normalization", asy
         reasoningMode: "high",
       },
     ],
-    { orchestratorModelId: "codex-local", racerModelIds: ["claude-local"] },
+    { orchestratorModelId: "codex-local" },
     false,
   );
   assert.equal(registry.models[0]?.model, "gpt-5.6-sol");

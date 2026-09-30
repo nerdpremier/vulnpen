@@ -3,7 +3,6 @@ import { SSEWriter } from "./agent.service";
 import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { sessionLifecycle } from "./session.lifecycle";
-import { focusSessionOnChallenge } from "./ctf.service";
 import { getOwaspCategory } from "../knowledge";
 import type {
   SessionVulnerabilityDoc,
@@ -13,7 +12,6 @@ import {
   computeCoverage,
   createTestPlan,
   nextTestsToRun,
-  TEST_PLAN_DEPTHS,
 } from "./web-security/test-plan.service";
 import { buildWebAppPentestReport } from "./web-security/report.service";
 import { mapUnclassifiedVulnerabilities } from "./vulnerability.service";
@@ -67,16 +65,10 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     usage: "/reset",
   },
   {
-    name: "solve",
-    description: "Focus on a specific CTF challenge (auto-suggests from synced challenges)",
-    usage: "/solve <challenge_name> [extra notes]",
-    args: [{ name: "challenge", required: true, description: "Challenge name or partial match" }],
-  },
-  {
     name: "wstg",
     description:
       "Create, refresh or show the OWASP WSTG v4.2 test plan for this session",
-    usage: "/wstg [smoke|standard|deep|full] [target]",
+    usage: "/wstg [target]",
   },
   {
     name: "map",
@@ -620,83 +612,6 @@ Use markdown formatting. Be thorough but concise.`,
     sse.end();
   },
 
-  solve: async ({ sessionId, args, sse }) => {
-    const fail = (content: string) => {
-      sse.write("slash_command_result", { command: "solve", success: false, content });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
-    };
-
-    if (args.toLowerCase() === "clear" || args.toLowerCase() === "none") {
-      await SessionsModel.updateOne({ sessionId }, { $unset: { "ctfConfig.activeSolve": 1 } });
-      sse.write("slash_command_result", {
-        command: "solve",
-        success: true,
-        content: "Challenge focus cleared. The agent will no longer target a specific challenge.",
-      });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
-      return;
-    }
-
-    if (!args.trim()) {
-      fail(
-        "Usage: `/solve <challenge_name>` — specify which challenge to focus on.\nUse `/solve clear` to deactivate challenge focus.",
-      );
-      return;
-    }
-
-    // `/solve "name with spaces" extra notes` — quoted name, rest is notes.
-    let query = args.replace(/^["']|["']$/g, "").trim();
-    let userNotes = "";
-    const quoted = args.match(/^["'](.+?)["']\s*(.*)/);
-    if (quoted) {
-      query = quoted[1].trim();
-      userNotes = quoted[2].trim();
-    }
-
-    const result = await focusSessionOnChallenge({
-      sessionId,
-      query,
-      userNotes,
-      syncWorkspaceActiveSolve: true,
-    });
-
-    if (!result.ok) {
-      const listing = result.candidates?.length
-        ? `\n\n### Available challenges:\n${result.candidates.map((c) => `- **${c}**`).join("\n")}`
-        : "";
-      fail(`${result.message}${listing}`);
-      return;
-    }
-
-    const ch = result.challenge;
-    const lines: string[] = [
-      `### Solving: ${ch.name}`,
-      ``,
-      `**Category:** ${ch.category} | **Points:** ${ch.points}`,
-      `**Working directory:** \`${ch.challengeDir}\``,
-      ``,
-      ch.challengeTxt.includes("Description:") ? "" : `${ch.challengeTxt}\n`,
-      ch.files.length > 0
-        ? `**Files:**\n${ch.files.map((f) => `- \`${ch.challengeDir}/${f}\``).join("\n")}`
-        : "*No attached files*",
-    ];
-
-    if (userNotes) {
-      lines.push("", `**Your notes:** ${userNotes}`);
-    }
-
-    lines.push("", "The agent is now focused on this challenge. Send a message to start solving, or add more context.");
-
-    sse.write("slash_command_result", {
-      command: "solve",
-      success: true,
-      content: lines.filter((l) => l !== undefined).join("\n"),
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
-  },
   wstg: async ({ sessionId, args, sse }) => {
     const finish = (content: string, success = true) => {
       sse.write("slash_command_result", { command: "wstg", success, content });
@@ -710,19 +625,12 @@ Use markdown formatting. Be thorough but concise.`,
         .lean();
       const existing = (session?.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
       const tokens = args.trim().split(/\s+/).filter(Boolean);
-      const depthToken = tokens.find((token) =>
-        TEST_PLAN_DEPTHS.some((depth) => depth.id === token.toLowerCase()),
-      );
-      const target = tokens.filter((token) => token !== depthToken).join(" ").trim();
+      const target = tokens.join(" ").trim();
 
-      const depthHelp = TEST_PLAN_DEPTHS.map(
-        (depth) => `- \`${depth.id}\` (${depth.testCount} cases) — ${depth.description}`,
-      ).join("\n");
-
-      if (!target && !depthToken && existing?.cases?.length) {
+      if (!target && existing?.cases?.length) {
         const coverage = computeCoverage(existing.cases);
         const lines = [
-          `### WSTG v${existing.version} test plan (depth: ${existing.depth})`,
+          `### WSTG v${existing.version} test plan`,
           "",
           existing.target ? `**Target:** ${existing.target}` : "**Target:** not set — run `/wstg <target>` to set it",
           existing.scope ? `**Scope:** ${existing.scope}` : "",
@@ -731,12 +639,12 @@ Use markdown formatting. Be thorough but concise.`,
           "**By category:** " +
             coverage.byCategory.map((row) => `${row.key} ${row.executed}/${row.total}`).join(", "),
           "",
-          "**Next by priority:**",
+          "**Next tests:**",
           ...nextTestsToRun(existing, 10).map(
-            (testCase) => `- \`${testCase.testId}\` ${testCase.title} — ${testCase.owasp.join(", ")}`,
+            (testCase) => `- \`${testCase.testId}\` ${testCase.title}`,
           ),
           "",
-          "Refresh or re-scope with `/wstg <depth> <target>`.",
+          "Refresh or re-scope with `/wstg <target>`.",
         ];
         finish(lines.filter(Boolean).join("\n"));
         return;
@@ -744,7 +652,7 @@ Use markdown formatting. Be thorough but concise.`,
 
       if (!target && !existing?.cases?.length) {
         finish(
-          `Usage: \`/wstg [depth] [target]\` — for example \`/wstg standard https://app.example.com\`.\n\n${depthHelp}`,
+          "Usage: `/wstg <target>` — for example `/wstg https://app.example.com`. Plans the full OWASP WSTG catalogue; ask the assistant to restrict categories or add custom cases.",
           false,
         );
         return;
@@ -752,7 +660,6 @@ Use markdown formatting. Be thorough but concise.`,
 
       const result = createTestPlan({
         target: target || undefined,
-        depth: depthToken,
         existing,
       });
       await SessionsModel.updateOne(
@@ -765,11 +672,11 @@ Use markdown formatting. Be thorough but concise.`,
         `### WSTG v${result.plan.version} test plan ${existing ? "updated" : "created"}`,
         "",
         `**Target:** ${result.plan.target || "not set"}`,
-        `**Depth:** ${result.plan.depth} — ${result.plan.cases.length} test cases (${result.added} added, ${result.kept} kept with their previous status)`,
+        `**Cases:** ${result.plan.cases.length} test cases (${result.added} added, ${result.kept} kept with their previous status)`,
         "",
         "**Start with:**",
         ...nextTestsToRun(result.plan, 10).map(
-          (testCase) => `- \`${testCase.testId}\` (${testCase.section}) ${testCase.title} — ${testCase.owasp.join(", ")}`,
+          (testCase) => `- \`${testCase.testId}\` (${testCase.section}) ${testCase.title}`,
         ),
         "",
         "Ask the assistant to work through the plan; it records each result with `wstg_test_plan` action `update_case`.",

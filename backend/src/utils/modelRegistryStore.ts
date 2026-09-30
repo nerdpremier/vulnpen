@@ -22,7 +22,6 @@ export interface ModelPreset {
 
 export interface ModelAssignments {
   orchestratorModelId?: string;
-  racerModelIds: string[];
   browserModelId?: string;
 }
 
@@ -45,12 +44,6 @@ const LEGACY_MODEL_KEYS = [
   "MAGNITUDE_MODEL_API_KEY",
   "MAGNITUDE_MODEL_BASE_URL",
   ...Array.from({ length: 8 }, (_, i) => i + 1).flatMap((idx) => [
-    `RACER_${idx}_NAME`,
-    `RACER_${idx}_PROVIDER`,
-    `RACER_${idx}_MODEL`,
-    `RACER_${idx}_API_KEY`,
-    `RACER_${idx}_BASE_URL`,
-    `RACER_${idx}_REASONING_MODE`,
   ]),
 ];
 
@@ -185,13 +178,8 @@ function sanitizeAssignments(
   const browserModelId = ids.has(asString(raw.browserModelId))
     ? asString(raw.browserModelId)
     : undefined;
-  const racerModelIds = Array.isArray(raw.racerModelIds)
-    ? raw.racerModelIds.map(asString).filter((id) => ids.has(id))
-    : [];
-
   return {
     orchestratorModelId,
-    racerModelIds: Array.from(new Set(racerModelIds)),
     browserModelId,
   };
 }
@@ -232,19 +220,13 @@ function hasLegacyModelConfig(env: Record<string, string>): boolean {
     env.ORCHESTRATOR_API_KEY ||
     env.MAGNITUDE_MODEL_PROVIDER ||
     env.MAGNITUDE_MODEL ||
-    env.MAGNITUDE_MODEL_API_KEY ||
-    Array.from({ length: 8 }, (_, i) => i + 1).some(
-      (idx) =>
-        env[`RACER_${idx}_PROVIDER`] ||
-        env[`RACER_${idx}_MODEL`] ||
-        env[`RACER_${idx}_API_KEY`],
-    ),
+    env.MAGNITUDE_MODEL_API_KEY,
   );
 }
 
 function migrateLegacyModelConfig(env: Record<string, string>): ModelRegistry {
   const models: ModelPreset[] = [];
-  const assignments: ModelAssignments = { racerModelIds: [] };
+  const assignments: ModelAssignments = {};
   const usedIds = new Set<string>();
   const dedupe = new Map<string, string>();
 
@@ -258,17 +240,6 @@ function migrateLegacyModelConfig(env: Record<string, string>): ModelRegistry {
   });
   if (orchestratorId) assignments.orchestratorModelId = orchestratorId;
 
-  for (let i = 1; i <= 8; i += 1) {
-    const racerId = addLegacyPreset(models, usedIds, dedupe, {
-      label: asString(env[`RACER_${i}_NAME`]) || `Racer ${i}`,
-      provider: asString(env[`RACER_${i}_PROVIDER`]),
-      model: normalizeStoredModelId(env[`RACER_${i}_MODEL`]),
-      apiKey: asString(env[`RACER_${i}_API_KEY`]) || undefined,
-      baseURL: asString(env[`RACER_${i}_BASE_URL`]) || undefined,
-      reasoningMode: normalizeReasoning(env[`RACER_${i}_REASONING_MODE`]),
-    });
-    if (racerId) assignments.racerModelIds.push(racerId);
-  }
 
   const browserId = addLegacyPreset(models, usedIds, dedupe, {
     label: "Browser Agent",
@@ -292,7 +263,7 @@ export function getModelRegistryPath(): string {
 }
 
 function emptyRegistry(): ModelRegistry {
-  return { models: [], assignments: { racerModelIds: [] } };
+  return { models: [], assignments: {} };
 }
 
 function readProfileRegistry(): ModelRegistry | null {
@@ -415,7 +386,6 @@ export function resolveAssignedModel(
 
 export function getAssignedModels(): {
   orchestrator: ModelPreset | null;
-  racers: ModelPreset[];
   browser: ModelPreset | null;
   all: ModelPreset[];
   assignments: ModelAssignments;
@@ -426,9 +396,6 @@ export function getAssignedModels(): {
       registry,
       registry.assignments.orchestratorModelId,
     ),
-    racers: registry.assignments.racerModelIds
-      .map((id) => resolveAssignedModel(registry, id))
-      .filter((model): model is ModelPreset => Boolean(model)),
     browser: resolveAssignedModel(
       registry,
       registry.assignments.browserModelId,

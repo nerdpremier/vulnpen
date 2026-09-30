@@ -1,56 +1,24 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
-import { notification } from "antd";
+import React, { useState, useCallback, useEffect } from "react";
+import { TbWorldWww } from "react-icons/tb";
 import ChatView from "./ChatView";
-import ShellPanel from "@/components/shells/ShellPanel";
-import useShellSocket from "@/hooks/useShellSocket";
-import { reconnectWorkHost } from "@/services/agent.service";
+import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
 
 const SessionMainPage = ({ session_id }) => {
-  const [shellPanelWidth, setShellPanelWidth] = useState(45);
+  const [panelWidth, setPanelWidth] = useState(45);
   const [isDragging, setIsDragging] = useState(false);
+  // The live view starts collapsed; it unfolds itself when the agent starts
+  // driving the browser (see the browser-agent-active listener below).
+  const [panelOpen, setPanelOpen] = useState(false);
 
-  const handleShellError = useCallback((message, severity = "error") => {
-    notification[severity === "success" ? "success" : severity === "warning" ? "warning" : "error"]({
-      message: severity === "success" ? "Connection" : "Shell Error",
-      description: message,
-      duration: severity === "success" ? 3 : 5,
-      placement: "bottomRight",
-    });
+  // Unfold the live browser view whenever the agent starts driving the
+  // browser (ToolCallBlock broadcasts browser tool activity).
+  useEffect(() => {
+    const open = () => setPanelOpen(true);
+    window.addEventListener("browser-agent-active", open);
+    return () => window.removeEventListener("browser-agent-active", open);
   }, []);
-
-  const handleReconnectHost = useCallback(async () => {
-    try {
-      await reconnectWorkHost(session_id);
-      notification.success({
-        message: "Workspace reconnected",
-        description: "Reconnection initiated",
-        duration: 3,
-        placement: "bottomRight",
-      });
-    } catch (err) {
-      notification.error({
-        message: "Workspace reconnect failed",
-        description: err?.response?.data?.message ?? err.message ?? "Unknown error",
-        duration: 5,
-        placement: "bottomRight",
-      });
-    }
-  }, [session_id]);
-
-  const {
-    shells,
-    connectionStatus,
-    wsConnected,
-    subscribeShell,
-    unsubscribeShell,
-    sendShellInput,
-    spawnShell,
-    closeShell,
-    resizeShell,
-    onShellOutput,
-  } = useShellSocket({ sessionId: session_id, onError: handleShellError });
 
   const handleMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -61,7 +29,7 @@ const SessionMainPage = ({ session_id }) => {
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const pct = ((rect.right - e.clientX) / rect.width) * 100;
-      setShellPanelWidth(Math.max(20, Math.min(70, pct)));
+      setPanelWidth(Math.max(20, Math.min(70, pct)));
     };
 
     const handleMouseUp = () => {
@@ -98,45 +66,89 @@ const SessionMainPage = ({ session_id }) => {
           <ChatView sessionId={session_id} />
         </div>
 
-        {/* Resize Handle */}
-        <div
-          onMouseDown={handleMouseDown}
-          style={{
-            width: 4,
-            cursor: "col-resize",
-            backgroundColor: isDragging ? "#8e35ff" : "rgba(255, 255, 255, 0.06)",
-            transition: isDragging ? "none" : "background-color 0.15s ease",
-            flexShrink: 0,
-            zIndex: 10,
-          }}
-          onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.12)"; }}
-          onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.06)"; }}
-        />
+        {panelOpen ? (
+          <>
+            {/* Resize Handle */}
+            <div
+              onMouseDown={handleMouseDown}
+              style={{
+                width: 4,
+                cursor: "col-resize",
+                backgroundColor: isDragging ? "#8e35ff" : "rgba(255, 255, 255, 0.06)",
+                transition: isDragging ? "none" : "background-color 0.15s ease",
+                flexShrink: 0,
+                zIndex: 10,
+              }}
+              onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.12)"; }}
+              onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.06)"; }}
+            />
 
-        {/* Shell Panel */}
-        <div style={{
-          width: `${shellPanelWidth}%`,
-          minWidth: 200,
-          minHeight: 0,
-          overflow: "hidden",
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-        }}>
-          <ShellPanel
-            shells={shells}
-            subscribeShell={subscribeShell}
-            unsubscribeShell={unsubscribeShell}
-            sendShellInput={sendShellInput}
-            onShellOutput={onShellOutput}
-            spawnShell={spawnShell}
-            closeShell={closeShell}
-            resizeShell={resizeShell}
-            connectionStatus={connectionStatus}
-            wsConnected={wsConnected}
-            onReconnectHost={handleReconnectHost}
-          />
-        </div>
+            {/* Browser Agent Live View */}
+            <div style={{
+              width: `${panelWidth}%`,
+              minWidth: 200,
+              minHeight: 0,
+              overflow: "hidden",
+              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              position: "relative",
+            }}>
+              <button
+                onClick={() => setPanelOpen(false)}
+                title="Collapse browser view"
+                style={{
+                  position: "absolute",
+                  top: 8,
+                  left: 8,
+                  zIndex: 20,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(20,20,30,0.85)",
+                  color: "rgba(255,255,255,0.7)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  lineHeight: 1,
+                  padding: 0,
+                }}
+              >
+                »
+              </button>
+              <BrowserAgentPanel />
+            </div>
+          </>
+        ) : (
+          /* Collapsed strip */
+          <button
+            onClick={() => setPanelOpen(true)}
+            title="Show browser agent view"
+            style={{
+              width: 34,
+              alignSelf: "stretch",
+              flexShrink: 0,
+              border: "none",
+              borderLeft: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.03)",
+              color: "rgba(255,255,255,0.65)",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
+              paddingTop: 12,
+              fontSize: 11,
+              letterSpacing: "0.08em",
+            }}
+          >
+            <TbWorldWww size={16} />
+            <span style={{ writingMode: "vertical-rl" }}>BROWSER AGENT</span>
+          </button>
+        )}
       </div>
     </div>
   );

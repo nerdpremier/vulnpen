@@ -3,34 +3,18 @@
 import { useState, useEffect, useCallback } from "react";
 import styles from "@/styles/components/Common.module.scss";
 import { useRouter } from "next/navigation";
-import { App, Tooltip } from "antd";
+import { App } from "antd";
 import { useDispatch, useSelector } from "react-redux";
 import { logoutUser } from "@/services/auth.service";
 import { useMutation } from "react-query";
 import Link from "next/link";
 import { RiLogoutCircleRLine, RiSettings3Line } from "react-icons/ri";
 
-import { FiFlag } from "react-icons/fi";
-import {
-  CheckCircleFilled,
-  ClockCircleOutlined,
-  CloseCircleFilled,
-  RobotOutlined,
-} from "@ant-design/icons";
 import { logout } from "@/store/user.slice";
 import VulnPenLogo from "./VulnPenLogo";
 import SettingsOverlay from "./SettingsOverlay";
 
-const CTF_STATUS = {
-  solved: { icon: <CheckCircleFilled />, label: "Solved", cls: "ctfStatusSolved" },
-  submitted: { icon: <CheckCircleFilled />, label: "Submitted", cls: "ctfStatusSolved" },
-  flag_found: { icon: <RobotOutlined />, label: "Flag found", cls: "ctfStatusFound" },
-  incorrect: { icon: <CloseCircleFilled />, label: "Incorrect", cls: "ctfStatusIncorrect" },
-  solving: { icon: <ClockCircleOutlined />, label: "Solving", cls: "ctfStatusSolving" },
-  pending: { icon: null, label: "Pending", cls: "ctfStatusPending" },
-};
-
-const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }) => {
+const HeaderLinks = ({ sessionId, sessionName, logoVisible = true }) => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.user);
@@ -67,41 +51,8 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
       <div className={styles.headerLinkWrapper}>
         {sessionId ? (
           <div className={styles.sessionIdGroup}>
-            {sessionInfo?.isCTF && sessionInfo?.ctf ? (
-              <>
-                <span className={styles.ctfBadge}>
-                  <FiFlag size={11} /> {sessionInfo.ctf.ctfName}
-                </span>
-                <span className={styles.sessionId}>#{sessionId}</span>
-
-                <span className={styles.sessionName}>{sessionInfo.name}</span>
-                {sessionInfo.ctf.category && (
-                  <span className={styles.ctfMeta}>{sessionInfo.ctf.category}</span>
-                )}
-                {sessionInfo.ctf.points != null && (
-                  <span className={styles.ctfMeta}>{sessionInfo.ctf.points} pts</span>
-                )}
-
-                {sessionInfo.ctf.flag && (
-                  <Tooltip title={sessionInfo.ctf.flag}>
-                    <code className={styles.ctfFlag}>{sessionInfo.ctf.flag}</code>
-                  </Tooltip>
-                )}
-                {(() => {
-                  const st = CTF_STATUS[sessionInfo.ctf.status] || CTF_STATUS.pending;
-                  return (
-                    <span className={`${styles.ctfStatus} ${styles[st.cls]}`}>
-                      {st.icon} {st.label}
-                    </span>
-                  );
-                })()}
-              </>
-            ) : (
-              <>
-                {sessionName && <span className={styles.sessionName}>{sessionName}</span>}
-                <span className={styles.sessionId}>#{sessionId}</span>
-              </>
-            )}
+            {sessionName && <span className={styles.sessionName}>{sessionName}</span>}
+            <span className={styles.sessionId}>#{sessionId}</span>
           </div>
         ) : (
           <>
@@ -142,6 +93,7 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
         open={settingsOpen}
         onClose={() => { setSettingsOpen(false); setSettingsInitialTab(null); }}
         initialTab={settingsInitialTab}
+        sessionId={sessionId}
       />
     </>
   );

@@ -24,7 +24,6 @@ import {
 } from "../services/subscription-inference.service";
 import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
 import { getBurpBrowserHome } from "../services/burp-ca.service";
-import { normalizeMythicUrl } from "../services/mythic.client";
 import { requireActiveSession } from "../services/session.helpers";
 import {
   getAssignedModels,
@@ -332,7 +331,6 @@ export const updateSwarmModels = async (req: Request, res: Response) => {
     const assignedIds = new Set([
       normalizedWithSecrets.assignments.orchestratorModelId,
       normalizedWithSecrets.assignments.browserModelId,
-      ...normalizedWithSecrets.assignments.racerModelIds,
     ].filter(Boolean));
     const verifiedModels = [];
     for (const model of normalizedWithSecrets.models) {
@@ -1113,7 +1111,7 @@ export const autoSetupVNC = async (req: Request, res: Response) => {
           const randomPassword = generateRandomPassword();
           await execCmd(
             `mkdir -p ~/.vnc && ` +
-              `echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
+              `printf '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $HOME/.Xresources ] && xrdb $HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi\\n' > ~/.vnc/xstartup && ` +
               `chmod +x ~/.vnc/xstartup`,
           );
           // Kill all existing VNC/Xvfb processes for a clean start
@@ -1678,7 +1676,7 @@ export const repairVNC = async (req: Request, res: Response) => {
       try {
         await execSSHCommand(
           `mkdir -p ~/.vnc && ` +
-            `echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
+            `printf '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $HOME/.Xresources ] && xrdb $HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi\\n' > ~/.vnc/xstartup && ` +
             `chmod +x ~/.vnc/xstartup`,
         );
         log.push(`Configured xstartup with DISPLAY=${VNC_DISPLAY}`);
@@ -2041,92 +2039,6 @@ export const updateBurpConfig = async (req: Request, res: Response) => {
   }
 };
 
-export const getCaidoConfig = async (_req: Request, res: Response) => {
-  try {
-    const env = readEnvFile();
-    return res.status(200).json({
-      url: env.CAIDO_URL || "",
-      patConfigured: !!env.CAIDO_PAT,
-      proxyUrl: env.CAIDO_PROXY_URL || env.CAIDO_URL || "",
-      configured: !!env.CAIDO_URL && !!env.CAIDO_PAT,
-    });
-  } catch (error) {
-    console.log(error);
-    return res.status(400).json({ message: "Failed to get integration config" });
-  }
-};
-
-export const updateCaidoConfig = async (req: Request, res: Response) => {
-  try {
-    const { url, pat, proxyUrl } = req.body;
-
-    if (!url) {
-      return res.status(400).json({ message: "URL is required" });
-    }
-
-    const updates: Record<string, string> = {
-      CAIDO_URL: String(url).replace(/\/+$/, ""),
-      CAIDO_PROXY_URL: String(proxyUrl || url).replace(/\/+$/, ""),
-    };
-
-    if (pat !== undefined) {
-      updates.CAIDO_PAT = String(pat || "");
-    }
-
-    updateEnvVars(updates);
-
-    return res.status(200).json({ message: "Configuration updated" });
-  } catch (error) {
-    console.log(error);
-    return res.status(400).json({ message: "Failed to update integration config" });
-  }
-};
-
-// ─── Mythic C2 Configuration ─────────────────────────────────────────
-
-export const getMythicConfig = async (_req: Request, res: Response) => {
-  try {
-    const env = readEnvFile();
-    return res.status(200).json({
-      url: env.MYTHIC_URL || "",
-      tokenConfigured: !!env.MYTHIC_API_TOKEN,
-      insecureTls: String(env.MYTHIC_INSECURE_TLS || "").toLowerCase() === "true",
-      configured: !!env.MYTHIC_URL && !!env.MYTHIC_API_TOKEN,
-    });
-  } catch (error) {
-    console.log(error);
-    return res.status(400).json({ message: "Failed to get Mythic config" });
-  }
-};
-
-export const updateMythicConfig = async (req: Request, res: Response) => {
-  try {
-    const { url, token, insecureTls } = req.body;
-
-    if (!url) {
-      return res.status(400).json({ message: "URL is required" });
-    }
-
-    const updates: Record<string, string> = {
-      MYTHIC_URL: normalizeMythicUrl(String(url)),
-      MYTHIC_INSECURE_TLS: insecureTls === true || insecureTls === "true" ? "true" : "false",
-    };
-
-    // Only overwrite the token when one was actually submitted, so the settings
-    // form can round-trip without the client ever seeing the stored value.
-    if (token !== undefined) {
-      updates.MYTHIC_API_TOKEN = String(token || "");
-    }
-
-    updateEnvVars(updates);
-
-    return res.status(200).json({ message: "Mythic configuration updated" });
-  } catch (error) {
-    console.log(error);
-    return res.status(400).json({ message: "Failed to update Mythic config" });
-  }
-};
-
 // ─── Magnitude Browser Agent Configuration ───────────────────────────
 
 export const getMagnitudeConfig = async (_req: Request, res: Response) => {
@@ -2212,6 +2124,21 @@ export const updateMagnitudeConfig = async (req: Request, res: Response) => {
   }
 };
 
+// The browser agent's Chromium is kept open between runs so the noVNC live
+// view (Browser Agent panel / /browser-agent page) always shows the browser's
+// latest state. Starting a new agent replaces — and stops — the previous one.
+let persistentBrowserAgent: any = null;
+
+const stopPersistentBrowserAgent = async () => {
+  if (!persistentBrowserAgent) return;
+  try {
+    await persistentBrowserAgent.stop();
+  } catch (stopError) {
+    console.warn("Failed to stop previous Browser Agent:", stopError);
+  }
+  persistentBrowserAgent = null;
+};
+
 export const startMagnitudeAgent = async (req: Request, res: Response) => {
   try {
     const { goal, targetUrl } = req.body;
@@ -2289,7 +2216,7 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
 
     const agentConfig: any = {
       url: targetUrl,
-      narrate: true,
+      narrate: false,
       browser: {
         launchOptions,
         contextOptions: { ignoreHTTPSErrors: true },
@@ -2301,21 +2228,19 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     };
 
     const agent = await startBrowserAgent(agentConfig);
+    await stopPersistentBrowserAgent();
+    persistentBrowserAgent = agent;
 
     try {
       await agent.act(goal);
-      await agent.stop();
+      // Kept open on purpose — the live view shows the browser's final state
+      // until the next agent run replaces it.
       return res.status(200).json({
         message: "Browser agent completed the goal successfully",
         goal,
         targetUrl,
       });
     } catch (agentError: any) {
-      try {
-        await agent.stop();
-      } catch (stopError) {
-        console.warn("Failed to stop Browser Agent after an error:", stopError);
-      }
       return res.status(500).json({
         message: `Browser agent failed: ${formatMagnitudeError(agentError)}`,
         goal,

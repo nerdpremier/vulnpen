@@ -13,9 +13,17 @@ test("wraps apt installs with root or passwordless sudo detection", () => {
   assert.match(command, /sudo -n true/);
   assert.match(
     command,
-    /sudo -n sh -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get install -y vim-common'/,
+    /sudo -n sh -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq; apt-get install -y vim-common'/,
   );
   assert.match(command, /exit 126/);
+});
+
+test("refreshes apt lists before installing", () => {
+  const command = buildPrivilegeAwareInstallCommand(
+    "apt install -y curl wget",
+    false,
+  );
+  assert.match(command, /apt-get update -qq; apt-get install -y curl wget/);
 });
 
 test("does not elevate portable or macOS install commands", () => {

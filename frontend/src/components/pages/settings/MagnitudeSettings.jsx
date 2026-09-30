@@ -126,40 +126,12 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
         )}
       </div>
 
-      <div className={styles.warningBox}>
-        <WarningOutlined />
-        <span>
-          Browser Agent requires a Magnitude-compatible model. For MiniMax, use
-          an <strong>OpenAI-Compatible</strong> preset with base URL{" "}
-          <code>https://api.minimax.io/v1</code>. Incompatible presets are
-          hidden from the Browser Agent dropdown in Settings &gt; Models.
-        </span>
-      </div>
-
       {browserModelIssue && (
         <div className={styles.errorBox}>
           <WarningOutlined />
           <span>{browserModelIssue}</span>
         </div>
       )}
-
-      <div className={styles.infoBox}>
-        <InfoCircleOutlined />
-        <span>
-          Browser Agent uses the model selected in Settings &gt; Models.
-          Configure credentials and assignments there once.
-        </span>
-      </div>
-
-      <div className={styles.warningBox}>
-        <WarningOutlined />
-        <span>
-          Browser Agent runs beside the backend, not on the workspace SSH host.
-          A VPN connected on that SSH host does not route browser traffic. For
-          VPN-only targets, run the VPN locally/in the backend or configure a
-          reachable HTTP/SOCKS proxy below.
-        </span>
-      </div>
 
       <div className={styles.mcpPanel}>
         <div className={styles.mcpPanelHeader} style={{ marginBottom: 0 }}>

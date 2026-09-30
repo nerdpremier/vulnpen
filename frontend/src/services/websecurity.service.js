@@ -12,6 +12,11 @@ export const generateTestPlan = async ({ sessionId, ...body }) => {
   return res.data;
 };
 
+export const addTestCase = async ({ sessionId, ...body }) => {
+  const res = await apiClient.post(`/agent/session/${sessionId}/test-plan`, body);
+  return res.data;
+};
+
 export const updateTestCase = async ({ sessionId, testId, ...body }) => {
   const res = await apiClient.patch(
     `/agent/session/${sessionId}/test-plan/cases/${testId}`,

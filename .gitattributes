@@ -1,0 +1,11 @@
+# Shell scripts must keep LF endings. A CRLF shebang makes the kernel try to
+# execute "bash\r", which fails at container start with:
+#   env: 'bash\r': No such file or directory
+*.sh text eol=lf
+
+# Keep these as-is
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

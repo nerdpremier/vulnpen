@@ -78,7 +78,7 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
 
             // Ensure xstartup exists with DISPLAY export
             await exec(
-              `mkdir -p ~/.vnc && echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup`
+              `mkdir -p ~/.vnc && printf '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $HOME/.Xresources ] && xrdb $HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi\\n' > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup`
             );
 
             // Kill all existing VNC/Xvfb for a clean start

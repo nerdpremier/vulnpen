@@ -1,7 +1,5 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
 import { EngagementState } from "../../services/engagement-state";
-import SessionsModel from "../../models/Sessions/Sessions.model";
-import { sanitizeDirName, submitFlagToCtfd } from "../../services/ctf.service";
 import {
   normalizeVulnerability,
   upsertSessionVulnerability,
@@ -9,16 +7,6 @@ import {
 
 function str(v: any): string {
   return typeof v === "string" ? v.trim() : "";
-}
-
-function formatDurationSec(sec: number): string {
-  if (sec < 60) return `${sec}s`;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return mm ? `${h}h ${mm}m` : `${h}h`;
 }
 
 const updateEngagementState: ToolDefinition = {
@@ -37,11 +25,7 @@ const updateEngagementState: ToolDefinition = {
           "add_vulnerability",
           "add_shell",
           "set_phase",
-          "attempt_flag",
-          "confirm_flag",
-          "add_distfile_analysis",
           "add_key_discovery",
-          "set_challenge_status",
           "add_file",
           "log_approach",
           "set_next_steps",
@@ -52,12 +36,12 @@ const updateEngagementState: ToolDefinition = {
         type: "object",
         description:
           "The action-specific state data. For add_vulnerability include title, host/target, service or endpoint, severity, " +
-          "CVSS score/vector, CWE, evidence, stepsToReproduce, contextSummary, impact, remediation, and exploited status when known. " +
-          "Also set wstgId to the WSTG v4.2 test case that produced the finding (e.g. WSTG-INPV-05): the OWASP Top 10:2025 category " +
-          "is derived from it automatically, and set owaspTop10 explicitly only when you know the correct category. " +
+          "CVSS score/vector, evidence, stepsToReproduce, contextSummary, impact, remediation, and exploited status when known. " +
+          "CWE and owaspTop10 are optional: set wstgId to the WSTG v4.2 test case that produced the finding (e.g. WSTG-INPV-05) and set " +
+          "owaspTop10/CWE only when you know they fit. A finding with no well-fitting category or CWE is accepted unmapped — never invent a mapping for completeness. " +
           "For add_key_discovery provide title and/or description (discovery/value are accepted for compatibility).",
         properties: {
-          // Shared/CTF fields. Keeping these explicit prevents models from
+          // Shared fields. Keeping these explicit prevents models from
           // guessing the shape of add_key_discovery calls while retaining the
           // existing permissive schema for the other state actions.
           title: { type: "string" },
@@ -111,7 +95,6 @@ const updateEngagementState: ToolDefinition = {
     const data = args.data && typeof args.data === "object" ? args.data : {};
 
     switch (action) {
-      // ─── Pentest actions ────────────────────────────────────────
       case "add_host": {
         const ip = str(data.ip) || "unknown";
         state.hosts.push({
@@ -164,9 +147,7 @@ const updateEngagementState: ToolDefinition = {
           return { output: "add_vulnerability requires an active session", exitCode: 1 };
         }
         const normalized = normalizeVulnerability(data, {
-          source: ctx.agentRole === "swarm_agent"
-            ? `racer:${ctx.agentId ?? "unknown"}`
-            : `agent:${ctx.agentId ?? "orchestrator"}`,
+          source: `agent:${ctx.agentId ?? "orchestrator"}`,
         });
         const persisted = await upsertSessionVulnerability(ctx.sessionId, normalized);
         const existingIndex = state.vulnerabilities.findIndex(
@@ -205,259 +186,8 @@ const updateEngagementState: ToolDefinition = {
         state.phase = data.phase ?? state.phase;
         return { output: `Phase set to: ${state.phase}`, exitCode: 0 };
 
-      // ─── CTF actions ────────────────────────────────────────────
-      case "attempt_flag": {
-        state.flagAttempts.push({
-          value: data.value ?? "",
-          result: data.result ?? "incorrect",
-        });
-
-        if (ctx.sessionId && state.challengeName) {
-          SessionsModel.updateOne(
-            { sessionId: ctx.sessionId, "ctfConfig.solveHistory.challengeName": state.challengeName },
-            { $inc: { "ctfConfig.solveHistory.$.attempts": 1 } },
-          ).catch(() => {});
-        }
-
-        return {
-          output: `Flag attempt recorded: "${data.value}" → ${data.result ?? "incorrect"}`,
-          exitCode: 0,
-        };
-      }
-
-      case "confirm_flag": {
-        const flagValue =
-          str(data.value) ||
-          str(data.flag) ||
-          str(data.confirmedFlag);
-        if (!flagValue) {
-          return {
-            output: "confirm_flag requires data.value (or data.flag) with the flag string.",
-            exitCode: 1,
-          };
-        }
-
-        state.confirmedFlag = flagValue;
-        // confirm_flag means "candidate flag found", not yet verified correct by CTFd.
-        state.challengeStatus = "flag_found";
-
-        const flag = state.confirmedFlag;
-        let persistNote = "";
-        let challengeNameForSubmit: string | undefined;
-        let challengeIdForSubmit: number | undefined;
-        let autoSubmitNote = "";
-        let shouldMarkSubmitted = false;
-        let ctfdResult = "";
-        let timeToFlagNote = "";
-
-        if (ctx.sessionId) {
-          try {
-            const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
-              .select("ctfConfig")
-              .lean();
-
-            if (session?.ctfConfig) {
-              const cfg = session.ctfConfig as any;
-              const history: any[] = cfg.solveHistory ?? [];
-
-              let challengeName: string | undefined =
-                (typeof data.challengeName === "string" && data.challengeName.trim()) ||
-                state.challengeName ||
-                cfg.activeSolve?.name;
-
-              if (!challengeName && history.length) {
-                const solving = [...history]
-                  .reverse()
-                  .find((r) => r.status === "solving");
-                challengeName = solving?.challengeName;
-              }
-
-              if (challengeName) {
-                state.challengeName = challengeName;
-                challengeNameForSubmit = challengeName;
-
-                const existing = history.find((r) => r.challengeName === challengeName);
-                const safeDir =
-                  existing?.safeDir ||
-                  cfg.activeSolve?.safeDir ||
-                  sanitizeDirName(challengeName);
-                const category =
-                  existing?.category ?? cfg.activeSolve?.category ?? "";
-                const challengeId = existing?.challengeId;
-                challengeIdForSubmit = challengeId;
-
-                if (existing) {
-                  await SessionsModel.updateOne(
-                    {
-                      sessionId: ctx.sessionId,
-                      "ctfConfig.solveHistory.challengeName": challengeName,
-                    },
-                    {
-                      $set: {
-                        "ctfConfig.solveHistory.$.status": "flag_found",
-                        "ctfConfig.solveHistory.$.confirmedFlag": flag,
-                        "ctfConfig.solveHistory.$.solvedAt": new Date(),
-                        "ctfConfig.solveHistory.$.submittedToCtfd": false,
-                        "ctfConfig.solveHistory.$.ctfdResult": "",
-                        ...(challengeId != null
-                          ? { "ctfConfig.solveHistory.$.challengeId": challengeId }
-                          : {}),
-                      },
-                      $inc: { "ctfConfig.solveHistory.$.attempts": 1 },
-                    },
-                  );
-                } else {
-                  await SessionsModel.updateOne(
-                    { sessionId: ctx.sessionId },
-                    {
-                      $push: {
-                        "ctfConfig.solveHistory": {
-                          challengeName,
-                          challengeId,
-                          safeDir,
-                          category,
-                          status: "flag_found",
-                          confirmedFlag: flag,
-                          attempts: 1,
-                          startedAt: cfg.activeSolve?.setAt ?? new Date(),
-                          solvedAt: new Date(),
-                          submittedToCtfd: false,
-                          ctfdResult: "",
-                        },
-                      },
-                    },
-                  );
-                }
-                persistNote = " Saved to CTF dashboard.";
-
-                const solvedAtMs = Date.now();
-                const startMs = existing?.startedAt
-                  ? new Date(existing.startedAt).getTime()
-                  : cfg.activeSolve?.setAt
-                    ? new Date(cfg.activeSolve.setAt).getTime()
-                    : solvedAtMs;
-                const elapsedSec = Math.max(0, Math.round((solvedAtMs - startMs) / 1000));
-                if (elapsedSec > 0) {
-                  timeToFlagNote = ` Time to flag: ${formatDurationSec(elapsedSec)}.`;
-                }
-              } else {
-                persistNote =
-                  " Not saved to CTF tab — pass data.challengeName (challenge title) or run /solve <name> first.";
-              }
-            }
-          } catch (e: any) {
-            console.error("[CTF] confirm_flag persist failed:", e.message);
-            persistNote = ` (dashboard save error: ${e.message})`;
-          }
-        }
-
-        // Best-effort auto-submit to CTFd for confirmed flags in CTF mode.
-        if (ctx.sessionId && challengeNameForSubmit) {
-          try {
-            const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
-              .select("ctfConfig")
-              .lean();
-            const cfg = session?.ctfConfig as any;
-            const url = cfg?.url as string | undefined;
-            const apiToken = cfg?.apiToken as string | undefined;
-            const sessionCookie = cfg?.sessionCookie as string | undefined;
-
-            if (url && (apiToken || sessionCookie)) {
-              let resolvedId = challengeIdForSubmit;
-              if (!resolvedId) {
-                const axios = (await import("axios")).default;
-                const listRes = await axios.get(`${url.replace(/\/+$/, "")}/api/v1/challenges`, {
-                  headers: {
-                    "Content-Type": "application/json",
-                    ...(apiToken ? { Authorization: `Token ${apiToken}` } : {}),
-                    ...(sessionCookie ? { Cookie: sessionCookie } : {}),
-                  },
-                  timeout: 20_000,
-                });
-                const ctfdChallenges: any[] = listRes.data?.data || [];
-                const match = ctfdChallenges.find(
-                  (c: any) =>
-                    c.name === challengeNameForSubmit ||
-                    c.name?.toLowerCase?.() === challengeNameForSubmit?.toLowerCase?.(),
-                );
-                if (match?.id) resolvedId = match.id;
-              }
-
-              if (resolvedId) {
-                const submitRes = await submitFlagToCtfd(url, resolvedId, flag, sessionCookie, apiToken);
-                shouldMarkSubmitted =
-                  submitRes.status === "correct" || submitRes.status === "already_solved";
-                ctfdResult = submitRes.status;
-                autoSubmitNote = ` Auto-submit to CTFd: ${submitRes.status}${submitRes.message ? ` (${submitRes.message})` : ""}.`;
-
-                if (shouldMarkSubmitted) {
-                  await SessionsModel.updateOne(
-                    {
-                      sessionId: ctx.sessionId,
-                      "ctfConfig.solveHistory.challengeName": challengeNameForSubmit,
-                    },
-                    {
-                      $set: {
-                        "ctfConfig.solveHistory.$.status": "solved",
-                        "ctfConfig.solveHistory.$.submittedToCtfd": true,
-                        "ctfConfig.solveHistory.$.ctfdResult": ctfdResult,
-                        ...(resolvedId != null
-                          ? { "ctfConfig.solveHistory.$.challengeId": resolvedId }
-                          : {}),
-                      },
-                    },
-                  );
-                } else {
-                  const nextStatus =
-                    ctfdResult === "incorrect" ? "incorrect" : "flag_found";
-                  await SessionsModel.updateOne(
-                    {
-                      sessionId: ctx.sessionId,
-                      "ctfConfig.solveHistory.challengeName": challengeNameForSubmit,
-                    },
-                    {
-                      $set: {
-                        "ctfConfig.solveHistory.$.status": nextStatus,
-                        "ctfConfig.solveHistory.$.submittedToCtfd": false,
-                        "ctfConfig.solveHistory.$.ctfdResult": ctfdResult || "unknown",
-                      },
-                    },
-                  );
-                }
-              } else {
-                autoSubmitNote =
-                  " Auto-submit skipped: could not resolve challenge ID. Use Submit in CTF tab after Refresh.";
-              }
-            } else {
-              autoSubmitNote =
-                " Auto-submit skipped: CTFd auth missing. Re-auth in CTF tab.";
-            }
-          } catch (e: any) {
-            autoSubmitNote = ` Auto-submit failed: ${e.message}`;
-          }
-        }
-
-        return {
-          output: `Flag confirmed: ${flag}.${persistNote}${timeToFlagNote}${autoSubmitNote}`,
-          exitCode: 0,
-        };
-      }
-
-      case "add_distfile_analysis": {
-        const filename = str(data.filename) || "unknown";
-        state.distfiles.push({
-          filename,
-          fileType: data.fileType ?? "unknown",
-          findings: data.findings ?? "",
-        });
-        return {
-          output: `Distfile analysis for ${filename} recorded.`,
-          exitCode: 0,
-        };
-      }
-
       case "add_key_discovery": {
-        // CTF agents historically used `discovery`/`value`, while newer
+        // Agents historically used `discovery`/`value`, while newer
         // prompts naturally produce a titled record. Normalize all supported
         // forms into the string-based in-memory state, but never record an
         // empty placeholder: an empty discovery is indistinguishable from a
@@ -484,14 +214,6 @@ const updateEngagementState: ToolDefinition = {
         };
       }
 
-      case "set_challenge_status":
-        state.challengeStatus = data.status ?? state.challengeStatus;
-        return {
-          output: `Challenge status: ${state.challengeStatus}`,
-          exitCode: 0,
-        };
-
-      // ─── Shared actions ─────────────────────────────────────────
       case "add_file": {
         const filePath = str(data.path) || "unknown";
         state.files.push({

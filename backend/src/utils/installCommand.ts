@@ -23,8 +23,12 @@ export function buildPrivilegeAwareInstallCommand(
     /(^|(?:&&|\|\||;)\s*)apt(?=\s)/g,
     "$1apt-get",
   );
+  // Debian/Kali images ship with /var/lib/apt/lists cleaned, so any apt install
+  // fails with "has no installation candidate" until the lists are refreshed.
+  // Refresh first (cheap when lists are already populated).
+  const withUpdate = `apt-get update -qq; ${stablePackageCommand}`;
   const quotedCommand = quoteForShell(
-    `export DEBIAN_FRONTEND=noninteractive; ${stablePackageCommand}`,
+    `export DEBIAN_FRONTEND=noninteractive; ${withUpdate}`,
   );
   return [
     'if [ "$(id -u)" -eq 0 ]; then',
