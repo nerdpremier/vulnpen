@@ -69,36 +69,31 @@ const SessionMainPage = ({ session_id }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}>
-      {/* Top screen tabs: single Browser Agent tab when closed; Browser
-          Agent and Burp side by side once a panel is open */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "4px 8px",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(255,255,255,0.02)",
-          flexShrink: 0,
-        }}
-      >
-        {RAIL_TABS.map((tab) => {
-          const active = activePanel === tab.key;
-          const visible = activePanel !== null || tab.key === "browser";
-          if (!visible) return null;
-          return (
+      {/* Entry tab at the top of the screen while no panel is open; once a
+          panel is open the tabs live on the panel's own header instead */}
+      {!activePanel && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "4px 8px",
+            flexShrink: 0,
+          }}
+        >
+          {RAIL_TABS.filter((tab) => tab.key === "browser").map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActivePanel(active ? null : tab.key)}
-              title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
-              style={railTabStyle(active)}
+              onClick={() => setActivePanel("browser")}
+              title="Show browser agent view"
+              style={railTabStyle(false)}
             >
-              {tab.key === "browser" && <TbWorldWww size={14} />}
+              <TbWorldWww size={14} />
               {tab.label}
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div
         id="session-split-container"
@@ -153,6 +148,33 @@ const SessionMainPage = ({ session_id }) => {
               // resize handle is dragged and strand the drag mid-way.
               pointerEvents: isDragging ? "none" : "auto",
             }}>
+              {/* Panel header sits on the panel's own top strip */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "5px 8px",
+                  borderBottom: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.02)",
+                  flexShrink: 0,
+                }}
+              >
+                {RAIL_TABS.map((tab) => {
+                  const active = activePanel === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActivePanel(active ? null : tab.key)}
+                      title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
+                      style={railTabStyle(active)}
+                    >
+                      {tab.key === "browser" && <TbWorldWww size={14} />}
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
               {activePanel === "browser" ? (
                 <BrowserAgentPanel />
               ) : (
