@@ -4,6 +4,9 @@ import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/ic
 import { TbRadar } from "react-icons/tb";
 import { useQuery } from "react-query";
 import { getSessionInfo } from "@/services/agent.service";
+import ExecutionModeSelector from "@/components/agent/ExecutionModeSelector";
+import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
+import { ModelSelector, ReasoningSelector } from "@/components/agent/ModelSelector";
 
 const SLASH_COMMANDS = [
   { name: "summarize", description: "Summarize the entire session so far" },
@@ -206,46 +209,53 @@ export default function ChatInput({
       )}
 
       <div className={styles.inputWrapper}>
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onInput={handleInput}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            isRunning
-              ? "Agent is working... click pause to interrupt"
-              : burpAttachment
-                ? "Add instructions for this request, or press Enter to analyze..."
-                : "Describe your target or type / for commands..."
-          }
-          rows={1}
-          disabled={isRunning}
-        />
-        <div className={styles.inputActions}>
-          {isRunning ? (
-            <button
-              className={styles.pauseButton}
-              onClick={onPause}
-              title="Pause agent"
-            >
-              <PauseCircleOutlined />
-            </button>
-          ) : (
-            <button
-              className={styles.sendButton}
-              onClick={handleSend}
-              disabled={!canSend}
-              title="Send message"
-            >
-              <SendOutlined />
-            </button>
-          )}
+        <div className={styles.inputMainRow}>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              isRunning
+                ? "Agent is working... click pause to interrupt"
+                : burpAttachment
+                  ? "Add instructions for this request, or press Enter to analyze..."
+                  : "Describe your target or type / for commands..."
+            }
+            rows={1}
+            disabled={isRunning}
+          />
+          <div className={styles.inputActions}>
+            {isRunning ? (
+              <button
+                className={styles.pauseButton}
+                onClick={onPause}
+                title="Pause agent"
+              >
+                <PauseCircleOutlined />
+              </button>
+            ) : (
+              <button
+                className={styles.sendButton}
+                onClick={handleSend}
+                disabled={!canSend}
+                title="Send message"
+              >
+                <SendOutlined />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
-      <div className={styles.statusBar}>
-        <span className={`${styles.statusDot} ${statusClass}`} />
-        <span className={isReady ? styles.statusReady : ""}>{statusLabel}</span>
+        <div className={styles.statusBar}>
+          <ExecutionModeSelector />
+          <ModelSelector />
+          <ReasoningSelector />
+          <span className={styles.statusSpacer} />
+          <ContextUsageIndicator sessionId={sessionId} />
+          <span className={`${styles.statusDot} ${statusClass}`} />
+          <span className={isReady ? styles.statusReady : ""}>{statusLabel}</span>
+        </div>
       </div>
     </div>
   );

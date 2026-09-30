@@ -147,6 +147,47 @@ summary:focus-visible,
   height: 8px;
 }
 
+/* Execution-mode dropdown: keep the selected item readable on dark surface. */
+.modeDropdown .ant-dropdown-menu {
+  min-width: 280px;
+  padding-block: 0.35rem;
+}
+
+.modeDropdown .ant-dropdown-menu-item {
+  color: rgba(255, 255, 255, 0.82) !important;
+  padding: 0.45rem 0.85rem;
+}
+
+.modeDropdown .ant-dropdown-menu-item-selected {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Popovers: one clean frame — drop the theme's nested content borders. */
+.ant-popover .ant-popover-inner-content {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Model / reasoning dropdowns: same dark treatment, narrower. */.modelDropdown .ant-dropdown-menu {
+  min-width: 170px;
+  padding-block: 0.35rem;
+}
+
+.modelDropdown .ant-dropdown-menu-item {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.modelDropdown .ant-dropdown-menu-item-selected {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+
+  .anticon {
+    color: #fff !important;
+  }
+}
+
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }

@@ -678,7 +678,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.15rem 0.6rem;
+  padding: 0.24rem 0.6rem;
+  line-height: 1;
   font-size: 0.64rem;
   font-weight: 400;
   letter-spacing: 0.07em;
@@ -687,6 +688,11 @@
   background: var(--moon-accent-08);
   border: 1px solid var(--moon-accent-24);
   border-radius: var(--moon-radius-pill);
+
+  svg {
+    display: block;
+    flex: none;
+  }
 }
 
 .backBtn {

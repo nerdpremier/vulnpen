@@ -400,161 +400,6 @@
     }
   }
 
-  .contextPanel {
-    padding: 0.6rem 0.75rem;
-    margin-bottom: 0.5rem;
-    background: var(--secondary-bg, rgba(255, 255, 255, 0.03));
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-  }
-
-  .contextHeader {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .contextDonut {
-    flex-shrink: 0;
-    display: block;
-  }
-
-  .contextHeaderText {
-    display: flex;
-    flex-direction: column;
-    line-height: 1;
-  }
-
-  .contextPct {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.75rem;
-    font-weight: 400;
-    color: var(--primary-text, #e0e0e0);
-    letter-spacing: -0.02em;
-  }
-
-  .contextSubtitle {
-    font-size: 0.55rem;
-    color: var(--secondary-text, #666);
-    margin-top: 0.05rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 400;
-  }
-
-  .contextBar {
-    height: 2px;
-    width: 100%;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 2px;
-    margin: 0.5rem 0;
-    overflow: hidden;
-  }
-
-  .contextBarFill {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 0.3s ease;
-  }
-
-  .contextDetails {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .contextRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.65rem;
-
-    span:first-child {
-      color: var(--secondary-text, #888);
-      font-weight: 400;
-    }
-
-    span:last-child {
-      font-family: "JetBrains Mono", monospace;
-      color: var(--primary-text, #ccc);
-      font-weight: 400;
-    }
-  }
-
-  .contextDivider {
-    height: 1px;
-    background: var(--border-subtle, rgba(255, 255, 255, 0.06));
-    margin: 0.25rem 0;
-  }
-
-  .contextRowWithHelp {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .contextHelpWrap {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .contextHelpIcon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    font-size: 0.5rem;
-    font-weight: 400;
-    color: var(--secondary-text, #666);
-    cursor: help;
-    line-height: 1;
-    transition: border-color 0.15s, color 0.15s;
-
-    &:hover {
-      border-color: rgba(255, 255, 255, 0.3);
-      color: var(--primary-text, #ccc);
-    }
-  }
-
-  .contextHelpTip {
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: 180px;
-    padding: 0.4rem 0.5rem;
-    background: var(--bg-elevated, #1a1a1a);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
-    font-size: 0.6rem;
-    font-weight: 400;
-    line-height: 1.45;
-    color: var(--secondary-text, #aaa);
-    z-index: 200;
-    pointer-events: auto;
-    animation: contextTipIn 0.12s ease;
-
-    &::after {
-      content: "";
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      border: 4px solid transparent;
-      border-top-color: rgba(255, 255, 255, 0.1);
-    }
-  }
-
-  @keyframes contextTipIn {
-    from { opacity: 0; transform: translateX(-50%) translateY(2px); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0); }
-  }
-
 }
 
 .divider {
@@ -799,117 +644,30 @@
 .navRow {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.75rem;
-}
-
-.navBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  padding: 0;
-  flex-shrink: 0;
-  border-radius: var(--moon-radius-xs);
-  border: 1px solid var(--moon-line-2);
-  background: var(--moon-surface-2);
-  color: var(--moon-text-mute);
-  cursor: pointer;
-  @include focus-ring(2px);
-
-  &:hover {
-    color: var(--moon-text);
-    border-color: var(--moon-line-3);
-    background: var(--moon-surface-3);
-  }
-}
-
-.navLabel {
-  flex: 1;
-  text-align: left;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  border: none;
+  background: none;
   font-size: 0.74rem;
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--moon-text-mute);
-  background: none;
-  border: none;
   cursor: pointer;
-  padding: 0.15rem 0.25rem;
-  border-radius: var(--moon-radius-xs);
-  @include truncate(1);
+  text-align: left;
+  @include focus-ring(2px);
+  transition: background var(--moon-dur-2) var(--moon-ease-out), color var(--moon-dur-2) var(--moon-ease-out);
 
   &:hover {
     color: var(--moon-text);
-    background: var(--surface-hover);
-  }
-
-  @include responsive(tablet3) {
-    display: none;
-  }
-}
-
-/* ---- Tool execution mode ---- */
-/* Matches the Agent Tools row directly below it: same metrics, same tokens. */
-.modeControl {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 0.45rem 0.75rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--secondary-text);
-  background: var(--secondary-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: none;
-  text-align: left;
-  @include focus-ring(2px);
-  transition: all var(--moon-dur-2) var(--moon-ease-out);
-
-  &:hover:not(:disabled) {
-    color: var(--primary-text);
     background: var(--moon-surface-2);
-    border-color: var(--border-default);
   }
 
-  &:disabled {
-    opacity: 0.6;
-    cursor: progress;
-  }
-
-  @include responsive(tablet3) {
-    display: none;
-  }
-}
-
-.modeIcon {
-  flex-shrink: 0;
-  color: var(--secondary-text-500);
-}
-
-.modeLabel {
-  flex: 1 1 auto;
-  min-width: 0;
   @include truncate(1);
 }
 
-.modeChevron {
-  flex-shrink: 0;
-  font-size: 0.8rem;
-  color: var(--secondary-text-500);
-}
-
-/* Placeholder so an unselected mode lines up with the checked one. */
-.modeMarker {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-}
 /* ---- Grouped navigation ---- */
 .sidebarNav {
   display: flex;

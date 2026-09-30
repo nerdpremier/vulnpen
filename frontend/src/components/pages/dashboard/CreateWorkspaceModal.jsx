@@ -53,7 +53,6 @@ const CreateWorkspaceModal = ({ show, setShow, close }) => {
       show={show}
       setShow={setShow}
       heading="Create new workspace"
-      subheading="Set up a workspace for your engagement"
       onCancel={handleClose}
       footer={false}
       destroyOnHidden

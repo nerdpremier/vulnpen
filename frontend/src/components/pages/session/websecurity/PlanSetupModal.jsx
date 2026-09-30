@@ -2,43 +2,42 @@
 
 import React, { useMemo, useState } from "react";
 import { Alert, App, Button, Checkbox, Form, Input, Modal } from "antd";
+import { FiChevronDown, FiChevronRight } from "react-icons/fi";
 import { useMutation } from "react-query";
 import { generateTestPlan } from "@/services/websecurity.service";
 import { apiErrorMessage } from "@/utils/apiError";
+import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import styles from "@/styles/pages/TestPlan.module.scss";
 
-/** Every WSTG category code, in catalogue order. */
-function allCategoryCodes(catalog) {
-  return (catalog?.categories ?? []).map((category) => category.code);
+/** Every WSTG case of the catalogue, in catalogue order. */
+function allCatalogueIds(catalog) {
+  return (catalog?.tests ?? []).map((test) => test.id);
 }
 
-/** The categories a plan already covers, read from its cases. */
-function plannedCategories(plan, catalog) {
-  const known = new Set(allCategoryCodes(catalog));
-  return Array.from(new Set((plan?.cases ?? []).map((testCase) => testCase.categoryCode))).filter(
-    (code) => known.has(code),
-  );
+/** The catalogue cases a plan already holds, read from its cases. */
+function plannedCatalogueIds(plan, catalog) {
+  const known = new Set(allCatalogueIds(catalog));
+  return (plan?.cases ?? [])
+    .map((testCase) => testCase.testId)
+    .filter((id) => known.has(id));
 }
 
-/** What saving this category selection would add, drop, and end up holding. */
+/** Cases of one category, in catalogue order. */
+function categoryTests(catalog, code) {
+  return (catalog?.tests ?? []).filter((test) => test.category === code);
+}
+
+/** What saving this selection would add, drop, and end up holding. */
 function previewPlan(plan, catalog, selected) {
-  const catalogueTests = catalog?.tests ?? [];
-  const codes = new Set(selected);
-  // Only the ticked categories are planned: ticking nothing plans nothing.
-  const scopeIds = catalogueTests
-    .filter((test) => codes.has(test.category))
-    .map((test) => test.id);
-
-  const inScope = new Set(scopeIds);
-  const catalogueIds = new Set(catalogueTests.map((test) => test.id));
+  const catalogueIds = new Set((catalog?.tests ?? []).map((test) => test.id));
   const planned = new Set((plan?.cases ?? []).map((testCase) => testCase.testId));
   const dropped = (plan?.cases ?? []).filter(
-    (testCase) => catalogueIds.has(testCase.testId) && !inScope.has(testCase.testId),
+    (testCase) => catalogueIds.has(testCase.testId) && !selected.has(testCase.testId),
   );
 
   return {
-    total: scopeIds.length,
-    added: scopeIds.filter((testId) => !planned.has(testId)).length,
+    total: selected.size,
+    added: [...selected].filter((id) => !planned.has(id)).length,
     dropped: dropped.length,
     droppedWithResults: dropped.filter((testCase) => testCase.status !== "not_started").length,
     handAdded: (plan?.cases ?? []).filter((testCase) => !catalogueIds.has(testCase.testId)).length,
@@ -46,20 +45,23 @@ function previewPlan(plan, catalog, selected) {
 }
 
 /**
- * The one place the plan itself is set up: the engagement it belongs to and the WSTG categories it
- * covers. Saving rebuilds the case list from the catalogue, so cases that stay keep their results;
+ * The one place the plan itself is set up: the engagement it belongs to and the WSTG cases it
+ * covers. Categories are dropdowns - tick the whole category or expand it and hand-pick cases.
+ * Saving rebuilds the case list from the catalogue, so cases that stay keep their results;
  * the page mounts this per open, so the form starts from the plan as it is now.
  */
 export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSaved }) {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
+  const confirmPopUp = useConfirmPopUp();
   const [form] = Form.useForm();
-  const [categories, setCategories] = useState(() =>
-    plan ? plannedCategories(plan, catalog) : allCategoryCodes(catalog),
+  const [selected, setSelected] = useState(() =>
+    plan ? new Set(plannedCatalogueIds(plan, catalog)) : new Set(allCatalogueIds(catalog)),
   );
+  const [openCategories, setOpenCategories] = useState(() => new Set());
   const isNew = !plan;
   const preview = useMemo(
-    () => previewPlan(plan, catalog, categories),
-    [plan, catalog, categories],
+    () => previewPlan(plan, catalog, selected),
+    [plan, catalog, selected],
   );
 
   const saveMutation = useMutation(generateTestPlan, {
@@ -75,7 +77,47 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
     onError: (error) => message.error(apiErrorMessage(error, "Could not save the plan")),
   });
 
+  // The backend keeps only the explicit ids whose category is listed, so every category with at
+  // least one picked case must go out as a code - not just the fully ticked ones.
+  const buildSelection = () => {
+    const categories = (catalog?.categories ?? [])
+      .filter((category) =>
+        categoryTests(catalog, category.code).some((test) => selected.has(test.id)),
+      )
+      .map((category) => category.code);
+    const order = new Map((catalog?.tests ?? []).map((test, index) => [test.id, index]));
+    const testIds = [...selected].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+    return { categories, testIds };
+  };
+
+  const toggleId = (id, checked) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  const setCategory = (tests, checked) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const test of tests) {
+        if (checked) next.add(test.id);
+        else next.delete(test.id);
+      }
+      return next;
+    });
+
+  const toggleOpen = (code) =>
+    setOpenCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+
   const runSave = (values) => {
+    const { categories, testIds } = buildSelection();
     saveMutation.mutate({
       sessionId,
       action: "generate",
@@ -83,6 +125,7 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
       scope: values.scope?.trim() ?? "",
       notes: values.notes?.trim() ?? "",
       categories,
+      testIds,
     });
   };
 
@@ -91,14 +134,14 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
       runSave(values);
       return;
     }
-    modal.confirm({
+    confirmPopUp({
       title: `Drop ${preview.dropped} case${preview.dropped === 1 ? "" : "s"}?`,
       content: `${preview.droppedWithResults} of them carry a recorded result, and that result goes with them. The report draft is built from this plan, so download it first if you need those records.`,
       okText: `Drop ${preview.dropped} and save`,
-      okButtonProps: { danger: true },
       onOk: () => runSave(values),
     });
   };
+
   return (
     <Modal
       open
@@ -106,7 +149,7 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
       title={isNew ? "Set up the test plan" : "Plan setup"}
       width={720}
       okText={isNew ? "Create plan" : "Save plan"}
-      okButtonProps={{ disabled: isNew && !categories.length }}
+      okButtonProps={{ disabled: isNew && !selected.size }}
       confirmLoading={saveMutation.isLoading}
       onOk={() => form.submit()}
     >
@@ -148,35 +191,73 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
               <Button
                 size="small"
                 type="link"
-                onClick={() => setCategories(allCategoryCodes(catalog))}
+                onClick={() => setSelected(new Set(allCatalogueIds(catalog)))}
               >
                 Select all
               </Button>
-              <Button size="small" type="link" onClick={() => setCategories([])}>
+              <Button size="small" type="link" onClick={() => setSelected(new Set())}>
                 Clear
               </Button>
             </div>
           </div>
           <p>
-            The plan holds every WSTG case in the categories you tick, and drops the cases of the ones
-            you untick. Cases that stay keep the results recorded against them.
+            Tick a category to plan all of its cases, or expand it and pick individual cases.
+            Unticking a category or a case drops it from the plan; cases that stay keep the
+            results recorded against them.
           </p>
-          <Checkbox.Group
-            value={categories}
-            onChange={setCategories}
-            className={styles.categoryPicker}
-          >
-            {(catalog?.categories ?? []).map((category) => (
-              <Checkbox key={category.code} value={category.code}>
-                <span className={styles.categoryText}>
-                  <span className={styles.categoryName}>
-                    {category.section} {category.name}
-                  </span>
-                  <span className={styles.categoryMeta}>{category.testCount} cases</span>
-                </span>
-              </Checkbox>
-            ))}
-          </Checkbox.Group>
+          <div className={styles.categoryPicker}>
+            {(catalog?.categories ?? []).map((category) => {
+              const tests = categoryTests(catalog, category.code);
+              const picked = tests.filter((test) => selected.has(test.id)).length;
+              const allPicked = tests.length > 0 && picked === tests.length;
+              const isOpen = openCategories.has(category.code);
+              return (
+                <div key={category.code} className={styles.categoryRow}>
+                  <div className={styles.categoryHead}>
+                    <Checkbox
+                      checked={allPicked}
+                      indeterminate={picked > 0 && !allPicked}
+                      onChange={(event) => setCategory(tests, event.target.checked)}
+                    >
+                      <span className={styles.categoryText}>
+                        <span className={styles.categoryName}>
+                          {category.section} {category.name}
+                        </span>
+                        <span className={styles.categoryMeta}>
+                          {picked}/{tests.length} cases
+                        </span>
+                      </span>
+                    </Checkbox>
+                    <button
+                      type="button"
+                      className={styles.categoryToggle}
+                      aria-label={isOpen ? "Hide cases" : "Show cases"}
+                      aria-expanded={isOpen}
+                      onClick={() => toggleOpen(category.code)}
+                    >
+                      {isOpen ? <FiChevronDown /> : <FiChevronRight />}
+                    </button>
+                  </div>
+                  {isOpen && (
+                    <div className={styles.caseList}>
+                      {tests.map((test) => (
+                        <Checkbox
+                          key={test.id}
+                          checked={selected.has(test.id)}
+                          onChange={(event) => toggleId(test.id, event.target.checked)}
+                        >
+                          <span className={styles.caseText}>
+                            <span className={styles.caseId}>{test.id}</span>
+                            <span className={styles.caseName}>{test.title}</span>
+                          </span>
+                        </Checkbox>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
           <div className={styles.scopePreview}>
             <span>{preview.total} cases in scope</span>
@@ -201,13 +282,13 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
             <Alert
               type="warning"
               showIcon
-              message="No category ticked - saving leaves the plan without catalogue cases"
+              message="No case selected - saving leaves the plan without catalogue cases"
             />
           )}
 
           <p className={styles.scopeHint}>
-            Only the ticked categories are planned. Nothing ticked means no catalogue cases, and any
-            case the assistant added by hand is always kept.
+            Only the ticked categories and cases are planned. Nothing ticked means no catalogue
+            cases, and any case the assistant added by hand is always kept.
           </p>
         </div>
       </Form>

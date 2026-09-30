@@ -250,6 +250,18 @@
   padding: 0.6rem 0.6rem 0.35rem;
 }
 
+.navGroup {
+  margin-bottom: 0.4rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  .navGroupLabel {
+    padding-top: 0.75rem;
+  }
+}
+
 .navItems {
   display: flex;
   flex-direction: column;

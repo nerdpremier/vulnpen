@@ -82,7 +82,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
       e?.stopPropagation?.();
       confirmPopUp({
         title: "Delete session?",
-        content: "This session will be archived.",
+        content: "This session will be permanently deleted.",
         okText: "Delete",
         cancelText: "Cancel",
         onOk: async () => {
@@ -132,7 +132,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
             </button>
             <span className={styles.typeChip}>
               <FiShield size={12} />
-              {isPentest ? "Pentest engagement" : "General workspace"}
+              {isPentest ? "Web Security Testing" : "General workspace"}
             </span>
           </div>
 
@@ -141,10 +141,9 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
               <h1 className={styles.heroTitle}>
                 <ShinyText text={workspace.name} speed={7} />
               </h1>
-              <p className={styles.heroDescription}>
-                {workspace.description ||
-                  "No description yet. Sessions in this workspace share the target, the WSTG test plan and the report draft."}
-              </p>
+              {workspace.description && (
+                <p className={styles.heroDescription}>{workspace.description}</p>
+              )}
             </div>
             <PrimaryButton
               purpleFilled
@@ -297,7 +296,6 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
         show={showNewSession}
         setShow={setShowNewSession}
         heading="New session"
-        subheading={`Create a session in ${workspace.name}`}
         onCancel={() => {
           setShowNewSession(false);
           newSessionForm.resetFields();
@@ -314,7 +312,6 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
             <Form.Item
               name="name"
               label="Session name"
-              extra="Shown in the session rail and on the report cover."
               rules={[{ required: true, message: "Name is required" }]}
             >
               <Input placeholder="e.g. Target A - login and session handling" />

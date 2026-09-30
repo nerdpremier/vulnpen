@@ -14,6 +14,63 @@
   min-height: 100dvh;
   width: 100%;
   isolation: isolate;
+
+  /* Moon glow behind the centred card: the removed brand panel left the
+     backdrop flat, so the atmosphere lives here instead. */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(
+        ellipse 60% 52% at 50% 46%,
+        color-mix(in srgb, var(--moon-accent) 13%, transparent) 0%,
+        color-mix(in srgb, var(--moon-accent) 6%, transparent) 34%,
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 34% 30% at 50% 44%,
+        color-mix(in srgb, var(--moon-accent) 10%, transparent) 0%,
+        transparent 70%
+      );
+    animation: authGlowBreathe 14s ease-in-out infinite;
+  }
+
+  /* Faint star field, matching the app's moon-surface motif. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image:
+      radial-gradient(1.4px 1.4px at 22px 34px, rgba(255, 255, 255, 0.55) 50%, transparent 100%),
+      radial-gradient(1px 1px at 148px 96px, rgba(255, 255, 255, 0.35) 50%, transparent 100%),
+      radial-gradient(1.8px 1.8px at 264px 210px, rgba(255, 255, 255, 0.65) 50%, transparent 100%),
+      radial-gradient(1px 1px at 342px 40px, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+    background-size: 380px 380px;
+    animation: authStarsTwinkle 9s ease-in-out infinite;
+  }
+}
+
+@keyframes authGlowBreathe {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes authStarsTwinkle {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* ---- The card ---- */

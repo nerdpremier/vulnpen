@@ -1239,19 +1239,6 @@
   min-width: 0;
 }
 
-.cardIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--moon-radius-xs);
-  flex-shrink: 0;
-  color: var(--moon-accent);
-  background: var(--moon-accent-08);
-  border: 1px solid var(--moon-accent-24);
-}
-
 .cardTitle {
   font-size: 0.95rem;
   font-weight: 400;
@@ -1280,7 +1267,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.12rem 0.5rem;
+  padding: 0.22rem 0.5rem;
+  line-height: 1;
   font-size: 0.64rem;
   font-weight: 400;
   letter-spacing: 0.05em;
@@ -1289,6 +1277,11 @@
   background: var(--moon-surface-3);
   border: 1px solid var(--moon-line-2);
   border-radius: var(--moon-radius-pill);
+
+  svg {
+    display: block;
+    flex: none;
+  }
 }
 
 .cardDate {

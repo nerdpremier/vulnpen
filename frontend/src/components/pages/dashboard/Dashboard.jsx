@@ -1,7 +1,7 @@
 import styles from "@/styles/pages/Dashboard.module.scss";
 import { Input, message, Tooltip } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
-import { SearchOutlined, PlusOutlined, ArrowRightOutlined } from "@ant-design/icons";
+import { PlusOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import Loader from "@/components/common/loader/Loader";
 import { useSelector, useDispatch } from "react-redux";
 import { useMutation, useQuery, useQueryClient } from "react-query";
@@ -24,7 +24,7 @@ import {
 
 const TYPE_CONFIG = {
   pentest: {
-    label: "Pentest",
+    label: "Web Security Testing",
     icon: <FiShield size={12} />,
     note: "OWASP WSTG v4.2",
   },
@@ -46,7 +46,6 @@ const DashboardPage = () => {
   const launchWorkspace = searchParams.get("launch") === "true";
 
   const [show, setShow] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
 
   const { data: workspacesData, isLoading } = useQuery(
     ["get-user-workspaces"],
@@ -59,15 +58,8 @@ const DashboardPage = () => {
 
   const filteredWorkspaces = useMemo(() => {
     if (!workspacesData) return [];
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return workspacesData;
-    return workspacesData.filter(
-      (w) =>
-        (w.name || "").toLowerCase().includes(term) ||
-        (w.description || "").toLowerCase().includes(term) ||
-        (w.workspaceId || "").toLowerCase().includes(term)
-    );
-  }, [workspacesData, searchTerm]);
+    return workspacesData;
+  }, [workspacesData]);
 
   // Roll the workspace list up into the header metrics once per change instead
   // of recomputing inside every card.
@@ -101,7 +93,7 @@ const DashboardPage = () => {
     e?.stopPropagation?.();
     confirmPopUp({
       title: "Delete workspace?",
-      content: "This workspace and all its sessions will be archived.",
+      content: "This workspace and all its sessions will be permanently deleted.",
       okText: "Delete",
       cancelText: "Cancel",
       onOk: async () => {
@@ -135,33 +127,9 @@ const DashboardPage = () => {
           <div className={styles.heroContent}>
             <div className={styles.heroRow}>
               <div className={styles.heroText}>
-                <span className={styles.heroEyebrow}>Engagement console</span>
                 <h1 className={styles.heroTitle}>
-                  <ShinyText text="Workspaces" speed={6} />
+                  <ShinyText text="Dashboard" speed={6} />
                 </h1>
-                <p className={styles.heroDescription}>
-                  Every engagement lives in its own workspace with its own
-                  session, WSTG test plan, findings and report draft.
-                </p>
-              </div>
-
-              <div className={styles.heroActions}>
-                <Input
-                  prefix={<SearchOutlined className={styles.searchIcon} />}
-                  placeholder="Search workspaces..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  allowClear
-                  className={styles.searchBox}
-                  aria-label="Search workspaces"
-                />
-                <PrimaryButton
-                  purpleFilled
-                  icon={<PlusOutlined />}
-                  onClick={() => setShow(true)}
-                >
-                  New workspace
-                </PrimaryButton>
               </div>
             </div>
 
@@ -199,43 +167,36 @@ const DashboardPage = () => {
         <section className={styles.workspaceGrid}>
           <div className={styles.gridHeader}>
             <h2 className={styles.gridTitle}>
-              {searchTerm ? "Search results" : "All workspaces"}
+              All workspaces
               <span className={styles.gridCount}>
                 {filteredWorkspaces.length}
               </span>
             </h2>
-            {searchTerm && (
-              <button
-                type="button"
-                className={styles.clearSearch}
-                onClick={() => setSearchTerm("")}
-              >
-                Clear search
-              </button>
-            )}
+            <PrimaryButton
+              purpleFilled
+              icon={<PlusOutlined />}
+              onClick={() => setShow(true)}
+            >
+              New workspace
+            </PrimaryButton>
           </div>
 
           {filteredWorkspaces.length === 0 ? (
             <EmptyState
-              icon={<FiShield />}
+              icon={<FiFolder />}
               title={
                 hasWorkspaces
-                  ? "No workspaces match your search"
+                  ? "No workspaces found"
                   : "Create your first workspace"
               }
               description={
                 hasWorkspaces
-                  ? `Nothing matches "${searchTerm}". Try a different name, description or workspace id.`
+                  ? "Nothing to show yet. Create a workspace to get started."
                   : "A workspace bundles one engagement: its target, its sessions, the WSTG test plan and the report draft."
               }
               actions={
-                <PrimaryButton
-                  purpleFilled
-                  onClick={() =>
-                    hasWorkspaces ? setSearchTerm("") : setShow(true)
-                  }
-                >
-                  {hasWorkspaces ? "Clear search" : "Create workspace"}
+                <PrimaryButton purpleFilled onClick={() => setShow(true)}>
+                  Create workspace
                 </PrimaryButton>
               }
             />
@@ -269,7 +230,6 @@ const DashboardPage = () => {
                   >
                     <div className={styles.cardHeader}>
                       <div className={styles.cardTitleRow}>
-                        <span className={styles.cardIcon}>{typeConf.icon}</span>
                         <h3 className={styles.cardTitle}>{workspace.name}</h3>
                       </div>
                       <div
@@ -291,10 +251,9 @@ const DashboardPage = () => {
                       </div>
                     </div>
 
-                    <p className={styles.cardDescription}>
-                      {workspace.description ||
-                        "No description yet - open the workspace to add one."}
-                    </p>
+                    {workspace.description && (
+                      <p className={styles.cardDescription}>{workspace.description}</p>
+                    )}
 
                     <div className={styles.cardMeta}>
                       <span className={styles.typeChip}>

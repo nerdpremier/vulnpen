@@ -251,7 +251,6 @@ export default function ChatView({ sessionId }) {
               height={65}
               className={styles.emptyStateLogo}
             />
-            <h2>VulnPen</h2>
             <p>What do you want to secure today?</p>
           </div>
         )}

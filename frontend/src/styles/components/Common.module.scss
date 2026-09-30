@@ -705,7 +705,19 @@
   background: var(--moon-danger-bg);
 }
 
-.account {
+/* Floating dock for the account row: full-width bar pinned to the bottom-left
+   of the sidebar (where Clear context used to live), ChatGPT-style. */
+.accountDock {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 247px;
+  padding: 0.5rem 0.75rem;
+  z-index: 300;
+}
+
+/* Compact pill variant for pages without the session rail. */
+.accountPill {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -725,6 +737,27 @@
   }
 }
 
+.account {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  height: auto;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--moon-text-dim);
+  cursor: pointer;
+  text-align: left;
+  @include focus-ring(2px);
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--moon-surface-2);
+  }
+}
+
 .avatar {
   width: 1.5rem;
   height: 1.5rem;
@@ -732,6 +765,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
   font-size: 0.68rem;
   font-weight: 400;
   letter-spacing: 0.02em;
@@ -743,10 +777,10 @@
 .username {
   font-size: 0.78rem;
   font-weight: 400;
-  color: var(--moon-text-dim);
-  max-width: 9rem;
+  color: var(--moon-text);
+  flex: 1 1 auto;
+  min-width: 0;
   @include truncate(1);
-
   @include responsive(tablet1) {
     display: none;
   }

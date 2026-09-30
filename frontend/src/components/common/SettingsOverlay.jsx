@@ -27,6 +27,7 @@ import VPNMainPage from "@/components/pages/session/vpn/VPNMainPage";
 const SESSION_TABS = [
   {
     key: "connection",
+    section: "Session",
     label: "Connection",
     description: "Workspace host and exploit-box connection for this session.",
     icon: TbPlugConnected,
@@ -34,6 +35,7 @@ const SESSION_TABS = [
   },
   {
     key: "vpn",
+    section: "Session",
     label: "VPN",
     description: "OpenVPN status and control for this session's workspace.",
     icon: TbWorldWww,
@@ -44,20 +46,14 @@ const SESSION_TABS = [
 const TABS = [
   {
     key: "account",
+    section: "Account",
     label: "My Account",
     icon: RiAccountCircleLine,
     component: MyAccount,
   },
   {
-    key: "capabilities",
-    label: "Capabilities",
-    description:
-      "Manage CLI tools and Python packages available on your exploit box.",
-    icon: TbTools,
-    component: CapabilitiesPage,
-  },
-  {
     key: "models",
+    section: "Agent",
     label: "Models",
     description:
       "Configure reusable model presets and assign them to the orchestrator and browser agent.",
@@ -66,6 +62,7 @@ const TABS = [
   },
   {
     key: "agent-behavior",
+    section: "Agent",
     label: "Agent Behavior",
     description:
       "Configure how long autonomous agent runs can continue before pausing.",
@@ -73,7 +70,17 @@ const TABS = [
     component: AgentBehaviorPage,
   },
   {
+    key: "capabilities",
+    section: "Tools & integrations",
+    label: "Capabilities",
+    description:
+      "Manage CLI tools and Python packages available on your exploit box.",
+    icon: TbTools,
+    component: CapabilitiesPage,
+  },
+  {
     key: "burp",
+    section: "Tools & integrations",
     label: "Burp Suite",
     description: "Connect to a Burp Suite instance via the Burp RPC extension.",
     icon: TbRadar,
@@ -81,6 +88,7 @@ const TABS = [
   },
   {
     key: "magnitude",
+    section: "Tools & integrations",
     label: "Browser Agent",
     description:
       "Configure Magnitude for agentic browser automation during pentests.",
@@ -89,6 +97,7 @@ const TABS = [
   },
   {
     key: "mcp",
+    section: "Tools & integrations",
     label: "MCP Access",
     description:
       "Generate MCP tokens and copy the backend-integrated MCP endpoint config.",
@@ -97,10 +106,19 @@ const TABS = [
   },
 ];
 
+/** Section headings, in display order; tabs without a matching section fall back to the end. */
+const SECTION_ORDER = ["Account", "Agent", "Tools & integrations", "Session"];
+
 const SettingsOverlay = ({ open, onClose, initialTab, sessionId }) => {
   const [activeTab, setActiveTab] = useState(initialTab || "account");
 
   const visibleTabs = [...TABS, ...(sessionId ? SESSION_TABS : [])];
+
+  // Group tabs by section, keeping SECTION_ORDER for headings.
+  const groupedTabs = SECTION_ORDER.map((section) => ({
+    section,
+    tabs: visibleTabs.filter((tab) => tab.section === section),
+  })).filter((group) => group.tabs.length > 0);
 
   useEffect(() => {
     if (initialTab && open) {
@@ -143,20 +161,22 @@ const SettingsOverlay = ({ open, onClose, initialTab, sessionId }) => {
               <span className={styles.sidebarTitle}>Settings</span>
             </div>
           </div>
-          <div className={styles.navGroupLabel}>
-            {sessionId ? 'Installation & session' : 'Installation'}
-          </div>
           <div className={styles.navItems}>
-            {visibleTabs.map((tab) => (
-              <div
-                key={tab.key}
-                className={
-                  activeTab === tab.key ? styles.navItemActive : styles.navItem
-                }
-                onClick={() => setActiveTab(tab.key)}
-              >
-                <tab.icon className={styles.navIcon} />
-                {tab.label}
+            {groupedTabs.map(({ section, tabs }) => (
+              <div key={section} className={styles.navGroup}>
+                <div className={styles.navGroupLabel}>{section}</div>
+                {tabs.map((tab) => (
+                  <div
+                    key={tab.key}
+                    className={
+                      activeTab === tab.key ? styles.navItemActive : styles.navItem
+                    }
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    <tab.icon className={styles.navIcon} />
+                    {tab.label}
+                  </div>
+                ))}
               </div>
             ))}
           </div>

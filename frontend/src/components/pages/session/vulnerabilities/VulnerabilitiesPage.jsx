@@ -11,7 +11,7 @@ import {
   FiAlertTriangle,
   FiTarget,
   FiHelpCircle,
-  FiShield,
+  FiCrosshair,
 } from "react-icons/fi";
 import { getVulnerabilities } from "@/services/agent.service";
 import { getTestPlan } from "@/services/websecurity.service";
@@ -142,12 +142,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>Engagement findings</span>
           <h1>Vulnerabilities</h1>
-          <p>
-            Every finding the orchestrator recorded, with the WSTG case and the
-            OWASP Top 10:2025 category it maps to.
-          </p>
         </div>
         <div className={styles.totalBadge}>
           {vulnerabilities.length} findings
@@ -158,7 +153,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
         <StatTile
           label="Total"
           value={vulnerabilities.length}
-          icon={<FiShield />}
+          icon={<FiCrosshair />}
           active={severity === "all"}
           onClick={() => setSeverity("all")}
         />
@@ -254,7 +249,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
         ) : filtered.length === 0 ? (
           <EmptyState
             compact
-            icon={<FiShield />}
+            icon={<FiAlertTriangle />}
             title={
               vulnerabilities.length
                 ? "No findings match these filters"
@@ -263,7 +258,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
             description={
               vulnerabilities.length
                 ? "Widen the severity or OWASP filters, or clear the search box."
-                : "Ask the orchestrator to test the target. Findings appear here the moment they are recorded."
+                : undefined
             }
             actions={
               vulnerabilities.length ? (

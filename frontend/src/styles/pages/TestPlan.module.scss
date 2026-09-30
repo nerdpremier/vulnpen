@@ -233,6 +233,38 @@
   font-size: 0.76rem;
   background: #ff9f4310;
   border-bottom: 1px solid #ff9f4333;
+
+  /* Danger button: keep antd's danger semantics but on the dark surface. */
+  :global(.ant-btn-dangerous) {
+    background: rgba(255, 77, 79, 0.14);
+    border-color: rgba(255, 77, 79, 0.45);
+    color: #ff7875;
+    box-shadow: none;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 77, 79, 0.24);
+      border-color: rgba(255, 77, 79, 0.65);
+      color: #ff9c9a;
+    }
+  }
+
+  :global(.ant-btn-text) {
+    color: var(--moon-text-dim, #999);
+
+    &:hover {
+      color: var(--moon-text, #ddd);
+    }
+  }
+}
+
+/* antd link buttons (e.g. Select all / Clear in Plan setup) default to antd
+   blue — recolour them to the theme. */
+.sectionActions :global(.ant-btn-link) {
+  color: var(--moon-text-dim, #999);
+
+  &:hover {
+    color: var(--moon-text, #ddd);
+  }
 }
 
 .filterNote {
@@ -663,6 +695,73 @@
     padding: 0;
     color: #d7d7d7;
   }
+}
+
+.categoryRow {
+  min-width: 0;
+  padding: 0.1rem;
+  border-radius: 8px;
+}
+
+.categoryHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+
+  :global(.ant-checkbox-wrapper) {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.categoryToggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 0.25rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: #9a9a9a;
+  cursor: pointer;
+
+  &:hover {
+    background: #1c1c1c;
+    color: #eaeaea;
+  }
+}
+
+.caseList {
+  display: flex;
+  flex-direction: column;
+  margin: 0.15rem 0 0.4rem 2rem;
+  padding-left: 0.65rem;
+  border-left: 1px solid #242424;
+
+  :global(.ant-checkbox-wrapper) {
+    padding: 0.28rem 0.5rem;
+  }
+}
+
+.caseText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.caseId {
+  color: #eaeaea;
+  font-size: 0.72rem;
+  font-family: var(--font-mono, monospace);
+}
+
+.caseName {
+  color: #9a9a9a;
+  font-size: 0.68rem;
 }
 
 .categoryText {

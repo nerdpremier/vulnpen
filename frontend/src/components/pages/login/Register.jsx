@@ -101,7 +101,6 @@ const RegisterPage = () => {
             <Form.Item
               name="password"
               label="Password"
-              extra="At least 8 characters."
               rules={[
                 { required: true, message: "Please enter your password" },
                 { min: 8, message: "Password must be at least 8 characters" },

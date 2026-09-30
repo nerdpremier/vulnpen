@@ -12,8 +12,6 @@ import {
   RiLogoutCircleRLine,
   RiSettings3Line,
   RiArrowDownSLine,
-  RiAccountCircleLine,
-  RiLayoutGridLine,
 } from "react-icons/ri";
 
 import { logout } from "@/store/user.slice";
@@ -82,23 +80,11 @@ const HeaderLinks = ({
   const accountMenu = {
     items: [
       {
-        key: "identity",
-        type: "group",
-        label: <div className={styles.menuHeader}>{resolvedWorkspace || "Signed in"}</div>,
-        children: [
-          {
-            key: "account",
-            icon: <RiAccountCircleLine />,
-            label: <span className={styles.menuItem}>My account</span>,
-          },
-        ],
-      },
-      { type: "divider" },
-      {
         key: "settings",
         icon: <RiSettings3Line />,
         label: <span className={styles.menuItem}>Settings</span>,
       },
+      { type: "divider" },
       {
         key: "logout",
         icon: <RiLogoutCircleRLine />,
@@ -107,10 +93,6 @@ const HeaderLinks = ({
     ],
     onClick: ({ key }) => {
       if (key === "settings") setSettingsOpen(true);
-      if (key === "account") {
-        setSettingsInitialTab("account");
-        setSettingsOpen(true);
-      }
       if (key === "logout") logoutMutation.mutate();
     },
   };
@@ -136,7 +118,7 @@ const HeaderLinks = ({
                 <Link href="/dashboard" className={styles.brandLink}>
                   <span className={styles.brandText}>
                     <span className={styles.brandName}>VulnPen</span>
-                    <span className={styles.brandSub}>Security testing assistant</span>
+                    <span className={styles.brandSub}>Web application security testing assistant</span>
                   </span>
                 </Link>
               ) : (
@@ -146,35 +128,24 @@ const HeaderLinks = ({
           )}
         </div>
 
-        <div className={styles.options}>
-          {sessionId && (
-            <Link href="/dashboard" className={styles.headerIconBtn} title="Dashboard">
-              <RiLayoutGridLine />
-            </Link>
-          )}
+        {!sessionId && (
+          <div className={styles.options}>
+            <Dropdown menu={accountMenu} trigger={["click"]} placement="bottomRight">
+              <button type="button" className={styles.accountPill} aria-label="Account menu">
+                <span className={styles.avatar}>{initialsOf(user?.name)}</span>
+                <span className={styles.username}>{user?.name || "Account"}</span>
+                <RiArrowDownSLine className={styles.accountCaret} />
+              </button>
+            </Dropdown>
+          </div>
+        )}
+      </header>
 
-          <button
-            type="button"
-            className={styles.headerIconBtn}
-            onClick={() => setSettingsOpen(true)}
-            title="Settings"
-            aria-label="Open settings"
-          >
-            <RiSettings3Line />
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.headerIconBtn} ${styles.headerLogoutBtn}`}
-            onClick={() => logoutMutation.mutate()}
-            title="Log out"
-            aria-label="Log out"
-            disabled={logoutMutation.isLoading}
-          >
-            <RiLogoutCircleRLine />
-          </button>
-
-          <Dropdown menu={accountMenu} trigger={["click"]} placement="bottomRight">
+      {/* Account placement follows the layout: pages with the session rail
+          dock it to the bottom-left; plain pages keep it in the header. */}
+      {sessionId && (
+        <div className={styles.accountDock}>
+          <Dropdown menu={accountMenu} trigger={["click"]} placement="topLeft">
             <button type="button" className={styles.account} aria-label="Account menu">
               <span className={styles.avatar}>{initialsOf(user?.name)}</span>
               <span className={styles.username}>{user?.name || "Account"}</span>
@@ -182,7 +153,7 @@ const HeaderLinks = ({
             </button>
           </Dropdown>
         </div>
-      </header>
+      )}
 
       <SettingsOverlay
         open={settingsOpen}

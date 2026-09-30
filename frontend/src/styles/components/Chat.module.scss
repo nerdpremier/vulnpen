@@ -1429,12 +1429,12 @@
 
 .inputWrapper {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.6rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 0.5rem 0.75rem;
+  padding: 0.7rem 0.85rem 0.55rem;
   transition: border-color 0.2s;
 
   &:focus-within {
@@ -1451,14 +1451,21 @@
     resize: none;
     outline: none;
     max-height: 150px;
-    min-height: 32px;
-    padding: 0.2rem 0;
+    min-height: 38px;
+    padding: 0.25rem 0;
     font-family: inherit;
 
     &::placeholder {
       color: var(--secondary-text, #555);
     }
   }
+}
+
+/* Textarea + send button live on the top row inside the composer box. */
+.inputMainRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .inputActions {
@@ -1512,6 +1519,10 @@
   font-size: 0.72rem;
   color: var(--secondary-text, #666);
 
+  .statusSpacer {
+    flex: 1;
+  }
+
   .statusDot {
     width: 6px;
     height: 6px;
@@ -1545,6 +1556,183 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* ---- Context usage bubble (lives in the status bar) ---- */
+.contextBubble {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+
+  svg {
+    display: block;
+  }
+}
+
+.contextDetailsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 185px;
+  padding: 0.35rem 0.85rem 0.55rem 0.85rem;
+}
+
+.contextRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.25rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+
+  span:first-child {
+    color: var(--secondary-text, #888);
+  }
+
+  span:last-child {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--primary-text, #ccc);
+  }
+}
+
+.contextRowWithHelp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: help;
+
+  i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 0.5rem;
+    font-style: normal;
+    color: var(--secondary-text, #666);
+  }
+}
+
+/* Clear-context action inside the context popover. */
+.contextClearRow {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: center;
+}
+
+.contextClearBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--primary-text, #ddd);
+  font-size: 0.72rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+
+  &:hover {
+    background: rgba(255, 80, 80, 0.14);
+    color: #ff6b6b;
+  }
+}
+
+/* ---- Execution mode selector (lives in the status bar) ---- */.modeSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--primary-text, #fff);
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+
+  &:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.modeSelectorIcon {
+  color: var(--secondary-text, #888);
+  flex-shrink: 0;
+}
+
+.modeSelectorLabel {
+  white-space: nowrap;
+}
+
+.modeSelectorChevron {
+  color: var(--secondary-text, #888);
+  flex-shrink: 0;
+}
+
+/* ---- Mode dropdown rows: icon + title + description ---- */
+.modeItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 240px;
+  padding: 0.15rem 0;
+}
+
+.modeItemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+}
+
+.modeItemTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--primary-text, #fff);
+  white-space: nowrap;
+}
+
+.modeItemIcon {
+  color: var(--moon-accent, #f97316);
+  flex-shrink: 0;
+}
+
+.modeItemDesc {
+  font-size: 0.68rem;
+  color: var(--secondary-text, #888);
+  white-space: nowrap;
+}
+
+.modeItemCheck {
+  color: var(--primary-text, #fff);
+  flex-shrink: 0;
+}
+
 
 /* ============================================================================
    CHAT SURFACES - Lunar Monochrome

@@ -23,7 +23,6 @@ import {
   EditOutlined,
   FileTextOutlined,
   MoreOutlined,
-  PlusOutlined,
   ReloadOutlined,
   UpOutlined,
   RightOutlined,
@@ -32,7 +31,6 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  addCatalogueCases,
   getReportDraft,
   getTestPlan,
   removeTestCase,
@@ -40,6 +38,7 @@ import {
   updateTestCase,
 } from "@/services/websecurity.service";
 import { apiErrorMessage } from "@/utils/apiError";
+import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import PlanSetupModal from "./PlanSetupModal";
 import styles from "@/styles/pages/TestPlan.module.scss";
 import { ProgressRing } from "@/components/common/ui";
@@ -142,7 +141,8 @@ function caseCarriesWork(testCase) {
   );
 }
 export default function TestPlanPage({ sessionId }) {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
+  const confirmPopUp = useConfirmPopUp();
   const queryClient = useQueryClient();
   const [editForm] = Form.useForm();
   const [search, setSearch] = useState("");
@@ -150,7 +150,6 @@ export default function TestPlanPage({ sessionId }) {
   const [groupOverrides, setGroupOverrides] = useState(() => new Map());
   const [expandedCase, setExpandedCase] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const [addingCategory, setAddingCategory] = useState(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [editingCase, setEditingCase] = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
@@ -201,25 +200,23 @@ export default function TestPlanPage({ sessionId }) {
     () => groupCases(plan?.cases ?? [], catalog?.categories ?? []),
     [plan, catalog],
   );
+
+  // Keep the selection honest: drop ids that are no longer part of the plan
+  // (removed via the row menu, plan regeneration, ...), so batch actions never
+  // hit cases that do not exist any more.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const planned = new Set((plan?.cases ?? []).map((c) => c.testId));
+      const next = new Set([...prev].filter((id) => planned.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [plan]);
+
   const catalogueIds = useMemo(
     () => new Set((catalog?.tests ?? []).map((test) => test.id)),
     [catalog],
   );
-  const plannedIds = useMemo(
-    () => new Set((plan?.cases ?? []).map((testCase) => testCase.testId.toUpperCase())),
-    [plan],
-  );
-  // Catalogue cases per WSTG category, so a category can be completed in one click.
-  const catalogueByCategory = useMemo(() => {
-    const map = new Map();
-    for (const test of catalog?.tests ?? []) {
-      if (!map.has(test.category)) map.set(test.category, []);
-      map.get(test.category).push(test.id);
-    }
-    return map;
-  }, [catalog]);
-  const missingCatalogueCases = (code) =>
-    (catalogueByCategory.get(code) ?? []).filter((testId) => !plannedIds.has(testId));
 
   const needle = search.trim().toLowerCase();
   const filtersActive = statusFilter !== "all" || needle.length > 0;
@@ -280,16 +277,6 @@ export default function TestPlanPage({ sessionId }) {
     queryClient.invalidateQueries(["test-plan", sessionId]);
   };
 
-  const addCasesMutation = useMutation(addCatalogueCases, {
-    onSuccess: (data) => {
-      const added = data?.added?.length ?? 0;
-      message.success(`${added} test case${added === 1 ? "" : "s"} added to the plan`);
-      invalidate();
-    },
-    onError: (error) =>
-      message.error(apiErrorMessage(error, "Could not add the test cases")),
-  });
-
   const statusMutation = useMutation(updateTestCase, {
     onSuccess: (data) => {
       message.success(`${data.testCase?.testId} -> ${data.testCase?.status}`);
@@ -310,6 +297,14 @@ export default function TestPlanPage({ sessionId }) {
   const removeCaseMutation = useMutation(removeTestCase, {
     onSuccess: (data) => {
       message.success(`${data.testId} removed from the plan`);
+      // Drop the removed id from the selection so the selection bar can't
+      // reference a case that is no longer part of the plan.
+      setSelectedIds((prev) => {
+        if (!prev.has(data.testId)) return prev;
+        const next = new Set(prev);
+        next.delete(data.testId);
+        return next;
+      });
       invalidate();
     },
     onError: (error) => message.error(apiErrorMessage(error, "Could not remove the case")),
@@ -373,16 +368,6 @@ export default function TestPlanPage({ sessionId }) {
     });
   };
 
-  // One click fills a category with every WSTG case it is still missing.
-  const addCategoryCases = (group, testIds) => {
-    if (!testIds.length) return;
-    setAddingCategory(group.key);
-    addCasesMutation.mutate(
-      { sessionId, testIds },
-      { onSettled: () => setAddingCategory(null) },
-    );
-  };
-
   // A case nobody has worked on costs nothing to drop: it comes back with one click. Only stop for
   // a confirmation when recorded work would go with it.
   const requestRemoveCase = (testCase) => {
@@ -390,23 +375,19 @@ export default function TestPlanPage({ sessionId }) {
       removeCaseMutation.mutate({ sessionId, testId: testCase.testId });
       return;
     }
-    modal.confirm({
+    confirmPopUp({
       title: `Remove ${testCase.testId}?`,
       content:
         "This case carries recorded work - its status, observations and linked findings go with it. The report draft is built from this plan, so download it first if you need the record.",
       okText: "Remove",
-      okButtonProps: { danger: true },
       onOk: () => removeCaseMutation.mutateAsync({ sessionId, testId: testCase.testId }),
     });
   };
 
   const confirmRemoveCases = (testIds, title) => {
-    modal.confirm({
+    confirmPopUp({
       title: title ?? `Remove ${testIds.length} ${testIds.length === 1 ? "case" : "cases"}?`,
-      content:
-        "These cases leave the plan together with anything recorded against them. The category they belong to can put them back in one click.",
       okText: `Remove ${testIds.length}`,
-      okButtonProps: { danger: true },
       onOk: () => casesRemoveMutation.mutateAsync({ sessionId, testIds }),
     });
   };
@@ -470,15 +451,16 @@ export default function TestPlanPage({ sessionId }) {
           <span className={styles.eyebrow}>OWASP WSTG v{catalog?.version ?? "4.2"}</span>
           <h1>Web Application Security Testing</h1>
           <p className={styles.headerContext}>
-            {plan
-              ? [
-                  plan.target,
-                  plan.scope,
-                  `${plan.cases.length} cases in ${groups.length} categories`,
-                ]
-                  .filter(Boolean)
-                  .join("  Â·  ")
-              : `The ${catalog?.totalTests ?? 97} WSTG v4.2 cases, ready to scope to this engagement.`}
+            {plan ? (
+              [
+                plan.target,
+                plan.scope,
+              ]
+                .filter(Boolean)
+                .join("  ·  ")
+            ) : (
+              `The ${catalog?.totalTests ?? 97} WSTG v4.2 cases, ready to scope to this engagement.`
+            )}
           </p>
         </div>
         <div className={styles.headerActions}>
@@ -657,7 +639,6 @@ export default function TestPlanPage({ sessionId }) {
                   const groupSelectedCount = groupIds.filter((testId) =>
                     selectedIds.has(testId),
                   ).length;
-                  const missing = group.code ? missingCatalogueCases(group.code) : [];
 
                   return (
                     <div key={group.key} className={styles.group}>
@@ -696,19 +677,6 @@ export default function TestPlanPage({ sessionId }) {
                           <span className={`${styles.stat} ${styles.statBlocked}`}>
                             {summary.blocked} blocked
                           </span>
-                        )}
-
-                        {missing.length > 0 && (
-                          <Button
-                            size="small"
-                            type="text"
-                            icon={<PlusOutlined />}
-                            loading={addingCategory === group.key}
-                            title={`Add the ${missing.length} remaining ${group.code} cases`}
-                            onClick={() => addCategoryCases(group, missing)}
-                          >
-                            {missing.length}
-                          </Button>
                         )}
                       </div>
 
