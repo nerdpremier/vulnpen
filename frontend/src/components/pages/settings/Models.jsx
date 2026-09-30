@@ -281,7 +281,7 @@ const ModelModal = ({
               <Select
                 options={PROVIDER_OPTIONS}
                 popupMatchSelectWidth={false}
-                popupClassName={styles.modelSelectDropdown}
+                classNames={{ popup: { root: styles.modelSelectDropdown } }}
                 onChange={() => {
                   form.setFieldValue("model", "");
                   form.setFieldValue("baseURL", "");
@@ -298,7 +298,7 @@ const ModelModal = ({
               <AutoComplete
                 allowClear
                 placeholder="Select or type a model"
-                popupClassName={styles.modelSelectDropdown}
+                classNames={{ popup: { root: styles.modelSelectDropdown } }}
                 options={(modelSuggestions[provider] || []).map((model) => ({
                   value: model,
                   label: model,
@@ -320,7 +320,7 @@ const ModelModal = ({
             <Form.Item label="Reasoning" name="reasoningMode">
               <Select
                 options={REASONING_OPTIONS}
-                popupClassName={styles.modelSelectDropdown}
+                classNames={{ popup: { root: styles.modelSelectDropdown } }}
               />
             </Form.Item>
           </Col>

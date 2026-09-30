@@ -208,7 +208,7 @@ export default function WorkspaceConnectionPage({ sessionId }) {
               }))}
               notFoundContent="No SSH hosts found in the mounted SSH config"
               className={styles.select}
-              popupClassName={styles.selectPopup}
+              classNames={{ popup: { root: styles.selectPopup } }}
             />
             {selectedProfile?.error && <small className={styles.fieldError}>{selectedProfile.error}</small>}
             <small>Credentials remain in mounted SSH files, your SSH agent, or legacy environment config; the workspace stores only the profile name.</small>
