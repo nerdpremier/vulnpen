@@ -16,15 +16,15 @@ const RAIL_TABS = [
 const railTabStyle = (active) => ({
   flex: "1 1 0%",
   border: "none",
-  borderLeft: active ? "2px solid #8e35ff" : "1px solid rgba(255,255,255,0.08)",
+  borderTop: active ? "2px solid #8e35ff" : "1px solid rgba(255,255,255,0.08)",
   background: active ? "rgba(142,53,255,0.12)" : "rgba(255,255,255,0.03)",
   color: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.65)",
   cursor: "pointer",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
+  justifyContent: "center",
   gap: 8,
-  paddingTop: 12,
   fontSize: 11,
   letterSpacing: "0.08em",
 });
@@ -133,13 +133,15 @@ const SessionMainPage = ({ session_id }) => {
           </>
         )}
 
-        {/* Right rail: BROWSER AGENT and BURP vertical tabs side by side */}
+        {/* Right strip: one column split into two halves —
+            BROWSER AGENT on top, BURP below */}
         <div
           style={{
-            width: 68,
+            width: 34,
             alignSelf: "stretch",
             flexShrink: 0,
             display: "flex",
+            flexDirection: "column",
           }}
         >
           {RAIL_TABS.map((tab) => {
@@ -151,7 +153,7 @@ const SessionMainPage = ({ session_id }) => {
                 title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
                 style={railTabStyle(active)}
               >
-                {tab.key === "browser" && <TbWorldWww size={16} />}
+                {tab.key === "browser" && <TbWorldWww size={14} />}
                 <span style={{ writingMode: "vertical-rl" }}>{tab.label}</span>
               </button>
             );
