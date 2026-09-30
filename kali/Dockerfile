@@ -40,8 +40,6 @@ RUN mkdir -p /var/run/sshd && \
 
 EXPOSE 22 4200 1194/udp 9020
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
 # -- Layer 2: Base utilities + build deps (needed for runtime tool installs) --
 RUN apti \
@@ -84,6 +82,12 @@ RUN apti \
 # RUN apti kali-linux-default
 
 # Additional security tools (Go-based & Python-based - uncomment to pre-install)
+# Entrypoint is copied last on purpose: it changes far more often than the
+# package layers above, and keeping it here means editing it rebuilds in
+# seconds instead of reinstalling Burp, the desktop and the browser stack.
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 COPY tools.sh /tools.sh
 RUN chmod +x /tools.sh
 # RUN /tools.sh
