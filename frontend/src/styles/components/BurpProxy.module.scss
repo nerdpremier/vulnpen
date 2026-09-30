@@ -1,4 +1,4 @@
-@import "../_variables";
+﻿@import "../_variables";
 
 .burpContainer {
   display: flex;
@@ -8,7 +8,7 @@
   background: var(--primary-bg);
 }
 
-// ── Header ──────────────────────────────────────────────────────────────────
+// â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .header {
   display: flex;
@@ -167,7 +167,7 @@
   }
 }
 
-// ── Filter bar ──────────────────────────────────────────────────────────────
+// â”€â”€ Filter bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .filterBar {
   display: flex;
@@ -192,7 +192,7 @@
 
   &:focus,
   &:global(.ant-input-affix-wrapper-focused) {
-    border-color: var(--filled-purple) !important;
+    border-color: var(--moon-accent) !important;
     box-shadow: none !important;
     background: var(--primary-bg) !important;
   }
@@ -255,9 +255,9 @@
   }
 
   &:global(.ant-tag-checkable-checked) {
-    background: var(--filled-purple) !important;
-    border-color: var(--filled-purple) !important;
-    color: #fff !important;
+    background: var(--moon-accent-solid) !important;
+    border-color: var(--moon-accent-solid) !important;
+    color: var(--moon-accent-ink) !important;
   }
 }
 
@@ -286,7 +286,7 @@
   }
 
   :global(.ant-select-focused .ant-select-selector) {
-    border-color: var(--filled-purple) !important;
+    border-color: var(--moon-accent) !important;
     box-shadow: none !important;
   }
 }
@@ -321,7 +321,7 @@
   }
 }
 
-// ── Table ───────────────────────────────────────────────────────────────────
+// â”€â”€ Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .tableWrapper {
   flex: 1;
@@ -442,16 +442,16 @@
     }
 
     &:hover {
-      border-color: var(--filled-purple);
-      a { color: var(--filled-purple); }
+      border-color: var(--moon-accent-solid);
+      a { color: var(--moon-accent); }
     }
   }
 
   :global(.ant-pagination .ant-pagination-item-active) {
-    background: var(--filled-purple);
-    border-color: var(--filled-purple);
-    a { color: #fff; }
-    &:hover a { color: #fff; }
+    background: var(--moon-accent-solid);
+    border-color: var(--moon-accent-solid);
+    a { color: var(--moon-accent-ink); }
+    &:hover a { color: var(--moon-accent-ink); }
   }
 
   :global(.ant-pagination .ant-pagination-prev button),
@@ -479,7 +479,7 @@
   }
 }
 
-// ── Cell styles ─────────────────────────────────────────────────────────────
+// â”€â”€ Cell styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .methodTag {
   font-size: 0.56rem;
@@ -554,11 +554,11 @@
   transition: color var(--transition-fast) !important;
 
   &:hover {
-    color: var(--filled-purple) !important;
+    color: var(--moon-accent) !important;
   }
 }
 
-// ── Expanded row ────────────────────────────────────────────────────────────
+// â”€â”€ Expanded row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .expandedRow {
   padding: 0.5rem 0.65rem;
@@ -615,8 +615,8 @@
   gap: 0.2rem !important;
 
   &:hover {
-    color: var(--filled-purple) !important;
-    border-color: var(--filled-purple-50) !important;
+    color: var(--moon-accent) !important;
+    border-color: var(--moon-accent-40) !important;
   }
 }
 
@@ -640,7 +640,7 @@
   }
 }
 
-// ── Code block ──────────────────────────────────────────────────────────────
+// â”€â”€ Code block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .codeBlock {
   background: var(--primary-bg);
@@ -690,7 +690,7 @@
 }
 
 // Syntax highlighting
-.httpMethod { color: var(--filled-purple); font-weight: 700; }
+.httpMethod { color: var(--moon-accent); font-weight: 700; }
 .httpUrl { color: var(--primary-text); }
 .httpVersion { color: var(--secondary-text); }
 .httpHeaderName { color: #79c0ff; }
@@ -701,7 +701,7 @@
 .httpStatusServerErr { color: #ff7b72; font-weight: 700; }
 .httpBody { color: var(--secondary-text); }
 
-// ── Repeater modal ──────────────────────────────────────────────────────────
+// â”€â”€ Repeater modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .repeaterModal {
   :global(.ant-modal-content) {
@@ -782,7 +782,7 @@
     height: 1.4rem;
 
     &:focus {
-      border-color: var(--filled-purple);
+      border-color: var(--moon-accent-solid);
     }
 
     &::placeholder {
@@ -920,7 +920,7 @@
     }
 
     &::selection {
-      background: var(--filled-purple-50);
+      background: var(--moon-accent-14);
     }
   }
 }
@@ -949,7 +949,7 @@
   border-radius: 3px;
 }
 
-// ── States ──────────────────────────────────────────────────────────────────
+// â”€â”€ States â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 .emptyState {
   display: flex;
@@ -1004,3 +1004,4 @@
   gap: 0.3rem;
   flex-shrink: 0;
 }
+

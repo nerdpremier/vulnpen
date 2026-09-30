@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
   Alert,
@@ -42,6 +42,9 @@ import {
 import { apiErrorMessage } from "@/utils/apiError";
 import PlanSetupModal from "./PlanSetupModal";
 import styles from "@/styles/pages/TestPlan.module.scss";
+import { ProgressRing } from "@/components/common/ui";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const STATUS_OPTIONS = [
   { value: "not_started", label: "Not started" },
@@ -152,11 +155,47 @@ export default function TestPlanPage({ sessionId }) {
   const [editingCase, setEditingCase] = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
 
+  // A finding deep-links here as ?case=WSTG-ATHN-01. The request is read from the
+  // URL and held as derived state, so opening the plan never needs a sync effect:
+  // the category opens, the case expands and the row is scrolled into view.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const requestedCaseId = (searchParams.get("case") || "").trim().toUpperCase();
+  const [focusDismissed, setFocusDismissed] = useState(false);
+  const focusCaseId = focusDismissed ? "" : requestedCaseId;
+
   const planQuery = useQuery(["test-plan", sessionId], () => getTestPlan(sessionId));
 
   const plan = planQuery.data?.plan ?? null;
   const catalog = planQuery.data?.catalog;
   const coverage = planQuery.data?.coverage ?? null;
+
+  /** The case a finding pointed at, once the plan has loaded. */
+  const focusedCase = useMemo(() => {
+    if (!focusCaseId) return null;
+    return (
+      (plan?.cases ?? []).find(
+        (testCase) => testCase.testId.toUpperCase() === focusCaseId,
+      ) ?? null
+    );
+  }, [plan, focusCaseId]);
+
+  const clearFocus = () => {
+    setFocusDismissed(true);
+    router.replace(`/session/${sessionId}/test-plan`);
+  };
+
+  // Scrolling is the one thing that needs the DOM, so it is the only effect:
+  // no state is written here, which keeps renders cascaded-free.
+  useEffect(() => {
+    if (!focusedCase) return undefined;
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`case-${focusedCase.testId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusedCase]);
 
   const groups = useMemo(
     () => groupCases(plan?.cases ?? [], catalog?.categories ?? []),
@@ -223,6 +262,14 @@ export default function TestPlanPage({ sessionId }) {
   const isGroupOpen = (group) => {
     if (groupOverrides.has(group.key)) return groupOverrides.get(group.key);
     if (filtersActive) return true;
+    if (
+      focusCaseId &&
+      group.cases.some(
+        (testCase) => testCase.testId.toUpperCase() === focusCaseId,
+      )
+    ) {
+      return true;
+    }
     return group.cases.some(
       (testCase) => testCase.status === "failed" || testCase.status === "blocked",
     );
@@ -430,7 +477,7 @@ export default function TestPlanPage({ sessionId }) {
                   `${plan.cases.length} cases in ${groups.length} categories`,
                 ]
                   .filter(Boolean)
-                  .join("  ·  ")
+                  .join("  Â·  ")
               : `The ${catalog?.totalTests ?? 97} WSTG v4.2 cases, ready to scope to this engagement.`}
           </p>
         </div>
@@ -475,17 +522,34 @@ export default function TestPlanPage({ sessionId }) {
       {plan && coverage && (
         <>
           <section className={styles.progress}>
-            <div className={styles.progressHead}>
-              <strong>{coverage.percentExecuted}%</strong>
-              <span>
-                {coverage.executed} of {coverage.total} cases executed
-              </span>
-              <span className={styles.progressBar}>
-                <CoverageBar
-                  value={coverage.percentExecuted}
-                  tone={coverage.failed ? "barFailed" : "barPurple"}
-                />
-              </span>
+            <div className={styles.progressSummary}>
+              <ProgressRing
+                value={coverage.executed}
+                total={coverage.total}
+                tone={coverage.failed ? "warning" : "accent"}
+                caption="Executed"
+                size={108}
+                thickness={7}
+              />
+              <div className={styles.progressText}>
+                <span className={styles.progressPercent}>
+                  {coverage.percentExecuted}% complete
+                </span>
+                <span className={styles.progressMeta}>
+                  {coverage.executed} of {coverage.total} cases executed
+                  {coverage.failed > 0 ? ` - ${coverage.failed} failed` : ""}
+                  {coverage.blocked > 0 ? ` - ${coverage.blocked} blocked` : ""}
+                  {coverage.notStarted > 0
+                    ? ` - ${coverage.notStarted} not started`
+                    : ""}
+                </span>
+                <span className={styles.progressBar}>
+                  <CoverageBar
+                    value={coverage.percentExecuted}
+                    tone={coverage.failed ? "barFailed" : "barPurple"}
+                  />
+                </span>
+              </div>
             </div>
             <div className={styles.chips}>
               {chips.map((chip) => (
@@ -507,6 +571,29 @@ export default function TestPlanPage({ sessionId }) {
           </section>
 
           <section className={styles.planCard}>
+            {requestedCaseId && (
+              <div className={styles.focusBanner}>
+                <span className={styles.focusLabel}>
+                  {focusedCase ? "Opened from a finding" : "Not in this plan"}
+                </span>
+                <span className={styles.focusCase}>{requestedCaseId}</span>
+                {focusedCase && (
+                  <span className={styles.focusTitle}>{focusedCase.title}</span>
+                )}
+                {!focusedCase && (
+                  <span className={styles.focusTitle}>
+                    Add this case in Plan setup to record its result here.
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className={styles.focusClear}
+                  onClick={clearFocus}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             <div className={styles.toolbar}>
               <Input
                 allowClear
@@ -662,11 +749,16 @@ export default function TestPlanPage({ sessionId }) {
                             </thead>
                             <tbody>
                                 {group.matches.map((testCase) => {
-                                  const isOpen = expandedCase === testCase.testId;
+                                  const isOpen =
+                                    (expandedCase ?? focusCaseId) ===
+                                    testCase.testId;
+                                  const isFocused =
+                                    focusCaseId === testCase.testId;
                                   const selected = selectedIds.has(testCase.testId);
                                   const rowClass = [
                                     isOpen ? styles.rowOpen : "",
                                     selected ? styles.rowSelected : "",
+                                    isFocused ? styles.rowFocused : "",
                                   ]
                                     .filter(Boolean)
                                     .join(" ");
@@ -675,10 +767,17 @@ export default function TestPlanPage({ sessionId }) {
                                   return (
                                     <React.Fragment key={testCase.testId}>
                                       <tr
+                                        id={`case-${testCase.testId}`}
                                         className={rowClass || undefined}
-                                        onClick={() =>
-                                          setExpandedCase(isOpen ? null : testCase.testId)
-                                        }
+                                        onClick={() => {
+                                          // Collapsing the deep-linked case also
+                                          // releases the focus, so it does not
+                                          // spring back open.
+                                          if (isFocused) setFocusDismissed(true);
+                                          setExpandedCase(
+                                            isOpen ? null : testCase.testId,
+                                          );
+                                        }}
                                       >
                                         <td onClick={(event) => event.stopPropagation()}>
                                           <Checkbox
@@ -724,9 +823,24 @@ export default function TestPlanPage({ sessionId }) {
                                             }
                                           />
                                         </td>
-                                        <td>
+                                        <td
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                        >
                                           {findings > 0 ? (
-                                            <span className={styles.findingCount}>{findings}</span>
+                                            <Link
+                                              href={
+                                                testCase.linkedVulnerabilityIds
+                                                  ?.length === 1
+                                                  ? `/session/${sessionId}/vulnerabilities/${testCase.linkedVulnerabilityIds[0]}`
+                                                  : `/session/${sessionId}/vulnerabilities`
+                                              }
+                                              className={styles.findingLink}
+                                              title="Open the finding recorded for this case"
+                                            >
+                                              {findings}
+                                            </Link>
                                           ) : (
                                             <span className={styles.muted}>-</span>
                                           )}

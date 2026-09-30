@@ -137,7 +137,15 @@ const SettingsOverlay = ({ open, onClose, initialTab, sessionId }) => {
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.sidebar}>
-          <div className={styles.sidebarTitle}>Settings</div>
+          <div className={styles.sidebarBrand}>
+            <div className={styles.sidebarBrandText}>
+              <span className={styles.sidebarBrandName}>VulnPen</span>
+              <span className={styles.sidebarTitle}>Settings</span>
+            </div>
+          </div>
+          <div className={styles.navGroupLabel}>
+            {sessionId ? 'Installation & session' : 'Installation'}
+          </div>
           <div className={styles.navItems}>
             {visibleTabs.map((tab) => (
               <div
@@ -186,3 +194,4 @@ const SettingsOverlay = ({ open, onClose, initialTab, sessionId }) => {
 };
 
 export default SettingsOverlay;
+

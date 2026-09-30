@@ -173,3 +173,198 @@
     }
   }
 }
+/* ============================================================================
+   SETTINGS OVERLAY - Lunar Monochrome
+   ========================================================================== */
+.overlay {
+  background: rgba(2, 3, 6, 0.74);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.modal {
+  width: 70rem;
+  max-width: 94vw;
+  height: 84vh;
+  max-height: 780px;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-xl);
+  box-shadow: var(--moon-inner-top), var(--moon-shadow-4);
+
+  @include responsive(tablet3) {
+    height: 92vh;
+    max-height: none;
+  }
+}
+
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  padding: 1.1rem 0.85rem 1rem;
+  background: var(--moon-night);
+  border-right: 1px solid var(--moon-line-1);
+
+  @include responsive(tablet3) {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--moon-line-1);
+    padding: 0.85rem 0.75rem;
+  }
+}
+
+.sidebarBrand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.55rem 0.9rem;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid var(--moon-line-1);
+}
+
+.sidebarBrandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.sidebarBrandName {
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--moon-text);
+}
+
+.sidebar .sidebarTitle {
+  @include eyebrow;
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  padding: 0;
+  margin: 0;
+}
+
+.navGroupLabel {
+  @include eyebrow;
+  font-size: 0.55rem;
+  padding: 0.6rem 0.6rem 0.35rem;
+}
+
+.navItems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  max-height: calc(84vh - 9rem);
+  @include scrollbar(5px);
+}
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.79rem;
+  font-weight: 500;
+  color: var(--moon-text-dim);
+  border: 1px solid transparent;
+  border-radius: var(--moon-radius-sm);
+  cursor: pointer;
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+  @include focus-ring(2px);
+
+  .navIcon {
+    font-size: 15px;
+    flex-shrink: 0;
+    color: var(--moon-text-mute);
+  }
+
+  &:hover {
+    background: var(--surface-hover);
+    color: var(--moon-text);
+    border-color: var(--moon-line-1);
+
+    .navIcon {
+      color: var(--moon-text-dim);
+    }
+  }
+}
+
+.navItemActive {
+  @extend .navItem;
+  background: var(--moon-accent-08);
+  border-color: var(--moon-accent-24);
+  color: var(--moon-text);
+
+  .navIcon {
+    color: var(--moon-accent);
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 56%;
+    border-radius: 0 2px 2px 0;
+    background: var(--moon-accent);
+    box-shadow: 0 0 10px var(--moon-accent-40);
+  }
+}
+
+.content {
+  background: var(--moon-surface-1);
+}
+
+.contentHeader {
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--moon-line-1);
+  background: rgba(255, 255, 255, 0.012);
+
+  .contentTitle {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--moon-text);
+  }
+
+  .contentDescription {
+    font-size: 0.79rem;
+    line-height: 1.5;
+    color: var(--moon-text-mute);
+    margin-top: 3px;
+  }
+
+  .closeButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: var(--moon-radius-sm);
+    border: 1px solid var(--moon-line-1);
+    background: var(--moon-surface-2);
+    color: var(--moon-text-dim);
+    font-size: 1.1rem;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover {
+      background: var(--moon-surface-3);
+      border-color: var(--moon-line-3);
+      color: var(--moon-text);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: var(--moon-focus-ring);
+    }
+  }
+}
+
+.contentBody {
+  @include scrollbar(7px);
+}

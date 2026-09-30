@@ -3,13 +3,41 @@
 @import "@/styles/color-themes";
 @import "@/styles/variables";
 
-body,
-html {
-  scroll-behavior: smooth;
-  background: var(--secondary-bg);
-  overflow-x: hidden;
+/* ============================================================================
+   VulnPen - global layer (Lunar Monochrome)
+   1. Base + ambient backdrop   5. antd: data display
+   2. Typography                6. antd: feedback
+   3. Focus + scrollbars        7. Motion utilities
+   4. antd: forms + controls    8. Legacy global helpers
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. BASE + AMBIENT BACKDROP
+   The page is a night sky: a near-black void, a cold moon halo bleeding in
+   from the top-left, a faint vignette in the corners and a hairline grid so
+   large empty surfaces still read as "designed" rather than "forgotten".
+   -------------------------------------------------------------------------- */
+html,
+body {
   padding: 0;
   margin: 0;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  background-color: var(--moon-void);
+  color: var(--moon-text);
+}
+
+body {
+  min-height: 100vh;
+  background-image: radial-gradient(
+      1100px 620px at 12% -12%,
+      var(--moon-halo-soft) 0%,
+      transparent 62%
+    ),
+    radial-gradient(760px 520px at 92% 4%, rgba(201, 210, 226, 0.05) 0%, transparent 60%),
+    radial-gradient(900px 900px at 50% 120%, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 
   * {
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -17,9 +45,134 @@ html {
   }
 }
 
+@font-face {
+  font-family: "Menlo for powerline";
+  src: url("../assets/fonts/menlo-for-powerline/MenloPowerline.ttf");
+  font-display: swap;
+}
+
 ::selection {
-  background: var(--filled-purple-50);
-  color: var(--primary-text);
+  background: var(--moon-accent-40);
+  color: var(--moon-0);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  transition: color var(--moon-dur-1) var(--moon-ease-out),
+    opacity var(--moon-dur-1) var(--moon-ease-out);
+  text-underline-offset: 0.2em;
+}
+
+button {
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+/* ---------------------------------------------------------------------------
+   2. TYPOGRAPHY
+   -------------------------------------------------------------------------- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--moon-text);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: "JetBrains Mono", "Menlo for powerline", ui-monospace, monospace;
+}
+
+.codeStyle {
+  display: block !important;
+  font-family: "JetBrains Mono", "Menlo for powerline", monospace !important;
+}
+
+/* Machine identifiers (model ids, endpoints, hashes) read better as mono. */
+.moon-mono {
+  font-family: "JetBrains Mono", "Menlo for powerline", ui-monospace, monospace;
+  font-variant-ligatures: none;
+  letter-spacing: -0.01em;
+}
+
+.kbd,
+.moon-kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.68rem;
+  font-family: "JetBrains Mono", monospace;
+  color: var(--moon-text-dim);
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-2);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+/* ---------------------------------------------------------------------------
+   3. FOCUS + SCROLLBARS
+   Every interactive element gets a visible keyboard ring. Pointer users never
+   see it (:focus-visible), keyboard users always do.
+   -------------------------------------------------------------------------- */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible,
+summary:focus-visible,
+.ant-btn:focus-visible,
+.ant-input:focus-visible,
+.ant-input-affix-wrapper:focus-within {
+  outline: none;
+  box-shadow: var(--moon-focus-ring);
+  border-radius: var(--moon-radius-xs);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--moon-line-2);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+
+  &:hover {
+    background-color: var(--moon-line-3);
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--moon-line-2) transparent;
 }
 
 /* App-wide input placeholder color for readable contrast on dark backgrounds */
@@ -46,32 +199,1204 @@ textarea::placeholder,
     color: var(--primary-text);
   }
 }
-
-@font-face {
-  font-family: "Menlo for powerline";
-  src: url("../assets/fonts/menlo-for-powerline/MenloPowerline.ttf");
+/* ---------------------------------------------------------------------------
+   4. antd: FORMS + CONTROLS
+   antd ships its light theme; these overrides paint every control with the
+   moon palette. Every fill/border/text pair is checked for contrast.
+   -------------------------------------------------------------------------- */
+.ant-btn {
+  box-shadow: none;
+  font-weight: 500;
+  border-radius: var(--moon-radius-sm);
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
 }
 
-a {
-  transition: color var(--transition-fast), opacity var(--transition-fast);
+.ant-btn-default {
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  color: var(--moon-text-dim);
+
+  &:not(:disabled):not(.ant-btn-disabled) {
+    &:hover,
+    &:focus-visible {
+      color: var(--moon-text);
+      border-color: var(--moon-line-3);
+      background: var(--moon-surface-3);
+    }
+
+    &:active {
+      color: var(--moon-text);
+      border-color: var(--moon-line-2);
+      background: var(--moon-surface-2);
+      transform: translateY(0.5px);
+    }
+  }
+
+  &:disabled,
+  &.ant-btn-disabled {
+    color: var(--moon-text-faint);
+    background: var(--moon-surface-1);
+    border-color: var(--moon-line-1);
+
+    .anticon {
+      color: var(--moon-text-faint);
+    }
+  }
 }
 
-button {
-  transition: all var(--transition-fast);
+.ant-btn-primary {
+  background: var(--moon-accent-solid);
+  border: 1px solid var(--moon-accent-solid);
+  color: var(--moon-accent-ink) !important;
+  font-weight: 600;
+
+  &:not(:disabled):not(.ant-btn-disabled) {
+    &:hover,
+    &:focus-visible {
+      background: var(--moon-0);
+      border-color: var(--moon-0);
+      color: var(--moon-accent-ink) !important;
+      box-shadow: var(--moon-glow-sm);
+    }
+
+    &:active {
+      background: var(--moon-100);
+      border-color: var(--moon-100);
+    }
+  }
+
+  .anticon {
+    color: var(--moon-accent-ink) !important;
+  }
+
+  &:disabled,
+  &.ant-btn-disabled {
+    color: var(--moon-text-faint) !important;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: transparent;
+    box-shadow: none;
+
+    .anticon {
+      color: var(--moon-text-faint) !important;
+    }
+  }
 }
 
-.ant-modal-confirm-confirm .ant-modal-content {
-  background-color: var(--cli-bg) !important;
-  border: 1px solid var(--border-subtle) !important;
-  border-radius: 8px !important;
+.ant-btn-text {
+  color: var(--moon-text-dim);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--moon-text) !important;
+    background: var(--surface-hover) !important;
+  }
+}
+
+.ant-btn-link {
+  color: var(--moon-accent);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--moon-accent-strong);
+  }
+}
+
+.ant-btn-dangerous {
+  color: var(--moon-danger) !important;
+  border-color: var(--moon-danger-line);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--moon-danger) !important;
+    background: var(--moon-danger-bg);
+    border-color: var(--moon-danger);
+  }
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+.ant-picker,
+.ant-input-number-affix-wrapper {
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-sm);
+  color: var(--moon-text);
+  transition: border-color var(--moon-dur-2) var(--moon-ease-out),
+    box-shadow var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover {
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-2);
+  }
+
+  &:focus,
+  &:focus-within,
+  &.ant-input-focused {
+    border-color: var(--moon-accent-64);
+    box-shadow: 0 0 0 3px var(--moon-accent-14);
+    background: var(--moon-surface-2);
+  }
+
+  .ant-input,
+  input {
+    background: transparent;
+    color: var(--moon-text);
+  }
+}
+
+.ant-input-number {
+  .ant-input-number-handler-wrap {
+    display: none !important;
+  }
+
+  .ant-input-number-input {
+    padding: 0 0.75rem !important;
+    height: 100%;
+  }
+}
+
+textarea.ant-input {
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.ant-input-clear-icon,
+.ant-input-password-icon,
+.ant-select-arrow,
+.ant-picker-suffix {
+  color: var(--moon-text-mute);
+
+  &:hover {
+    color: var(--moon-text);
+  }
+}
+
+.ant-select {
+  .ant-select-selector {
+    background: var(--moon-surface-2) !important;
+    border: 1px solid var(--moon-line-2) !important;
+    border-radius: var(--moon-radius-sm) !important;
+    color: var(--moon-text) !important;
+    transition: border-color var(--moon-dur-2) var(--moon-ease-out);
+  }
+
+  &.ant-select-focused .ant-select-selector,
+  &:hover .ant-select-selector {
+    border-color: var(--moon-accent-40) !important;
+    background: var(--moon-surface-2) !important;
+  }
+
+  &.ant-select-focused .ant-select-selector {
+    box-shadow: 0 0 0 3px var(--moon-accent-14);
+  }
+}
+
+.ant-select-dropdown {
+  background: var(--moon-surface-2) !important;
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-md);
+  padding: 5px;
+  box-shadow: var(--moon-shadow-3);
+
+  .ant-select-item {
+    color: var(--moon-text-dim);
+    font-size: 0.8rem;
+    border-radius: var(--moon-radius-xs);
+    margin-bottom: 1px;
+
+    &:hover,
+    &.ant-select-item-option-active {
+      background: var(--surface-hover);
+      color: var(--moon-text);
+    }
+
+    &.ant-select-item-option-selected {
+      background: var(--moon-accent-14);
+      color: var(--moon-text);
+      font-weight: 500;
+    }
+  }
+
+  .ant-select-item-empty {
+    color: var(--moon-text-mute);
+  }
+}
+
+.ant-form {
+  .ant-form-item-label > label {
+    color: var(--moon-text-dim);
+    font-size: 0.76rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  .ant-form-item-required::before {
+    color: var(--moon-danger) !important;
+  }
+
+  .ant-form-item-explain-error {
+    color: var(--moon-danger);
+    font-size: 0.74rem;
+  }
+
+  .ant-form-item-extra,
+  .ant-form-item-explain {
+    color: var(--moon-text-mute);
+    font-size: 0.72rem;
+  }
+}
+
+.ant-checkbox-inner,
+.ant-radio-inner {
+  background: var(--moon-surface-2);
+  border-color: var(--moon-line-3);
+}
+
+.ant-checkbox-wrapper:hover .ant-checkbox-inner,
+.ant-radio-wrapper:hover .ant-radio-inner {
+  border-color: var(--moon-accent-64);
+}
+
+.ant-checkbox-checked .ant-checkbox-inner {
+  background: var(--moon-accent-solid) !important;
+  border-color: var(--moon-accent-solid) !important;
+}
+
+.ant-checkbox-checked .ant-checkbox-inner::after {
+  border-color: var(--moon-accent-ink) !important;
+}
+
+.ant-checkbox-indeterminate .ant-checkbox-inner::after {
+  background: var(--moon-accent-ink) !important;
+}
+
+.ant-radio-wrapper {
+  color: var(--moon-text-dim);
+
+  &:hover .ant-radio-inner {
+    border-color: var(--moon-accent-64);
+  }
+}
+
+.ant-radio-checked .ant-radio-inner {
+  background: var(--moon-accent-solid) !important;
+  border-color: var(--moon-accent-solid) !important;
+}
+
+.ant-radio-checked .ant-radio-inner::after {
+  background: var(--moon-accent-ink) !important;
+}
+
+.ant-switch {
+  background: rgba(255, 255, 255, 0.14);
+
+  &:hover:not(.ant-switch-disabled) {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .ant-switch-handle::before {
+    background: var(--moon-200);
+  }
+}
+
+.ant-switch-checked {
+  background: var(--moon-accent-solid) !important;
+
+  &:hover:not(.ant-switch-disabled) {
+    background: var(--moon-0) !important;
+  }
+
+  .ant-switch-handle::before {
+    background: var(--moon-accent-ink) !important;
+  }
+}
+
+.ant-slider {
+  .ant-slider-rail {
+    background: rgba(255, 255, 255, 0.09);
+  }
+
+  .ant-slider-track {
+    background: var(--moon-accent-64);
+  }
+
+  .ant-slider-handle::after {
+    box-shadow: 0 0 0 2px var(--moon-accent) !important;
+  }
+}
+/* ---------------------------------------------------------------------------
+   5. antd: DATA DISPLAY
+   -------------------------------------------------------------------------- */
+.ant-tag {
+  border-radius: var(--moon-radius-pill);
+  font-weight: 600;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.6rem;
+  line-height: 1.6;
+  border: 1px solid transparent;
+  background: var(--moon-surface-3);
+  color: var(--moon-text-dim);
+}
+
+.ant-tag-default {
+  background: var(--moon-surface-3) !important;
+  border-color: var(--moon-line-2) !important;
+  color: var(--moon-text-dim) !important;
+}
+
+.ant-tag-success,
+.ant-tag-green {
+  background: var(--moon-success-bg) !important;
+  border-color: var(--moon-success-line) !important;
+  color: var(--moon-success) !important;
+}
+
+.ant-tag-warning,
+.ant-tag-orange,
+.ant-tag-gold {
+  background: var(--moon-warning-bg) !important;
+  border-color: var(--moon-warning-line) !important;
+  color: var(--moon-warning) !important;
+}
+
+.ant-tag-error,
+.ant-tag-red {
+  background: var(--moon-danger-bg) !important;
+  border-color: var(--moon-danger-line) !important;
+  color: var(--moon-danger) !important;
+}
+
+.ant-tag-blue {
+  background: var(--moon-info-bg) !important;
+  border-color: var(--moon-info-line) !important;
+  color: var(--moon-info) !important;
+}
+
+.ant-tag-purple,
+.ant-tag-cyan,
+.ant-tag-magenta {
+  background: var(--moon-accent-14) !important;
+  border-color: var(--moon-accent-24) !important;
+  color: var(--moon-accent) !important;
+}
+
+.ant-badge-count {
+  background: var(--moon-surface-4);
+  color: var(--moon-text);
+  box-shadow: 0 0 0 1px var(--moon-line-2);
+}
+
+.ant-table {
+  background: transparent;
+  color: var(--moon-text);
+
+  .ant-table-thead > tr > th {
+    background: var(--moon-surface-2) !important;
+    color: var(--moon-text-mute) !important;
+    border-bottom: 1px solid var(--moon-line-2) !important;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .ant-table-tbody > tr > td {
+    border-bottom: 1px solid var(--moon-line-1) !important;
+    color: var(--moon-text-dim);
+    font-size: 0.8rem;
+  }
+
+  .ant-table-tbody > tr.ant-table-row:hover > td,
+  .ant-table-tbody > tr > td.ant-table-cell-row-hover {
+    background: var(--surface-hover) !important;
+  }
+
+  .ant-table-placeholder .ant-table-cell {
+    background: transparent !important;
+  }
+
+  .ant-table-cell-fix-left,
+  .ant-table-cell-fix-right {
+    background: var(--moon-surface-2) !important;
+  }
+}
+
+.ant-pagination {
+  color: var(--moon-text-mute);
+
+  .ant-pagination-item {
+    background: transparent;
+    border-color: var(--moon-line-2);
+    border-radius: var(--moon-radius-xs);
+
+    a {
+      color: var(--moon-text-dim);
+    }
+
+    &:hover {
+      border-color: var(--moon-accent-40);
+
+      a {
+        color: var(--moon-text);
+      }
+    }
+  }
+
+  .ant-pagination-item-active {
+    background: var(--moon-accent-solid);
+    border-color: var(--moon-accent-solid);
+
+    a {
+      color: var(--moon-accent-ink) !important;
+      font-weight: 600;
+    }
+  }
+
+  .ant-pagination-prev button,
+  .ant-pagination-next button,
+  .ant-pagination-jump-prev button,
+  .ant-pagination-jump-next button {
+    color: var(--moon-text-mute);
+    border-color: var(--moon-line-2);
+
+    &:hover {
+      color: var(--moon-text);
+      border-color: var(--moon-line-3);
+    }
+  }
+
+  .ant-pagination-options .ant-select-selector {
+    background: transparent !important;
+  }
+}
+
+.ant-progress {
+  .ant-progress-inner {
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .ant-progress-bg {
+    background: var(--moon-accent) !important;
+  }
+
+  .ant-progress-text {
+    color: var(--moon-text-dim) !important;
+    font-size: 0.75rem;
+  }
+}
+
+.ant-progress-success-bg {
+  background: var(--moon-success) !important;
+}
+
+.ant-empty {
+  .ant-empty-description {
+    color: var(--moon-text-mute);
+    font-size: 0.82rem;
+  }
+
+  .ant-empty-image {
+    opacity: 0.45;
+    filter: grayscale(1) contrast(1.1);
+  }
+}
+
+.ant-spin-dot {
+  .ant-spin-dot-item {
+    background-color: var(--moon-accent);
+  }
+}
+
+.ant-spin-text {
+  color: var(--moon-text-dim);
+  font-size: 0.78rem;
+}
+
+.ant-tabs {
+  color: var(--moon-text-dim);
+
+  .ant-tabs-tab {
+    color: var(--moon-text-mute);
+    font-size: 0.8rem;
+
+    &:hover {
+      color: var(--moon-text);
+    }
+
+    &.ant-tabs-tab-active .ant-tabs-tab-btn {
+      color: var(--moon-text) !important;
+    }
+  }
+
+  .ant-tabs-ink-bar {
+    background: var(--moon-accent) !important;
+  }
+
+  .ant-tabs-nav::before {
+    border-bottom-color: var(--moon-line-1) !important;
+  }
+}
+
+.ant-segmented {
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-sm);
+  padding: 3px;
+
+  .ant-segmented-item {
+    color: var(--moon-text-mute);
+    border-radius: var(--moon-radius-xs);
+    transition: color var(--moon-dur-2) var(--moon-ease-out);
+
+    &:hover {
+      color: var(--moon-text);
+    }
+
+    &.ant-segmented-item-selected {
+      background: var(--moon-surface-4);
+      color: var(--moon-text);
+      box-shadow: var(--moon-shadow-1);
+    }
+  }
+}
+
+.ant-collapse {
+  background: transparent;
+  border: none;
+
+  > .ant-collapse-item {
+    border-bottom: 1px solid var(--moon-line-1);
+
+    > .ant-collapse-header {
+      color: var(--moon-text);
+      align-items: center;
+
+      &:hover {
+        color: var(--moon-text);
+        background: var(--surface-hover);
+      }
+    }
+  }
+
+  .ant-collapse-content {
+    background: transparent;
+    border-top: 1px solid var(--moon-line-1);
+    color: var(--moon-text-dim);
+  }
+
+  .ant-collapse-expand-icon {
+    color: var(--moon-text-mute);
+  }
+}
+
+.ant-steps {
+  .ant-steps-item-title {
+    color: var(--moon-text-mute) !important;
+    font-size: 0.8rem;
+  }
+
+  .ant-steps-item-description {
+    color: var(--moon-text-faint) !important;
+    font-size: 0.72rem;
+  }
+
+  .ant-steps-item-wait .ant-steps-item-icon {
+    background: transparent !important;
+    border-color: var(--moon-line-3) !important;
+
+    .ant-steps-icon {
+      color: var(--moon-text-mute) !important;
+    }
+  }
+
+  .ant-steps-item-process .ant-steps-item-icon {
+    background: var(--moon-accent-solid) !important;
+    border-color: var(--moon-accent-solid) !important;
+
+    .ant-steps-icon {
+      color: var(--moon-accent-ink) !important;
+      font-weight: 700;
+    }
+  }
+
+  .ant-steps-item-process .ant-steps-item-title {
+    color: var(--moon-text) !important;
+    font-weight: 600;
+  }
+
+  .ant-steps-item-finish .ant-steps-item-icon {
+    background: transparent !important;
+    border-color: var(--moon-accent-64) !important;
+
+    .ant-steps-icon {
+      color: var(--moon-accent) !important;
+    }
+  }
+
+  .ant-steps-item-finish .ant-steps-item-title {
+    color: var(--moon-text-dim) !important;
+  }
+
+  .ant-steps-item-tail::after {
+    background: var(--moon-line-2) !important;
+  }
+
+  .ant-steps-item-finish .ant-steps-item-tail::after {
+    background: var(--moon-accent-40) !important;
+  }
+}
+
+.ant-result {
+  .ant-result-title {
+    color: var(--moon-text) !important;
+  }
+
+  .ant-result-subtitle {
+    color: var(--moon-text-dim) !important;
+  }
+}
+
+.ant-card {
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  color: var(--moon-text-dim);
+
+  .ant-card-head {
+    border-bottom: 1px solid var(--moon-line-1);
+    color: var(--moon-text);
+  }
+}
+
+.ant-divider {
+  border-color: var(--moon-line-1) !important;
+  color: var(--moon-text-mute);
+}
+
+.ant-skeleton {
+  .ant-skeleton-content .ant-skeleton-title,
+  .ant-skeleton-content .ant-skeleton-paragraph > li,
+  .ant-skeleton-input {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.05) 25%,
+      rgba(255, 255, 255, 0.09) 37%,
+      rgba(255, 255, 255, 0.05) 63%
+    ) !important;
+    background-size: 400% 100%;
+  }
+}
+
+.ant-descriptions {
+  .ant-descriptions-item-label {
+    color: var(--moon-text-mute);
+  }
+
+  .ant-descriptions-item-content {
+    color: var(--moon-text-dim);
+  }
+
+  .ant-descriptions-row > th,
+  .ant-descriptions-row > td {
+    border-bottom-color: var(--moon-line-1) !important;
+  }
+}
+
+.ant-timeline {
+  .ant-timeline-item-tail {
+    border-inline-start-color: var(--moon-line-2) !important;
+  }
+
+  .ant-timeline-item-head {
+    background: var(--moon-surface-3);
+  }
+
+  .ant-timeline-item-content {
+    color: var(--moon-text-dim);
+  }
+}
+
+.ant-breadcrumb {
+  color: var(--moon-text-mute);
+  font-size: 0.78rem;
+
+  a {
+    color: var(--moon-text-dim);
+
+    &:hover {
+      color: var(--moon-text);
+    }
+  }
+
+  li:last-child {
+    color: var(--moon-text);
+  }
+
+  .ant-breadcrumb-separator {
+    color: var(--moon-text-faint);
+  }
+}
+
+.ant-upload {
+  color: var(--moon-text-dim);
+
+  .ant-upload-drag {
+    background: var(--moon-surface-2);
+    border: 1px dashed var(--moon-line-3);
+    border-radius: var(--moon-radius-md);
+
+    &:hover {
+      border-color: var(--moon-accent-64);
+      background: var(--moon-surface-3);
+    }
+  }
+}
+/* ---------------------------------------------------------------------------
+   6. antd: FEEDBACK (modal, dropdown, tooltip, message, alert)
+   -------------------------------------------------------------------------- */
+.ant-modal-mask,
+.ant-drawer-mask {
+  background: rgba(2, 3, 6, 0.72) !important;
+  backdrop-filter: blur(6px);
+}
+
+.ant-modal {
+  .ant-modal-content {
+    background: var(--moon-surface-2);
+    border: 1px solid var(--moon-line-2);
+    border-radius: var(--moon-radius-xl);
+    box-shadow: var(--moon-shadow-4);
+    padding: 1.5rem;
+  }
+
+  .ant-modal-header {
+    background: transparent;
+    border-bottom: none;
+    margin-bottom: 0.75rem;
+  }
+
+  .ant-modal-title {
+    color: var(--moon-text);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .ant-modal-close {
+    color: var(--moon-text-mute);
+    border-radius: var(--moon-radius-xs);
+
+    &:hover {
+      color: var(--moon-text);
+      background: var(--surface-hover);
+    }
+  }
+
+  .ant-modal-body {
+    color: var(--moon-text-dim);
+  }
+
+  .ant-modal-footer {
+    border-top: 1px solid var(--moon-line-1);
+    padding-top: 1rem;
+    margin-top: 1.25rem;
+  }
+}
+
+.ant-drawer {
+  .ant-drawer-content {
+    background: var(--moon-surface-1);
+    border-left: 1px solid var(--moon-line-2);
+  }
+
+  .ant-drawer-header {
+    border-bottom: 1px solid var(--moon-line-1);
+  }
+
+  .ant-drawer-title,
+  .ant-drawer-close {
+    color: var(--moon-text);
+  }
+}
+
+.ant-modal-confirm-confirm .ant-modal-content,
+.ant-modal-confirm .ant-modal-content {
+  background-color: var(--moon-surface-2) !important;
+  border: 1px solid var(--moon-line-2) !important;
+  border-radius: var(--moon-radius-xl) !important;
 
   .ant-modal-confirm-title {
-    color: var(--primary-text);
+    color: var(--moon-text);
+    font-weight: 600;
   }
 
   .ant-modal-confirm-content {
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
+    font-size: 0.84rem;
   }
+}
+
+.ant-dropdown-menu,
+.ant-dropdown .ant-dropdown-menu {
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-md);
+  box-shadow: var(--moon-shadow-3);
+  padding: 5px;
+
+  .ant-dropdown-menu-item {
+    color: var(--moon-text-dim);
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: var(--moon-radius-xs);
+
+    &:hover,
+    &.ant-dropdown-menu-item-active {
+      color: var(--moon-text);
+      background: var(--surface-hover);
+    }
+  }
+
+  .ant-dropdown-menu-item-divider {
+    background: var(--moon-line-1);
+  }
+}
+
+.ant-tooltip {
+  .ant-tooltip-inner {
+    background: var(--moon-surface-3);
+    color: var(--moon-text);
+    border: 1px solid var(--moon-line-2);
+    border-radius: var(--moon-radius-xs);
+    font-size: 0.72rem;
+    box-shadow: var(--moon-shadow-2);
+    padding: 0.35rem 0.6rem;
+  }
+
+  .ant-tooltip-arrow::before {
+    background: var(--moon-surface-3);
+    border: 1px solid var(--moon-line-2);
+  }
+}
+
+.ant-popover {
+  .ant-popover-inner,
+  .ant-popover-inner-content {
+    background: var(--moon-surface-2);
+    border: 1px solid var(--moon-line-2);
+    border-radius: var(--moon-radius-md);
+    box-shadow: var(--moon-shadow-3);
+  }
+
+  .ant-popover-title {
+    color: var(--moon-text);
+    border-bottom: 1px solid var(--moon-line-1);
+  }
+
+  .ant-popover-inner-content,
+  .ant-popover-message {
+    color: var(--moon-text-dim);
+    font-size: 0.8rem;
+  }
+
+  .ant-popover-arrow::before {
+    background: var(--moon-surface-2);
+  }
+}
+
+.ant-popconfirm {
+  .ant-popover-inner {
+    background: var(--moon-surface-2) !important;
+    border: 1px solid var(--moon-line-2);
+    border-radius: var(--moon-radius-md);
+  }
+
+  .ant-popconfirm-title {
+    color: var(--moon-text) !important;
+    font-weight: 600;
+  }
+
+  .ant-popconfirm-description {
+    color: var(--moon-text-dim) !important;
+    font-size: 0.78rem;
+  }
+}
+
+.ant-message {
+  .ant-message-notice-content {
+    background: var(--moon-surface-2) !important;
+    border: 1px solid var(--moon-line-2);
+    border-radius: var(--moon-radius-md);
+    color: var(--moon-text);
+    font-size: 0.8rem;
+    box-shadow: var(--moon-shadow-3);
+    padding: 0.55rem 0.9rem;
+    backdrop-filter: blur(12px);
+
+    .ant-message-custom-content {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .anticon-check-circle {
+      color: var(--moon-success) !important;
+    }
+
+    .anticon-close-circle {
+      color: var(--moon-danger) !important;
+    }
+
+    .anticon-exclamation-circle {
+      color: var(--moon-warning) !important;
+    }
+
+    .anticon-info-circle {
+      color: var(--moon-info) !important;
+    }
+
+    .anticon-loading {
+      color: var(--moon-accent) !important;
+    }
+  }
+}
+
+.ant-notification-notice {
+  background: var(--moon-surface-2) !important;
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-shadow-3);
+
+  .ant-notification-notice-message {
+    color: var(--moon-text);
+  }
+
+  .ant-notification-notice-description {
+    color: var(--moon-text-dim);
+  }
+}
+
+.ant-alert {
+  border-radius: var(--moon-radius-md);
+  font-size: 0.8rem;
+
+  .ant-alert-message {
+    color: var(--moon-text);
+    font-weight: 600;
+  }
+
+  .ant-alert-description {
+    color: var(--moon-text-dim);
+    font-size: nth($fontSize, 2);
+    font-weight: 400;
+  }
+
+  .ant-alert-close-icon .anticon {
+    color: var(--moon-text-mute);
+
+    &:hover {
+      color: var(--moon-text);
+    }
+  }
+}
+
+.ant-alert-info {
+  background-color: var(--moon-info-bg);
+  border: 1px solid var(--moon-info-line);
+
+  .ant-alert-icon {
+    color: var(--moon-info);
+  }
+}
+
+.ant-alert-warning {
+  background-color: var(--moon-warning-bg);
+  border: 1px solid var(--moon-warning-line);
+
+  .ant-alert-icon {
+    color: var(--moon-warning);
+  }
+}
+
+.ant-alert-error {
+  background-color: var(--moon-danger-bg);
+  border: 1px solid var(--moon-danger-line);
+
+  .ant-alert-icon {
+    color: var(--moon-danger);
+  }
+}
+
+.ant-alert-success {
+  background-color: var(--moon-success-bg);
+  border: 1px solid var(--moon-success-line);
+
+  .ant-alert-icon {
+    color: var(--moon-success);
+  }
+}
+/* ---------------------------------------------------------------------------
+   7. MOTION UTILITIES
+   Small, composable entrance animations. Everything here is opt-out via
+   prefers-reduced-motion at the bottom of this file.
+   -------------------------------------------------------------------------- */
+@keyframes moonFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes moonFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes moonScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes moonTwinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes moonDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@keyframes moonSheen {
+  from {
+    background-position: 200% 50%;
+  }
+  to {
+    background-position: -100% 50%;
+  }
+}
+
+@keyframes moonPulseRing {
+  0% {
+    box-shadow: 0 0 0 0 var(--moon-accent-24);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(201, 210, 226, 0);
+  }
+}
+
+@keyframes thinkingPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.moon-fade-up {
+  animation: moonFadeUp var(--moon-dur-4) var(--moon-ease-out) both;
+}
+
+.moon-fade-in {
+  animation: moonFade var(--moon-dur-3) var(--moon-ease-out) both;
+}
+
+.moon-scale-in {
+  animation: moonScaleIn var(--moon-dur-3) var(--moon-ease-out) both;
+}
+
+.moon-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   8. BRAND + LEGACY GLOBAL HELPERS
+   Class names referenced by JSX or by older pages. Kept so nothing breaks.
+   -------------------------------------------------------------------------- */
+#nprogress {
+  pointer-events: none;
+}
+
+#nprogress .bar {
+  background: linear-gradient(
+    90deg,
+    var(--moon-accent-40),
+    var(--moon-accent-strong),
+    transparent
+  );
+  position: fixed;
+  z-index: var(--moon-z-overlay);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  box-shadow: 0 0 14px var(--moon-accent-40);
+}
+
+#nprogress .peg {
+  display: none;
+}
+
+.vulnpen-logo {
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+
+  img {
+    display: block;
+    width: auto;
+    height: 2.4rem;
+    /* Force the brand mark into the monochrome moon palette. */
+    filter: grayscale(1) brightness(1.35) contrast(1.05);
+  }
+}
+
+.vulnpen-logo-plain img {
+  height: 3.2rem;
+}
+
+.confirm-popup-large {
+  width: 48rem !important;
+}
+
+.recharts-tooltip-cursor {
+  fill: var(--secondary-text-100);
 }
 
 .gui-result-wrapper {
@@ -132,87 +1457,12 @@ button {
   transform: translate(-30%, -50%);
 }
 
-.ant-spin-dot {
-  .ant-spin-dot-item {
-    background-color: var(--primary-purple);
-  }
-}
-
-#nprogress {
-  pointer-events: none;
-}
-
-#nprogress .bar {
-  background: var(--primary-purple);
-  position: fixed;
-  z-index: 1000;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-}
-
-#nprogress .peg {
-  display: block;
-  position: absolute;
-  right: 0px;
-  width: 100px;
-  height: 100%;
-  opacity: 1;
-  transform: rotate(3deg) translate(0px, -4px);
-}
-
-.codeStyle {
-  display: block !important;
-  font-family: "JetBrains Mono", "Menlo for powerline", monospace !important;
-}
-
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--filled-purple-50);
-  border-radius: 4px;
-
-  &:hover {
-    background-color: var(--filled-purple);
-  }
-}
-
-::-webkit-scrollbar-track {
-  background-color: transparent;
-}
-
-.vulnpen-logo {
-  z-index: 1000000;
-  display: inline-flex;
-  align-items: center;
-
-  img {
-    display: block;
-    width: auto;
-    height: 2.4rem;
-  }
-}
-
-.vulnpen-logo-plain img {
-  height: 3.2rem;
-}
-.confirm-popup-large {
-  width: 48rem !important;
-}
-
-.recharts-tooltip-cursor {
-  fill: var(--secondary-text-100);
-}
-
 .line1 {
   position: absolute;
   left: 18%;
   transform: translate(-150%, -53%) scale(1.5);
   z-index: 1;
+  opacity: 0.5;
 
   @include responsive(laptop1) {
     display: none;
@@ -223,14 +1473,12 @@ button {
   @extend .line1;
   left: 35%;
   transform: translate(-100%, 60%);
-  z-index: 1;
 }
 
 .line3 {
   @extend .line1;
   left: 50%;
   transform: translate(-150%, -65%);
-  z-index: 1;
 }
 
 .line4 {
@@ -238,6 +1486,7 @@ button {
   right: 23%;
   transform: translate(-100%, -10%) scale(1.5);
   z-index: 1;
+  opacity: 0.5;
 
   @include responsive(laptop1) {
     display: none;
@@ -248,279 +1497,71 @@ button {
   @extend .line4;
   right: 5%;
   transform: translate(-100%, -48%) scale(1.2);
-  z-index: 1;
 }
 
-.ant-alert {
-  border-radius: 6px;
-
-  .ant-alert-message {
-    color: var(--primary-text);
-    font-weight: bold;
+/* ---------------------------------------------------------------------------
+   9. REDUCED MOTION
+   Honour the OS setting: no entrance animation, no idle drift, no sheen.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 
-  .ant-alert-description {
-    color: var(--secondary-text);
-    font-size: nth($fontSize, 2);
-    font-weight: 500;
-  }
-
-  .ant-alert-close-icon {
-    .anticon {
-      color: var(--primary-text);
-    }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
-
-.ant-alert-info {
-  background-color: rgba(#089aec, 0.08);
-  border: 1px solid rgba(#089aec, 0.2);
+/* ---------------------------------------------------------------------------
+   10. ANIMATABLE CUSTOM PROPERTIES
+   Declared globally (not inside a CSS module) so every component can animate
+   them with @property-typed interpolation.
+   -------------------------------------------------------------------------- */
+@property --moon-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
 }
 
-.ant-alert-warning {
-  background-color: rgba(#ff9f00, 0.08);
-  border: 1px solid rgba(#ff9f00, 0.2);
+@property --moon-sheen {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
 }
-
-.ant-alert-error {
-  background-color: rgba(#d74d00, 0.08);
-  border: 1px solid rgba(#d74d00, 0.3);
-}
-
-.ant-alert-success {
-  background-color: rgba(#00d7a3, 0.08);
-  border: 1px solid rgba(#00d7a3, 0.2);
-}
-
-@keyframes thinkingPulse {
-  0%,
-  100% {
-    opacity: 0.3;
+@keyframes moonFadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
   }
-  50% {
+  to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
-.ant-btn-default {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--secondary-text);
-  transition: all 0.15s;
-
-  &:not(:disabled):not(.ant-btn-disabled):hover {
-    color: var(--primary-text);
-    border-color: rgba(255, 255, 255, 0.22);
-    background: rgba(255, 255, 255, 0.1);
+@keyframes moonFadeLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
   }
-
-  &:not(:disabled):not(.ant-btn-disabled):active {
-    color: var(--primary-text);
-    border-color: rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.04);
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
-// antd is running on its default (light) theme tokens, so a disabled button
-// falls back to near-black text on a near-transparent black fill — invisible
-// against this UI. Primary buttons show it worst: a disabled "Save" renders as
-// an empty black box. Give both variants an explicit dark-theme disabled state.
-.ant-btn-primary {
-  &:disabled,
-  &.ant-btn-disabled {
-    color: rgba(255, 255, 255, 0.4);
-    background: rgba(142, 53, 255, 0.3);
-    border-color: rgba(142, 53, 255, 0.38);
-    box-shadow: none;
-
-    .anticon {
-      color: rgba(255, 255, 255, 0.4);
-    }
+@keyframes moonFadeRight {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
   }
-}
-
-.ant-btn-default {
-  &:disabled,
-  &.ant-btn-disabled {
-    color: rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: none;
-
-    .anticon {
-      color: rgba(255, 255, 255, 0.3);
-    }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
-}
-
-.ant-tag {
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 0.72rem;
-  padding: 0.15rem 0.6rem;
-  line-height: 1.5;
-  border: 1px solid transparent;
-}
-
-.ant-tag-success {
-  background: rgba(82, 196, 26, 0.12) !important;
-  border-color: rgba(82, 196, 26, 0.25) !important;
-  color: #73d13d !important;
-}
-
-.ant-tag-warning {
-  background: rgba(250, 173, 20, 0.1) !important;
-  border-color: rgba(250, 173, 20, 0.22) !important;
-  color: #faad14 !important;
-}
-
-.ant-tag-error {
-  background: rgba(255, 77, 79, 0.1) !important;
-  border-color: rgba(255, 77, 79, 0.22) !important;
-  color: #ff7875 !important;
-}
-
-.ant-tag-default {
-  background: var(--surface-hover) !important;
-  border-color: var(--border-color-100) !important;
-  color: var(--secondary-text) !important;
-}
-
-.ant-tag-green {
-  background: rgba(82, 196, 26, 0.12) !important;
-  border-color: rgba(82, 196, 26, 0.25) !important;
-  color: #73d13d !important;
-}
-
-.ant-tag-blue {
-  background: rgba(74, 158, 255, 0.1) !important;
-  border-color: rgba(74, 158, 255, 0.22) !important;
-  color: #4a9eff !important;
-}
-
-.ant-tag-orange,
-.ant-tag-gold {
-  background: rgba(250, 173, 20, 0.1) !important;
-  border-color: rgba(250, 173, 20, 0.22) !important;
-  color: #faad14 !important;
-}
-
-.ant-tag-red {
-  background: rgba(255, 77, 79, 0.1) !important;
-  border-color: rgba(255, 77, 79, 0.22) !important;
-  color: #ff7875 !important;
-}
-
-.ant-tag-purple {
-  background: rgba(127, 86, 217, 0.1) !important;
-  border-color: rgba(127, 86, 217, 0.22) !important;
-  color: #b37feb !important;
-}
-
-.ant-input-number {
-  .ant-input-number-handler-wrap {
-    display: none !important;
-  }
-
-  .ant-input-number-input {
-    padding: 0 0.75rem !important;
-    height: 100%;
-  }
-}
-
-.ant-select-dropdown {
-  background: var(--black-bg) !important;
-  border: 1px solid var(--border-color-100);
-  border-radius: 6px;
-  padding: 4px;
-
-  .ant-select-item {
-    color: var(--secondary-text);
-    font-size: 0.8rem;
-    border-radius: 4px;
-
-    &:hover,
-    &.ant-select-item-option-active {
-      background: var(--surface-hover);
-      color: var(--primary-text);
-    }
-
-    &.ant-select-item-option-selected {
-      background: var(--purple-bg-100);
-      color: var(--primary-text);
-      font-weight: 500;
-    }
-  }
-
-  .ant-select-item-empty {
-    color: var(--secondary-text);
-  }
-}
-
-.ant-popconfirm {
-  .ant-popover-inner {
-    background: var(--cli-bg) !important;
-    border: 1px solid var(--border-color-100);
-    border-radius: 8px;
-  }
-
-  .ant-popconfirm-title {
-    color: var(--primary-text) !important;
-  }
-
-  .ant-popconfirm-description {
-    color: var(--secondary-text, #aaa) !important;
-  }
-}
-
-.ant-tooltip {
-  .ant-tooltip-inner {
-    background: var(--black-bg);
-    color: var(--secondary-text);
-    border: 1px solid var(--border-color-100);
-    font-size: 0.72rem;
-  }
-
-  .ant-tooltip-arrow::before {
-    background: var(--black-bg);
-  }
-}
-
-.ant-message {
-  .ant-message-notice-content {
-    background: var(--black-bg) !important;
-    border: 1px solid var(--border-color-100);
-    border-radius: 6px;
-    color: var(--primary-text);
-    font-size: 0.78rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    padding: 0.5rem 0.85rem;
-
-    .ant-message-custom-content {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .anticon-check-circle {
-      color: var(--vulnpen-green) !important;
-    }
-
-    .anticon-close-circle {
-      color: var(--danger) !important;
-    }
-
-    .anticon-exclamation-circle {
-      color: var(--orange) !important;
-    }
-
-    .anticon-info-circle {
-      color: #79c0ff !important;
-    }
-  }
-}
-
-.ant-modal-mask {
-  background: rgba(0, 0, 0, 0.65) !important;
-  backdrop-filter: blur(4px);
 }

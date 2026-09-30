@@ -560,3 +560,266 @@
     }
   }
 }
+/* ============================================================================
+   AUTH (login / register) - Lunar Monochrome
+   Split screen: the pitch and the night sky on the left, a focused glass card
+   on the right. Collapses to a single centred card under 992px.
+   ========================================================================== */
+.authShell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  isolation: isolate;
+}
+
+/* ---- Left: brand column ---- */
+.authBrand {
+  position: relative;
+  flex: 1 1 56%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 2.5rem 3rem;
+  border-right: 1px solid var(--moon-line-1);
+  background: linear-gradient(
+    165deg,
+    rgba(13, 16, 23, 0.72) 0%,
+    rgba(4, 5, 10, 0.4) 60%,
+    transparent 100%
+  );
+
+  @include responsive(laptop1) {
+    padding: 2rem 2.25rem;
+  }
+
+  @include responsive(tablet4) {
+    display: none;
+  }
+}
+
+.brandTop {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brandName {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--moon-text);
+}
+
+.brandSub {
+  @include eyebrow;
+  font-size: 0.56rem;
+  letter-spacing: 0.2em;
+}
+
+.brandBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  max-width: 34rem;
+}
+
+.brandHeadline {
+  font-size: clamp(1.6rem, 2.6vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.04em;
+  color: var(--moon-text);
+  margin: 0;
+}
+
+.brandCopy {
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--moon-text-dim);
+  margin: 0;
+}
+
+.brandList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    position: relative;
+    padding-left: 1.35rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--moon-text-dim);
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.42rem;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--moon-accent);
+      box-shadow: 0 0 10px var(--moon-accent-40);
+    }
+  }
+}
+
+.brandFoot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moon-text-faint);
+}
+
+.brandFootDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moon-success);
+  box-shadow: 0 0 0 3px var(--moon-success-bg);
+}
+
+/* ---- Right: the card ---- */
+.authPanel {
+  position: relative;
+  flex: 1 1 44%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.15rem;
+  padding: 2.5rem 3rem;
+
+  @include responsive(laptop1) {
+    padding: 2rem 2rem;
+  }
+
+  @include responsive(tablet4) {
+    flex: 1 1 100%;
+    padding: 1.75rem 1.15rem 2.5rem;
+  }
+}
+
+.authCard {
+  position: relative;
+  width: 100%;
+  max-width: 26.5rem;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 1.9rem 1.75rem;
+  background: linear-gradient(
+    170deg,
+    var(--moon-surface-2) 0%,
+    var(--moon-surface-1) 100%
+  );
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-xl);
+  box-shadow: var(--moon-inner-top), var(--moon-shadow-4);
+
+  @include responsive(tablet1) {
+    padding: 1.5rem 1.25rem 1.35rem;
+    border-radius: var(--moon-radius-lg);
+  }
+}
+
+.authEyebrow {
+  @include eyebrow;
+  margin-bottom: 0.45rem;
+}
+
+.authTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: var(--moon-text);
+  margin: 0 0 0.35rem;
+}
+
+.authSubtitle {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--moon-text-mute);
+  margin: 0 0 1.35rem;
+}
+
+.authNotice {
+  margin-bottom: 1rem;
+  border-radius: var(--moon-radius-md) !important;
+}
+
+.authForm {
+  display: flex;
+  flex-direction: column;
+
+  :global(.ant-form-item) {
+    margin-bottom: 1rem;
+  }
+
+  :global(.ant-input),
+  :global(.ant-input-affix-wrapper),
+  :global(.ant-input-password) {
+    min-height: 2.55rem;
+    border-radius: var(--moon-radius-sm);
+  }
+}
+
+/* The primary action is the one solid moonwhite surface on the page. */
+.authSubmit {
+  margin-top: 0.35rem;
+  margin-bottom: 1.1rem !important;
+
+  :global(.ant-btn) {
+    height: 2.75rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border-radius: var(--moon-radius-sm);
+  }
+}
+
+.authLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--moon-text-dim);
+  text-decoration: none;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-sm);
+  background: var(--moon-surface-2);
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-3);
+  }
+}
+
+.authFootnote {
+  width: 100%;
+  max-width: 26.5rem;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: var(--moon-text-faint);
+  text-align: center;
+  margin: 0;
+}

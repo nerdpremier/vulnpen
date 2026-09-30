@@ -74,7 +74,7 @@ const BrowserAgentPanel = () => {
     return (
       <div style={panelStyle}>
         <Result
-          icon={<GlobalOutlined style={{ color: "var(--primary-purple, #7c3aed)" }} />}
+          icon={<GlobalOutlined style={{ color: "var(--moon-accent)" }} />}
           title="Browser Agent Not Enabled"
           subTitle="Enable the Magnitude browser agent in Settings to see the live browser view here."
           extra={
@@ -87,8 +87,8 @@ const BrowserAgentPanel = () => {
                 )
               }
               style={{
-                background: "var(--primary-purple, #7c3aed)",
-                borderColor: "var(--primary-purple, #7c3aed)",
+                background: "var(--moon-accent)",
+                borderColor: "var(--moon-accent)",
               }}
             >
               Open Browser Agent Settings
@@ -103,7 +103,7 @@ const BrowserAgentPanel = () => {
     return (
       <div style={panelStyle}>
         <Result
-          icon={<GlobalOutlined style={{ color: "var(--primary-purple, #7c3aed)" }} />}
+          icon={<GlobalOutlined style={{ color: "var(--moon-accent)" }} />}
           title="Headed Mode Not Active"
           subTitle="The browser agent is running in headless mode. Disable headless mode in Settings to see the live browser view."
           extra={
@@ -116,8 +116,8 @@ const BrowserAgentPanel = () => {
                 )
               }
               style={{
-                background: "var(--primary-purple, #7c3aed)",
-                borderColor: "var(--primary-purple, #7c3aed)",
+                background: "var(--moon-accent)",
+                borderColor: "var(--moon-accent)",
               }}
             >
               Open Browser Agent Settings
@@ -132,7 +132,7 @@ const BrowserAgentPanel = () => {
     return (
       <div style={panelStyle}>
         <Result
-          icon={<DesktopOutlined style={{ color: "var(--primary-purple, #7c3aed)" }} />}
+          icon={<DesktopOutlined style={{ color: "var(--moon-accent)" }} />}
           title="Developer Mode"
           subTitle={
             <span>
@@ -151,8 +151,8 @@ const BrowserAgentPanel = () => {
                 )
               }
               style={{
-                background: "var(--primary-purple, #7c3aed)",
-                borderColor: "var(--primary-purple, #7c3aed)",
+                background: "var(--moon-accent)",
+                borderColor: "var(--moon-accent)",
               }}
             >
               Open Browser Agent Settings
@@ -190,8 +190,8 @@ const BrowserAgentPanel = () => {
               icon={<ReloadOutlined />}
               onClick={() => refetchVnc()}
               style={{
-                background: "var(--primary-purple, #7c3aed)",
-                borderColor: "var(--primary-purple, #7c3aed)",
+                background: "var(--moon-accent)",
+                borderColor: "var(--moon-accent)",
               }}
             >
               Retry Now

@@ -1,24 +1,37 @@
-import { useMemo } from "react";
-import { App, Tooltip } from "antd";
+import { App, Dropdown, Tooltip } from "antd";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
 import quad from "@/assets/sidebar/quad.svg";
-
 import rect from "@/assets/sidebar/rect.svg";
 import { useDispatch, useSelector } from "react-redux";
-import { setRecon, updateCurrentSession } from "@/store/user.slice";
+import { setRecon, updateCurrentSession, updateSessions } from "@/store/user.slice";
 import { useRouter, usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCapabilities, updateCapabilities } from "@/services/user.service";
 import { clearContext, getVulnerabilities } from "@/services/agent.service";
 import { getTestPlan } from "@/services/websecurity.service";
 import AgentToolsPanel from "@/components/session/AgentToolsPanel";
-import { updateSessions } from "@/store/user.slice";
 import { FiCheckSquare, FiMonitor, FiShield } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
 import { HiOutlineChevronLeft } from "react-icons/hi";
+import { RiArrowDownSLine, RiCheckLine } from "react-icons/ri";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
+
+/**
+ * Session rail.
+ *
+ * Three stacked zones: who/where you are at the top, the grouped view
+ * navigation in the middle (Workspace / Testing / Views), and the session
+ * utilities pinned to the bottom. The rail collapses to icons below 768px so
+ * the workspace keeps its width on a laptop.
+ */
+/** Tool execution modes, in the order they appear in the menu. */
+const EXECUTION_MODES = [
+  { value: "auto", label: "Auto run" },
+  { value: "auto_approve", label: "Approve for me" },
+  { value: "requires_consent", label: "Requires consent" },
+];
 
 const Sidebar = ({ sessionId, workspaceId }) => {
   const router = useRouter();
@@ -61,7 +74,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     (state) => state.sessions[sessionId]?.tokenUsage ?? null,
   );
 
-
   const handleClickTab = (id) => {
     dispatch(updateCurrentSession(id));
     const selectedSession = sessions.filter((s) => s.id === id);
@@ -92,183 +104,227 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   const isOnTestPlan = pathname?.includes("/test-plan");
   const contextUsageForTab = orchestratorTokenUsage;
 
+  const mainSessions = sessions.filter((s) => s.is_main && s.type === "session");
+  const subSessions = sessions.filter((s) => !s.is_main && s.type === "session");
+  const primarySession = mainSessions[0];
+
+  const handleClearContext = () => {
+    modal.confirm({
+      title: "Clear context?",
+      content:
+        "This will erase all conversation history for this session. The system prompt and shells will be preserved.",
+      okText: "Clear",
+      okType: "danger",
+      cancelText: "Cancel",
+      centered: true,
+      async onOk() {
+        try {
+          await clearContext({ sessionId });
+          message.success("Context cleared");
+          window.dispatchEvent(
+            new CustomEvent("context-cleared", { detail: { sessionId } }),
+          );
+          queryClient.invalidateQueries(["session-info", sessionId]);
+        } catch {
+          message.error("Failed to clear context");
+        }
+      },
+    });
+  };
+
+  const executionModeLabel =
+    EXECUTION_MODES.find((mode) => mode.value === toolExecutionMode)?.label ??
+    "Auto run";
+
+  const executionModeHint =
+    toolExecutionMode === "auto"
+      ? "Run automatically; built-in destructive-action protections still ask."
+      : toolExecutionMode === "auto_approve"
+        ? "A separate reviewer handles actions that cross an approval boundary. This does not replace host isolation."
+        : "Ask before every tool action.";
+
   return (
-    <div className={styles.sidebar}>
-      <div className={styles.createNew}>
+    <aside className={styles.sidebar} aria-label="Session navigation">
+      <div className={styles.sidebarTop}>
         <div className={styles.navRow}>
           <Tooltip title="All workspaces" placement="right">
             <button
+              type="button"
               className={styles.navBtn}
-              onClick={() => { dispatch(setRecon(false)); router.push("/dashboard"); }}
+              aria-label="Back to all workspaces"
+              onClick={() => {
+                dispatch(setRecon(false));
+                router.push("/dashboard");
+              }}
             >
-              <HiOutlineChevronLeft size={12} />
+              <HiOutlineChevronLeft size={13} />
             </button>
           </Tooltip>
           <button
+            type="button"
             className={styles.navLabel}
-            onClick={() => { dispatch(setRecon(false)); router.push(exitTarget); }}
+            onClick={() => {
+              dispatch(setRecon(false));
+              router.push(exitTarget);
+            }}
           >
             {workspaceId ? "Workspace" : "Dashboard"}
           </button>
         </div>
 
-        <Tooltip
-          placement="right"
-          title={toolExecutionMode === "auto"
-            ? "Run automatically; built-in destructive-action protections still ask."
-            : toolExecutionMode === "auto_approve"
-              ? "A separate reviewer handles actions that cross an approval boundary. This does not replace host isolation."
-              : "Ask before every tool action."}
-        >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0.45rem 0.75rem",
-            marginBottom: "0.5rem",
-            fontSize: "0.72rem",
-            fontWeight: 500,
-            color: "var(--secondary-text)",
-            background: "var(--secondary-bg)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: 6,
-            cursor: "default",
-            userSelect: "none",
-            transition: "all 0.15s",
-          }}
-        >
-          <FiShield size={12} style={{ flexShrink: 0 }} />
-          <select
-            aria-label="Tool execution mode"
-            value={toolExecutionMode}
-            disabled={updateCapabilitiesMutation.isLoading}
-            onChange={(event) => handleExecutionModeChange(event.target.value)}
-            style={{
-              minWidth: 0,
-              width: "100%",
-              color: "var(--primary-text)",
-              background: "transparent",
-              border: 0,
-              outline: 0,
-              cursor: "pointer",
-              fontSize: "0.72rem",
-              // Makes the native option popup render dark instead of white.
-              colorScheme: "dark",
+        <div className={styles.engagement}>
+          <div className={styles.engagementText}>
+            <span className={styles.engagementTitle}>
+              {primarySession?.name || "Engagement"}
+            </span>
+          </div>
+        </div>
+
+        <Tooltip placement="right" title={executionModeHint}>
+          <Dropdown
+            trigger={["click"]}
+            placement="bottomLeft"
+            menu={{
+              items: EXECUTION_MODES.map((mode) => ({
+                key: mode.value,
+                icon:
+                  mode.value === toolExecutionMode ? (
+                    <RiCheckLine />
+                  ) : (
+                    <span className={styles.modeMarker} />
+                  ),
+                label: mode.label,
+              })),
+              onClick: ({ key }) => handleExecutionModeChange(key),
             }}
           >
-            <option value="auto">Auto run</option>
-            <option value="auto_approve">Approve for me</option>
-            <option value="requires_consent">Requires consent</option>
-          </select>
-        </div>
+            <button
+              type="button"
+              className={styles.modeControl}
+              aria-label="Tool execution mode"
+              disabled={updateCapabilitiesMutation.isLoading}
+            >
+              <FiShield size={14} className={styles.modeIcon} />
+              <span className={styles.modeLabel}>{executionModeLabel}</span>
+              <RiArrowDownSLine className={styles.modeChevron} />
+            </button>
+          </Dropdown>
         </Tooltip>
 
         <AgentToolsPanel sessionId={sessionId} />
+      </div>
 
-        <div className={styles.sessionOptions}>
-          {sessions
-            .filter((s) => s.is_main && s.type === "session")
-            .map((sess) => (
-              <div
-                key={sess.id}
-                onClick={() => handleClickTab(sess.id)}
-                className={sess?.is_active ? styles.activeTab : styles.tab}
-              >
-                <Image src={quad} width={14} height={14} alt="" />
-                Main Workspace
-              </div>
-            ))}
+      <nav className={styles.sidebarNav}>
+        <div className={styles.navSectionLabel}>Workspace</div>
 
-          {sessions
-            .filter((s) => !s.is_main && s.type === "session")
-            .map((sess, i) => (
-              <div
-                key={sess.id}
-                onClick={() => handleClickTab(sess.id)}
-                className={sess?.is_active ? styles.activeTab : styles.tab}
-              >
-                <Image src={rect} width={14} height={14} alt="" />
-                Sub Workspace {i + 1}
-              </div>
-            ))}
-
+        {mainSessions.map((sess) => (
           <div
-            onClick={() => router.push(`/session/${sessionId}`)}
-            className={isOnWorkspace ? styles.activeTab : styles.tab}
+            key={sess.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => handleClickTab(sess.id)}
+            onKeyDown={(event) => event.key === "Enter" && handleClickTab(sess.id)}
+            className={sess?.is_active ? styles.activeTab : styles.tab}
           >
             <Image src={quad} width={14} height={14} alt="" />
-            Orchestrator
+            <span className={styles.navText}>Main workspace</span>
           </div>
+        ))}
 
+        {subSessions.map((sess, i) => (
           <div
-            onClick={() => router.push(`/session/${sessionId}/test-plan`)}
-            className={isOnTestPlan ? styles.activeTab : styles.tab}
+            key={sess.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => handleClickTab(sess.id)}
+            onKeyDown={(event) => event.key === "Enter" && handleClickTab(sess.id)}
+            className={sess?.is_active ? styles.activeTab : styles.tab}
           >
-            <FiCheckSquare />
-            <span style={{ flex: 1 }}>WSTG Test Plan</span>
-            {testPlanCoverage?.total > 0 && (
-              <span className={styles.navBadge}>
-                {testPlanCoverage.executed}/{testPlanCoverage.total}
-              </span>
-            )}
+            <Image src={rect} width={14} height={14} alt="" />
+            <span className={styles.navText}>Sub workspace {i + 1}</span>
           </div>
+        ))}
 
-          <div
-            onClick={() => router.push(`/session/${sessionId}/vulnerabilities`)}
-            className={isOnVulnerabilities ? styles.activeTab : styles.tab}
-          >
-            <FiShield />
-            <span style={{ flex: 1 }}>Vulnerabilities</span>
-            {(vulnerabilitiesData?.total ?? 0) > 0 && (
-              <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
-            )}
-          </div>
-
-          <div
-            onClick={navigateToGUI}
-            className={isOnGUI ? styles.activeTab : styles.tab}
-          >
-            <FiMonitor />
-            GUI
-          </div>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push(`/session/${sessionId}`)}
+          onKeyDown={(event) =>
+            event.key === "Enter" && router.push(`/session/${sessionId}`)
+          }
+          className={isOnWorkspace ? styles.activeTab : styles.tab}
+        >
+          <Image src={quad} width={14} height={14} alt="" />
+          <span className={styles.navText}>Orchestrator</span>
         </div>
-      </div>
+
+        <div className={styles.navSectionLabel}>Testing</div>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push(`/session/${sessionId}/test-plan`)}
+          onKeyDown={(event) =>
+            event.key === "Enter" && router.push(`/session/${sessionId}/test-plan`)
+          }
+          className={isOnTestPlan ? styles.activeTab : styles.tab}
+        >
+          <FiCheckSquare />
+          <span className={styles.navText}>WSTG test plan</span>
+          {testPlanCoverage?.total > 0 && (
+            <span className={styles.navBadge}>
+              {testPlanCoverage.executed}/{testPlanCoverage.total}
+            </span>
+          )}
+        </div>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push(`/session/${sessionId}/vulnerabilities`)}
+          onKeyDown={(event) =>
+            event.key === "Enter" &&
+            router.push(`/session/${sessionId}/vulnerabilities`)
+          }
+          className={isOnVulnerabilities ? styles.activeTab : styles.tab}
+        >
+          <FiShield />
+          <span className={styles.navText}>Vulnerabilities</span>
+          {(vulnerabilitiesData?.total ?? 0) > 0 && (
+            <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
+          )}
+        </div>
+
+        <div className={styles.navSectionLabel}>Views</div>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={navigateToGUI}
+          onKeyDown={(event) => event.key === "Enter" && navigateToGUI()}
+          className={isOnGUI ? styles.activeTab : styles.tab}
+        >
+          <FiMonitor />
+          <span className={styles.navText}>GUI</span>
+        </div>
+      </nav>
 
       <div className={styles.additionalOptions}>
-        {contextUsageForTab && <ContextUsageIndicator tokenUsage={contextUsageForTab} />}
+        {contextUsageForTab && (
+          <ContextUsageIndicator tokenUsage={contextUsageForTab} />
+        )}
         <div className={styles.supportStep}>
-          <div
+          <button
+            type="button"
             className={styles.options}
-            onClick={() => {
-              modal.confirm({
-                title: "Clear context?",
-                content: "This will erase all conversation history for this session. The system prompt and shells will be preserved.",
-                okText: "Clear",
-                okType: "danger",
-                cancelText: "Cancel",
-                centered: true,
-                async onOk() {
-                  try {
-                    await clearContext({ sessionId });
-                    message.success("Context cleared");
-                    window.dispatchEvent(new CustomEvent("context-cleared", { detail: { sessionId } }));
-                    queryClient.invalidateQueries(["session-info", sessionId]);
-                  } catch {
-                    message.error("Failed to clear context");
-                  }
-                },
-              });
-            }}
+            onClick={handleClearContext}
           >
             <MdOutlineDeleteSweep size={15} />
-            Clear Context
-          </div>
-
+            Clear context
+          </button>
         </div>
       </div>
-
-    </div>
+    </aside>
   );
 };
 

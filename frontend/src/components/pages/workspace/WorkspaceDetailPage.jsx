@@ -1,5 +1,5 @@
-import styles from "@/styles/pages/WorkspaceDetail.module.scss";
-import { message, Tag, Tooltip, Input, Form, Empty, Button } from "antd";
+﻿import styles from "@/styles/pages/WorkspaceDetail.module.scss";
+import { message, Tooltip, Input, Form } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import {
   PlusOutlined,
@@ -10,20 +10,30 @@ import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useState, useMemo, useCallback } from "react";
-import { getWorkspaceDetail, createSessionInWorkspace } from "@/services/workspace.service";
+import {
+  getWorkspaceDetail,
+  createSessionInWorkspace,
+} from "@/services/workspace.service";
 import { deleteSession } from "@/services/agent.service";
 import moment from "moment";
 import { useRouter } from "next/navigation";
-import { FiTrash } from "react-icons/fi";
+import { FiTrash, FiActivity, FiClock, FiShield } from "react-icons/fi";
 import ModalComponent from "@/components/common/ModalComponent";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
+import {
+  AnimatedContent,
+  EmptyState,
+  MoonBackdrop,
+  ShinyText,
+  StatTile,
+} from "@/components/common/ui";
 
 const STATE_DOT = {
-  running: { color: "#10ca00", label: "Running" },
-  idle: { color: "#6b7280", label: "Idle" },
-  paused: { color: "#d29922", label: "Paused" },
-  waiting_consent: { color: "#d29922", label: "Waiting" },
-  waiting_manual_execution: { color: "#d29922", label: "Waiting" },
+  running: { color: "var(--moon-success)", label: "Running" },
+  idle: { color: "var(--moon-text-mute)", label: "Idle" },
+  paused: { color: "var(--moon-warning)", label: "Paused" },
+  waiting_consent: { color: "var(--moon-warning)", label: "Waiting" },
+  waiting_manual_execution: { color: "var(--moon-warning)", label: "Waiting" },
 };
 
 const WorkspaceDetailPage = ({ workspaceId }) => {
@@ -67,23 +77,41 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     },
   });
 
-  const onDeleteSession = useCallback((sessionId, e) => {
-    e?.stopPropagation?.();
-    confirmPopUp({
-      title: "Delete session?",
-      content: "This session will be archived.",
-      okText: "Delete",
-      cancelText: "Cancel",
-      onOk: async () => {
-        await deleteSessionMutation.mutateAsync({ sessionId });
-      },
-    });
-  }, [confirmPopUp, deleteSessionMutation]);
+  const onDeleteSession = useCallback(
+    (sessionId, e) => {
+      e?.stopPropagation?.();
+      confirmPopUp({
+        title: "Delete session?",
+        content: "This session will be archived.",
+        okText: "Delete",
+        cancelText: "Cancel",
+        onOk: async () => {
+          await deleteSessionMutation.mutateAsync({ sessionId });
+        },
+      });
+    },
+    [confirmPopUp, deleteSessionMutation]
+  );
 
   const sessions = useMemo(
     () => workspace?.sessions || [],
-    [workspace?.sessions],
+    [workspace?.sessions]
   );
+
+  const stateCounts = useMemo(() => {
+    return sessions.reduce(
+      (acc, session) => {
+        if (session.agentState === "running") acc.running += 1;
+        else if (String(session.agentState || "").startsWith("waiting"))
+          acc.waiting += 1;
+        else acc.idle += 1;
+        return acc;
+      },
+      { running: 0, waiting: 0, idle: 0 }
+    );
+  }, [sessions]);
+
+  const isPentest = workspace?.type === "pentest";
 
   if (!user || isLoading || !workspace) {
     return <Loader />;
@@ -91,34 +119,64 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <button
-            className={styles.backBtn}
-            onClick={() => router.push("/dashboard")}
-          >
-            <ArrowLeftOutlined /> Back
-          </button>
-          <div className={styles.headerInfo}>
-            <div className={styles.titleRow}>
-              <h1>{workspace.name}</h1>
-              <Tag className={styles.typeBadge} color={
-                workspace.type === "pentest" ? "#8b5cf6" : "#6b7280"
-              }>
-                {workspace.type?.toUpperCase()}
-              </Tag>
+      <section className={styles.hero}>
+        <MoonBackdrop variant="hero" />
+        <div className={styles.heroContent}>
+          <div className={styles.heroTop}>
+            <button
+              type="button"
+              className={styles.backBtn}
+              onClick={() => router.push("/dashboard")}
+            >
+              <ArrowLeftOutlined /> All workspaces
+            </button>
+            <span className={styles.typeChip}>
+              <FiShield size={12} />
+              {isPentest ? "Pentest engagement" : "General workspace"}
+            </span>
+          </div>
+
+          <div className={styles.heroRow}>
+            <div className={styles.heroText}>
+              <h1 className={styles.heroTitle}>
+                <ShinyText text={workspace.name} speed={7} />
+              </h1>
+              <p className={styles.heroDescription}>
+                {workspace.description ||
+                  "No description yet. Sessions in this workspace share the target, the WSTG test plan and the report draft."}
+              </p>
             </div>
-            {workspace.description ? (
-              <p className={styles.description}>{workspace.description}</p>
-            ) : null}
+            <PrimaryButton
+              purpleFilled
+              icon={<PlusOutlined />}
+              onClick={() => setShowNewSession(true)}
+            >
+              New session
+            </PrimaryButton>
+          </div>
+
+          <div className={styles.heroStats}>
+            <StatTile label="Sessions" value={sessions.length} />
+            <StatTile
+              label="Running"
+              value={stateCounts.running}
+              tone="success"
+              icon={<span className={styles.liveDot} />}
+            />
+            <StatTile
+              label="Waiting"
+              value={stateCounts.waiting}
+              tone="warning"
+              icon={<FiClock />}
+            />
+            <StatTile
+              label="Idle"
+              value={stateCounts.idle}
+              icon={<FiActivity />}
+            />
           </div>
         </div>
-        <div className={styles.headerRight}>
-          <PrimaryButton purple onClick={() => setShowNewSession(true)} className={styles.compactBtn}>
-            <PlusOutlined /> New Session
-          </PrimaryButton>
-        </div>
-      </div>
+      </section>
 
       <div className={styles.content}>
         <div className={styles.sectionHeader}>
@@ -129,101 +187,153 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
         </div>
 
         {sessions.length === 0 ? (
-          <div className={styles.emptyState}>
-            <Empty
-              description="Create a session to get started"
-            />
-          </div>
+          <EmptyState
+            icon={<PlayCircleOutlined />}
+            title="No sessions yet"
+            description="A session is one engagement workspace: the orchestrator, its shells, the WSTG test plan and the findings it records."
+            actions={
+              <PrimaryButton
+                purpleFilled
+                icon={<PlusOutlined />}
+                onClick={() => setShowNewSession(true)}
+              >
+                Create the first session
+              </PrimaryButton>
+            }
+          />
         ) : (
           <div className={styles.sessionTable}>
             <div className={styles.sessionTableHeader}>
               <span>Session</span>
               <span>Status</span>
               <span>Created</span>
-              <span style={{ textAlign: "right" }}>Actions</span>
+              <span className={styles.sessionActionCol}>Actions</span>
             </div>
-            {sessions.map((session) => {
+            {sessions.map((session, index) => {
               const stateInfo = STATE_DOT[session.agentState] || STATE_DOT.idle;
 
               return (
-                <div
+                <AnimatedContent
                   key={session.sessionId}
-                  className={`${styles.sessionTableRow} ${session.agentState === "running" ? styles.sessionTableRowRunning : ""}`}
+                  direction="none"
+                  delay={Math.min(index, 10) * 30}
+                  className={`${styles.sessionTableRow} ${
+                    session.agentState === "running"
+                      ? styles.sessionTableRowRunning
+                      : ""
+                  }`}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => router.push(`/session/${session.sessionId}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter")
+                      router.push(`/session/${session.sessionId}`);
+                  }}
                 >
                   <span className={styles.sessionNameCell}>
                     <span className={styles.sessionNameInner}>
                       <Tooltip title={stateInfo.label}>
-                        <span className={styles.stateDot} style={{ background: stateInfo.color }} />
+                        <span
+                          className={styles.stateDot}
+                          style={{ background: stateInfo.color }}
+                        />
                       </Tooltip>
-                      <span className={styles.sessionNameText}>{session.name}</span>
+                      <span className={styles.sessionNameText}>
+                        {session.name}
+                      </span>
                     </span>
                     {session.description && (
-                      <span className={styles.sessionDescInline}>{session.description}</span>
+                      <span className={styles.sessionDescInline}>
+                        {session.description}
+                      </span>
                     )}
                   </span>
                   <span>
-                    <span className={`${styles.agentStateBadge} ${styles[`agentState_${session.agentState || "idle"}`]}`}>
+                    <span
+                      className={`${styles.agentStateBadge} ${
+                        styles[`agentState_${session.agentState || "idle"}`]
+                      }`}
+                    >
                       {stateInfo.label}
                     </span>
                   </span>
                   <span className={styles.sessionDateCol}>
                     {moment(session.createdAt).format("MMM D, YYYY")}
                   </span>
-                  <span className={styles.sessionActionCol} onClick={(e) => e.stopPropagation()}>
+                  <span
+                    className={styles.sessionActionCol}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Tooltip title="Open">
-                      <Button
-                        size="small"
-                        type="default"
-                        icon={<PlayCircleOutlined />}
-                        onClick={() => router.push(`/session/${session.sessionId}`)}
+                      <button
+                        type="button"
                         className={styles.openBtn}
+                        onClick={() =>
+                          router.push(`/session/${session.sessionId}`)
+                        }
                       >
                         Open
-                      </Button>
+                      </button>
                     </Tooltip>
                     <Tooltip title="Delete">
-                      <div
+                      <button
+                        type="button"
                         className={styles.sessionActionBtn}
+                        aria-label={`Delete ${session.name}`}
                         onClick={(e) => onDeleteSession(session.sessionId, e)}
                       >
                         <FiTrash size={11} />
-                      </div>
+                      </button>
                     </Tooltip>
                   </span>
-                </div>
+                </AnimatedContent>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* New Session Modal */}
       <ModalComponent
         show={showNewSession}
         setShow={setShowNewSession}
         heading="New session"
-        subheading={`Create a session in "${workspace.name}"`}
-        onCancel={() => { setShowNewSession(false); newSessionForm.resetFields(); }}
-        footer={false}
+        subheading={`Create a session in ${workspace.name}`}
+        onCancel={() => {
+          setShowNewSession(false);
+          newSessionForm.resetFields();
+        }}
         destroyOnHidden
         width={500}
       >
         <div className={styles.formWrap}>
-          <Form form={newSessionForm} layout="vertical" onFinish={createSessionMutation.mutate}>
+          <Form
+            form={newSessionForm}
+            layout="vertical"
+            onFinish={createSessionMutation.mutate}
+          >
             <Form.Item
               name="name"
               label="Session name"
+              extra="Shown in the session rail and on the report cover."
               rules={[{ required: true, message: "Name is required" }]}
             >
-              <Input placeholder="e.g. buffer-overflow, Target A" />
+              <Input placeholder="e.g. Target A - login and session handling" />
             </Form.Item>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <PrimaryButton white onClick={() => { setShowNewSession(false); newSessionForm.resetFields(); }}>
+            <div className={styles.formActions}>
+              <PrimaryButton
+                onClick={() => {
+                  setShowNewSession(false);
+                  newSessionForm.resetFields();
+                }}
+              >
                 Cancel
               </PrimaryButton>
-              <PrimaryButton purple htmlType="submit" loading={createSessionMutation.isLoading}>
-                Create Session
+              <PrimaryButton
+                purpleFilled
+                htmlType="submit"
+                loading={createSessionMutation.isLoading}
+              >
+                Create session
               </PrimaryButton>
             </div>
           </Form>

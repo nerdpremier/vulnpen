@@ -81,7 +81,7 @@ const GUIpage = ({ params }) => {
     return (
       <div className="gui-result-wrapper" style={{ padding: "3rem", display: "flex", justifyContent: "center" }}>
         <Result
-          icon={<DesktopOutlined style={{ color: "var(--primary-purple, #7c3aed)" }} />}
+          icon={<DesktopOutlined style={{ color: "var(--moon-accent)" }} />}
           title="GUI Desktop Not Configured"
           subTitle="Set up a graphical desktop on this workspace host. You can install it with one click or connect to an existing VNC server."
           extra={
@@ -92,8 +92,8 @@ const GUIpage = ({ params }) => {
                 router.push(`/session/${sessionId}/connection`);
               }}
               style={{
-                background: "var(--primary-purple, #7c3aed)",
-                borderColor: "var(--primary-purple, #7c3aed)",
+                background: "var(--moon-accent)",
+                borderColor: "var(--moon-accent)",
               }}
             >
               Open Connection
@@ -149,8 +149,8 @@ const GUIpage = ({ params }) => {
                   router.push(`/session/${sessionId}/connection`);
                 }}
                 style={{
-                  background: "var(--primary-purple, #7c3aed)",
-                  borderColor: "var(--primary-purple, #7c3aed)",
+                  background: "var(--moon-accent)",
+                  borderColor: "var(--moon-accent)",
                 }}
               >
                 Check Connection

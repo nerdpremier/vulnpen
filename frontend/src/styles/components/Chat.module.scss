@@ -1,4 +1,4 @@
-@import "../_variables";
+﻿@import "../_variables";
 
 .chatContainer {
   display: flex;
@@ -48,9 +48,9 @@
   left: 50%;
   transform: translateX(-50%);
   padding: 0.4rem 1rem;
-  border-radius: 10px;
-  border: 1px solid rgba(142, 53, 255);
-  background: rgba(142, 53, 255, 0.9);
+  border-radius: var(--moon-radius-pill);
+  border: 1px solid var(--moon-accent-solid);
+  background: var(--moon-accent-solid);
   color: var(--primary-text, #fff);
   cursor: pointer;
   display: flex;
@@ -59,7 +59,7 @@
   gap: 0.4rem;
   font-size: 11px;
   font-weight: 500;
-  box-shadow: 0 2px 12px rgba(142, 53, 255, 0.2);
+  box-shadow: var(--moon-shadow-2);
   transition: background 0.15s, transform 0.15s, box-shadow 0.15s, border-color 0.15s;
   z-index: 10;
 
@@ -69,10 +69,10 @@
   }
 
   &:hover {
-    background: rgba(142, 53, 255, 0.25);
-    border-color: rgba(142, 53, 255, 0.6);
+    background: var(--moon-0);
+    border-color: var(--moon-0);
     transform: translateX(-50%) scale(1.03);
-    box-shadow: 0 4px 16px rgba(142, 53, 255, 0.3);
+    box-shadow: var(--moon-glow-sm);
   }
 
   @media (max-width: 768px) {
@@ -109,7 +109,7 @@
   }
 }
 
-/* ─── Messages ────────────────────────────────────────────────── */
+/* â”€â”€â”€ Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .message {
   display: flex;
@@ -203,7 +203,7 @@
 
 .streamingCursor {
   &::after {
-    content: "▊";
+    content: "â–Š";
     animation: blink 0.8s step-end infinite;
     color: var(--accent-color, #4a9eff);
   }
@@ -231,7 +231,7 @@
   color: #ff6b6b;
 }
 
-/* ─── Iteration Limit ─────────────────────────────────────────── */
+/* â”€â”€â”€ Iteration Limit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .iterationLimitBanner {
   display: flex;
@@ -242,9 +242,9 @@
   box-sizing: border-box;
   margin: 0.65rem 0;
   padding: 1rem 1.1rem;
-  border: 1px solid rgba(142, 53, 255, 0.34);
+  border: 1px solid var(--moon-accent-24);
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(142, 53, 255, 0.13), rgba(74, 158, 255, 0.05));
+  background: linear-gradient(135deg, var(--moon-accent-08), transparent);
 }
 
 .iterationLimitCopy {
@@ -253,7 +253,7 @@
 
 .iterationLimitEyebrow {
   margin-bottom: 0.2rem;
-  color: #b97bff;
+  color: var(--moon-accent);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -297,12 +297,12 @@
 }
 
 .iterationContinueBtn {
-  border: 1px solid rgba(142, 53, 255, 0.65);
-  background: #8e35ff;
+  border: 1px solid var(--moon-accent-solid);
+  background: var(--moon-accent-solid);
   color: #fff;
 
   &:hover {
-    background: #9b4cff;
+    background: var(--moon-0);
     transform: translateY(-1px);
   }
 }
@@ -329,7 +329,7 @@
   }
 }
 
-/* ─── Reasoning Block ────────────────────────────────────────── */
+/* â”€â”€â”€ Reasoning Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .reasoningBlock {
   width: 100%;
@@ -431,7 +431,7 @@
   }
 }
 
-/* ─── Tool Call Block ─────────────────────────────────────────── */
+/* â”€â”€â”€ Tool Call Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .toolCallBlock {
   width: 100%;
@@ -616,7 +616,7 @@
   }
 }
 
-/* ─── Consent Banner ──────────────────────────────────────────── */
+/* â”€â”€â”€ Consent Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .consentBanner {
   display: flex;
@@ -678,7 +678,7 @@
 
     .consentCodePreview {
       margin-top: 0.55rem;
-      border-radius: 10px;
+      border-radius: var(--moon-radius-md);
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.06);
       max-height: 180px;
@@ -796,14 +796,14 @@
   text-transform: uppercase;
 }
 
-/* ─── Install Suggestion Banner ───────────────────────────────── */
+/* â”€â”€â”€ Install Suggestion Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .installBanner {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.75rem 1rem;
-  border-radius: 10px;
+  border-radius: var(--moon-radius-md);
   border: 1px solid rgba(22, 119, 255, 0.28);
   background: linear-gradient(180deg, rgba(22, 119, 255, 0.10), rgba(22, 119, 255, 0.04));
   box-shadow: 0 10px 30px rgba(22, 119, 255, 0.06);
@@ -957,7 +957,7 @@
   }
 }
 
-/* ─── Manual Execution Block ──────────────────────────────────── */
+/* â”€â”€â”€ Manual Execution Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .manualExecBlock {
   align-self: flex-start;
@@ -965,7 +965,7 @@
   max-width: 90%;
   margin: 0.5rem 0;
   border: 1px solid rgba(74, 158, 255, 0.25);
-  border-radius: 10px;
+  border-radius: var(--moon-radius-md);
   overflow: hidden;
   background: rgba(74, 158, 255, 0.04);
 }
@@ -1058,7 +1058,7 @@
   justify-content: flex-end;
 }
 
-/* ─── Slash Command Menu ─────────────────────────────────────── */
+/* â”€â”€â”€ Slash Command Menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .slashMenu {
   position: relative;
@@ -1067,7 +1067,7 @@
   right: 0;
   background: var(--bg-elevated, #141414);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: var(--moon-radius-md);
   margin-bottom: 0.5rem;
   overflow: hidden;
   animation: slideUp 0.15s ease;
@@ -1137,7 +1137,7 @@
   color: var(--secondary-text, #888);
 }
 
-/* ─── Slash Command Result ───────────────────────────────────── */
+/* â”€â”€â”€ Slash Command Result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .slashCommandResult {
   width: 100%;
@@ -1145,7 +1145,7 @@
   flex-shrink: 0;
   margin: 0.35rem 0;
   border: 1px solid rgba(74, 158, 255, 0.15);
-  border-radius: 10px;
+  border-radius: var(--moon-radius-md);
   background: rgba(74, 158, 255, 0.03);
   animation: fadeIn 0.2s ease;
 }
@@ -1222,7 +1222,7 @@
   }
 }
 
-/* ─── Burp Attachment Chip ────────────────────────────────────── */
+/* â”€â”€â”€ Burp Attachment Chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .attachmentChip {
   display: flex;
@@ -1232,7 +1232,7 @@
   margin-bottom: 0.5rem;
   background: linear-gradient(135deg, rgba(74, 158, 255, 0.08), rgba(74, 158, 255, 0.04));
   border: 1px solid rgba(74, 158, 255, 0.2);
-  border-radius: 10px;
+  border-radius: var(--moon-radius-md);
   animation: fadeIn 0.2s ease;
 }
 
@@ -1308,7 +1308,7 @@
   }
 }
 
-/* ─── Burp Request Block (collapsible in chat) ───────────────── */
+/* â”€â”€â”€ Burp Request Block (collapsible in chat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .burpRequestBlock {
   width: 100%;
@@ -1414,7 +1414,7 @@
   }
 }
 
-/* ─── Input Area ──────────────────────────────────────────────── */
+/* â”€â”€â”€ Input Area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .inputArea {
   flex-shrink: 0;
@@ -1545,3 +1545,18 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* ============================================================================
+   CHAT SURFACES - Lunar Monochrome
+   Text colours for the action buttons whose fill became moonwhite.
+   ========================================================================== */.scrollToBottomBtn,.iterationContinueBtn {
+  color: var(--moon-accent-ink) !important;
+
+  span {
+    color: var(--moon-accent-ink);
+  }
+}
+.scrollToBottomBtn:hover {
+  color: var(--moon-accent-ink) !important;
+}
+

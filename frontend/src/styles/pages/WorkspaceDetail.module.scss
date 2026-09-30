@@ -579,3 +579,381 @@
   color: #ff6b6b;
   font-size: 0.78rem;
 }
+/* ============================================================================
+   WORKSPACE DETAIL - Lunar Monochrome
+   ========================================================================== */
+.container {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--moon-page-max);
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 3rem;
+  background: transparent;
+  min-height: auto;
+
+  @include responsive(tablet3) {
+    padding: 1rem 0.85rem 2.5rem;
+  }
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 1.5rem 1.6rem 1.4rem;
+  margin-bottom: 1.35rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-xl);
+  background: linear-gradient(
+    152deg,
+    var(--moon-surface-2) 0%,
+    var(--moon-surface-1) 58%,
+    var(--moon-surface-1) 100%
+  );
+  box-shadow: var(--moon-inner-top), var(--moon-shadow-2);
+
+  @include responsive(tablet3) {
+    padding: 1.15rem 1.1rem;
+    border-radius: var(--moon-radius-lg);
+  }
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.heroTop {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.heroRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.heroTitle {
+  font-size: clamp(1.55rem, 2.4vw, 2.05rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--moon-text);
+  word-break: break-word;
+}
+
+.heroDescription {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--moon-text-dim);
+  max-width: 62ch;
+  margin: 0;
+}
+
+.heroStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.6rem;
+}
+
+.typeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--moon-accent);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+  border-radius: var(--moon-radius-pill);
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-3);
+  }
+}
+
+.content {
+  padding: 0;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.8rem;
+
+  h2 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--moon-text);
+    letter-spacing: -0.02em;
+  }
+}
+
+.sessionCount {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-2);
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--moon-radius-pill);
+}
+
+.sessionTable {
+  overflow: hidden;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+.sessionTableHeader {
+  display: grid;
+  grid-template-columns: minmax(240px, 3fr) 110px 130px 150px;
+  gap: 0.7rem;
+  padding: 0.6rem 1rem;
+  background: rgba(255, 255, 255, 0.015);
+  border-bottom: 1px solid var(--moon-line-2);
+  font-size: 0.63rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--moon-text-mute);
+
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.sessionTableRow {
+  display: grid;
+  grid-template-columns: minmax(240px, 3fr) 110px 130px 150px;
+  gap: 0.7rem;
+  padding: 0.65rem 1rem;
+  align-items: center;
+  border-bottom: 1px solid var(--moon-line-1);
+  font-size: 0.79rem;
+  cursor: pointer;
+  transition: background var(--moon-dur-1) var(--moon-ease-out),
+    box-shadow var(--moon-dur-1) var(--moon-ease-out);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--surface-hover);
+    box-shadow: inset 2px 0 0 var(--moon-accent);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+
+  @include responsive(tablet3) {
+    grid-template-columns: 1fr auto;
+    row-gap: 0.4rem;
+  }
+}
+
+.sessionTableRowRunning {
+  background: var(--moon-success-bg);
+  box-shadow: inset 2px 0 0 var(--moon-success);
+
+  &:hover {
+    background: rgba(95, 211, 154, 0.16);
+  }
+}
+
+.sessionNameText {
+  font-weight: 500;
+  color: var(--moon-text);
+  @include truncate(1);
+}
+
+.stateDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sessionDescInline {
+  font-size: 0.7rem;
+  color: var(--moon-text-mute);
+  @include truncate(1);
+}
+
+.sessionDateCol {
+  font-size: 0.74rem;
+  color: var(--moon-text-mute);
+}
+
+.sessionActionCol {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+/* Status badges: neutral by default, coloured only when it means something. */
+.agentStateBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border-radius: var(--moon-radius-pill);
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-2);
+}
+
+.agentState_running {
+  color: var(--moon-success);
+  background: var(--moon-success-bg);
+  border-color: var(--moon-success-line);
+}
+
+.agentState_waiting_consent,
+.agentState_waiting_manual_execution,
+.agentState_paused {
+  color: var(--moon-warning);
+  background: var(--moon-warning-bg);
+  border-color: var(--moon-warning-line);
+}
+
+.agentState_idle {
+  color: var(--moon-text-mute);
+}
+
+.openBtn {
+  height: 1.7rem;
+  padding: 0 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--moon-text-dim);
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-xs);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-3);
+  }
+}
+
+.sessionActionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: var(--moon-radius-xs);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--moon-text-faint);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--moon-danger);
+    background: var(--moon-danger-bg);
+    border-color: var(--moon-danger-line);
+  }
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moon-success);
+  box-shadow: 0 0 0 3px var(--moon-success-bg);
+}
+
+.formWrap {
+  padding-top: 0.25rem;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* Legacy accent classes kept in the monochrome system. */
+.solveAllBtn {
+  color: var(--moon-accent) !important;
+  border-color: var(--moon-accent-40) !important;
+  background: var(--moon-accent-08) !important;
+
+  &:hover:not(:disabled) {
+    color: var(--moon-accent-strong) !important;
+    border-color: var(--moon-accent-64) !important;
+    background: var(--moon-accent-14) !important;
+  }
+}
+
+.syncBtn {
+  color: var(--moon-success) !important;
+  border-color: var(--moon-success-line) !important;
+  background: var(--moon-success-bg) !important;
+
+  &:hover:not(:disabled) {
+    border-color: var(--moon-success) !important;
+    background: rgba(95, 211, 154, 0.18) !important;
+  }
+}
+
+.flagFormat {
+  background: var(--moon-accent-08);
+  color: var(--moon-accent);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--moon-radius-xs);
+  font-size: 0.68rem;
+}

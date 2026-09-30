@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useCallback, useEffect } from "react";
 import { TbWorldWww } from "react-icons/tb";
@@ -16,9 +16,9 @@ const RAIL_TABS = [
 const railTabStyle = (active) => ({
   flex: "1 1 0%",
   border: "none",
-  borderTop: active ? "2px solid #8e35ff" : "1px solid rgba(255,255,255,0.08)",
-  background: active ? "rgba(142,53,255,0.12)" : "rgba(255,255,255,0.03)",
-  color: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.65)",
+  borderTop: active ? "2px solid var(--moon-accent)" : "1px solid var(--moon-line-1)",
+  background: active ? "var(--moon-accent-14)" : "var(--moon-surface-1)",
+  color: active ? "var(--moon-text)" : "var(--moon-text-dim)",
   cursor: "pointer",
   display: "flex",
   flexDirection: "column",
@@ -99,13 +99,13 @@ const SessionMainPage = ({ session_id }) => {
               style={{
                 width: 4,
                 cursor: "col-resize",
-                backgroundColor: isDragging ? "#8e35ff" : "rgba(255, 255, 255, 0.06)",
+                backgroundColor: isDragging ? "var(--moon-accent)" : "var(--moon-line-1)",
                 transition: isDragging ? "none" : "background-color 0.15s ease",
                 flexShrink: 0,
                 zIndex: 10,
               }}
-              onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.12)"; }}
-              onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.06)"; }}
+              onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "var(--moon-line-3)"; }}
+              onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "var(--moon-line-1)"; }}
             />
 
             {/* Panel Content (Browser Agent / Burp) */}
@@ -133,11 +133,11 @@ const SessionMainPage = ({ session_id }) => {
           </>
         )}
 
-        {/* Right strip: one column split into two halves —
+        {/* Right strip: one column split into two halves â€”
             BROWSER AGENT on top, BURP below */}
         <div
           style={{
-            width: 34,
+            width: 42,
             alignSelf: "stretch",
             flexShrink: 0,
             display: "flex",
@@ -165,3 +165,4 @@ const SessionMainPage = ({ session_id }) => {
 };
 
 export default SessionMainPage;
+

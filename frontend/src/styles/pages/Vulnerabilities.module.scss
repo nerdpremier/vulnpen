@@ -1,3 +1,5 @@
+@import '../_variables';
+
 .page,
 .detailPage {
   width: 100%;
@@ -316,13 +318,13 @@
   max-width: 100%;
   overflow: hidden;
   padding: 0.2rem 0.5rem;
-  color: #c8a6ff;
+  color: var(--moon-accent);
   font-size: 0.66rem;
   font-weight: 700;
   white-space: nowrap;
   text-overflow: ellipsis;
-  background: #8e35ff14;
-  border: 1px solid #8e35ff33;
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
   border-radius: 6px;
 }
 
@@ -462,8 +464,8 @@
   max-width: min(82%, 560px);
   margin-left: auto;
   padding: 0.75rem 0.9rem;
-  background: rgba(142, 53, 255, 0.15);
-  border: 1px solid rgba(142, 53, 255, 0.25);
+  background: var(--moon-accent-14);
+  border: 1px solid var(--moon-accent-24);
 }
 
 .assistant {
@@ -516,7 +518,7 @@
     border-radius: 7px;
   }
   code {
-    color: #c8a6ff;
+    color: var(--moon-accent);
     font-family: "JetBrains Mono", monospace;
     font-size: 0.92em;
     white-space: break-spaces;
@@ -561,8 +563,8 @@
 
   :global(.ant-btn-primary:disabled) {
     color: rgba(255, 255, 255, 0.38);
-    background: rgba(142, 53, 255, 0.32);
-    border-color: rgba(142, 53, 255, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--moon-line-1);
   }
 }
 
@@ -606,4 +608,288 @@
   .chatMessages { padding: 0.85rem; }
   .chatComposer { padding: 0.75rem 4.5rem 0.75rem 0.75rem; }
   .sendButton { min-width: 52px; padding-inline: 0.8rem; }
+}
+/* ============================================================================
+   VULNERABILITIES - Lunar Monochrome
+   ========================================================================== */
+.page {
+  background: transparent;
+  max-width: var(--moon-page-max);
+  margin: 0 auto;
+  padding: 1.75rem 2rem 3rem;
+  width: 100%;
+
+  @include responsive(tablet3) {
+    padding: 1.25rem 1rem 2.5rem;
+  }
+}
+
+.header {
+  margin-bottom: 1.25rem;
+
+  h1 {
+    margin: 0.3rem 0 0.4rem;
+    font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--moon-text);
+  }
+
+  p {
+    margin: 0;
+    max-width: 68ch;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--moon-text-mute);
+  }
+}
+
+.eyebrow {
+  @include eyebrow;
+}
+
+.totalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--moon-accent);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+  border-radius: var(--moon-radius-pill);
+  white-space: nowrap;
+}
+
+/* Metric band - the tiles double as severity filters. */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1.15rem;
+}
+
+.tableCard {
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top), var(--moon-shadow-1);
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--moon-line-1);
+  background: var(--moon-glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.toolbarSpacer {
+  flex: 1 1 auto;
+}
+
+.resultCount {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--moon-text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.clearFilters {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--moon-text-dim);
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-3);
+  }
+}
+
+.search {
+  max-width: 360px;
+  min-width: 15rem;
+}
+
+.filter {
+  width: 176px;
+}
+
+.table {
+  th {
+    padding: 0.65rem 0.9rem;
+    color: var(--moon-text-mute);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    background: rgba(255, 255, 255, 0.015);
+    border-bottom: 1px solid var(--moon-line-2);
+  }
+
+  td {
+    padding: 0.85rem 0.9rem;
+    color: var(--moon-text-dim);
+    font-size: 0.78rem;
+    border-bottom: 1px solid var(--moon-line-1);
+  }
+
+  tbody tr {
+    transition: background var(--moon-dur-1) var(--moon-ease-out);
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      background: var(--surface-hover);
+      box-shadow: inset 2px 0 0 var(--moon-accent);
+    }
+  }
+}
+
+/* Severity pills keep their meaning but lose the neon. */
+.severity {
+  min-width: 72px;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--moon-radius-pill);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+.critical {
+  color: var(--moon-critical);
+  background: rgba(255, 107, 107, 0.12);
+  border-color: rgba(255, 107, 107, 0.32);
+}
+
+.high {
+  color: var(--moon-high);
+  background: rgba(244, 162, 97, 0.12);
+  border-color: rgba(244, 162, 97, 0.3);
+}
+
+.medium {
+  color: var(--moon-medium);
+  background: rgba(233, 196, 106, 0.1);
+  border-color: rgba(233, 196, 106, 0.26);
+}
+
+.low {
+  color: var(--moon-low);
+  background: rgba(158, 169, 191, 0.1);
+  border-color: rgba(158, 169, 191, 0.26);
+}
+
+.info {
+  color: var(--moon-text-mute);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--moon-line-2);
+}
+
+.centerState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--moon-text-mute);
+  font-size: 0.82rem;
+}
+
+.openIcon {
+  color: var(--moon-text-faint);
+  font-size: 0.7rem;
+  transition: transform var(--moon-dur-2) var(--moon-ease-out),
+    color var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.table tbody tr:hover .openIcon {
+  color: var(--moon-accent);
+  transform: translateX(2px);
+}
+
+/* Chat composer action inside a detail view. */
+.chatComposer :global(.ant-btn-primary),
+.sendButton {
+  background: var(--moon-accent-solid) !important;
+  border-color: var(--moon-accent-solid) !important;
+  color: var(--moon-accent-ink) !important;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    background: var(--moon-0) !important;
+    border-color: var(--moon-0) !important;
+  }
+
+  &:disabled {
+    color: var(--moon-text-faint) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: transparent !important;
+  }
+}
+
+/* ============================================================================
+   WSTG PROVENANCE
+   The test case a finding came from is a first-class link back into the plan:
+   id, the category it belongs to, and the plan is one click away.
+   ========================================================================== */
+.wstgLink {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  padding: 0.25rem 0.4rem;
+  margin: -0.25rem -0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--moon-radius-xs);
+  text-decoration: none;
+  transition: background var(--moon-dur-2) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: var(--moon-accent-08);
+    border-color: var(--moon-accent-24);
+
+    .wstgRef {
+      color: var(--moon-accent-strong);
+    }
+  }
+}
+
+.wstgLink .wstgRef {
+  color: var(--moon-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.wstgCategory {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--moon-text-mute);
+  @include truncate(2);
+}
+
+.wstgCta {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--moon-accent);
 }

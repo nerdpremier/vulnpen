@@ -1,14 +1,7 @@
-"use client";
-
-import ModelSetupGate from "@/components/common/ModelSetupGate";
-import { AuthContextProvider } from "@/components/common/auth/AuthContext";
+﻿import DashboardLayout from "@/components/layouts/DashboardLayout";
 
 const WorkspaceLayout = ({ children }) => {
-  return (
-    <AuthContextProvider>
-      <ModelSetupGate>{children}</ModelSetupGate>
-    </AuthContextProvider>
-  );
+  return <DashboardLayout>{children}</DashboardLayout>;
 };
 
 export default WorkspaceLayout;

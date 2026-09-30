@@ -64,3 +64,122 @@
     }
   }
 }
+
+/* ============================================================================
+   DIALOG SHELL - Lunar Monochrome
+   ========================================================================== */
+.modalContainer {
+  border-radius: var(--moon-radius-xl);
+
+  :global(.ant-modal-content) {
+    background: linear-gradient(
+      170deg,
+      var(--moon-surface-2) 0%,
+      var(--moon-surface-1) 100%
+    );
+    border: 1px solid var(--moon-line-2);
+    border-radius: var(--moon-radius-xl);
+    padding: 1.6rem 1.6rem 1.5rem;
+    box-shadow: var(--moon-inner-top), var(--moon-shadow-4);
+  }
+
+  :global(.ant-modal-body) {
+    padding: 0;
+    color: var(--moon-text-dim);
+  }
+
+  :global(.ant-modal-footer) {
+    display: none;
+  }
+
+  :global(.ant-modal-close-x) {
+    display: none;
+  }
+
+  :global(.ant-form-item-control-input-content textarea) {
+    background: var(--moon-surface-2) !important;
+    border: 1px solid var(--moon-line-2);
+    color: var(--moon-text) !important;
+    border-radius: var(--moon-radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.86rem;
+
+    &:hover,
+    &:focus {
+      border-color: var(--moon-accent-40);
+    }
+  }
+
+  :global(.ant-form-item-control-input-content textarea::placeholder) {
+    color: var(--placeholder-color);
+  }
+}
+
+.headingController {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.headingtextController {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+
+  h1 {
+    color: var(--moon-text);
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+}
+
+.subheading {
+  margin: 0;
+  color: var(--moon-text-mute);
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.description {
+  margin: 0 0 1rem;
+  color: var(--moon-text-dim);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  padding: 0;
+  font-size: 1.1rem;
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-sm);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--moon-surface-3);
+    border-color: var(--moon-line-3);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+.body {
+  color: var(--moon-text-dim);
+}

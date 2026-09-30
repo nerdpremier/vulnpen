@@ -1,3 +1,9 @@
+﻿// ============================================================================
+// VulnPen - SCSS foundations (Lunar Monochrome)
+// Breakpoints, type scale, spacing/radius/elevation scales and the shared
+// mixins every page module builds on.
+// ============================================================================
+
 //MEDIA QUERY ENDPOINTS
 @mixin responsive($breakpoint) {
   @if $breakpoint==desktop {
@@ -76,3 +82,133 @@
 // font sizes
 $fontSize: 0.8rem, 0.9rem, 1rem, 1.2rem, 1.4rem, 1.8rem, 2rem, 2.4rem, 2.8rem,
   3rem, 3.2rem, 3.8rem, 4rem, 5rem;
+
+// ---- Spacing scale (4px base) ----------------------------------------------
+$space-1: 0.25rem;
+$space-2: 0.5rem;
+$space-3: 0.75rem;
+$space-4: 1rem;
+$space-5: 1.25rem;
+$space-6: 1.5rem;
+$space-8: 2rem;
+$space-10: 2.5rem;
+$space-12: 3rem;
+
+// ---- Radius ----------------------------------------------------------------
+$radius-xs: 6px;
+$radius-sm: 9px;
+$radius-md: 12px;
+$radius-lg: 16px;
+$radius-xl: 22px;
+$radius-pill: 999px;
+
+// ---- Elevation -------------------------------------------------------------
+$shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+$shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+$shadow-3: 0 18px 48px rgba(0, 0, 0, 0.55);
+$shadow-4: 0 32px 90px rgba(0, 0, 0, 0.65);
+
+// ---- Z-index ---------------------------------------------------------------
+$z-sticky: 40;
+$z-header: 60;
+$z-drawer: 200;
+$z-overlay: 1000;
+$z-toast: 1200;
+
+// ---- Motion ----------------------------------------------------------------
+$ease-out: cubic-bezier(0.22, 0.75, 0.25, 1);
+$ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+$dur-1: 120ms;
+$dur-2: 180ms;
+$dur-3: 260ms;
+$dur-4: 420ms;
+
+// ============================================================================
+// Mixins
+// ============================================================================
+
+/// Keyboard-only focus ring, inheriting the moon palette.
+@mixin focus-ring($offset: 2px) {
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 $offset var(--moon-void, #04050a),
+      0 0 0 ($offset + 2px) var(--moon-accent-64, rgba(201, 210, 226, 0.64));
+  }
+}
+
+/// Layer 1 panel surface: cards, tiles, list rows.
+@mixin surface-1 {
+  background: var(--moon-surface-1, #0d1017);
+  border: 1px solid var(--moon-line-1, rgba(255, 255, 255, 0.06));
+  border-radius: var(--moon-radius-md, 12px);
+  box-shadow: var(--moon-inner-top, inset 0 1px 0 rgba(255, 255, 255, 0.05)),
+    var(--moon-shadow-1, 0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+/// Layer 2 panel surface: raised blocks, popovers, modals.
+@mixin surface-2 {
+  background: var(--moon-surface-2, #12161f);
+  border: 1px solid var(--moon-line-2, rgba(255, 255, 255, 0.11));
+  border-radius: var(--moon-radius-lg, 16px);
+  box-shadow: var(--moon-inner-top, inset 0 1px 0 rgba(255, 255, 255, 0.05)),
+    var(--moon-shadow-2, 0 8px 24px rgba(0, 0, 0, 0.45));
+}
+
+/// Frosted panel: header, dropdowns, overlays.
+@mixin glass {
+  background: var(--moon-glass-bg, rgba(8, 10, 17, 0.72));
+  border: 1px solid var(--moon-glass-border, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(var(--moon-blur, 18px)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--moon-blur, 18px)) saturate(140%);
+}
+
+/// Small uppercase label above a heading.
+@mixin eyebrow {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #6e7686);
+}
+
+/// Single-line or clamped multi-line text.
+@mixin truncate($lines: 1) {
+  @if $lines == 1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  } @else {
+    display: -webkit-box;
+    -webkit-line-clamp: $lines;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/// Slim monochrome scrollbars.
+@mixin scrollbar($size: 6px) {
+  &::-webkit-scrollbar {
+    width: $size;
+    height: $size;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--moon-line-2, rgba(255, 255, 255, 0.11));
+    border-radius: $radius-pill;
+
+    &:hover {
+      background: var(--moon-line-3, rgba(255, 255, 255, 0.2));
+    }
+  }
+}
+
+/// Wrap motion so it degrades for reduced-motion users.
+@mixin reduced-motion {
+  @media (prefers-reduced-motion: reduce) {
+    @content;
+  }
+}

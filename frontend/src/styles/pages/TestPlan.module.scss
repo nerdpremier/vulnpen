@@ -1,3 +1,5 @@
+@import '../_variables';
+
 .page {
   width: 100%;
   max-width: 100%;
@@ -431,7 +433,7 @@
 }
 
 .rowSelected {
-  background: #8e35ff12;
+  background: var(--moon-accent-08);
 }
 
 // Row actions stay quiet until the row is pointed at, so a 97-case plan reads as data first.
@@ -469,8 +471,8 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  background: #8e35ff14;
-  border: 1px solid #8e35ff33;
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
   border-radius: 4px;
 }
 
@@ -833,5 +835,340 @@
   .twoUp,
   .categoryPicker {
     grid-template-columns: minmax(0, 1fr);
+  }
+}/* ============================================================================
+   WSTG TEST PLAN - Lunar Monochrome
+   ========================================================================== */
+.page {
+  background: transparent;
+  max-width: var(--moon-page-max);
+  margin: 0 auto;
+  padding: 1.75rem 2rem 3rem;
+
+  @include responsive(tablet3) {
+    padding: 1.25rem 1rem 2.5rem;
+  }
+}
+
+.header {
+  margin-bottom: 1.2rem;
+
+  h1 {
+    margin: 0.3rem 0 0.4rem;
+    font-size: clamp(1.5rem, 2.3vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--moon-text);
+  }
+}
+
+.eyebrow {
+  @include eyebrow;
+}
+
+.headerContext {
+  max-width: 82ch;
+  margin: 0;
+  color: var(--moon-text-mute);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ---- Coverage panel ---- */
+.progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.25rem;
+  background: linear-gradient(
+    150deg,
+    var(--moon-surface-2) 0%,
+    var(--moon-surface-1) 100%
+  );
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+.progressSummary {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  min-width: 0;
+  flex: 1 1 22rem;
+}
+
+.progressText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.progressPercent {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--moon-text);
+}
+
+.progressMeta {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--moon-text-mute);
+}
+
+.progressBar {
+  display: block;
+  width: 100%;
+  max-width: 26rem;
+  margin-top: 0.15rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--moon-text-dim);
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+  cursor: pointer;
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+
+  b {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--moon-text);
+  }
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-2);
+  }
+}
+
+.chipActive {
+  color: var(--moon-accent-ink) !important;
+  background: var(--moon-accent-solid) !important;
+  border-color: var(--moon-accent-solid) !important;
+
+  b {
+    color: var(--moon-accent-ink) !important;
+  }
+}
+
+/* ---- Plan card ---- */
+.planCard {
+  overflow: hidden;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  background: var(--moon-text-mute);
+  border-radius: var(--moon-radius-pill);
+  transition: width var(--moon-dur-3) var(--moon-ease-out);
+}
+
+.barPurple {
+  background: linear-gradient(90deg, var(--moon-accent-64), var(--moon-accent));
+}
+
+.barFailed {
+  background: linear-gradient(90deg, var(--moon-high), var(--moon-critical));
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.caseTable {
+  th {
+    padding: 0.55rem 0.75rem;
+    color: var(--moon-text-mute);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    background: rgba(255, 255, 255, 0.015);
+    border-bottom: 1px solid var(--moon-line-2);
+  }
+
+  td {
+    padding: 0.65rem 0.75rem;
+    color: var(--moon-text-dim);
+    font-size: 0.78rem;
+    border-bottom: 1px solid var(--moon-line-1);
+  }
+
+  tbody tr:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.rowOpen {
+  background: var(--moon-surface-2);
+  box-shadow: inset 2px 0 0 var(--moon-accent);
+}
+
+.rowSelected {
+  background: var(--moon-accent-08);
+  box-shadow: inset 2px 0 0 var(--moon-accent-40);
+}
+
+.caseCode {
+  color: var(--moon-accent);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.caseSection {
+  color: var(--moon-text-mute);
+}
+
+.customTag {
+  color: var(--moon-accent);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+  border-radius: var(--moon-radius-xs);
+}
+
+.caseTitle {
+  color: var(--moon-text);
+}
+
+.emptyState {
+  max-width: 640px;
+  padding: 1.6rem 1.75rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+
+  h2 {
+    color: var(--moon-text);
+  }
+
+  p {
+    color: var(--moon-text-mute);
+    line-height: 1.6;
+  }
+}
+
+.muted {
+  color: var(--moon-text-mute);
+}
+
+.fullState {
+  color: var(--moon-text-dim);
+}
+
+/* ============================================================================
+   TRACK-BACK FROM A FINDING
+   ?case=WSTG-XXX-01 opens the plan focused on the case that produced a finding.
+   ========================================================================== */
+.focusBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--moon-accent-24);
+  background: linear-gradient(90deg, var(--moon-accent-08), transparent 70%);
+}
+
+.focusLabel {
+  @include eyebrow;
+  font-size: 0.58rem;
+  color: var(--moon-accent);
+}
+
+.focusCase {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--moon-text);
+}
+
+.focusTitle {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: 0.76rem;
+  color: var(--moon-text-dim);
+  @include truncate(1);
+}
+
+.focusClear {
+  margin-left: auto;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--moon-text-dim);
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-3);
+  }
+}
+
+/* The deep-linked row keeps a quiet marker so it is findable after scrolling. */
+.rowFocused {
+  background: var(--moon-accent-08);
+  box-shadow: inset 2px 0 0 var(--moon-accent);
+}
+
+/* Findings count in a case row links back to the finding itself. */
+.findingLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.4rem;
+  padding: 0 0.4rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--moon-accent);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+  border-radius: var(--moon-radius-pill);
+  text-decoration: none;
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover {
+    color: var(--moon-accent-ink);
+    background: var(--moon-accent-solid);
+    border-color: var(--moon-accent-solid);
   }
 }

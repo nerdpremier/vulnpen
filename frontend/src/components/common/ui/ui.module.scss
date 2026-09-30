@@ -1,0 +1,710 @@
+@import "@/styles/variables";
+
+/* ============================================================================
+   Lunar Monochrome - shared UI primitives
+   Every module here is a plain CSS-module reimplementation of the effects in
+   the React Bits library, retuned for a monochrome moon surface. No Tailwind:
+   this codebase styles with SCSS modules + CSS custom properties.
+
+   Sections
+     A. MoonBackdrop        E. SpotlightCard
+     B. ShinyText           F. StatTile / MetaRow
+     C. StarBorder          G. ProgressRing
+     D. EmptyState / SectionHeader
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   A. MOON BACKDROP
+   A night sky: moon halo, drifting star fields, faint grid, film grain.
+   Always decorative - variants are set by the parent layout.
+   -------------------------------------------------------------------------- */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  contain: paint;
+}
+
+.backdropPage {
+  position: fixed;
+}
+
+.backdropHero {
+  border-radius: inherit;
+}
+
+.halo {
+  position: absolute;
+  top: -28%;
+  left: -12%;
+  width: 46rem;
+  height: 46rem;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--moon-halo) 0%,
+    var(--moon-halo-soft) 38%,
+    transparent 70%
+  );
+  filter: blur(6px);
+  animation: moonDrift 18s var(--moon-ease-out) infinite;
+}
+
+.haloSecondary {
+  position: absolute;
+  right: -18%;
+  bottom: -34%;
+  width: 38rem;
+  height: 38rem;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(201, 210, 226, 0.07) 0%,
+    transparent 68%
+  );
+  animation: moonDrift 24s var(--moon-ease-out) infinite reverse;
+}
+
+
+/* Tiled star fields: three parallax-ish layers at different densities. */
+.starsFar,
+.starsMid,
+.starsNear {
+  position: absolute;
+  inset: -20%;
+  background-repeat: repeat;
+}
+
+.starsFar {
+  background-image: radial-gradient(1px 1px at 18px 32px, var(--moon-star) 50%, transparent 100%),
+    radial-gradient(1px 1px at 92px 118px, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  background-size: 180px 180px, 260px 260px;
+  opacity: 0.3;
+  animation: moonTwinkle 7s ease-in-out infinite;
+}
+
+.starsMid {
+  background-image: radial-gradient(1.4px 1.4px at 54px 70px, rgba(255, 255, 255, 0.85) 50%, transparent 100%),
+    radial-gradient(1.2px 1.2px at 160px 24px, rgba(232, 236, 245, 0.7) 50%, transparent 100%);
+  background-size: 320px 320px, 420px 420px;
+  opacity: 0.34;
+  animation: moonTwinkle 9s ease-in-out infinite 1.2s;
+}
+
+.starsNear {
+  background-image: radial-gradient(1.8px 1.8px at 210px 150px, rgba(255, 255, 255, 0.95) 50%, transparent 100%);
+  background-size: 520px 520px;
+  opacity: 0.4;
+  animation: moonTwinkle 5.5s ease-in-out infinite 0.6s;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 0%, transparent 78%);
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'140\' height=\'140\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'140\' height=\'140\' filter=\'url(%23n)\' opacity=\'0.55\'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 74% 62% at 50% 44%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
+}
+
+
+/* ---------------------------------------------------------------------------
+   C. SHINY TEXT
+   A moonlit sheen travelling across the glyphs.
+   -------------------------------------------------------------------------- */
+.shiny {
+  display: inline-block;
+  background-image: linear-gradient(
+    100deg,
+    var(--moon-text-mute) 18%,
+    var(--moon-text-dim) 34%,
+    var(--moon-0) 50%,
+    var(--moon-text-dim) 66%,
+    var(--moon-text-mute) 82%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: moonSheen var(--shiny-duration, 4.5s) linear infinite;
+}
+
+.shinyPaused {
+  animation-play-state: paused;
+}
+
+/* ---------------------------------------------------------------------------
+   D. STAR BORDER
+   A rotating specular highlight around a panel edge.
+   -------------------------------------------------------------------------- */
+.starBorder {
+  position: relative;
+  border-radius: inherit;
+  isolation: isolate;
+}
+
+.starBorder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--moon-angle),
+    transparent 0deg,
+    transparent 260deg,
+    var(--moon-accent-40) 300deg,
+    var(--moon-accent-strong) 330deg,
+    transparent 360deg
+  );
+  animation: moonAngleSpin var(--star-speed, 5s) linear infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes moonAngleSpin {
+  to {
+    --moon-angle: 360deg;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   E. SPOTLIGHT CARD
+   Cursor-follow spotlight + optional glare sweep + lift on hover.
+   -------------------------------------------------------------------------- */
+.spotlight {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.spotlightLayer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--moon-dur-3) var(--moon-ease-out);
+  background: radial-gradient(
+    var(--spot-radius, 280px) circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    var(--spot-color, rgba(201, 210, 226, 0.14)),
+    transparent 72%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.spotlightOn .spotlightLayer {
+  opacity: 1;
+}
+
+.glareLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.06) 46%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 54%,
+    transparent 68%
+  );
+  transform: translateX(-30%);
+  transition: opacity var(--moon-dur-3) var(--moon-ease-out),
+    transform var(--moon-dur-4) var(--moon-ease-out);
+}
+
+.glareOn .glareLayer {
+  opacity: 1;
+  transform: translateX(30%);
+}
+
+.spotlightBody {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------------------------------------------------------------------------
+   F. STAT TILE / META ROW
+   -------------------------------------------------------------------------- */
+.statTile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  min-width: 0;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-md);
+  box-shadow: var(--moon-inner-top);
+  transition: border-color var(--moon-dur-2) var(--moon-ease-out),
+    background var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.statTileInteractive {
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-2);
+  }
+}
+
+.statTileActive {
+  border-color: var(--moon-accent-40);
+  background: var(--moon-accent-08);
+  box-shadow: var(--moon-glow-sm);
+}
+
+.statLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  @include eyebrow;
+}
+
+.statValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--moon-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.statTotal {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--moon-text-faint);
+}
+
+.statHint {
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+  @include truncate(1);
+}
+
+.statIcon {
+  color: var(--moon-text-mute);
+  font-size: 0.8rem;
+  display: inline-flex;
+}
+
+.statTileSuccess {
+  .statValue {
+    color: var(--moon-success);
+  }
+
+  .statIcon {
+    color: var(--moon-success);
+  }
+}
+
+.statTileWarning {
+  .statValue {
+    color: var(--moon-warning);
+  }
+
+  .statIcon {
+    color: var(--moon-warning);
+  }
+}
+
+.statTileDanger {
+  .statValue {
+    color: var(--moon-danger);
+  }
+
+  .statIcon {
+    color: var(--moon-danger);
+  }
+}
+
+.statTileAccent {
+  .statValue {
+    color: var(--moon-accent);
+  }
+
+  .statIcon {
+    color: var(--moon-accent);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   G. PROGRESS RING
+   Coverage / completion dial used on the WSTG plan header.
+   -------------------------------------------------------------------------- */
+.ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ringSvg {
+  transform: rotate(-90deg);
+  display: block;
+}
+
+.ringTrack {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.ringValue {
+  stroke: var(--moon-accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--moon-dur-4) var(--moon-ease-out);
+  filter: drop-shadow(0 0 6px var(--moon-accent-24));
+}
+
+.ringValueWarn {
+  stroke: var(--moon-warning);
+  filter: drop-shadow(0 0 6px rgba(233, 196, 106, 0.24));
+}
+
+.ringValueDanger {
+  stroke: var(--moon-danger);
+  filter: drop-shadow(0 0 6px rgba(255, 107, 107, 0.24));
+}
+
+.ringContent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  text-align: center;
+}
+
+.ringValueText {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--moon-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.ringCaption {
+  @include eyebrow;
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+}
+
+/* ---------------------------------------------------------------------------
+   H. SECTION HEADER / EMPTY STATE / SHARED BITS
+   -------------------------------------------------------------------------- */
+.sectionHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sectionHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.sectionEyebrow {
+  @include eyebrow;
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--moon-text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sectionDescription {
+  font-size: 0.8rem;
+  color: var(--moon-text-mute);
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  position: relative;
+  border: 1px dashed var(--moon-line-2);
+  border-radius: var(--moon-radius-lg);
+  background: radial-gradient(
+    ellipse 60% 70% at 50% 0%,
+    rgba(201, 210, 226, 0.05),
+    transparent 70%
+  );
+}
+
+.emptyCompact {
+  padding: 1.75rem 1rem;
+  border: none;
+  background: transparent;
+}
+
+.emptyArt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--moon-radius-md);
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  box-shadow: var(--moon-inner-top);
+  color: var(--moon-text-dim);
+  font-size: 1.3rem;
+}
+
+.emptyTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  letter-spacing: -0.02em;
+}
+
+.emptyDescription {
+  font-size: 0.82rem;
+  color: var(--moon-text-mute);
+  line-height: 1.55;
+  max-width: 46ch;
+}
+
+.emptyActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.2rem;
+}
+
+/* ---- Chips / pills / dots ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.16rem 0.55rem;
+  border-radius: var(--moon-radius-pill);
+  border: 1px solid var(--moon-line-2);
+  background: var(--moon-surface-2);
+  color: var(--moon-text-dim);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.chipAccent {
+  border-color: var(--moon-accent-24);
+  background: var(--moon-accent-08);
+  color: var(--moon-accent);
+}
+
+.chipIdle {
+  color: var(--moon-text-mute);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moon-text-mute);
+  flex-shrink: 0;
+}
+
+.dotSuccess {
+  background: var(--moon-success);
+  box-shadow: 0 0 0 3px var(--moon-success-bg);
+}
+
+.dotWarning {
+  background: var(--moon-warning);
+  box-shadow: 0 0 0 3px var(--moon-warning-bg);
+}
+
+.dotDanger {
+  background: var(--moon-danger);
+  box-shadow: 0 0 0 3px var(--moon-danger-bg);
+}
+
+.dotLive {
+  background: var(--moon-success);
+  animation: moonPulseRing 2.2s var(--moon-ease-out) infinite;
+}
+
+/* ---- Toolbar / filters ---- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.toolbarSpacer {
+  flex: 1 1 auto;
+}
+
+/* ---- Covered surface wrapper ---- */
+.panel {
+  position: relative;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top), var(--moon-shadow-1);
+  overflow: hidden;
+}
+
+.panelPad {
+  padding: 1.1rem 1.25rem;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--moon-line-1);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.028),
+    transparent
+  );
+}
+
+.panelTitle {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* ---- Pill tabs (in-page navigation) ---- */
+.pillTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-sm);
+}
+
+.pillTab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--moon-text-mute);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--moon-radius-xs);
+  cursor: pointer;
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--surface-hover);
+  }
+}
+
+.pillTabActive {
+  background: var(--moon-surface-4);
+  color: var(--moon-text);
+  box-shadow: var(--moon-shadow-1);
+}
+
+/* ---- Grids ---- */
+.gridAuto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+
+/* Direct children paint above the spotlight/glare layers so the glow never
+   veils content, without forcing callers to wrap their markup. */
+.spotlight > *:not(.spotlightLayer):not(.glareLayer) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Entrance reveals (AnimatedContent) ---- */
+.reveal {
+  animation: moonFadeUp var(--moon-dur-4) var(--moon-ease-out) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.revealDown {
+  animation-name: moonFadeDown;
+}
+
+.revealLeft {
+  animation-name: moonFadeLeft;
+}
+
+.revealRight {
+  animation-name: moonFadeRight;
+}
+
+.revealNone {
+  animation-name: moonFade;
+}
+
+

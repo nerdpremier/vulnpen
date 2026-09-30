@@ -1,4 +1,4 @@
-@import "../_variables";
+﻿@import "../_variables";
 
 .settingsContainer {
   padding: 1.5rem;
@@ -128,7 +128,11 @@
   }
 
   :global(.ant-switch-checked) {
-    background: var(--filled-purple) !important;
+    background: var(--moon-accent-solid) !important;
+
+    :global(.ant-switch-handle::before) {
+      background: var(--moon-accent-ink) !important;
+    }
   }
 
   :global(
@@ -591,15 +595,16 @@
     }
   }
 
-  :global(.ant-btn-primary) {
-    background: var(--filled-purple) !important;
-    border-color: var(--filled-purple) !important;
-    color: var(--primary-text) !important;
+  :global(.ant-btn-primary:not(.ant-btn-dangerous)) {
+    background: var(--moon-accent-solid) !important;
+    border-color: var(--moon-accent-solid) !important;
+    color: var(--moon-accent-ink) !important;
 
     &:hover,
     &:focus {
-      background: #7a2de6 !important;
-      border-color: #7a2de6 !important;
+      background: var(--moon-0) !important;
+      border-color: var(--moon-0) !important;
+      color: var(--moon-accent-ink) !important;
     }
   }
 }
@@ -1207,3 +1212,4 @@
     border-radius: 0 4px 4px 0;
   }
 }
+

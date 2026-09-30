@@ -1,64 +1,195 @@
+﻿/* ============================================================================
+   VulnPen - "Lunar Monochrome" design tokens
+   ----------------------------------------------------------------------------
+   One black-and-white moon system: a near-black void, layered graphitic
+   surfaces, moonwhite type and a cool moonlight silver used for interaction.
+
+   Two token families live here:
+     1. --moon-*  : the design system. New code should read only these.
+     2. legacy    : the previous token names (--primary-purple, --filled-purple,
+                    --secondary-bg, ...). They are kept and re-pointed at the
+                    moon palette so every existing SCSS module picks up the new
+                    theme without a rewrite.
+
+   Semantic status colours (success / warning / danger / severity) are kept -
+   a security tool cannot drop the severity signal - but they are tuned to sit
+   quietly inside a monochrome page and are only ever used as small fills,
+   borders, dots and labels.
+   ========================================================================== */
+
 :root {
   /* Native controls (select popups, scrollbars, inputs) render dark. */
   color-scheme: dark;
 
-  --primary-grey: #6d6d6d;
-  --primary-purple: #9933ff;
-  --purple-background: #8e35ff14;
-  --primary-bg: #0a0a0a;
-  --secondary-bg: #000000;
-  --black-bg: #111111;
-  --primary-text: #ffffff;
-  --primary-text-100: #f3f3f3;
-  --secondary-text: #a1a1a1;
-  --purple-bg: #a100f250;
-  --filled-purple: #8e35ff;
-  --filled-purple-100: #8e35ff77;
-  --filled-purple-50: #8e35ff50;
-  --filled-pink: #c10aad;
-  --purple-bg-100: #8e35ff1a;
-  --border-color: #ffffff1a;
-  --vulnpen-green: #10ca00;
-  --danger: #ff3e3e;
-  --lime-green: #9fef00;
-  --status-grey: #1a1a1a;
-  --cli-bg: #0a0a0a;
-  --navbar-bg: #000000;
-  --card-bg: #0a0a0a;
-  --input-bg: #ffffff08;
+  /* ---- Void & surfaces ------------------------------------------------- */
+  --moon-void: #04050a;
+  --moon-night: #080a11;
+  --moon-surface-1: #0d1017;
+  --moon-surface-2: #12161f;
+  --moon-surface-3: #171c27;
+  --moon-surface-4: #1d2331;
 
-  --table-bg: #d4d4d41a;
-  --border-color-100: #ffffff1a;
-  --secondary-text-100: #d4d4d41a;
-  --primary-purple-100: #a100f21a;
-  --danger-100: #cb444a1a;
-  --danger-600: #ff3e3e90;
-  --vulnpen-green-100: #10ca001a;
-  --lime-green-100: #9fef001a;
-  --lime-green-700: #9fef00b3;
-  --orange-700: #ef87515a;
-  --orange: #ef8751;
-  --yellow-700: #f5d60030;
-  --yellow: #f5d600;
-  --secondary-text-500: #d4d4d480;
-  --placeholder-color: rgba(255, 255, 255, 0.5);
-  --text-light: #b4b4b4;
+  /* ---- Moonlight scale ------------------------------------------------- */
+  --moon-0: #ffffff;
+  --moon-50: #f5f7fc;
+  --moon-100: #e8ecf5;
+  --moon-200: #c9d2e2;
+  --moon-300: #9ea9bf;
+  --moon-400: #6f7b91;
+  --moon-500: #495365;
+  --moon-600: #333b4a;
+
+  /* ---- Type ------------------------------------------------------------ */
+  --moon-text: #f5f7fc;
+  --moon-text-dim: #a8b0c0;
+  --moon-text-mute: #6e7686;
+  --moon-text-faint: #4b5361;
+
+  /* ---- Lines ----------------------------------------------------------- */
+  --moon-line-1: rgba(255, 255, 255, 0.06);
+  --moon-line-2: rgba(255, 255, 255, 0.11);
+  --moon-line-3: rgba(255, 255, 255, 0.2);
+  --moon-line-4: rgba(255, 255, 255, 0.32);
+
+  /* ---- Interaction ----------------------------------------------------- */
+  --moon-accent: #c9d2e2;
+  --moon-accent-strong: #eef1f8;
+  --moon-accent-solid: #f2f4fa;
+  --moon-accent-ink: #05060c;
+  --moon-accent-08: rgba(201, 210, 226, 0.08);
+  --moon-accent-14: rgba(201, 210, 226, 0.14);
+  --moon-accent-24: rgba(201, 210, 226, 0.24);
+  --moon-accent-40: rgba(201, 210, 226, 0.4);
+  --moon-accent-64: rgba(201, 210, 226, 0.64);
+
+  /* ---- Moonlight atmosphere -------------------------------------------- */
+  --moon-halo: rgba(214, 226, 255, 0.16);
+  --moon-halo-soft: rgba(214, 226, 255, 0.06);
+  --moon-star: rgba(255, 255, 255, 0.75);
+  --moon-grain: rgba(255, 255, 255, 0.022);
+
+  /* ---- Glass ----------------------------------------------------------- */
+  --moon-glass-bg: rgba(8, 10, 17, 0.72);
+  --moon-glass-bg-strong: rgba(4, 5, 10, 0.86);
+  --moon-glass-border: rgba(255, 255, 255, 0.08);
+  --moon-blur: 18px;
+
+  /* ---- Status (functional, low-saturation) ----------------------------- */
+  --moon-success: #5fd39a;
+  --moon-success-bg: rgba(95, 211, 154, 0.12);
+  --moon-success-line: rgba(95, 211, 154, 0.26);
+  --moon-warning: #e9c46a;
+  --moon-warning-bg: rgba(233, 196, 106, 0.12);
+  --moon-warning-line: rgba(233, 196, 106, 0.26);
+  --moon-danger: #ff6b6b;
+  --moon-danger-bg: rgba(255, 107, 107, 0.12);
+  --moon-danger-line: rgba(255, 107, 107, 0.26);
+  --moon-info: #8fb8ff;
+  --moon-info-bg: rgba(143, 184, 255, 0.1);
+  --moon-info-line: rgba(143, 184, 255, 0.24);
+  --moon-critical: #ff8080;
+  --moon-high: #f4a261;
+  --moon-medium: #e9c46a;
+  --moon-low: #9ea9bf;
+  --moon-info-sev: #8fb8ff;
+
+  /* ---- Radius ---------------------------------------------------------- */
+  --moon-radius-xs: 6px;
+  --moon-radius-sm: 9px;
+  --moon-radius-md: 12px;
+  --moon-radius-lg: 16px;
+  --moon-radius-xl: 22px;
+  --moon-radius-pill: 999px;
+
+  /* ---- Elevation ------------------------------------------------------- */
+  --moon-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --moon-shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --moon-shadow-3: 0 18px 48px rgba(0, 0, 0, 0.55);
+  --moon-shadow-4: 0 32px 90px rgba(0, 0, 0, 0.65);
+  --moon-inner-top: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --moon-glow-sm: 0 0 0 1px var(--moon-accent-24), 0 0 18px rgba(201, 210, 226, 0.12);
+  --moon-glow-md: 0 0 0 1px var(--moon-accent-40), 0 0 34px rgba(201, 210, 226, 0.18);
+
+  /* ---- Motion ---------------------------------------------------------- */
+  --moon-ease-out: cubic-bezier(0.22, 0.75, 0.25, 1);
+  --moon-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  --moon-dur-1: 120ms;
+  --moon-dur-2: 180ms;
+  --moon-dur-3: 260ms;
+  --moon-dur-4: 420ms;
+
+  /* ---- Layout ---------------------------------------------------------- */
+  --moon-header-h: 3.75rem;
+  --moon-sidebar-w: 248px;
+  --moon-sidebar-w-sm: 68px;
+  --moon-page-max: 1560px;
+  --moon-z-header: 60;
+  --moon-z-overlay: 1000;
+
+  /* ---- Focus ----------------------------------------------------------- */
+  --moon-focus-ring: 0 0 0 2px var(--moon-void), 0 0 0 4px var(--moon-accent-64);
+
+  /* ======================================================================
+     Legacy aliases (do not remove - existing SCSS modules depend on them)
+     ====================================================================== */
+  --primary-grey: #6e7686;
+  --primary-purple: #c9d2e2;
+  --purple-background: rgba(255, 255, 255, 0.035);
+  --primary-bg: #0d1017;
+  --secondary-bg: #04050a;
+  --black-bg: #12161f;
+  --primary-text: #f5f7fc;
+  --primary-text-100: #e8ecf5;
+  --secondary-text: #a8b0c0;
+  --purple-bg: rgba(255, 255, 255, 0.08);
+  --filled-purple: #f2f4fa;
+  --filled-purple-100: rgba(242, 244, 250, 0.4);
+  --filled-purple-50: rgba(242, 244, 250, 0.26);
+  --filled-pink: #dfe4ee;
+  --purple-bg-100: rgba(255, 255, 255, 0.09);
+  --border-color: rgba(255, 255, 255, 0.09);
+  --status-grey: #1d2331;
+  --cli-bg: #0d1017;
+  --navbar-bg: rgba(4, 5, 10, 0.72);
+  --card-bg: #0d1017;
+  --input-bg: rgba(255, 255, 255, 0.04);
+
+  --vulnpen-green: #5fd39a;
+  --danger: #ff6b6b;
+  --lime-green: #cfe6a3;
+  --orange: #f0a868;
+  --yellow: #e9c46a;
+
+  --table-bg: rgba(255, 255, 255, 0.03);
+  --border-color-100: rgba(255, 255, 255, 0.1);
+  --secondary-text-100: rgba(255, 255, 255, 0.06);
+  --primary-purple-100: rgba(255, 255, 255, 0.1);
+  --danger-100: rgba(255, 107, 107, 0.14);
+  --danger-600: rgba(255, 107, 107, 0.62);
+  --vulnpen-green-100: rgba(95, 211, 154, 0.14);
+  --lime-green-100: rgba(207, 230, 163, 0.14);
+  --lime-green-700: rgba(207, 230, 163, 0.7);
+  --orange-700: rgba(240, 168, 104, 0.42);
+  --yellow-700: rgba(233, 196, 106, 0.28);
+  --secondary-text-500: rgba(255, 255, 255, 0.5);
+  --placeholder-color: rgba(255, 255, 255, 0.42);
+  --text-light: #b3bacc;
   --primary-grey-600: rgba(255, 255, 255, 0.5);
 
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.12);
-  --surface-hover: rgba(255, 255, 255, 0.04);
-  --surface-active: rgba(255, 255, 255, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.13);
+  --surface-hover: rgba(255, 255, 255, 0.045);
+  --surface-active: rgba(255, 255, 255, 0.07);
 
-  --transition-fast: 150ms ease;
-  --transition-default: 200ms ease;
-  --transition-slow: 300ms ease;
+  --transition-fast: 120ms var(--moon-ease-out);
+  --transition-default: 180ms var(--moon-ease-out);
+  --transition-slow: 280ms var(--moon-ease-out);
 }
 
 /* Native <select> popups: Chromium honours color-scheme, but style the
    options explicitly too so the dropdown never flashes white. */
 select option,
 select optgroup {
-  background-color: var(--black-bg, #111111);
-  color: var(--primary-text, #ffffff);
+  background-color: var(--moon-surface-2, #12161f);
+  color: var(--moon-text, #f5f7fc);
 }

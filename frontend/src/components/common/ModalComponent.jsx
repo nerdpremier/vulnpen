@@ -1,10 +1,13 @@
-import { Modal } from "antd";
+﻿import { Modal } from "antd";
 import styles from "@/styles/components/ModalComponent.module.scss";
-import { AiFillCloseCircle } from "react-icons/ai";
+import { RiCloseLine } from "react-icons/ri";
 
+/**
+ * Shared dialog shell: eyebrow-free title, supporting line, content, and a
+ * single close affordance in the top-right. Every dialog in the app routes
+ * through here so spacing, radius and the close target stay consistent.
+ */
 const ModalComponent = ({
-  //   backArrow,
-  //   backArrowClick,
   heading,
   subheading,
   description,
@@ -13,7 +16,6 @@ const ModalComponent = ({
   setShow,
   width,
   maxWidth,
-  //   minWidth,
   destroyOnClose,
   keyboard,
   confirmLoading,
@@ -25,71 +27,54 @@ const ModalComponent = ({
   showClose = false,
   maskClosable,
   closeIcon,
-  // ...props
 }) => {
   const closeModal = () => {
     setShow(false);
   };
 
+  const handleCancel = onCancel ? onCancel : closeModal;
+
   return (
-    <>
-      <Modal
-        keyboard={keyboard}
-        className={`${styles.modalContainer} ${className ? className : ""}`}
-        open={show}
-        centered
-        width={width ? width : 700}
-        style={{
-          maxWidth: maxWidth ? maxWidth : "900px",
-        }}
-        destroyOnHidden={destroyOnClose}
-        confirmLoading={confirmLoading}
-        onCancel={onCancel ? onCancel : closeModal}
-        maskClosable={maskClosable}
-        closeIcon={closeIcon}
-        // {...props}
-      >
-        <div className={styles.headingController}>
-          <div className={styles.headingtextController} style={headerStyles}>
-            {/* {backArrow && (
-              <div
-                onClick={backArrowClick}
-                style={{
-                  cursor: "pointer",
-                  marginTop: "0.6rem",
-                }}
-              >
-                <Image
-                  src="/assets/images/dashboard/back-arrow.svg"
-                  width={20}
-                  height={20}
-                  preview={false}
-                  alt=""
-                />
-              </div>
-            )} */}
-            <div>
-              <h1 style={headingStyles}>{heading}</h1>
-              <h2 style={subheadingStyles}>{subheading}</h2>
-            </div>
-          </div>
-          {!showClose && (
-            <div>
-              <AiFillCloseCircle
-                style={{
-                  color: "#424342",
-                  fontSize: "2rem",
-                  cursor: "pointer",
-                }}
-                onClick={onCancel ? onCancel : closeModal}
-              />
-            </div>
+    <Modal
+      keyboard={keyboard}
+      className={`${styles.modalContainer} ${className ? className : ""}`}
+      open={show}
+      centered
+      width={width ? width : 700}
+      style={{
+        maxWidth: maxWidth ? maxWidth : "900px",
+      }}
+      destroyOnHidden={destroyOnClose}
+      confirmLoading={confirmLoading}
+      onCancel={handleCancel}
+      maskClosable={maskClosable}
+      closeIcon={closeIcon}
+      footer={null}
+      title={null}
+    >
+      <div className={styles.headingController}>
+        <div className={styles.headingtextController} style={headerStyles}>
+          {heading && <h1 style={headingStyles}>{heading}</h1>}
+          {subheading && (
+            <p className={styles.subheading} style={subheadingStyles}>
+              {subheading}
+            </p>
           )}
         </div>
-        <p className={styles.headingController}>{description}</p>
-        {children}
-      </Modal>
-    </>
+        {!showClose && (
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={handleCancel}
+            aria-label="Close dialog"
+          >
+            <RiCloseLine />
+          </button>
+        )}
+      </div>
+      {description && <p className={styles.description}>{description}</p>}
+      <div className={styles.body}>{children}</div>
+    </Modal>
   );
 };
 

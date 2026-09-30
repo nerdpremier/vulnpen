@@ -956,7 +956,7 @@
 
     &.typeSelected {
       border-color: var(--filled-purple);
-      background: rgba(142, 53, 255, 0.1);
+      background: var(--moon-accent-08);
       box-shadow: 0 0 0 1px var(--filled-purple);
 
       .typeIcon {
@@ -988,9 +988,511 @@
     padding: 0.6rem 0.85rem;
     margin-bottom: 1rem;
     border-radius: 6px;
-    background: rgba(142, 53, 255, 0.06);
+    background: var(--moon-accent-08);
     border: 1px solid var(--border-subtle);
     font-size: 0.8rem;
     color: var(--secondary-text);
   }
+}
+/* ============================================================================
+   DASHBOARD - Lunar Monochrome
+   Hero + metric band + spotlight workspace cards. Additive: every rule below
+   is declared after the legacy block so it wins without touching it.
+   ========================================================================== */
+.dashboardContainer {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--moon-page-max);
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 2.5rem;
+  background: transparent;
+  min-height: auto;
+
+  @include responsive(tablet3) {
+    padding: 1rem 0.85rem 2rem;
+  }
+}
+
+.dashboardHero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 1.6rem 1.6rem 1.5rem;
+  margin-bottom: 1.35rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-xl);
+  background: linear-gradient(
+    152deg,
+    var(--moon-surface-2) 0%,
+    var(--moon-surface-1) 58%,
+    var(--moon-surface-1) 100%
+  );
+  box-shadow: var(--moon-inner-top), var(--moon-shadow-2);
+
+  @include responsive(tablet3) {
+    padding: 1.2rem 1.1rem 1.15rem;
+    border-radius: var(--moon-radius-lg);
+  }
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.heroRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.heroEyebrow {
+  @include eyebrow;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.heroTitle {
+  font-size: clamp(1.7rem, 2.6vw, 2.3rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+  margin: 0;
+  color: var(--moon-text);
+}
+
+.heroDescription {
+  font-size: 0.87rem;
+  line-height: 1.6;
+  color: var(--moon-text-dim);
+  max-width: 60ch;
+  margin: 0;
+}
+
+.heroActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.heroStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+/* Search input sits on the glass hero - give it its own surface. */
+.searchBox {
+  height: 2.4rem !important;
+  min-width: 17rem;
+  padding: 0.35rem 0.75rem !important;
+  border-radius: var(--moon-radius-sm) !important;
+  background: rgba(4, 5, 10, 0.55) !important;
+  border: 1px solid var(--moon-line-2) !important;
+
+  &:hover,
+  &:focus-within {
+    border-color: var(--moon-accent-40) !important;
+  }
+
+  :global(.ant-input) {
+    background: none !important;
+    color: var(--moon-text) !important;
+    font-size: 0.85rem;
+  }
+
+  :global(.ant-input-suffix),
+  .searchIcon {
+    color: var(--moon-text-mute) !important;
+  }
+}
+
+.workspaceGrid {
+  padding: 0 !important;
+  background: transparent !important;
+  border-top: none !important;
+}
+
+.gridHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.gridTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  letter-spacing: -0.01em;
+}
+
+.gridCount {
+  min-width: 1.35rem;
+  padding: 0.05rem 0.4rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+}
+
+.clearSearch {
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--moon-text-mute);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--moon-radius-xs);
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--surface-hover);
+  }
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: 0.85rem;
+}
+
+.workspaceCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.05rem 1.15rem 0.95rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top), var(--moon-shadow-1);
+  cursor: pointer;
+  transition: transform var(--moon-dur-3) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out),
+    box-shadow var(--moon-dur-3) var(--moon-ease-out);
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: var(--moon-line-3);
+    box-shadow: var(--moon-shadow-2), var(--moon-glow-sm);
+    background: var(--moon-surface-1);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+.activeCard {
+  border-color: var(--moon-success-line) !important;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--moon-success);
+    box-shadow: 0 0 0 3px var(--moon-success-bg);
+  }
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.cardIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--moon-radius-xs);
+  flex-shrink: 0;
+  color: var(--moon-accent);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+}
+
+.cardTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  margin: 0;
+  letter-spacing: -0.02em;
+  @include truncate(1);
+}
+
+.cardDescription {
+  font-size: 0.78rem;
+  color: var(--moon-text-mute);
+  margin: 0;
+  line-height: 1.5;
+  min-height: 2.3rem;
+  @include truncate(2);
+}
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.typeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--moon-text-dim);
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+}
+
+.cardDate {
+  font-size: 0.7rem;
+  color: var(--moon-text-faint);
+}
+
+.cardActions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.deleteBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border-radius: var(--moon-radius-xs);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--moon-text-faint);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--moon-danger);
+    background: var(--moon-danger-bg);
+    border-color: var(--moon-danger-line);
+  }
+}
+
+.sessionStats {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.statItem {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--moon-text-mute);
+}
+
+.statCount {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.statLabel {
+  font-size: 0.7rem;
+  color: var(--moon-text-mute);
+}
+
+.statRunning {
+  color: var(--moon-success);
+
+  .statCount {
+    color: var(--moon-success);
+  }
+}
+
+.statWaiting {
+  color: var(--moon-warning);
+
+  .statCount {
+    color: var(--moon-warning);
+  }
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moon-success);
+  box-shadow: 0 0 0 3px var(--moon-success-bg);
+  animation: pulse 2s infinite;
+}
+
+.waitDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moon-warning);
+  box-shadow: 0 0 0 3px var(--moon-warning-bg);
+}
+
+/* Affordance row: the card is clickable, so say so. */
+.cardOpen {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--moon-text-faint);
+  transition: color var(--moon-dur-2) var(--moon-ease-out),
+    gap var(--moon-dur-2) var(--moon-ease-out);
+
+  :global(.anticon) {
+    font-size: 0.66rem;
+  }
+
+  .workspaceCard:hover & {
+    color: var(--moon-accent);
+    gap: 0.55rem;
+  }
+}
+
+/* ---- Workspace-type selector (create dialog) ---- */
+.typeSelector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.65rem;
+}
+
+.typeOption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.9rem 0.6rem;
+  text-align: center;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-md);
+  cursor: pointer;
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover {
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-2);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+.typeSelected {
+  border-color: var(--moon-accent-40) !important;
+  background: var(--moon-accent-08) !important;
+  box-shadow: var(--moon-glow-sm);
+
+  .typeIcon {
+    color: var(--moon-accent) !important;
+  }
+}
+
+.typeIcon {
+  font-size: 1.25rem;
+  color: var(--moon-text-mute);
+  display: flex;
+}
+
+.typeLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--moon-text);
+}
+
+.typeDesc {
+  font-size: 0.66rem;
+  color: var(--moon-text-mute);
+  line-height: 1.35;
+}
+
+/* Legacy placeholder classes: keep the layout sane if anything still uses them. */
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 18rem;
+  padding: 2rem 1rem;
+  text-align: center;
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--moon-text);
+    margin: 0;
+  }
+
+  p {
+    font-size: 0.82rem;
+    color: var(--moon-text-mute);
+    margin: 0;
+  }
+}
+
+.syncStatus {
+  padding: 0.6rem 0.85rem;
+  margin-bottom: 1rem;
+  border-radius: var(--moon-radius-sm);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+  font-size: 0.78rem;
+  color: var(--moon-text-dim);
 }

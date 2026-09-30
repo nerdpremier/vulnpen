@@ -282,8 +282,8 @@ const GUISettingsPage = ({ sessionId }) => {
                 loading={repairMutation.isLoading}
                 onClick={() => repairMutation.mutate({ sessionId, fix: "all" })}
                 style={{
-                  background: "var(--primary-purple, #7c3aed)",
-                  borderColor: "var(--primary-purple, #7c3aed)",
+                  background: "var(--moon-accent)",
+                  borderColor: "var(--moon-accent)",
                   fontSize: "0.72rem",
                   height: 28,
                 }}

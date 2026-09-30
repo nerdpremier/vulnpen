@@ -740,3 +740,376 @@
     }
   }
 }
+/* ============================================================================
+   SESSION RAIL - Lunar Monochrome
+   Additive overrides + the new zones the redesign introduces. Declared last so
+   they win over the legacy rules above.
+   ========================================================================== */
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: var(--moon-sidebar-w);
+  min-width: var(--moon-sidebar-w);
+  height: 100vh;
+  height: 100dvh;
+  flex-shrink: 0;
+  padding: 0.85rem 0.7rem 0.75rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--moon-night);
+  border-right: 1px solid var(--moon-line-1);
+  @include scrollbar(6px);
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 1px;
+    height: 100%;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      var(--moon-accent-24) 22%,
+      transparent 70%
+    );
+    pointer-events: none;
+  }
+
+  @include responsive(laptop1) {
+    width: 216px;
+    min-width: 216px;
+  }
+
+  @include responsive(tablet3) {
+    width: var(--moon-sidebar-w-sm);
+    min-width: var(--moon-sidebar-w-sm);
+    padding: 0.7rem 0.4rem;
+    align-items: center;
+  }
+}
+
+.sidebarTop {
+  display: flex;
+  flex-direction: column;
+}
+
+.navRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: var(--moon-radius-xs);
+  border: 1px solid var(--moon-line-2);
+  background: var(--moon-surface-2);
+  color: var(--moon-text-mute);
+  cursor: pointer;
+  @include focus-ring(2px);
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-3);
+  }
+}
+
+.navLabel {
+  flex: 1;
+  text-align: left;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.15rem 0.25rem;
+  border-radius: var(--moon-radius-xs);
+  @include truncate(1);
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--surface-hover);
+  }
+
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+/* ---- Engagement identity ---- */
+.engagement {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.65rem;
+  margin-bottom: 0.6rem;
+  border-radius: var(--moon-radius-md);
+  border: 1px solid var(--moon-line-1);
+  background: linear-gradient(
+    150deg,
+    var(--moon-accent-08),
+    transparent 70%
+  );
+  box-shadow: var(--moon-inner-top);
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.engagementText {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.engagementTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  letter-spacing: -0.01em;
+  @include truncate(1);
+}
+
+
+/* ---- Tool execution mode ---- */
+/* Matches the Agent Tools row directly below it: same metrics, same tokens. */
+.modeControl {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--secondary-text);
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  @include focus-ring(2px);
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover:not(:disabled) {
+    color: var(--primary-text);
+    background: var(--moon-surface-2);
+    border-color: var(--border-default);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.modeIcon {
+  flex-shrink: 0;
+  color: var(--secondary-text-500);
+}
+
+.modeLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  @include truncate(1);
+}
+
+.modeChevron {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--secondary-text-500);
+}
+
+/* Placeholder so an unselected mode lines up with the checked one. */
+.modeMarker {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+}
+/* ---- Grouped navigation ---- */
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.9rem 0 0.6rem;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  @include responsive(tablet3) {
+    width: 100%;
+  }
+}
+
+.navSectionLabel {
+  @include eyebrow;
+  font-size: 0.58rem;
+  padding: 0.85rem 0.6rem 0.35rem;
+  user-select: none;
+
+  &:first-child {
+    padding-top: 0.2rem;
+  }
+
+  @include responsive(tablet3) {
+    padding: 0.5rem 0 0.25rem;
+    text-align: center;
+    font-size: 0.5rem;
+    letter-spacing: 0.08em;
+  }
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.1rem;
+  border-radius: var(--moon-radius-sm);
+  font-size: 0.79rem;
+  font-weight: 500;
+  color: var(--moon-text-dim);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+
+  :global(img) {
+    opacity: 0.75;
+    flex-shrink: 0;
+  }
+
+  :global(svg) {
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--surface-hover);
+    border-color: var(--moon-line-1);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+.activeTab {
+  @extend .tab;
+  color: var(--moon-text);
+  background: var(--moon-accent-08);
+  border-color: var(--moon-accent-24);
+
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 58%;
+    border-radius: 0 2px 2px 0;
+    background: var(--moon-accent);
+    box-shadow: 0 0 10px var(--moon-accent-40);
+  }
+
+  :global(img) {
+    opacity: 1;
+  }
+}
+
+.navText {
+  flex: 1;
+  min-width: 0;
+  @include truncate(1);
+
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.navBadge {
+  min-width: 1.3rem;
+  padding: 0.05rem 0.35rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--moon-accent);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+  border-radius: var(--moon-radius-pill);
+  flex-shrink: 0;
+}
+
+/* ---- Utilities ---- */
+.additionalOptions {
+  flex-shrink: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--moon-line-1);
+  color: var(--moon-text-mute);
+
+  .supportStep {
+    padding-bottom: 0;
+
+    .options {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--moon-text-mute);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: var(--moon-radius-sm);
+      cursor: pointer;
+
+      &:hover {
+        color: var(--moon-danger);
+        background: var(--moon-danger-bg);
+        border-color: var(--moon-danger-line);
+      }
+    }
+  }
+
+  @include responsive(tablet3) {
+    width: 100%;
+
+    .supportStep .options {
+      justify-content: center;
+
+      svg + * {
+        display: none;
+      }
+    }
+  }
+}
+
+/* Session content sits on the page canvas, letting the ambient halo through. */
+.sessionMainArea {
+  background: transparent;
+}

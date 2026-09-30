@@ -1,15 +1,19 @@
-import { App, Button, Col, Form, Input, Row } from "antd";
+import { App, Button, Form, Input } from "antd";
 
 import styles from "@/styles/pages/Login.module.scss";
 import { useRouter } from "next/navigation";
-import session from "@/assets/onboarding/session-placeholder.svg";
-import Image from "next/image";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getRegistrationStatus, login } from "@/services/auth.service";
-import VulnPenLogo from "@/components/common/VulnPenLogo";
 import Link from "next/link";
 import { loginUser } from "@/store/user.slice";
 import { useDispatch } from "react-redux";
+import { MoonBackdrop, ShinyText } from "@/components/common/ui";
+
+const CAPABILITIES = [
+  "97 WSTG v4.2 test cases across 12 categories",
+  "Evidence recorded per case; findings mapped to the OWASP Top 10:2025",
+  "Report draft generated from the evidence the session already holds",
+];
 
 const LoginPage = () => {
   const router = useRouter();
@@ -44,94 +48,102 @@ const LoginPage = () => {
     });
   };
 
-
   return (
-    <Row className={styles.loginContainer}>
-      <Col xl={16} lg={12} md={12} xs={0} className={styles.leftContainer}>
-        <div className={styles.loginBannerContainer}>
-          <div className={styles.loginBannerText}>
-            <h1>
-              Point VulnPen at a web application and{" "}
-              <span>let the testing start</span>
-            </h1>
+    <div className={styles.authShell}>
+      <MoonBackdrop variant="page" />
 
-            <p>
-              VulnPen plans its work from the OWASP WSTG v4.2 catalogue, runs
-              each test case, records the evidence, maps every finding to the
-              OWASP Top 10:2025 and drafts the penetration testing report.
-            </p>
-          </div>
-
-          <div className={styles.loginBanner}>
-            <Image src={session} alt="session" />
+      <aside className={styles.authBrand}>
+        <div className={styles.brandTop}>
+          <div className={styles.brandText}>
+            <span className={styles.brandName}>VulnPen</span>
+            <span className={styles.brandSub}>T-NET IT Solution</span>
           </div>
         </div>
-      </Col>
-      <Col xl={8} lg={12} md={12} xs={24} className={styles.rightContainer}>
-        <div
-          className={styles.navbar}
-          style={{
-            display: "flex",
-          }}
-        >
-          <VulnPenLogo plain />
+
+        <div className={styles.brandBody}>
+          <h2 className={styles.brandHeadline}>
+            Point VulnPen at a web application and{" "}
+            <ShinyText text="let the testing start" speed={7} />
+          </h2>
+          <p className={styles.brandCopy}>
+            VulnPen plans its work from the OWASP WSTG v4.2 catalogue, runs each
+            test case, records the evidence, maps every finding to the OWASP Top
+            10:2025 and drafts the penetration testing report.
+          </p>
+          <ul className={styles.brandList}>
+            {CAPABILITIES.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
         </div>
-        <div className={styles.loginForm}>
-          <h1>Welcome to VulnPen</h1>
-          <p>AI assistant for web application security testing by T-NET IT Solution</p>
 
+        <div className={styles.brandFoot}>
+          <span className={styles.brandFootDot} />
+          Authorised testing only
+        </div>
+      </aside>
 
-          <Row style={{ flexDirection: "column" }}>
-    
-            <Form  className={styles.formContent}
-            onFinish={handleLogin}>
+      <main className={styles.authPanel}>
+        <div className={styles.authCard}>
+          <span className={styles.authEyebrow}>Sign in</span>
+          <h1 className={styles.authTitle}>Welcome back</h1>
+          <p className={styles.authSubtitle}>
+            AI assistant for web application security testing.
+          </p>
+
+          <Form
+            className={styles.authForm}
+            layout="vertical"
+            onFinish={handleLogin}
+            requiredMark={false}
+          >
             <Form.Item
-                name="email"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please enter your email",
-                  },
-                  {
-                    type: "email",
-                    message: "Invalid email",
-                  },
-                ]}
-              >
-                <Input placeholder="Enter your email" />
-              </Form.Item>
-              <Form.Item
-                name="password"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please enter your password",
-                  },
-                
-                ]}
-              >
-                <Input.Password placeholder="Enter your password" />
-              </Form.Item>
-              <Form.Item>
-              <Button
-              htmlType="submit"
-              className={styles.loginButtonVulnpen}
-              loading={loginMutation.isLoading}
+              name="email"
+              label="Email"
+              rules={[
+                { required: true, message: "Please enter your email" },
+                { type: "email", message: "Invalid email" },
+              ]}
             >
-              Login
-            </Button>
-              </Form.Item>
-            </Form>
-         
-            {registrationStatus?.registrationOpen && (
-              <Link className={styles.docLink} href="/register">
-                <div className={styles.linkText}>New here? Register</div>
-              </Link>
-            )}
-          </Row>
+              <Input placeholder="you@company.com" autoComplete="email" />
+            </Form.Item>
+
+            <Form.Item
+              name="password"
+              label="Password"
+              rules={[{ required: true, message: "Please enter your password" }]}
+            >
+              <Input.Password
+                placeholder="Your password"
+                autoComplete="current-password"
+              />
+            </Form.Item>
+
+            <Form.Item className={styles.authSubmit}>
+              <Button
+                htmlType="submit"
+                type="primary"
+                block
+                loading={loginMutation.isLoading}
+              >
+                Sign in
+              </Button>
+            </Form.Item>
+          </Form>
+
+          {registrationStatus?.registrationOpen && (
+            <Link className={styles.authLink} href="/register">
+              New here? Create an account
+            </Link>
+          )}
         </div>
-      </Col>
-    </Row>
+
+        <p className={styles.authFootnote}>
+          For authorised security testing only. You are responsible for having
+          permission to test every target you point VulnPen at.
+        </p>
+      </main>
+    </div>
   );
 };
 

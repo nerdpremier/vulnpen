@@ -41,12 +41,12 @@
 .purpleButton {
   display: flex;
   gap: 0.5rem;
-  background-color: rgba(142, 53, 255, 0.12) !important;
+  background-color: rgba(201, 210, 226, 0.12) !important;
   color: var(--primary-text) !important;
   border: 1px solid var(--primary-purple) !important;
 
   &:hover {
-    background-color: rgba(142, 53, 255, 0.22) !important;
+    background-color: rgba(201, 210, 226, 0.22) !important;
     border-color: var(--primary-purple) !important;
     color: var(--primary-text) !important;
   }
@@ -58,8 +58,8 @@
   color: var(--primary-text) !important;
 
   &:hover {
-    background-color: #7a2de6 !important;
-    border-color: #7a2de6 !important;
+    background-color: var(--moon-0) !important;
+    border-color: var(--moon-0) !important;
     color: var(--primary-text) !important;
   }
 
@@ -259,7 +259,7 @@
   z-index: 10;
   border-bottom: 1px solid var(--border-subtle);
 
-  .sessionIdGroup {
+  .sessionContext {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -518,8 +518,8 @@
 
   background: linear-gradient(
     93deg,
-    rgba(#8e35ff, 0.2) 0%,
-    rgba(#8e35ff, 0) 100%
+    rgba(201, 210, 226, 0.2) 0%,
+    rgba(201, 210, 226, 0) 100%
   );
   border-color: var(--primary-purple);
 
@@ -558,3 +558,440 @@
     line-height: 1.5;
   }
 }
+/* ============================================================================
+   APP HEADER - Lunar Monochrome
+   Redefines the header classes the app already imports and adds the new
+   account-cluster pieces. Declared last so it wins over the legacy block above.
+   ========================================================================== */
+.headerLinkWrapper {
+  position: sticky;
+  top: 0;
+  z-index: $z-header;
+  flex-shrink: 0;
+  height: var(--moon-header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid var(--moon-line-1);
+  background: var(--moon-glass-bg);
+  backdrop-filter: blur(var(--moon-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--moon-blur)) saturate(140%);
+
+  @include responsive(tablet1) {
+    padding: 0 0.85rem;
+  }
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.brandLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  text-decoration: none;
+  color: inherit;
+  padding: 0.2rem 0.35rem;
+  margin-left: -0.35rem;
+  border-radius: var(--moon-radius-sm);
+  @include focus-ring(2px);
+
+  &:hover .brandName {
+    color: var(--moon-accent-strong);
+  }
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.brandName {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--moon-text);
+  transition: color var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.brandSub {
+  @include eyebrow;
+  font-size: 0.54rem;
+  letter-spacing: 0.18em;
+
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.sessionContext {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding-left: 0.85rem;
+  border-left: 1px solid var(--moon-line-2);
+
+  @include responsive(mobile4) {
+    padding-left: 0;
+    border-left: none;
+  }
+}
+
+.sessionCrumb {
+  @include eyebrow;
+  font-size: 0.58rem;
+  flex-shrink: 0;
+
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.sessionName {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  letter-spacing: -0.01em;
+  max-width: 26rem;
+  @include truncate(1);
+}
+
+
+.options {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.headerIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.05rem;
+  height: 2.05rem;
+  border-radius: var(--moon-radius-sm);
+  border: 1px solid var(--moon-line-1);
+  background: var(--moon-surface-2);
+  color: var(--moon-text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  @include focus-ring(2px);
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--moon-surface-3);
+    border-color: var(--moon-line-3);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.headerLogoutBtn:hover {
+  color: var(--moon-danger);
+  border-color: var(--moon-danger-line);
+  background: var(--moon-danger-bg);
+}
+
+.account {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.05rem;
+  padding: 0 0.5rem 0 0.28rem;
+  border-radius: var(--moon-radius-pill);
+  border: 1px solid var(--moon-line-1);
+  background: var(--moon-surface-2);
+  color: var(--moon-text-dim);
+  cursor: pointer;
+  @include focus-ring(2px);
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--moon-surface-3);
+    border-color: var(--moon-line-3);
+  }
+}
+
+.avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--moon-accent-ink);
+  background: linear-gradient(160deg, var(--moon-0), var(--moon-200));
+  flex-shrink: 0;
+}
+
+.username {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--moon-text-dim);
+  max-width: 9rem;
+  @include truncate(1);
+
+  @include responsive(tablet1) {
+    display: none;
+  }
+}
+
+.accountCaret {
+  font-size: 0.7rem;
+  color: var(--moon-text-faint);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--moon-text-dim);
+
+  &:hover {
+    color: var(--moon-text);
+  }
+}
+
+.menuDanger {
+  @extend .menuItem;
+  color: var(--moon-danger) !important;
+}
+
+.menuHeader {
+  @include eyebrow;
+  font-size: 0.56rem;
+  padding: 0.2rem 0.5rem 0.3rem;
+}
+/* ============================================================================
+   BUTTONS - Lunar Monochrome
+   The prop names (purple / purpleFilled / pinkFilled / white) are part of the
+   PrimaryButton API and stay, but they now resolve to moon surfaces:
+     purpleFilled -> solid moonwhite primary action (ink text)
+     purple       -> outlined moonlight secondary action
+     pinkFilled   -> solid silver, for use on top of busy surfaces
+     white        -> unobtrusive surface button (used as Cancel in dialogs)
+   ========================================================================== */
+.submitButton {
+  height: 2.4rem;
+  padding: 0 1.1rem;
+  border-radius: var(--moon-radius-sm);
+  background-color: var(--moon-surface-2);
+  color: var(--moon-text-dim);
+  font-weight: 500;
+  font-size: 0.82rem;
+  border: 1px solid var(--moon-line-2);
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  box-shadow: var(--moon-inner-top);
+  transition: all var(--moon-dur-2) var(--moon-ease-out);
+  @include focus-ring(2px);
+
+  :global(.ant-btn-icon) {
+    font-size: 0.9rem;
+  }
+
+  &:hover {
+    color: var(--moon-text) !important;
+    border-color: var(--moon-line-3) !important;
+    background-color: var(--moon-surface-3) !important;
+  }
+
+  &:active {
+    transform: translateY(0.5px);
+  }
+
+  &:disabled {
+    color: var(--moon-text-faint) !important;
+    border-color: var(--moon-line-1) !important;
+    background-color: var(--moon-surface-1) !important;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+}
+
+.purpleButton {
+  background-color: transparent !important;
+  color: var(--moon-text) !important;
+  border: 1px solid var(--moon-accent-40) !important;
+
+  &:hover {
+    background-color: var(--moon-accent-08) !important;
+    border-color: var(--moon-accent-64) !important;
+    color: var(--moon-text) !important;
+  }
+}
+
+.purpleFilledButton {
+  background-color: var(--moon-accent-solid) !important;
+  border: 1px solid var(--moon-accent-solid) !important;
+  color: var(--moon-accent-ink) !important;
+  font-weight: 600;
+
+  :global(.ant-btn-icon) {
+    color: var(--moon-accent-ink) !important;
+  }
+
+  &:hover {
+    background-color: var(--moon-0) !important;
+    border-color: var(--moon-0) !important;
+    color: var(--moon-accent-ink) !important;
+    box-shadow: var(--moon-glow-sm);
+  }
+
+  &:active {
+    background-color: var(--moon-100) !important;
+    border-color: var(--moon-100) !important;
+  }
+}
+
+.pinkFilledButton {
+  background-color: var(--moon-200) !important;
+  border: 1px solid var(--moon-200) !important;
+  color: var(--moon-accent-ink) !important;
+  font-weight: 600;
+
+  &:hover {
+    background-color: var(--moon-100) !important;
+    border-color: var(--moon-100) !important;
+    color: var(--moon-accent-ink) !important;
+  }
+}
+
+.whiteButton {
+  background-color: var(--moon-surface-2) !important;
+  color: var(--moon-text) !important;
+  border: 1px solid var(--moon-line-2) !important;
+  font-weight: 500;
+
+  &:hover {
+    background-color: var(--moon-surface-3) !important;
+    border-color: var(--moon-line-3) !important;
+    color: var(--moon-text) !important;
+  }
+}
+
+.dangerButton {
+  background-color: var(--moon-danger-bg) !important;
+  color: var(--moon-danger) !important;
+  border: 1px solid var(--moon-danger-line) !important;
+
+  &:hover {
+    background-color: rgba(255, 107, 107, 0.2) !important;
+    border-color: var(--moon-danger) !important;
+    color: var(--moon-danger) !important;
+  }
+}
+
+.greenButton {
+  background-color: var(--moon-success-bg) !important;
+  color: var(--moon-success) !important;
+  border: 1px solid var(--moon-success-line) !important;
+
+  &:hover {
+    background-color: rgba(95, 211, 154, 0.2) !important;
+    border-color: var(--moon-success) !important;
+    color: var(--moon-success) !important;
+  }
+}
+
+.yellowButton {
+  background-color: var(--moon-warning-bg) !important;
+  color: var(--moon-warning) !important;
+  border: 1px solid var(--moon-warning-line) !important;
+
+  &:hover {
+    background-color: rgba(233, 196, 106, 0.2) !important;
+    border-color: var(--moon-warning) !important;
+    color: var(--moon-warning) !important;
+  }
+}
+
+.orangeButton {
+  background-color: rgba(240, 168, 104, 0.12) !important;
+  color: var(--orange) !important;
+  border: 1px solid var(--orange-700) !important;
+
+  &:hover {
+    background-color: rgba(240, 168, 104, 0.2) !important;
+    border-color: var(--orange) !important;
+    color: var(--orange) !important;
+  }
+}
+
+.limegreenButton {
+  background-color: var(--moon-success-bg) !important;
+  color: var(--moon-success) !important;
+  border: 1px solid var(--moon-success-line) !important;
+
+  &:hover {
+    background-color: rgba(95, 211, 154, 0.2) !important;
+    border-color: var(--moon-success) !important;
+    color: var(--moon-success) !important;
+  }
+}
+
+/* Feature row (onboarding / capability lists) */
+.featureCardContainer {
+  margin: 0.4rem 0;
+  padding: 0.9rem 1rem;
+  max-width: none;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-md);
+  box-shadow: var(--moon-inner-top);
+
+  &:hover {
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-2);
+  }
+}
+
+.featureCardContainerActive {
+  background: linear-gradient(
+    95deg,
+    var(--moon-accent-14) 0%,
+    transparent 70%
+  );
+  border-color: var(--moon-accent-40);
+  box-shadow: var(--moon-glow-sm);
+}
+
+.textBoxContainer {
+  max-width: 26rem;
+
+  .title {
+    color: var(--moon-text);
+    font-size: nth($fontSize, 5);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+
+  .description {
+    font-weight: 400;
+    color: var(--moon-text-mute);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    transition: color var(--moon-dur-2) var(--moon-ease-out);
+  }
+}
+
