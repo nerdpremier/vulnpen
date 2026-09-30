@@ -85,7 +85,7 @@ async function detectSource(targetName) {
   }
 
   if (candidates.length === 0) {
-    log(`no other database next to \"${targetName}\" - nothing to migrate.`);
+    log(`no other database next to "${targetName}" - nothing to migrate.`);
     return null;
   }
 
@@ -119,7 +119,7 @@ async function main() {
     .sort();
 
   if (collections.length === 0) {
-    log(`no collections found in \"${from}\" - nothing to migrate.`);
+    log(`no collections found in "${from}" - nothing to migrate.`);
     return;
   }
 
@@ -170,12 +170,12 @@ async function main() {
 
   if (confirmed) {
     log(
-      `done - ${copiedDocuments} document(s) and ${copiedIndexes} index(es) copied into \"${to}\".`,
+      `done - ${copiedDocuments} document(s) and ${copiedIndexes} index(es) copied into "${to}".`,
     );
     log(
-      `the source database \"${from}\" was not modified. Once you have verified the app, drop it manually if you want the space back:`,
+      `the source database "${from}" was not modified. Once you have verified the app, drop it manually if you want the space back:`,
     );
-    log(`  mongosh --eval 'db.getSiblingDB(\"${from}\").dropDatabase()'`);
+    log(`  mongosh --eval 'db.getSiblingDB("${from}").dropDatabase()'`);
   } else {
     log("dry run finished - no changes were made.");
   }

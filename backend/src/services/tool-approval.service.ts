@@ -47,7 +47,7 @@ export type ToolSafetyEvaluator = (input: {
 export function shouldBlockAutonomousTool(
   toolName: string,
   safetyTriggered: boolean,
-  mode: ToolExecutionMode,
+  _mode: ToolExecutionMode,
 ): boolean {
   if (!safetyTriggered) return false;
   return true;

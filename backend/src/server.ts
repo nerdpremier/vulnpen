@@ -21,7 +21,6 @@ import { mcpRoutes } from "./routes/mcp.routes";
 import { mcpHttpRoutes } from "./routes/mcp-http.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
-import { verifySess } from "./middlewares/VerifySession.middleware";
 import { setupShellWebSocket } from "./services/shell.socket";
 import { sessionLifecycle } from "./services/session.lifecycle";
 import { migrateSessionsToWorkspaces } from "./migrations/001-create-workspaces";

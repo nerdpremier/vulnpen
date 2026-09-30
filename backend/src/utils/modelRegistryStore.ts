@@ -43,7 +43,7 @@ const LEGACY_MODEL_KEYS = [
   "MAGNITUDE_MODEL",
   "MAGNITUDE_MODEL_API_KEY",
   "MAGNITUDE_MODEL_BASE_URL",
-  ...Array.from({ length: 8 }, (_, i) => i + 1).flatMap((idx) => [
+  ...Array.from({ length: 8 }, (_, i) => i + 1).flatMap((_idx) => [
   ]),
 ];
 
