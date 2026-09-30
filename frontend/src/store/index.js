@@ -1,9 +1,23 @@
-import { configureStore, combineReducers } from "@reduxjs/toolkit";
+import { configureStore, combineReducers, createSerializableStateInvariantMiddleware } from "@reduxjs/toolkit";
 import userReducer from "./user.slice";
 import vpnReducer from "./vpn.slice";
 
 import { persistReducer } from "redux-persist";
 import storage from "redux-persist/lib/storage";
+
+// redux-persist dispatches these internal actions (PERSIST carries functions
+// in its payload) on every mount; RTK 2 ignores the ignoredActions config
+// passed through getDefaultMiddleware, so a dedicated serializable
+// middleware with the ignore list is required to keep them out of the
+// Next.js dev overlay.
+const PERSIST_ACTIONS = [
+  "persist/FLUSH",
+  "persist/REHYDRATE",
+  "persist/PAUSE",
+  "persist/PERSIST",
+  "persist/PURGE",
+  "persist/REGISTER",
+];
 
 const isClient = typeof window !== "undefined";
 
@@ -29,11 +43,11 @@ const createAppStore = () => {
   return configureStore({
     reducer: persistReducer(persistConfig, reducers),
     middleware: (getDefaultMiddleware) =>
-      getDefaultMiddleware({
-        serializabilityCheck: {
-          ignoredActions: ["persist/PERSIST", "persist/REHYDRATE"],
-        },
-      }),
+      getDefaultMiddleware({ serializableCheck: false }).concat(
+        createSerializableStateInvariantMiddleware({
+          ignoredActions: PERSIST_ACTIONS,
+        }),
+      ),
     devTools: process.env.NODE_ENV !== "production",
   });
 };

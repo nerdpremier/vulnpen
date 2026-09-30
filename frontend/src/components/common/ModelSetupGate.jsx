@@ -1,14 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Alert } from "antd";
-import { SettingOutlined } from "@ant-design/icons";
 import { useQuery } from "react-query";
-import Loader from "@/components/common/loader/Loader";
-import PrimaryButton from "@/components/common/PrimaryButton";
-import SettingsOverlay from "@/components/common/SettingsOverlay";
 import { getModels } from "@/services/user.service";
-import styles from "@/styles/components/Common.module.scss";
 
 function hasUsableOrchestrator(data) {
   const models = data?.models || [];
@@ -19,68 +14,52 @@ function hasUsableOrchestrator(data) {
   return Boolean(orchestrator?.provider && orchestrator?.model && orchestrator?.verifiedAt);
 }
 
+// The models endpoint is host-owner only; a 403 is a normal state for other
+// accounts, so return a marker instead of throwing (a throw would land in the
+// Next.js dev overlay as a console error via react-query's dev logger).
+async function loadModelsQuietly() {
+  try {
+    return await getModels();
+  } catch (err) {
+    if (err?.response?.status === 403) return { forbidden: true };
+    throw err;
+  }
+}
+
+/**
+ * Non-blocking: lets the user in immediately and only surfaces a warning
+ * banner while no usable orchestrator model is configured. Model setup
+ * happens in Settings > Models whenever the user chooses.
+ */
 const ModelSetupGate = ({ children }) => {
-  const [settingsOpen, setSettingsOpen] = useState(true);
-  const { data, isLoading, isError, refetch } = useQuery(
-    "unified-models",
-    getModels,
-    {
-      staleTime: 15 * 1000,
-      retryOnMount: false,
-    },
-  );
+  const { data } = useQuery("unified-models", loadModelsQuietly, {
+    staleTime: 15 * 1000,
+    retryOnMount: false,
+    retry: false,
+  });
 
   const isConfigured = useMemo(() => hasUsableOrchestrator(data), [data]);
-
-  if (isLoading) {
-    return <Loader />;
-  }
-
-  if (isConfigured) {
-    return children;
-  }
+  const forbidden = data?.forbidden === true;
 
   return (
-    <div className={styles.modelSetupGate}>
-      <div className={styles.modelSetupPanel}>
-        <div className={styles.modelSetupEyebrow}>Setup Required</div>
-        <h1>Configure a model before starting</h1>
-        <p>
-          Add at least one reusable model preset in Settings, then assign the
-          orchestrator model. API keys, provider details, and Browser
-          Agent model selection all live in Settings &gt; Models.
-        </p>
-
-        {isError && (
+    <>
+      {!isConfigured && (
+        <div style={{ padding: "0.5rem 1rem 0" }}>
           <Alert
             type="warning"
             showIcon
-            message="Could not load model settings"
-            description="Check that the backend is running, then retry."
-            className={styles.modelSetupAlert}
+            message="No orchestrator model configured yet"
+            description={
+              forbidden
+                ? "Model management is limited to the installation owner (the first registered account). Configure models from that account in Settings > Models."
+                : "Set up a model in Settings > Models when you're ready; everything else works right now."
+            }
+            banner
           />
-        )}
-
-        <div className={styles.modelSetupActions}>
-          <PrimaryButton
-            purple
-            icon={<SettingOutlined />}
-            onClick={() => setSettingsOpen(true)}
-          >
-            Configure Models
-          </PrimaryButton>
-          {isError && (
-            <PrimaryButton onClick={() => refetch()}>Retry</PrimaryButton>
-          )}
         </div>
-      </div>
-
-      <SettingsOverlay
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        initialTab="models"
-      />
-    </div>
+      )}
+      {children}
+    </>
   );
 };
 

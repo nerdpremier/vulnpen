@@ -69,32 +69,6 @@ const SessionMainPage = ({ session_id }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}>
-      {/* Entry tab at the top of the screen while no panel is open; once a
-          panel is open the tabs live on the panel's own header instead */}
-      {!activePanel && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            padding: "4px 8px",
-            flexShrink: 0,
-          }}
-        >
-          {RAIL_TABS.filter((tab) => tab.key === "browser").map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActivePanel("browser")}
-              title="Show browser agent view"
-              style={railTabStyle(false)}
-            >
-              <TbWorldWww size={14} />
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      )}
-
       <div
         id="session-split-container"
         style={{
@@ -185,6 +159,40 @@ const SessionMainPage = ({ session_id }) => {
             </div>
           </>
         )}
+
+        {/* Right strip: vertical BROWSER AGENT tab, click to open/close */}
+        <button
+          onClick={() =>
+            setActivePanel((cur) => (cur === "browser" ? null : "browser"))
+          }
+          title={activePanel ? "Close browser agent view" : "Show browser agent view"}
+          style={{
+            width: 34,
+            alignSelf: "stretch",
+            flexShrink: 0,
+            border: "none",
+            borderLeft: activePanel
+              ? "2px solid #8e35ff"
+              : "1px solid rgba(255,255,255,0.08)",
+            background: activePanel
+              ? "rgba(142,53,255,0.12)"
+              : "rgba(255,255,255,0.03)",
+            color: activePanel
+              ? "rgba(255,255,255,0.9)"
+              : "rgba(255,255,255,0.65)",
+            cursor: "pointer",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+            paddingTop: 12,
+            fontSize: 11,
+            letterSpacing: "0.08em",
+          }}
+        >
+          <TbWorldWww size={16} />
+          <span style={{ writingMode: "vertical-rl" }}>BROWSER AGENT</span>
+        </button>
       </div>
     </div>
   );
