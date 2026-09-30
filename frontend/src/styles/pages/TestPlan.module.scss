@@ -72,6 +72,28 @@
   }
 
   p { margin: 0 0 1.25rem; }
+
+  // antd form controls default to the light theme (dark labels, white
+  // inputs) — unreadable on this dark page without these overrides.
+  :global(.ant-form-item-label > label) {
+    color: var(--secondary-text);
+  }
+
+  :global(.ant-input),
+  :global(.ant-select-selector) {
+    background: var(--secondary-bg) !important;
+    border-color: var(--border-subtle) !important;
+    color: var(--primary-text) !important;
+  }
+
+  :global(.ant-input::placeholder),
+  :global(.ant-select-selection-placeholder) {
+    color: var(--secondary-text-500);
+  }
+
+  :global(.ant-select-arrow) {
+    color: var(--secondary-text);
+  }
 }
 
 .setupGrid {
