@@ -3,3 +3,7 @@ npm-debug.log
 Dockerfile
 .dockerignore
 .env
+dist
+tsconfig.tsbuildinfo
+model-registry.json
+test-run.txt

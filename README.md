@@ -8,14 +8,6 @@ VulnPen is T-NET IT Solution's AI assistant for web application security testing
 
 For authorised testing only — see [the acceptable use policy](frontend/src/app/terms/page.js) and the disclaimer at the end of this file.
 
-<p align="center">
-<img src="./assets/dashboard_with_backdrop.png">
-</p>
-
-<p align="center">
-<img src="./assets/operationa_dashboard_with_backdrop.png">
-</p>
-
 ## What It Does
 
 - **Agentic execution** - the AI runs commands directly on the attack box, reads output, decides next steps, and loops. Up to 25 iterations per turn, no manual nudging required.
