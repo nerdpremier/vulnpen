@@ -118,6 +118,14 @@ const magnitudeBrowser: ToolDefinition = {
       }
       if (!headless) {
         launchOptions.env = { ...browserEnv, DISPLAY: normalizedDisplay };
+        // No window manager runs on the Xvfb display, so --start-maximized is a
+        // no-op; size the window to the screen explicitly and let the page fill
+        // the window (viewport: null) so the whole screen shows the browser.
+        const [, screenW, screenH] =
+          (process.env.BROWSER_AGENT_SCREEN || "1280x800x24").match(/^(\d+)x(\d+)/) || [];
+        if (screenW && screenH) {
+          launchOptions.args = [`--window-size=${screenW},${screenH}`];
+        }
       }
 
       const agentConfig: any = {
@@ -125,7 +133,7 @@ const magnitudeBrowser: ToolDefinition = {
         narrate: false,
         browser: {
           launchOptions,
-          contextOptions: { ignoreHTTPSErrors: true },
+          contextOptions: { ignoreHTTPSErrors: true, viewport: null },
         },
         llm: {
           provider: llm.provider,

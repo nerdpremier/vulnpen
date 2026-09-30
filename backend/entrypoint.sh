@@ -176,6 +176,7 @@ launch_placeholder_chromium() {
   HOME="$CHROMIUM_HOME" DISPLAY="$DISPLAY" "$CHROMIUM_BIN" --no-sandbox \
     --disable-dev-shm-usage --disable-gpu --no-first-run \
     --disable-features=Translate --start-maximized \
+    --window-size="$(echo "$SCREEN_GEOMETRY" | cut -dx -f1),$(echo "$SCREEN_GEOMETRY" | cut -dx -f2)" \
     --user-data-dir="$placeholder_profile" \
     "${proxy_args[@]}" about:blank >/dev/null 2>&1 &
   PLACEHOLDER_PID=$!
