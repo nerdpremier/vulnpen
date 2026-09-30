@@ -1,21 +1,32 @@
 import { apiClient } from "@/utils/axios.config";
 
-// ─── OWASP WSTG v4.2 test plan ───────────────────────────────────────
+// --- OWASP WSTG v4.2 test plan ---------------------------------------
 
 export const getTestPlan = async (sessionId) => {
   const res = await apiClient.get(`/agent/session/${sessionId}/test-plan`);
   return res.data;
 };
 
+/** Build or rebuild the plan. Cases already in it keep the result they carry. */
 export const generateTestPlan = async ({ sessionId, ...body }) => {
-  const res = await apiClient.post(`/agent/session/${sessionId}/test-plan`, body);
+  const res = await apiClient.post(`/agent/session/${sessionId}/test-plan`, {
+    ...body,
+    action: "generate",
+  });
   return res.data;
 };
 
-export const addTestCase = async ({ sessionId, ...body }) => {
-  const res = await apiClient.post(`/agent/session/${sessionId}/test-plan`, body);
+
+/** Add WSTG catalogue cases to a plan that already exists, by test id. */
+export const addCatalogueCases = async ({ sessionId, testIds }) => {
+  const res = await apiClient.post(`/agent/session/${sessionId}/test-plan`, {
+    action: "add_case",
+    testIds,
+  });
   return res.data;
 };
+
+
 
 export const updateTestCase = async ({ sessionId, testId, ...body }) => {
   const res = await apiClient.patch(
@@ -25,7 +36,23 @@ export const updateTestCase = async ({ sessionId, testId, ...body }) => {
   return res.data;
 };
 
-// ─── OWASP Top 10:2025 ──────────────────────────────────────────────
+export const removeTestCase = async ({ sessionId, testId }) => {
+  const res = await apiClient.delete(
+    `/agent/session/${sessionId}/test-plan/cases/${testId}`,
+  );
+  return res.data;
+};
+
+/** Remove several cases at once: an explicit testIds list, or every case in a category. */
+export const removeTestCases = async ({ sessionId, ...body }) => {
+  const res = await apiClient.post(
+    `/agent/session/${sessionId}/test-plan/cases/remove`,
+    body,
+  );
+  return res.data;
+};
+
+// --- OWASP Top 10:2025 ----------------------------------------------
 
 export const getOwaspCoverage = async (sessionId) => {
   const res = await apiClient.get(`/agent/session/${sessionId}/owasp-top10`);
@@ -45,7 +72,7 @@ export const remapAllVulnerabilities = async (sessionId) => {
   return res.data;
 };
 
-// ─── Draft report ───────────────────────────────────────────────────
+// --- Draft report ---------------------------------------------------
 
 export const getReportDraft = async (sessionId) => {
   const res = await apiClient.get(`/agent/session/${sessionId}/report`);

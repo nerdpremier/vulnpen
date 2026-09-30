@@ -30,6 +30,8 @@ import {
   getTestPlan,
   mapVulnerability,
   remapAllVulnerabilities,
+  removeTestCase,
+  removeTestCases,
   updateTestCaseStatus,
 } from "../controllers/web-security.controller";
 
@@ -50,6 +52,8 @@ router.post("/session/:sessionId/vulnerabilities/:vulnerabilityId/chat", [verify
 router.get("/session/:sessionId/test-plan", [verifySess], getTestPlan);
 router.post("/session/:sessionId/test-plan", [verifySess], generateTestPlan);
 router.patch("/session/:sessionId/test-plan/cases/:testId", [verifySess], updateTestCaseStatus);
+router.delete("/session/:sessionId/test-plan/cases/:testId", [verifySess], removeTestCase);
+router.post("/session/:sessionId/test-plan/cases/remove", [verifySess], removeTestCases);
 router.get("/session/:sessionId/report", [verifySess], getReport);
 router.get("/session/:sessionId/owasp-top10", [verifySess], getOwaspCoverage);
 router.post("/delete-session", [verifySess], deleteSession);

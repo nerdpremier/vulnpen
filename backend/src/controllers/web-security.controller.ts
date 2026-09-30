@@ -6,9 +6,12 @@ import type { WebAppTestPlanDoc } from "../models/Sessions/Sessions.model";
 import { requireActiveSession } from "../services/session.helpers";
 import { mapUnclassifiedVulnerabilities } from "../services/vulnerability.service";
 import {
+  addCatalogueCases,
   computeCoverage,
   createTestPlan,
   normalizeTestStatus,
+  removeCase,
+  removeCases,
   updateTestCase,
 } from "../services/web-security/test-plan.service";
 import {
@@ -32,6 +35,14 @@ function catalogPayload() {
     version: WSTG_VERSION,
     source: WSTG_SOURCE,
     totalTests: WSTG_TESTS.length,
+    // Compact list for the "add test cases" picker: the full method text lives in the plan.
+    tests: WSTG_TESTS.map((test) => ({
+      id: test.id,
+      section: test.section,
+      category: test.category,
+      title: test.title,
+      objective: test.objective,
+    })),
     categories: WSTG_CATEGORIES.map((category) => ({
       code: category.code,
       section: category.section,
@@ -42,6 +53,23 @@ function catalogPayload() {
   };
 }
 
+/**
+ * Persist the plan and fail loudly when Mongo does not store it: a write that silently does
+ * nothing looks like success in the UI, which is worse than an error.
+ */
+async function persistTestPlan(sessionId: string, uid: unknown, plan: WebAppTestPlanDoc) {
+  const result = await SessionsModel.updateOne(
+    { sessionId, uid },
+    { $set: { webAppTestPlan: plan } },
+  );
+  if (!result.modifiedCount) {
+    throw new Error(
+      result.matchedCount
+        ? "MongoDB stored no change for the WSTG test plan"
+        : "Session not found while saving the WSTG test plan",
+    );
+  }
+}
 function planPayload(plan: WebAppTestPlanDoc | null) {
   return {
     plan,
@@ -78,6 +106,53 @@ export const generateTestPlan = async (req: Request, res: Response) => {
     const body = req.body ?? {};
     const existing =
       ((session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null) as WebAppTestPlanDoc | null;
+    const action = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
+
+    // The page adds cases to a plan that already exists; only a plain call regenerates it.
+    if (action === "add_case" || action === "add_cases") {
+      if (!existing?.cases?.length) {
+        return res
+          .status(400)
+          .json({ message: "Generate the WSTG test plan before adding test cases" });
+      }
+
+      const rawIds = [
+        ...(Array.isArray(body.testIds) ? body.testIds : []),
+        ...(Array.isArray(body.test_ids) ? body.test_ids : []),
+        typeof body.testId === "string" ? body.testId : "",
+      ].filter((testId): testId is string => typeof testId === "string" && !!testId.trim());
+
+      if (!rawIds.length) {
+        return res.status(400).json({
+          message: 'testIds must list the WSTG cases to add, e.g. ["WSTG-INPV-05"]',
+        });
+      }
+
+      const result = addCatalogueCases(existing, rawIds);
+      if (!result.added.length) {
+        const rejected = result.unknown.length && !result.skipped.length;
+        return res.status(rejected ? 400 : 409).json({
+          message: rejected
+            ? `Not part of WSTG v${WSTG_VERSION}: ${result.unknown.join(", ")}`
+            : `Already in the plan: ${result.skipped.join(", ")}`,
+        });
+      }
+
+      await persistTestPlan(sessionId, userId, result.plan);
+
+      return res.status(200).json({
+        ...planPayload(result.plan),
+        added: result.added.map((testCase) => testCase.testId),
+        skipped: result.skipped,
+        unknown: result.unknown,
+      });
+    }
+
+
+
+    if (action && action !== "generate") {
+      return res.status(400).json({ message: `Unsupported test plan action: ${body.action}` });
+    }
     const result = createTestPlan({
       target: typeof body.target === "string" ? body.target : undefined,
       scope: typeof body.scope === "string" ? body.scope : undefined,
@@ -91,10 +166,7 @@ export const generateTestPlan = async (req: Request, res: Response) => {
       existing,
     });
 
-    await SessionsModel.updateOne(
-      { sessionId, uid: userId },
-      { $set: { webAppTestPlan: result.plan } },
-    );
+    await persistTestPlan(sessionId, userId, result.plan);
 
     return res.status(200).json({
       ...planPayload(result.plan),
@@ -139,10 +211,7 @@ export const updateTestCaseStatus = async (req: Request, res: Response) => {
       return res.status(404).json({ message: `${testId} is not part of this test plan` });
     }
 
-    await SessionsModel.updateOne(
-      { sessionId, uid: userId },
-      { $set: { webAppTestPlan: updated.plan } },
-    );
+    await persistTestPlan(sessionId, userId, updated.plan);
 
     return res.status(200).json({
       testCase: updated.testCase,
@@ -155,6 +224,87 @@ export const updateTestCaseStatus = async (req: Request, res: Response) => {
   }
 };
 
+export const removeTestCase = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId, testId } = req.params;
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const plan = (session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
+    if (!plan?.cases?.length) {
+      return res.status(404).json({ message: "No WSTG test plan exists for this session" });
+    }
+
+    const removed = removeCase(plan, testId);
+    if (!removed) {
+      return res.status(404).json({ message: `${testId} is not part of this test plan` });
+    }
+
+    await persistTestPlan(sessionId, userId, removed.plan);
+
+    return res.status(200).json({
+      testId: removed.testId,
+      coverage: computeCoverage(removed.plan.cases),
+      plan: removed.plan,
+    });
+  } catch (err: any) {
+    console.error("[web-security] test case remove error:", err);
+    return res.status(500).json({ message: "Failed to remove the test case" });
+  }
+};
+
+export const removeTestCases = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const plan = (session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
+    if (!plan?.cases?.length) {
+      return res.status(404).json({ message: "No WSTG test plan exists for this session" });
+    }
+
+    const body = req.body ?? {};
+    const category = typeof body.category === "string" ? body.category.trim().toUpperCase() : "";
+    const requested: unknown[] = Array.isArray(body.testIds) ? body.testIds : [];
+
+    // Clearing a whole WSTG category and unticking a few rows are the same delete in the
+    // UI, so both shapes land here.
+    const testIds = requested.length
+      ? requested
+      : plan.cases
+          .filter(
+            (testCase) =>
+              !!category && String(testCase.categoryCode ?? "").toUpperCase() === category,
+          )
+          .map((testCase) => testCase.testId);
+
+    if (!testIds.length) {
+      return res
+        .status(400)
+        .json({ message: "Provide testIds to remove, or the category to clear" });
+    }
+
+    const removed = removeCases(plan, testIds);
+    if (!removed) {
+      return res
+        .status(404)
+        .json({ message: "None of these test cases are part of this plan" });
+    }
+
+    await persistTestPlan(sessionId, userId, removed.plan);
+
+    return res.status(200).json({
+      ...planPayload(removed.plan),
+      removed: removed.removed,
+    });
+  } catch (err: any) {
+    console.error("[web-security] test case bulk remove error:", err);
+    return res.status(500).json({ message: "Failed to remove the test cases" });
+  }
+};
 export const getReport = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;

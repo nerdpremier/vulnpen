@@ -9,12 +9,16 @@ import {
   isOwaspTop10Id,
 } from "../src/knowledge";
 import {
+  addCatalogueCases,
   addTestCase,
   computeCoverage,
   createTestPlan,
   nextTestsToRun,
+  removeCase,
+  removeCases,
   updateTestCase,
 } from "../src/services/web-security/test-plan.service";
+import type { WebAppTestPlanDoc } from "../src/models/Sessions/Sessions.model";
 import { mapFindingToOwaspTop10 } from "../src/services/web-security/owasp-mapping.service";
 import { buildWebAppPentestReport } from "../src/services/web-security/report.service";
 import { normalizeVulnerability } from "../src/services/vulnerability.service";
@@ -471,4 +475,133 @@ test("an existing plan is re-injected with coverage, results and next cases", ()
   assert.match(prompt, /Current risk spread: A05:2025 Injection \(2\)/);
   assert.match(prompt, /action "update_case" \(test_id \+ status\)/);
   assert.match(prompt, /action "add_case"/);
+});
+
+test("catalogue cases can be added to a narrowed plan without losing results", () => {
+  const narrowed = createTestPlan({ categories: ["INPV"] }).plan;
+  const executed = updateTestCase(narrowed, "WSTG-INPV-05", {
+    status: "passed",
+    observations: "Parameterised query returned no database error.",
+  })!.plan;
+
+  const added = addCatalogueCases(executed, [
+    "WSTG-ATHZ-04",
+    "inpv-5",
+    "4.8.1",
+    "WSTG-NOPE-99",
+    "",
+    null,
+  ]);
+
+  assert.deepEqual(
+    added.added.map((testCase) => testCase.testId),
+    ["WSTG-ATHZ-04", "WSTG-ERRH-01"],
+    "sections and short ids resolve, duplicates and junk do not",
+  );
+  assert.deepEqual(added.skipped, ["WSTG-INPV-05"]);
+  assert.deepEqual(added.unknown, ["WSTG-NOPE-99"]);
+  assert.equal(added.plan.cases.length, 21);
+
+  // Added cases slot into catalogue order; the executed case keeps its result.
+  assert.equal(added.plan.cases[0].testId, "WSTG-ATHZ-04");
+  assert.equal(added.plan.cases[added.plan.cases.length - 1].testId, "WSTG-ERRH-01");
+  const kept = added.plan.cases.find((testCase) => testCase.testId === "WSTG-INPV-05")!;
+  assert.equal(kept.status, "passed");
+  assert.match(kept.observations, /Parameterised query/);
+
+  // Nothing new to add leaves the plan untouched.
+  const again = addCatalogueCases(added.plan, ["WSTG-ATHZ-04", "WSTG-ERRH-01", ""]);
+  assert.equal(again.plan, added.plan);
+  assert.equal(again.added.length, 0);
+  assert.deepEqual(again.skipped, ["WSTG-ATHZ-04", "WSTG-ERRH-01"]);
+});
+
+test("cases can be removed one by one or in bulk", () => {
+  const plan = createTestPlan({ categories: ["ERRH"] }).plan;
+
+  const single = removeCase(plan, "WSTG-ERRH-01")!;
+  assert.equal(single.testId, "WSTG-ERRH-01");
+  assert.equal(single.plan.cases.length, 1);
+  assert.equal(removeCase(single.plan, "WSTG-ERRH-01"), undefined);
+  assert.equal(removeCase(single.plan, "WSTG-INPV-05"), undefined);
+
+  const bulk = removeCases(plan, ["WSTG-ERRH-01", "WSTG-ERRH-02", "nope"])!;
+  assert.deepEqual(bulk.removed, ["WSTG-ERRH-01", "WSTG-ERRH-02"]);
+  assert.equal(bulk.plan.cases.length, 0);
+  assert.equal(removeCases(bulk.plan, ["WSTG-ERRH-01"]), undefined);
+  assert.equal(removeCases(plan, []), undefined);
+  assert.equal(removeCases(plan, ["", null, 7]), undefined);
+
+  // Removing everything is a legitimate plan state: coverage comes back empty, not broken.
+  const coverage = computeCoverage(bulk.plan.cases);
+  assert.equal(coverage.total, 0);
+  assert.equal(coverage.percentExecuted, 0);
+});
+test("a hydrated plan is normalised before it is handed back for saving", () => {
+  const plan = createTestPlan({
+    target: "https://hydrated.example.com",
+    categories: ["INPV"],
+  }).plan;
+
+  // A mongoose document keeps its schema fields behind non-enumerable getters, so spreading one
+  // copies internals only: a controller that saves the result then writes nothing at all.
+  const hydrate = (source: WebAppTestPlanDoc): WebAppTestPlanDoc => {
+    const doc: Record<string, unknown> = { $__: {}, $isNew: false, _doc: source };
+    for (const [key, value] of Object.entries(source)) {
+      if (key === "cases") continue;
+      Object.defineProperty(doc, key, { get: () => value, enumerable: false });
+    }
+    doc.cases = source.cases;
+    doc.toObject = () => source;
+    return doc as unknown as WebAppTestPlanDoc;
+  };
+
+  const removed = removeCases(hydrate(plan), ["WSTG-INPV-01"])!;
+  const addedCatalogue = addCatalogueCases(hydrate(plan), ["WSTG-CLNT-01"]);
+  const addedCustom = addTestCase(hydrate(plan), { title: "Case added to a hydrated plan" })!;
+  const updated = updateTestCase(hydrate(plan), "WSTG-INPV-01", { status: "passed" })!;
+
+  assert.equal(removed.plan.cases.length, plan.cases.length - 1);
+  assert.equal(addedCatalogue.plan.cases.length, plan.cases.length + 1);
+  assert.deepEqual(
+    addedCatalogue.added.map((testCase) => testCase.testId),
+    ["WSTG-CLNT-01"],
+  );
+  assert.equal(addedCustom.plan.cases.length, plan.cases.length + 1);
+  assert.equal(updated.testCase.status, "passed");
+
+  const results: [string, WebAppTestPlanDoc][] = [
+    ["removeCases", removed.plan],
+    ["addCatalogueCases", addedCatalogue.plan],
+    ["addTestCase", addedCustom.plan],
+    ["updateTestCase", updated.plan],
+  ];
+
+  for (const [label, result] of results) {
+    assert.equal(result.target, "https://hydrated.example.com", `${label} kept the target`);
+    assert.equal(result.source, "OWASP WSTG v4.2", `${label} kept the source`);
+    assert.deepEqual(
+      Object.keys(result).sort(),
+      Object.keys(plan).sort(),
+      `${label} returned plain plan data`,
+    );
+  }
+});
+
+test("ticking no category plans no catalogue cases", () => {
+  const plan = createTestPlan({ target: "https://app.example.com", categories: ["INPV"] }).plan;
+  const executed = updateTestCase(plan, "WSTG-INPV-05", { status: "passed" })!.plan;
+
+  // An absent list is "no filter": the whole guide.
+  assert.equal(createTestPlan({}).plan.cases.length, WSTG_TESTS.length);
+
+  // A list that is present but empty is "nothing ticked".
+  const emptied = createTestPlan({ categories: [], existing: executed }).plan;
+  assert.equal(emptied.cases.length, 0);
+  assert.deepEqual(emptied.categories, []);
+  assert.equal(emptied.target, "https://app.example.com", "the details are left alone");
+  assert.equal(computeCoverage(emptied.cases).total, 0);
+
+  // Unknown codes plan nothing rather than everything.
+  assert.equal(createTestPlan({ categories: ["NOPE"] }).plan.cases.length, 0);
 });

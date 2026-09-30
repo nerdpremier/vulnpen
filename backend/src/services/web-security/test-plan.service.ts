@@ -36,6 +36,19 @@ export const TEST_STATUSES: WstgTestStatus[] = [
   "skipped",
 ];
 
+/**
+ * Controllers read the plan straight off a mongoose session document, whose fields sit behind
+ * non-enumerable getters: spreading one copies only internals (source, target, scope and the
+ * rest vanish) and Mongo then reports "no change". Every helper that hands a plan back to be
+ * persisted normalises it to plain data first.
+ */
+function toPlainPlan(plan: WebAppTestPlanDoc): WebAppTestPlanDoc {
+  const hydrated = plan as unknown as { toObject?: () => unknown };
+  if (typeof hydrated?.toObject === "function") {
+    return hydrated.toObject() as WebAppTestPlanDoc;
+  }
+  return plan;
+}
 export interface TestPlanCoverageRow {
   key: string;
   label: string;
@@ -134,6 +147,9 @@ export function selectTestIds(options: {
       .map((code) => String(code).trim().toUpperCase())
       .filter((code) => isWstgCategoryCode(code)),
   );
+  // A category list that is present but empty means "nothing ticked": no catalogue cases at all.
+  // Only an absent list leaves the selection unfiltered, which is the whole guide.
+  if (Array.isArray(options.categories) && !categories.size) return [];
 
   const ids = categories.size
     ? baseIds.filter((id) => {
@@ -194,10 +210,11 @@ export function addTestCase(
   plan: WebAppTestPlanDoc,
   input: AddTestCaseInput,
 ): { plan: WebAppTestPlanDoc; testCase: SessionTestCaseDoc } | undefined {
+  const base = toPlainPlan(plan);
   const title = typeof input.title === "string" ? input.title.trim() : "";
   if (!title) return undefined;
 
-  const existingIds = new Set(plan.cases.map((testCase) => testCase.testId.toUpperCase()));
+  const existingIds = new Set(base.cases.map((testCase) => testCase.testId.toUpperCase()));
   let testId =
     typeof input.testId === "string" ? input.testId.trim() : "";
   if (testId && existingIds.has(testId.toUpperCase())) return undefined;
@@ -228,7 +245,118 @@ export function addTestCase(
     updatedAt: new Date(),
   };
 
-  return { plan: { ...plan, cases: [...plan.cases, testCase], updatedAt: new Date() }, testCase };
+  return { plan: { ...base, cases: [...base.cases, testCase], updatedAt: new Date() }, testCase };
+}
+
+/** Catalogue position of a test id; hand-added cases sort after every catalogue case. */
+const CATALOGUE_ORDER = new Map<string, number>(
+  WSTG_TESTS.map((test, index) => [test.id, index] as const),
+);
+
+/**
+ * Catalogue cases first, in the guide's own section order, then hand-added cases in the
+ * order they were added (Array#sort is stable), so a plan always reads like the guide.
+ */
+function sortCatalogueFirst(cases: SessionTestCaseDoc[]): SessionTestCaseDoc[] {
+  return [...cases].sort(
+    (a, b) =>
+      (CATALOGUE_ORDER.get(a.testId) ?? Number.MAX_SAFE_INTEGER) -
+      (CATALOGUE_ORDER.get(b.testId) ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+export interface AddCatalogueCasesResult {
+  plan: WebAppTestPlanDoc;
+  /** Cases that were appended to the plan. */
+  added: SessionTestCaseDoc[];
+  /** Requested ids that the plan already holds. */
+  skipped: string[];
+  /** Requested ids that are not part of the WSTG v4.2 catalogue. */
+  unknown: string[];
+}
+
+/**
+ * Append WSTG catalogue cases to an existing plan. Ids may be written as "WSTG-INPV-05",
+ * "inpv-5" or the section "4.7.5". A case already in the plan keeps the result it
+ * carries, and unknown ids are reported back instead of failing the whole call.
+ */
+export function addCatalogueCases(
+  plan: WebAppTestPlanDoc,
+  testIds: unknown[],
+): AddCatalogueCasesResult {
+  const base = toPlainPlan(plan);
+  const planned = new Set(base.cases.map((testCase) => testCase.testId.toUpperCase()));
+  const added: SessionTestCaseDoc[] = [];
+  const skipped: string[] = [];
+  const unknown: string[] = [];
+
+  for (const raw of testIds) {
+    const test = getWstgTest(raw);
+    if (!test) {
+      const label = typeof raw === "string" ? raw.trim() : "";
+      if (label) unknown.push(label);
+      continue;
+    }
+    if (planned.has(test.id.toUpperCase())) {
+      skipped.push(test.id);
+      continue;
+    }
+    planned.add(test.id.toUpperCase());
+    added.push(buildTestCase(test));
+  }
+
+  if (!added.length) return { plan: base, added, skipped, unknown };
+
+  return {
+    plan: {
+      ...base,
+      cases: sortCatalogueFirst([...base.cases, ...added]),
+      updatedAt: new Date(),
+    },
+    added,
+    skipped,
+    unknown,
+  };
+}
+
+/**
+ * Drop cases from the plan by test id. Returns undefined when none of the ids belong to
+ * the plan, so the API can answer 404 instead of pretending it deleted something.
+ */
+export function removeCases(
+  plan: WebAppTestPlanDoc,
+  testIds: unknown[],
+): { plan: WebAppTestPlanDoc; removed: string[] } | undefined {
+  const wanted = new Set(
+    testIds
+      .filter((testId): testId is string => typeof testId === "string" && !!testId.trim())
+      .map((testId) => testId.trim().toUpperCase()),
+  );
+  if (!wanted.size) return undefined;
+
+  const base = toPlainPlan(plan);
+  const removed = base.cases
+    .filter((testCase) => wanted.has(testCase.testId.toUpperCase()))
+    .map((testCase) => testCase.testId);
+  if (!removed.length) return undefined;
+
+  return {
+    plan: {
+      ...base,
+      cases: base.cases.filter((testCase) => !wanted.has(testCase.testId.toUpperCase())),
+      updatedAt: new Date(),
+    },
+    removed,
+  };
+}
+
+export function removeCase(
+  plan: WebAppTestPlanDoc,
+  testId: string,
+): { plan: WebAppTestPlanDoc; testId: string } | undefined {
+  const result = removeCases(plan, [testId]);
+  if (!result) return undefined;
+  return { plan: result.plan, testId: result.removed[0] };
 }
 
 export function createTestPlan(input: CreateTestPlanInput): {
@@ -240,7 +368,11 @@ export function createTestPlan(input: CreateTestPlanInput): {
   const categories = (input.categories ?? [])
     .map((code) => String(code).trim().toUpperCase())
     .filter((code) => isWstgCategoryCode(code));
-  const testIds = selectTestIds({ categories, testIds: input.testIds });
+  const testIds = selectTestIds({
+    // Only pass a list when one was given: an absent list means "no filter", an empty one "nothing".
+    categories: Array.isArray(input.categories) ? categories : undefined,
+    testIds: input.testIds,
+  });
 
   const previous = new Map(
     (input.existing?.cases ?? []).map((testCase) => [testCase.testId, testCase] as const),
@@ -287,7 +419,8 @@ export function createTestPlan(input: CreateTestPlanInput): {
     target: input.target ?? input.existing?.target ?? "",
     scope: input.scope ?? input.existing?.scope ?? "",
     notes: input.notes ?? input.existing?.notes ?? "",
-    categories: categories.length
+    // Record exactly what was asked for, so an explicit empty list stays empty.
+    categories: Array.isArray(input.categories)
       ? categories
       : (input.existing?.categories ?? []).filter((code) => isWstgCategoryCode(code)),
     cases,
@@ -304,13 +437,14 @@ export function updateTestCase(
   patch: UpdateTestCasePatch,
 ): { plan: WebAppTestPlanDoc; testCase: SessionTestCaseDoc } | undefined {
   // Match any id present in the plan (WSTG or custom); normalize only as a hint.
+  const base = toPlainPlan(plan);
   const id = normalizeWstgId(testId);
-  const index = plan.cases.findIndex(
+  const index = base.cases.findIndex(
     (testCase) => testCase.testId === id || testCase.testId.toUpperCase() === testId.trim().toUpperCase(),
   );
   if (index < 0) return undefined;
 
-  const current = plan.cases[index];
+  const current = base.cases[index];
   const status = normalizeTestStatus(patch.status) ?? current.status;
   const linked = new Set(current.linkedVulnerabilityIds ?? []);
   for (const vulnerabilityId of patch.linkedVulnerabilityIds ?? []) {
@@ -334,9 +468,9 @@ export function updateTestCase(
     updatedAt: new Date(),
   };
 
-  const cases = [...plan.cases];
+  const cases = [...base.cases];
   cases[index] = testCase;
-  return { plan: { ...plan, cases, updatedAt: new Date() }, testCase };
+  return { plan: { ...base, cases, updatedAt: new Date() }, testCase };
 }
 
 export function computeCoverage(cases: SessionTestCaseDoc[]): TestPlanCoverage {
