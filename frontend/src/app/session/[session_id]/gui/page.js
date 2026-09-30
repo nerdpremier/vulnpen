@@ -173,7 +173,7 @@ const GUIpage = ({ params }) => {
           <iframe
             style={{ position: "static" }}
             id="remote-connection-2"
-            src={`${vncBase}/vnc.html?password=${data.password}&resize=remote&autoconnect=true`}
+            src={`${vncBase}/vnc.html?password=${data.password}&resize=scale&autoconnect=true`}
             width="100%"
             height="100%"
             frameBorder="0"

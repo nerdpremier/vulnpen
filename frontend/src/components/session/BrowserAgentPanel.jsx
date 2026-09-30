@@ -205,7 +205,7 @@ const BrowserAgentPanel = () => {
   return (
     <iframe
       id="browser-agent-vnc-panel"
-      src={`${novncUrl}/vnc.html?autoconnect=true&resize=remote`}
+      src={`${novncUrl}/vnc.html?autoconnect=true&resize=scale`}
       width="100%"
       height="100%"
       frameBorder="0"
