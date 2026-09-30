@@ -14,17 +14,17 @@ const RAIL_TABS = [
 ];
 
 const railTabStyle = (active) => ({
-  flex: "0 0 auto",
-  padding: "5px 14px",
-  border: "1px solid",
-  borderColor: active ? "rgba(255,255,255,0.16)" : "transparent",
-  borderRadius: 6,
-  background: active ? "rgba(142,53,255,0.18)" : "rgba(255,255,255,0.03)",
-  color: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.55)",
+  flex: "1 1 0%",
+  border: "none",
+  borderLeft: active ? "2px solid #8e35ff" : "1px solid rgba(255,255,255,0.08)",
+  background: active ? "rgba(142,53,255,0.12)" : "rgba(255,255,255,0.03)",
+  color: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.65)",
   cursor: "pointer",
   display: "flex",
+  flexDirection: "column",
   alignItems: "center",
-  gap: 6,
+  gap: 8,
+  paddingTop: 12,
   fontSize: 11,
   letterSpacing: "0.08em",
 });
@@ -69,37 +69,6 @@ const SessionMainPage = ({ session_id }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}>
-      {/* While a panel is open, the Brw/Burp switcher sits at the top of the
-          screen; the right strip stays the open/close control */}
-      {activePanel && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            padding: "5px 10px",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.02)",
-            flexShrink: 0,
-          }}
-        >
-          {RAIL_TABS.map((tab) => {
-            const active = activePanel === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActivePanel(active ? null : tab.key)}
-                title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
-                style={railTabStyle(active)}
-              >
-                {tab.key === "browser" && <TbWorldWww size={14} />}
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       <div
         id="session-split-container"
         style={{
@@ -164,39 +133,30 @@ const SessionMainPage = ({ session_id }) => {
           </>
         )}
 
-        {/* Right strip: vertical BROWSER AGENT tab, click to open/close */}
-        <button
-          onClick={() =>
-            setActivePanel((cur) => (cur === "browser" ? null : "browser"))
-          }
-          title={activePanel ? "Close browser agent view" : "Show browser agent view"}
+        {/* Right rail: BROWSER AGENT and BURP vertical tabs side by side */}
+        <div
           style={{
-            width: 34,
+            width: 68,
             alignSelf: "stretch",
             flexShrink: 0,
-            border: "none",
-            borderLeft: activePanel
-              ? "2px solid #8e35ff"
-              : "1px solid rgba(255,255,255,0.08)",
-            background: activePanel
-              ? "rgba(142,53,255,0.12)"
-              : "rgba(255,255,255,0.03)",
-            color: activePanel
-              ? "rgba(255,255,255,0.9)"
-              : "rgba(255,255,255,0.65)",
-            cursor: "pointer",
             display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 8,
-            paddingTop: 12,
-            fontSize: 11,
-            letterSpacing: "0.08em",
           }}
         >
-          <TbWorldWww size={16} />
-          <span style={{ writingMode: "vertical-rl" }}>BROWSER AGENT</span>
-        </button>
+          {RAIL_TABS.map((tab) => {
+            const active = activePanel === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActivePanel(active ? null : tab.key)}
+                title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
+                style={railTabStyle(active)}
+              >
+                {tab.key === "browser" && <TbWorldWww size={16} />}
+                <span style={{ writingMode: "vertical-rl" }}>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
