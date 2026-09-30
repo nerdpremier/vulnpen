@@ -26,9 +26,14 @@ export const getRegistrationStatus = async () => {
 
 
 export const checkSession = async () => {
-  const response = await apiClient.get("/auth/status");
-
-  return response.data;
+  try {
+    const response = await apiClient.get("/auth/status");
+    return response.data;
+  } catch {
+    // No/invalid session cookie is a normal state (the backend answers 400),
+    // not an error — return a marker so react-query never logs a rejection.
+    return { success: false, user: null };
+  }
 };
 
 export const logoutUser = async () => {

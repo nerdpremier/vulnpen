@@ -29,25 +29,22 @@ export const AuthContextProvider = ({ children }) => {
 
   useQuery(["check-session"], checkSession, {
     onSuccess: (data) => {
-      dispatch(loginUser(data.user));
-      setLoading(false);
-
-      if (
-        pathname === "/" ||
-        pathname === "/login" ||
-        pathname === "/register" ||
-        pathname === "/dashboard"
-      ) {
-        router.push("/dashboard");
-      }
-    },
-    onError: () => {
-      // if path doesnt include login, redirect to login
-      if (
+      if (data?.user) {
+        dispatch(loginUser(data.user));
+        if (
+          pathname === "/" ||
+          pathname === "/login" ||
+          pathname === "/register" ||
+          pathname === "/dashboard"
+        ) {
+          router.push("/dashboard");
+        }
+      } else if (
         pathname !== "/" &&
         !pathname.includes("/login") &&
         !pathname.includes("/register")
       ) {
+        // No valid session — same handling the onError branch used to do.
         notification.error({
           message: "Session Expired or Invalid",
           description: "Please login again!",
