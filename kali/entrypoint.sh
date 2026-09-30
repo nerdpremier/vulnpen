@@ -74,6 +74,35 @@ XS
     echo "VNC desktop up ($VNC_DISPLAY rfb=$VNC_RFB_PORT noVNC=$VNC_NOVNC_PORT)"
 }
 
+# Burp keeps loaded extensions, listeners and its window layout in this file.
+# The heredoc body is intentionally flush left: the JSON must start at column 0.
+BURP_USER_CONFIG="/root/.BurpSuite/UserConfig.json"
+ensure_burp_user_config() {
+    [ -s "$BURP_USER_CONFIG" ] && return 0
+    mkdir -p /root/.BurpSuite
+    cat > "$BURP_USER_CONFIG" <<'BURPCFG'
+{
+  "user_options": {
+    "extender": {
+      "extensions": [
+        {
+          "auto_reload": false,
+          "errors": "ui",
+          "extension_file": "/opt/burp-rpc.jar",
+          "extension_type": "java",
+          "loaded": true,
+          "name": "Burp RPC Bridge",
+          "output": "ui",
+          "use_ai": false
+        }
+      ]
+    }
+  }
+}
+BURPCFG
+    echo "Seeded a Burp user config that loads burp-rpc at startup"
+}
+
 launch_burp_flow() {
     # Burp Community always shows its startup wizard and a temporary project
     # forgets the extension + listener bind between runs. Buttons are found by
@@ -113,7 +142,12 @@ CO
         # would swallow the wizard clicks — remove them up front.
         rm -rf /tmp/burp*.tmp 2>/dev/null || true
 
-        setsid nohup burpsuite --use-defaults >/tmp/burp.log 2>&1 </dev/null &
+        # --use-defaults discards /root/.BurpSuite/UserConfig.json, and that file is
+        # where Burp records the loaded burp-rpc extension (gRPC 0.0.0.0:50051).
+        # Discarding it is why the RPC bridge never came back after a restart, so
+        # the saved config is loaded instead (and seeded above on a fresh install).
+        ensure_burp_user_config
+        setsid nohup burpsuite --user-config-file="$BURP_USER_CONFIG" >/tmp/burp.log 2>&1 </dev/null &
 
         # Wizard: Next (temporary project) then Start Burp — both orange, both
         # in the lower-right region. Stop once the proxy port is listening.
@@ -125,6 +159,9 @@ CO
         done
         for _ in $(seq 1 20); do port_free ":8080" && break; sleep 3; done
 
+        # The saved user config loads burp-rpc at startup, so give the bridge a
+        # moment before falling back to the click-driven load below.
+        for _ in $(seq 1 10); do port_free ":50051" && break; sleep 3; done
         # Load the burp-rpc extension (gRPC binds 0.0.0.0:50051). The file
         # field renders at slightly different y offsets per boot — try each.
         if ! port_free ":50051"; then
@@ -179,11 +216,30 @@ start_burp() { launch_burp_flow & }
 # Watchdog: if the Burp window gets closed (or crashes) while the desktop is
 # up, relaunch the whole flow — wizard clicks included.
 burp_watchdog() {
+    # A Burp process that is up but never loaded the extension looks healthy to a
+    # process check, so the RPC port is watched as well, after a boot grace period.
+    missing_rpc=0
     while true; do
         sleep 30
-        if [ -S "/tmp/.X11-unix/X${VNC_DISPLAY#:}" ] &&            ! ps aux 2>/dev/null | grep -q "[b]urpsuite.jar"; then
-            echo "Burp not running; relaunching via watchdog"
-            launch_burp_flow &
+        if [ -S "/tmp/.X11-unix/X${VNC_DISPLAY#:}" ]; then
+            if ! ps aux 2>/dev/null | grep -q "[b]urpsuite.jar"; then
+                echo "Burp not running; relaunching via watchdog"
+                missing_rpc=0
+                launch_burp_flow &
+                sleep 60
+                continue
+            fi
+            if ss -tln 2>/dev/null | grep -q ":50051"; then
+                missing_rpc=0
+            else
+                missing_rpc=$((missing_rpc + 1))
+                if [ "$missing_rpc" -ge 12 ]; then
+                    echo "Burp is up but the RPC bridge (:50051) never bound; relaunching"
+                    missing_rpc=0
+                    launch_burp_flow &
+                    sleep 60
+                fi
+            fi
         fi
     done
 }
