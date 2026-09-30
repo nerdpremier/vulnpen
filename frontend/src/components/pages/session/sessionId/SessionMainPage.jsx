@@ -93,6 +93,9 @@ const SessionMainPage = ({ session_id }) => {
               display: "flex",
               flexDirection: "column",
               position: "relative",
+              // The noVNC iframe would swallow mousemove events while the
+              // resize handle is dragged and strand the drag mid-way.
+              pointerEvents: isDragging ? "none" : "auto",
             }}>
               <button
                 onClick={() => setPanelOpen(false)}
