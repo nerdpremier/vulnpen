@@ -7,10 +7,9 @@
    this codebase styles with SCSS modules + CSS custom properties.
 
    Sections
-     A. MoonBackdrop        E. SpotlightCard
-     B. ShinyText           F. StatTile / MetaRow
-     C. StarBorder          G. ProgressRing
-     D. EmptyState / SectionHeader
+     A. MoonBackdrop        D. EmptyState / SectionHeader
+     B. ShinyText           E. SpotlightCard
+     C. StatTile / MetaRow  F. ProgressRing
    ========================================================================== */
 
 /* ---------------------------------------------------------------------------
@@ -154,45 +153,6 @@
 
 .shinyPaused {
   animation-play-state: paused;
-}
-
-/* ---------------------------------------------------------------------------
-   D. STAR BORDER
-   A rotating specular highlight around a panel edge.
-   -------------------------------------------------------------------------- */
-.starBorder {
-  position: relative;
-  border-radius: inherit;
-  isolation: isolate;
-}
-
-.starBorder::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(
-    from var(--moon-angle),
-    transparent 0deg,
-    transparent 260deg,
-    var(--moon-accent-40) 300deg,
-    var(--moon-accent-strong) 330deg,
-    transparent 360deg
-  );
-  animation: moonAngleSpin var(--star-speed, 5s) linear infinite;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-  z-index: 2;
-}
-
-@keyframes moonAngleSpin {
-  to {
-    --moon-angle: 360deg;
-  }
 }
 
 /* ---------------------------------------------------------------------------
