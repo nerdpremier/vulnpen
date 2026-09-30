@@ -16,7 +16,6 @@ import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
 import { FiCheckSquare, FiMonitor, FiShield } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
-import { TbRadar } from "react-icons/tb";
 import { HiOutlineChevronLeft } from "react-icons/hi";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
@@ -83,25 +82,12 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     router.push(`/session/${sessionId}/gui`);
   };
 
-  const navigateToBurp = () => {
-    const burpId = `${sessionId}/burp`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === burpId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: burpId, is_main: false, is_active: true, type: "burp" });
-      dispatch(updateSessions(updatedSess));
-    }
-    router.push(`/session/${sessionId}/burp`);
-  };
-
   const exitTarget = workspaceId
     ? `/workspace/${workspaceId}`
     : "/dashboard";
 
   const isOnWorkspace = pathname === `/session/${sessionId}`;
   const isOnGUI = pathname?.includes("/gui");
-  const isOnBurp = pathname?.includes("/burp");
   const isOnVulnerabilities = pathname?.includes("/vulnerabilities");
   const isOnTestPlan = pathname?.includes("/test-plan");
   const contextUsageForTab = orchestratorTokenUsage;
@@ -245,14 +231,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           >
             <FiMonitor />
             GUI
-          </div>
-
-          <div
-            onClick={navigateToBurp}
-            className={isOnBurp ? styles.activeTab : styles.tab}
-          >
-            <TbRadar />
-            Burp
           </div>
         </div>
       </div>
