@@ -33,7 +33,7 @@ const MyAccount = () => {
 
   return (
     <div className={styles.settingsContainer}>
-      <Form onValuesChange={handleUpdateName} layout="vertical">
+      <Form onValuesChange={handleUpdateName} layout="vertical" initialValues={{ name: user.name }}>
         <Form.Item
           label="Name"
           name="name"
@@ -43,7 +43,7 @@ const MyAccount = () => {
             { max: 30, message: "Name must be maximum 30 characters." },
           ]}
         >
-          <Input defaultValue={user.name} />
+          <Input />
         </Form.Item>
       </Form>
 

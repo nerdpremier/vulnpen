@@ -385,7 +385,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace, integration }
       title={integration.replayName}
       className={styles.repeaterModal}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <div className={styles.repeaterMeta}>
         <div className={styles.metaField}>

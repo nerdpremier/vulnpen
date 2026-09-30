@@ -244,7 +244,7 @@ const ModelModal = ({
       width={720}
       centered
       className={styles.modelModal}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}

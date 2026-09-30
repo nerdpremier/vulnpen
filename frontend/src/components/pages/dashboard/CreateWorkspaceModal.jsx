@@ -56,7 +56,7 @@ const CreateWorkspaceModal = ({ show, setShow, close }) => {
       subheading="Set up a workspace for your engagement"
       onCancel={handleClose}
       footer={false}
-      destroyOnClose
+      destroyOnHidden
       width={"80%"}
     >
       <div className={styles.createSession}>

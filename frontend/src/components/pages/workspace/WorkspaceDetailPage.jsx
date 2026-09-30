@@ -206,7 +206,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
         subheading={`Create a session in "${workspace.name}"`}
         onCancel={() => { setShowNewSession(false); newSessionForm.resetFields(); }}
         footer={false}
-        destroyOnClose
+        destroyOnHidden
         width={500}
       >
         <div className={styles.formWrap}>
