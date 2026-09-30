@@ -1,7 +1,7 @@
 {
   "name": "vulnpen",
   "version": "1.0.0",
-  "description": "VulnPen — AI assistant for web application security testing (T-NET IT Solution)",
+  "description": "VulnPen â€” AI assistant for web application security testing (T-NET IT Solution)",
   "main": "src/server.ts",
   "engines": {
     "node": ">=22",
@@ -18,8 +18,9 @@
     "migrate:db-name": "node scripts/migrate-database-name.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
-  },  "author": "T-NET IT Solution",
-  "license": "ISC",
+  },
+  "author": "T-NET IT Solution",
+  "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "0.78.0",
     "@arizeai/openinference-instrumentation-anthropic": "0.1.7",
