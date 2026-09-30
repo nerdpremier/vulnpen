@@ -183,7 +183,7 @@ For development setup and troubleshooting, see the
 
 ## Authors
 
-- TBD
+VulnPen is developed by **T-NET IT Solution**.
 
 ## Contributing
 
