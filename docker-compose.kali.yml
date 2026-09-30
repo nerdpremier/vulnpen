@@ -46,7 +46,6 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:6080:6080"
-      - "127.0.0.1:9020:9020"
     volumes:
       - ./kali-data:/kali-data
       - backend-data:/srv/data
@@ -78,6 +77,7 @@ services:
       - "127.0.0.1:4242:22"
       - "127.0.0.1:4200:4200"
       - "127.0.0.1:1194:1194/udp"
+      - "127.0.0.1:9020:9020"
     volumes:
       - ./kali-data:/kali-data
       - ./backend/.env:/run/vulnpen.env:ro

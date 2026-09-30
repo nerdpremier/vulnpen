@@ -1021,24 +1021,14 @@ prompt_rebuild_normal() {
     echo
     echo -e "   ${BOLD}1)${NC} No rebuild  ${DIM}(default — fastest start)${NC}"
     echo -e "   ${BOLD}2)${NC} Rebuild backend"
-    echo -e "   ${BOLD}3)${NC} Rebuild frontend"
-    echo -e "   ${BOLD}4)${NC} Rebuild both"
     echo
-    prompt_input "Choose [1/2/3/4, Enter = 1]:"
+    prompt_input "Choose [1/2, Enter = 1]:"
     read -r rebuild_choice
 
     case "$rebuild_choice" in
         2)
             info "Rebuilding backend..."
             compose build backend
-            ;;
-        3)
-            info "Rebuilding frontend..."
-            compose build frontend
-            ;;
-        4)
-            info "Rebuilding backend and frontend..."
-            compose build backend frontend
             ;;
         *)
             info "Skipping rebuild"
@@ -1165,8 +1155,7 @@ launch() {
     info "Waiting for the application to become ready..."
     local ready=false attempt
     for attempt in {1..60}; do
-        if curl --fail --silent --max-time 2 http://127.0.0.1:8080/api/healthcheck >/dev/null && \
-           curl --fail --silent --max-time 2 http://127.0.0.1:3000 >/dev/null; then
+        if curl --fail --silent --max-time 2 http://127.0.0.1:8080/api/healthcheck >/dev/null; then
             ready=true
             break
         fi
@@ -1175,7 +1164,7 @@ launch() {
     if [[ "$ready" != true ]]; then
         err "VulnPen did not become ready within 2 minutes."
         compose ps
-        compose logs --tail=80 backend frontend
+        compose logs --tail=80 backend
         exit 1
     fi
 
