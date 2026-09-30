@@ -4,18 +4,28 @@ import React, { useState, useCallback, useEffect } from "react";
 import { TbWorldWww } from "react-icons/tb";
 import ChatView from "./ChatView";
 import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
+import BurpProxyPage from "@/components/pages/session/burp/BurpProxyPage";
+
+const PANEL_TABS = [
+  {
+    key: "browser",
+    label: "Browser Agent",
+    icon: <TbWorldWww size={14} />,
+  },
+  { key: "burp", label: "Burp", icon: null },
+];
 
 const SessionMainPage = ({ session_id }) => {
   const [panelWidth, setPanelWidth] = useState(45);
   const [isDragging, setIsDragging] = useState(false);
-  // The live view starts collapsed; it unfolds itself when the agent starts
+  // The live view starts closed; it unfolds itself when the agent starts
   // driving the browser (see the browser-agent-active listener below).
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState(null);
 
   // Unfold the live browser view whenever the agent starts driving the
   // browser (ToolCallBlock broadcasts browser tool activity).
   useEffect(() => {
-    const open = () => setPanelOpen(true);
+    const open = () => setActivePanel("browser");
     window.addEventListener("browser-agent-active", open);
     return () => window.removeEventListener("browser-agent-active", open);
   }, []);
@@ -44,6 +54,48 @@ const SessionMainPage = ({ session_id }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}>
+      {/* Top panel tabs: Browser Agent and Burp side by side */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          gap: 2,
+          padding: "4px 8px 0",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(255,255,255,0.02)",
+          flexShrink: 0,
+        }}
+      >
+        {PANEL_TABS.map((tab) => {
+          const active = activePanel === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActivePanel(active ? null : tab.key)}
+              title={active ? "Close panel" : `Show ${tab.label}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 14px",
+                fontSize: 12,
+                letterSpacing: "0.04em",
+                border: "1px solid",
+                borderColor: active ? "rgba(255,255,255,0.16)" : "transparent",
+                borderBottom: active ? "1px solid rgba(255,255,255,0.02)" : "1px solid transparent",
+                borderRadius: "6px 6px 0 0",
+                background: active ? "rgba(255,255,255,0.08)" : "transparent",
+                color: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.5)",
+                cursor: "pointer",
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div
         id="session-split-container"
         style={{
@@ -66,7 +118,7 @@ const SessionMainPage = ({ session_id }) => {
           <ChatView sessionId={session_id} />
         </div>
 
-        {panelOpen ? (
+        {activePanel && (
           <>
             {/* Resize Handle */}
             <div
@@ -83,7 +135,7 @@ const SessionMainPage = ({ session_id }) => {
               onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.06)"; }}
             />
 
-            {/* Browser Agent Live View */}
+            {/* Panel Content (Browser Agent / Burp) */}
             <div style={{
               width: `${panelWidth}%`,
               minWidth: 200,
@@ -97,60 +149,15 @@ const SessionMainPage = ({ session_id }) => {
               // resize handle is dragged and strand the drag mid-way.
               pointerEvents: isDragging ? "none" : "auto",
             }}>
-              <button
-                onClick={() => setPanelOpen(false)}
-                title="Collapse browser view"
-                style={{
-                  position: "absolute",
-                  top: 8,
-                  left: 8,
-                  zIndex: 20,
-                  width: 22,
-                  height: 22,
-                  borderRadius: 6,
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(20,20,30,0.85)",
-                  color: "rgba(255,255,255,0.7)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 12,
-                  lineHeight: 1,
-                  padding: 0,
-                }}
-              >
-                »
-              </button>
-              <BrowserAgentPanel />
+              {activePanel === "browser" ? (
+                <BrowserAgentPanel />
+              ) : (
+                <div style={{ flex: "1 1 0%", minHeight: 0, overflow: "auto" }}>
+                  <BurpProxyPage sessionId={session_id} />
+                </div>
+              )}
             </div>
           </>
-        ) : (
-          /* Collapsed strip */
-          <button
-            onClick={() => setPanelOpen(true)}
-            title="Show browser agent view"
-            style={{
-              width: 34,
-              alignSelf: "stretch",
-              flexShrink: 0,
-              border: "none",
-              borderLeft: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.03)",
-              color: "rgba(255,255,255,0.65)",
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 8,
-              paddingTop: 12,
-              fontSize: 11,
-              letterSpacing: "0.08em",
-            }}
-          >
-            <TbWorldWww size={16} />
-            <span style={{ writingMode: "vertical-rl" }}>BROWSER AGENT</span>
-          </button>
         )}
       </div>
     </div>
