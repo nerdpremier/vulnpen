@@ -5,13 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "react-query";
 import { getRegistrationStatus, register } from "@/services/auth.service";
 import Link from "next/link";
-import { MoonBackdrop, ShinyText } from "@/components/common/ui";
-
-const CAPABILITIES = [
-  "Agentic execution on your own Kali attack box",
-  "Per-case WSTG tracking that survives context summarisation",
-  "Findings mapped to the OWASP Top 10:2025 with rationale",
-];
+import { MoonBackdrop } from "@/components/common/ui";
 
 const RegisterPage = () => {
   const router = useRouter();
@@ -45,38 +39,6 @@ const RegisterPage = () => {
   return (
     <div className={styles.authShell}>
       <MoonBackdrop variant="page" />
-
-      <aside className={styles.authBrand}>
-        <div className={styles.brandTop}>
-          <div className={styles.brandText}>
-            <span className={styles.brandName}>VulnPen</span>
-            <span className={styles.brandSub}>T-NET IT Solution</span>
-          </div>
-        </div>
-
-        <div className={styles.brandBody}>
-          <h2 className={styles.brandHeadline}>
-            From scope to signed-off report,
-            <br />
-            <ShinyText text="one session at a time" speed={7} />
-          </h2>
-          <p className={styles.brandCopy}>
-            Create an account to plan and work the OWASP WSTG v4.2 catalogue
-            against your targets, with every result and finding kept alongside
-            the evidence that proves it.
-          </p>
-          <ul className={styles.brandList}>
-            {CAPABILITIES.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-
-        <div className={styles.brandFoot}>
-          <span className={styles.brandFootDot} />
-          Authorised testing only
-        </div>
-      </aside>
 
       <main className={styles.authPanel}>
         <div className={styles.authCard}>
@@ -170,11 +132,6 @@ const RegisterPage = () => {
             Already have an account? Sign in
           </Link>
         </div>
-
-        <p className={styles.authFootnote}>
-          For authorised security testing only. You are responsible for having
-          permission to test every target you point VulnPen at.
-        </p>
       </main>
     </div>
   );

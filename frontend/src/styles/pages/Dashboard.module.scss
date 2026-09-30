@@ -19,7 +19,7 @@
     h1 {
       color: var(--primary-text);
       font-size: 1.35rem;
-      font-weight: 600;
+      font-weight: 400;
       margin: 0;
       letter-spacing: -0.03em;
     }
@@ -117,7 +117,7 @@
 
 .cardTitle {
   font-size: 0.925rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--primary-text);
   margin: 0;
   white-space: nowrap;
@@ -145,7 +145,7 @@
 
 .typeTag {
   font-size: 0.65rem !important;
-  font-weight: 600;
+  font-weight: 400;
   padding: 0 0.4rem !important;
   border-radius: 4px !important;
   line-height: 1.6 !important;
@@ -197,7 +197,7 @@
 
 .statCount {
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--primary-text);
 }
 
@@ -260,7 +260,7 @@
   }
 
   h3 {
-    font-weight: 600;
+    font-weight: 400;
     text-align: center;
     color: var(--primary-text);
     font-size: 1.1rem;
@@ -278,7 +278,7 @@
 }
 
 .cellName {
-  font-weight: 500;
+  font-weight: 400;
   color: var(--primary-text);
 }
 
@@ -311,7 +311,7 @@
     display: flex;
     justify-content: space-between;
     font-size: nth($fontSize, 4);
-    font-weight: 500;
+    font-weight: 400;
     color: var(--secondary-text);
     margin: 0;
     padding: 0.5rem 0;
@@ -351,7 +351,7 @@
   }
 
   :global(.ant-table .ant-table-container thead tr th) {
-    font-weight: 500;
+    font-weight: 400;
     border-radius: 0 !important;
   }
 
@@ -359,7 +359,7 @@
     background-color: var(--secondary-bg) !important;
     color: var(--secondary-text) !important;
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     border: none;
@@ -444,7 +444,7 @@
     background-color: transparent !important;
     color: var(--secondary-text) !important;
     font-size: 0.7rem;
-    font-weight: 500;
+    font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     border: none;
@@ -502,7 +502,7 @@
 
   :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-cell) {
     padding: 0;
-    font-weight: 500;
+    font-weight: 400;
     color: var(--primary-text);
     background-color: var(--secondary-bg);
     height: 2.5rem;
@@ -615,7 +615,7 @@
     }
 
     h3 {
-      font-weight: 600;
+      font-weight: 400;
       text-align: center;
       color: var(--primary-text);
       font-size: 1.1rem;
@@ -723,7 +723,7 @@
     font-size: 0.875rem !important;
     border: none;
     padding-left: 0;
-    font-weight: 500;
+    font-weight: 400;
     border-bottom: 1px solid var(--border-subtle);
   }
 
@@ -737,7 +737,7 @@
   }
 
   :global(.ant-table .ant-table-content .ant-table-tbody .ant-table-cell) {
-    font-weight: 500;
+    font-weight: 400;
     color: var(--primary-text);
     background: transparent !important;
     height: 3.5rem;
@@ -754,7 +754,7 @@
 .createSession {
   padding-top: 1rem;
   :global(.ant-form .ant-form-item .ant-form-item-label > label) {
-    font-weight: 600;
+    font-weight: 400;
     letter-spacing: -0.01em;
     font-size: 0.875rem;
     color: var(--primary-text) !important;
@@ -973,7 +973,7 @@
 
   .typeLabel {
     font-size: 0.8rem;
-    font-weight: 600;
+    font-weight: 400;
     color: var(--primary-text);
   }
 
@@ -1069,7 +1069,7 @@
 
 .heroTitle {
   font-size: clamp(1.7rem, 2.6vw, 2.3rem);
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: -0.04em;
   line-height: 1.08;
   margin: 0;
@@ -1142,7 +1142,7 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.86rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text);
   letter-spacing: -0.01em;
 }
@@ -1152,7 +1152,7 @@
   padding: 0.05rem 0.4rem;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: 400;
   text-align: center;
   color: var(--moon-text-mute);
   background: var(--moon-surface-3);
@@ -1162,7 +1162,7 @@
 
 .clearSearch {
   font-size: 0.74rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--moon-text-mute);
   background: none;
   border: none;
@@ -1254,7 +1254,7 @@
 
 .cardTitle {
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text);
   margin: 0;
   letter-spacing: -0.02em;
@@ -1282,7 +1282,7 @@
   gap: 0.3rem;
   padding: 0.12rem 0.5rem;
   font-size: 0.64rem;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--moon-text-dim);
@@ -1338,7 +1338,7 @@
 
 .statCount {
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text);
   font-variant-numeric: tabular-nums;
 }
@@ -1388,7 +1388,7 @@
   gap: 0.35rem;
   margin-top: 0.15rem;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text-faint);
   transition: color var(--moon-dur-2) var(--moon-ease-out),
     gap var(--moon-dur-2) var(--moon-ease-out);
@@ -1452,7 +1452,7 @@
 
 .typeLabel {
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text);
 }
 
@@ -1475,7 +1475,7 @@
 
   h3 {
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 400;
     color: var(--moon-text);
     margin: 0;
   }

@@ -259,7 +259,7 @@
 
 .statValue {
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: -0.03em;
   color: var(--moon-text);
   font-variant-numeric: tabular-nums;
@@ -267,7 +267,7 @@
 
 .statTotal {
   font-size: 0.82rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--moon-text-faint);
 }
 
@@ -374,7 +374,7 @@
 
 .ringValueText {
   font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: -0.03em;
   color: var(--moon-text);
   font-variant-numeric: tabular-nums;
@@ -411,7 +411,7 @@
 
 .sectionTitle {
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.02em;
   color: var(--moon-text);
   display: flex;
@@ -473,7 +473,7 @@
 
 .emptyTitle {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text);
   letter-spacing: -0.02em;
 }
@@ -504,7 +504,7 @@
   background: var(--moon-surface-2);
   color: var(--moon-text-dim);
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -589,7 +589,7 @@
 
 .panelTitle {
   font-size: 0.86rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text);
   display: flex;
   align-items: center;
@@ -613,7 +613,7 @@
   background: transparent;
   color: var(--moon-text-mute);
   font-size: 0.76rem;
-  font-weight: 600;
+  font-weight: 400;
   padding: 0.3rem 0.75rem;
   border-radius: var(--moon-radius-xs);
   cursor: pointer;

@@ -47,12 +47,12 @@
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    font-weight: 500;
+    font-weight: 400;
   }
 
   .sessionName {
     font-size: 1.5rem;
-    font-weight: 600;
+    font-weight: 400;
     letter-spacing: -0.03em;
   }
 
@@ -88,7 +88,7 @@
     .runStatusLabel {
       margin: 0;
       font-size: 0.8rem;
-      font-weight: 600;
+      font-weight: 400;
       color: var(--vulnpen-green);
     }
   }
@@ -166,7 +166,7 @@
 
     .navLabel {
       font-size: 0.7rem;
-      font-weight: 500;
+      font-weight: 400;
       color: var(--secondary-text);
       background: none;
       border: none;
@@ -187,7 +187,7 @@
     .exitSession {
       padding: 0 0.75rem 1rem 0;
       font-size: 0.75rem;
-      font-weight: 500;
+      font-weight: 400;
       color: var(--secondary-text);
 
       display: flex;
@@ -213,7 +213,7 @@
       padding: 0.5rem 0.75rem;
       margin-bottom: 0.5rem;
       font-size: 0.75rem;
-      font-weight: 500;
+      font-weight: 400;
       color: var(--secondary-text);
       background: var(--secondary-bg);
       border: 1px solid var(--border-subtle);
@@ -247,7 +247,7 @@
 
       .sessionInfoName {
         font-size: 0.82rem;
-        font-weight: 600;
+        font-weight: 400;
         color: var(--primary-text);
         letter-spacing: -0.01em;
         white-space: nowrap;
@@ -257,7 +257,7 @@
 
       .sessionInfoId {
         font-size: 0.65rem;
-        font-weight: 500;
+        font-weight: 400;
         color: var(--primary-purple);
         font-family: "JetBrains Mono", monospace;
         margin-top: 2px;
@@ -281,7 +281,7 @@
       gap: 0.4rem;
       padding: 0.5rem 0;
       font-size: 0.75rem;
-      font-weight: 500;
+      font-weight: 400;
       color: var(--secondary-text);
       background: transparent;
       border: 1px solid var(--border-subtle);
@@ -312,7 +312,7 @@
     .supportStep {
       .options {
         font-size: 0.8rem;
-        font-weight: 500;
+        font-weight: 400;
         padding: 0.6rem 0.75rem;
         display: flex;
         gap: 0.5rem;
@@ -348,7 +348,7 @@
 
   .settingsHeader {
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 400;
     color: var(--secondary-text);
     margin: 0.5rem 0;
     text-transform: uppercase;
@@ -367,7 +367,7 @@
       gap: 0.5rem;
       display: flex;
       cursor: pointer;
-      font-weight: 500;
+      font-weight: 400;
       border-radius: 6px;
       align-items: center;
       padding: 0.6rem 0.75rem;
@@ -395,7 +395,7 @@
       border: 1px solid var(--border-subtle);
       border-radius: 999px;
       font-size: 0.58rem;
-      font-weight: 600;
+      font-weight: 400;
       text-align: center;
     }
   }
@@ -428,7 +428,7 @@
   .contextPct {
     font-family: "JetBrains Mono", monospace;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 400;
     color: var(--primary-text, #e0e0e0);
     letter-spacing: -0.02em;
   }
@@ -439,7 +439,7 @@
     margin-top: 0.05rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    font-weight: 500;
+    font-weight: 400;
   }
 
   .contextBar {
@@ -471,13 +471,13 @@
 
     span:first-child {
       color: var(--secondary-text, #888);
-      font-weight: 500;
+      font-weight: 400;
     }
 
     span:last-child {
       font-family: "JetBrains Mono", monospace;
       color: var(--primary-text, #ccc);
-      font-weight: 500;
+      font-weight: 400;
     }
   }
 
@@ -508,7 +508,7 @@
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.15);
     font-size: 0.5rem;
-    font-weight: 700;
+    font-weight: 400;
     color: var(--secondary-text, #666);
     cursor: help;
     line-height: 1;
@@ -576,11 +576,11 @@
 
   .status {
     display: flex;
-    font-weight: 500;
+    font-weight: 400;
     align-items: center;
 
     span {
-      font-weight: 600;
+      font-weight: 400;
       margin-left: 0.3rem;
       color: var(--vulnpen-green);
     }
@@ -613,7 +613,7 @@
     .intro {
       font-size: 0.8rem;
       letter-spacing: -0.01em;
-      font-weight: 500;
+      font-weight: 400;
       margin-bottom: 1rem;
       color: var(--secondary-text);
     }
@@ -630,7 +630,7 @@
     }
 
     .errorText {
-      font-weight: 600;
+      font-weight: 400;
       color: var(--danger);
       font-size: 1rem;
     }
@@ -653,7 +653,7 @@
 
     .loop {
       cursor: pointer;
-      font-weight: 600;
+      font-weight: 400;
       padding: 0.2rem 0.5rem;
       color: var(--secondary-text);
       transition: all var(--transition-fast);
@@ -686,7 +686,7 @@
     gap: 0.5rem;
     display: flex;
     cursor: pointer;
-    font-weight: 500;
+    font-weight: 400;
     align-items: center;
     padding: 0.5rem 0.75rem;
     color: var(--secondary-text);
@@ -730,7 +730,7 @@
   :global(.ant-dropdown-menu .ant-dropdown-menu-item) {
     color: var(--secondary-text);
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 400;
     border-radius: 4px;
     transition: all var(--transition-fast);
 
@@ -829,7 +829,7 @@
   flex: 1;
   text-align: left;
   font-size: 0.74rem;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--moon-text-mute);
@@ -850,43 +850,6 @@
   }
 }
 
-/* ---- Engagement identity ---- */
-.engagement {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.65rem;
-  margin-bottom: 0.6rem;
-  border-radius: var(--moon-radius-md);
-  border: 1px solid var(--moon-line-1);
-  background: linear-gradient(
-    150deg,
-    var(--moon-accent-08),
-    transparent 70%
-  );
-  box-shadow: var(--moon-inner-top);
-  @include responsive(tablet3) {
-    display: none;
-  }
-}
-
-.engagementText {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-width: 0;
-  line-height: 1.15;
-}
-
-.engagementTitle {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--moon-text);
-  letter-spacing: -0.01em;
-  @include truncate(1);
-}
-
-
 /* ---- Tool execution mode ---- */
 /* Matches the Agent Tools row directly below it: same metrics, same tokens. */
 .modeControl {
@@ -897,7 +860,7 @@
   padding: 0.45rem 0.75rem;
   margin-bottom: 0.5rem;
   font-size: 0.72rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--secondary-text);
   background: var(--secondary-bg);
   border: 1px solid var(--border-subtle);
@@ -988,7 +951,7 @@
   margin-bottom: 0.1rem;
   border-radius: var(--moon-radius-sm);
   font-size: 0.79rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--moon-text-dim);
   cursor: pointer;
   border: 1px solid transparent;
@@ -1055,7 +1018,7 @@
   padding: 0.05rem 0.35rem;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.58rem;
-  font-weight: 600;
+  font-weight: 400;
   text-align: center;
   color: var(--moon-accent);
   background: var(--moon-accent-08);
@@ -1081,7 +1044,7 @@
       gap: 0.5rem;
       padding: 0.5rem 0.6rem;
       font-size: 0.78rem;
-      font-weight: 500;
+      font-weight: 400;
       color: var(--moon-text-mute);
       background: transparent;
       border: 1px solid transparent;

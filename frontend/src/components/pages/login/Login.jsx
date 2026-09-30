@@ -7,13 +7,7 @@ import { getRegistrationStatus, login } from "@/services/auth.service";
 import Link from "next/link";
 import { loginUser } from "@/store/user.slice";
 import { useDispatch } from "react-redux";
-import { MoonBackdrop, ShinyText } from "@/components/common/ui";
-
-const CAPABILITIES = [
-  "97 WSTG v4.2 test cases across 12 categories",
-  "Evidence recorded per case; findings mapped to the OWASP Top 10:2025",
-  "Report draft generated from the evidence the session already holds",
-];
+import { MoonBackdrop } from "@/components/common/ui";
 
 const LoginPage = () => {
   const router = useRouter();
@@ -52,41 +46,10 @@ const LoginPage = () => {
     <div className={styles.authShell}>
       <MoonBackdrop variant="page" />
 
-      <aside className={styles.authBrand}>
-        <div className={styles.brandTop}>
-          <div className={styles.brandText}>
-            <span className={styles.brandName}>VulnPen</span>
-            <span className={styles.brandSub}>T-NET IT Solution</span>
-          </div>
-        </div>
-
-        <div className={styles.brandBody}>
-          <h2 className={styles.brandHeadline}>
-            Point VulnPen at a web application and{" "}
-            <ShinyText text="let the testing start" speed={7} />
-          </h2>
-          <p className={styles.brandCopy}>
-            VulnPen plans its work from the OWASP WSTG v4.2 catalogue, runs each
-            test case, records the evidence, maps every finding to the OWASP Top
-            10:2025 and drafts the penetration testing report.
-          </p>
-          <ul className={styles.brandList}>
-            {CAPABILITIES.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-
-        <div className={styles.brandFoot}>
-          <span className={styles.brandFootDot} />
-          Authorised testing only
-        </div>
-      </aside>
-
       <main className={styles.authPanel}>
         <div className={styles.authCard}>
           <span className={styles.authEyebrow}>Sign in</span>
-          <h1 className={styles.authTitle}>Welcome back</h1>
+          <h1 className={styles.authTitle}>Welcome to VulnPen</h1>
           <p className={styles.authSubtitle}>
             AI assistant for web application security testing.
           </p>
@@ -137,11 +100,6 @@ const LoginPage = () => {
             </Link>
           )}
         </div>
-
-        <p className={styles.authFootnote}>
-          For authorised security testing only. You are responsible for having
-          permission to test every target you point VulnPen at.
-        </p>
       </main>
     </div>
   );

@@ -1,5 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap");
 @import "@/styles/color-themes";
 @import "@/styles/variables";
 
@@ -12,10 +12,9 @@
    ========================================================================== */
 
 /* ---------------------------------------------------------------------------
-   1. BASE + AMBIENT BACKDROP
-   The page is a night sky: a near-black void, a cold moon halo bleeding in
-   from the top-left, a faint vignette in the corners and a hairline grid so
-   large empty surfaces still read as "designed" rather than "forgotten".
+   1. BASE + CANVAS
+   xAI posture: one near-black #0a0a0a canvas edge-to-edge. No halo, no grid
+   ambience, no atmosphere — restraint is the design.
    -------------------------------------------------------------------------- */
 html,
 body {
@@ -29,15 +28,6 @@ body {
 
 body {
   min-height: 100vh;
-  background-image: radial-gradient(
-      1100px 620px at 12% -12%,
-      var(--moon-halo-soft) 0%,
-      transparent 62%
-    ),
-    radial-gradient(760px 520px at 92% 4%, rgba(201, 210, 226, 0.05) 0%, transparent 60%),
-    radial-gradient(900px 900px at 50% 120%, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
-  background-attachment: fixed;
-  background-repeat: no-repeat;
 
   * {
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -80,6 +70,7 @@ hr {
 
 /* ---------------------------------------------------------------------------
    2. TYPOGRAPHY
+   xAI voice: weight 400 everywhere, emphasis via negative tracking and size.
    -------------------------------------------------------------------------- */
 h1,
 h2,
@@ -88,7 +79,7 @@ h4,
 h5,
 h6 {
   color: var(--moon-text);
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.02em;
   margin: 0;
 }
@@ -101,17 +92,19 @@ code,
 kbd,
 pre,
 samp {
-  font-family: "JetBrains Mono", "Menlo for powerline", ui-monospace, monospace;
+  font-family: "Geist Mono", "JetBrains Mono", "Menlo for powerline",
+    ui-monospace, monospace;
 }
 
 .codeStyle {
   display: block !important;
-  font-family: "JetBrains Mono", "Menlo for powerline", monospace !important;
+  font-family: "Geist Mono", "JetBrains Mono", "Menlo for powerline", monospace !important;
 }
 
 /* Machine identifiers (model ids, endpoints, hashes) read better as mono. */
 .moon-mono {
-  font-family: "JetBrains Mono", "Menlo for powerline", ui-monospace, monospace;
+  font-family: "Geist Mono", "JetBrains Mono", "Menlo for powerline",
+    ui-monospace, monospace;
   font-variant-ligatures: none;
   letter-spacing: -0.01em;
 }
@@ -123,12 +116,11 @@ samp {
   gap: 0.25rem;
   padding: 0.05rem 0.35rem;
   font-size: 0.68rem;
-  font-family: "JetBrains Mono", monospace;
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
   color: var(--moon-text-dim);
-  background: var(--moon-surface-3);
-  border: 1px solid var(--moon-line-2);
-  border-bottom-width: 2px;
-  border-radius: 5px;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: 4px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -206,28 +198,30 @@ textarea::placeholder,
    -------------------------------------------------------------------------- */
 .ant-btn {
   box-shadow: none;
-  font-weight: 500;
-  border-radius: var(--moon-radius-sm);
+  font-weight: 400;
+  /* The pill is the entire interactive shape. */
+  border-radius: var(--moon-radius-pill);
   transition: all var(--moon-dur-2) var(--moon-ease-out);
 }
 
 .ant-btn-default {
-  background: var(--moon-surface-2);
-  border: 1px solid var(--moon-line-2);
+  background: transparent;
+  /* Translucent-white border, the canonical outline pill. */
+  border: 1px solid var(--moon-accent-24);
   color: var(--moon-text-dim);
 
   &:not(:disabled):not(.ant-btn-disabled) {
     &:hover,
     &:focus-visible {
       color: var(--moon-text);
-      border-color: var(--moon-line-3);
-      background: var(--moon-surface-3);
+      border-color: var(--moon-accent-40);
+      background: var(--moon-accent-08);
     }
 
     &:active {
       color: var(--moon-text);
-      border-color: var(--moon-line-2);
-      background: var(--moon-surface-2);
+      border-color: var(--moon-accent-24);
+      background: transparent;
       transform: translateY(0.5px);
     }
   }
@@ -235,7 +229,7 @@ textarea::placeholder,
   &:disabled,
   &.ant-btn-disabled {
     color: var(--moon-text-faint);
-    background: var(--moon-surface-1);
+    background: transparent;
     border-color: var(--moon-line-1);
 
     .anticon {
@@ -248,15 +242,15 @@ textarea::placeholder,
   background: var(--moon-accent-solid);
   border: 1px solid var(--moon-accent-solid);
   color: var(--moon-accent-ink) !important;
-  font-weight: 600;
+  font-weight: 400;
 
   &:not(:disabled):not(.ant-btn-disabled) {
     &:hover,
     &:focus-visible {
-      background: var(--moon-0);
-      border-color: var(--moon-0);
+      background: var(--moon-50);
+      border-color: var(--moon-50);
       color: var(--moon-accent-ink) !important;
-      box-shadow: var(--moon-glow-sm);
+      box-shadow: none;
     }
 
     &:active {
@@ -343,6 +337,34 @@ textarea::placeholder,
     background: transparent;
     color: var(--moon-text);
   }
+
+  /* antd's light-theme error state (.ant-input.ant-input-status-error) paints
+     a white background that beats the single-class base rule above and leaves
+     white-on-white text once validation fires. Keep the dark surface and carry
+     the error signal on the border only. */
+  /* !important: antd injects its error-state CSS at runtime after this sheet,
+     so equal-specificity rules lose regardless of order. */
+  &.ant-input-status-error,
+  &.ant-input-affix-wrapper-status-error,
+  &.ant-input-number-status-error,
+  &.ant-picker-status-error,
+  &:has(.ant-input-status-error) {
+    background: var(--moon-surface-2) !important;
+    border-color: var(--moon-danger) !important;
+
+    &:focus,
+    &:focus-within {
+      background: var(--moon-surface-2) !important;
+      border-color: var(--moon-danger) !important;
+      box-shadow: 0 0 0 3px var(--moon-danger-bg);
+    }
+
+    .ant-input,
+    input {
+      background: transparent !important;
+      color: var(--moon-text) !important;
+    }
+  }
 }
 
 .ant-input-number {
@@ -414,7 +436,7 @@ textarea.ant-input {
     &.ant-select-item-option-selected {
       background: var(--moon-accent-14);
       color: var(--moon-text);
-      font-weight: 500;
+      font-weight: 400;
     }
   }
 
@@ -427,7 +449,7 @@ textarea.ant-input {
   .ant-form-item-label > label {
     color: var(--moon-text-dim);
     font-size: 0.76rem;
-    font-weight: 500;
+    font-weight: 400;
     letter-spacing: 0.01em;
   }
 
@@ -530,7 +552,7 @@ textarea.ant-input {
    -------------------------------------------------------------------------- */
 .ant-tag {
   border-radius: var(--moon-radius-pill);
-  font-weight: 600;
+  font-weight: 400;
   font-size: 0.7rem;
   padding: 0.1rem 0.6rem;
   line-height: 1.6;
@@ -596,7 +618,7 @@ textarea.ant-input {
     color: var(--moon-text-mute) !important;
     border-bottom: 1px solid var(--moon-line-2) !important;
     font-size: 0.7rem;
-    font-weight: 600;
+    font-weight: 400;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
@@ -649,7 +671,7 @@ textarea.ant-input {
 
     a {
       color: var(--moon-accent-ink) !important;
-      font-weight: 600;
+      font-weight: 400;
     }
   }
 
@@ -816,13 +838,13 @@ textarea.ant-input {
 
     .ant-steps-icon {
       color: var(--moon-accent-ink) !important;
-      font-weight: 700;
+      font-weight: 400;
     }
   }
 
   .ant-steps-item-process .ant-steps-item-title {
     color: var(--moon-text) !important;
-    font-weight: 600;
+    font-weight: 400;
   }
 
   .ant-steps-item-finish .ant-steps-item-icon {
@@ -979,7 +1001,7 @@ textarea.ant-input {
   .ant-modal-title {
     color: var(--moon-text);
     font-size: 1.05rem;
-    font-weight: 600;
+    font-weight: 400;
     letter-spacing: -0.02em;
   }
 
@@ -1028,7 +1050,7 @@ textarea.ant-input {
 
   .ant-modal-confirm-title {
     color: var(--moon-text);
-    font-weight: 600;
+    font-weight: 400;
   }
 
   .ant-modal-confirm-content {
@@ -1048,7 +1070,7 @@ textarea.ant-input {
   .ant-dropdown-menu-item {
     color: var(--moon-text-dim);
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 400;
     border-radius: var(--moon-radius-xs);
 
     &:hover,
@@ -1114,7 +1136,7 @@ textarea.ant-input {
 
   .ant-popconfirm-title {
     color: var(--moon-text) !important;
-    font-weight: 600;
+    font-weight: 400;
   }
 
   .ant-popconfirm-description {
@@ -1183,7 +1205,7 @@ textarea.ant-input {
 
   .ant-alert-message {
     color: var(--moon-text);
-    font-weight: 600;
+    font-weight: 400;
   }
 
   .ant-alert-description {

@@ -40,7 +40,7 @@
 .eyebrow {
   color: var(--primary-purple);
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -163,7 +163,7 @@
   padding: 0.25rem 0.6rem;
   color: var(--secondary-text);
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 400;
   background: #131313;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
@@ -172,7 +172,7 @@
 
   b {
     color: #d7d7d7;
-    font-weight: 700;
+    font-weight: 400;
   }
 
   &:hover {
@@ -306,14 +306,14 @@
   color: var(--primary-purple);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .groupName {
   overflow: hidden;
   color: #f2f2f2;
   font-size: 0.84rem;
-  font-weight: 600;
+  font-weight: 400;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -335,7 +335,7 @@
   flex-shrink: 0;
   padding: 0.1rem 0.4rem;
   font-size: 0.64rem;
-  font-weight: 700;
+  font-weight: 400;
   border: 1px solid transparent;
   border-radius: 999px;
 }
@@ -392,7 +392,7 @@
     padding: 0.5rem 0.75rem;
     color: #777;
     font-size: 0.62rem;
-    font-weight: 700;
+    font-weight: 400;
     letter-spacing: 0.06em;
     text-align: left;
     text-transform: uppercase;
@@ -452,7 +452,7 @@
   color: var(--primary-purple);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .caseSection {
@@ -468,7 +468,7 @@
   padding: 0.05rem 0.3rem;
   color: #c8a6ff;
   font-size: 0.58rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   background: var(--moon-accent-08);
@@ -480,7 +480,7 @@
   display: block;
   color: #f2f2f2;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .caseObjective {
@@ -504,7 +504,7 @@
 
   :global(.ant-select-selection-item) {
     font-size: 0.72rem;
-    font-weight: 600;
+    font-weight: 400;
     padding-inline-end: 18px;
   }
 }
@@ -523,7 +523,7 @@
   padding: 0.15rem 0.4rem;
   color: #0d0d0d;
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: 400;
   background: #ff9f43;
   border-radius: 999px;
 }
@@ -542,7 +542,7 @@
     margin: 0 0 0.3rem;
     color: #777;
     font-size: 0.62rem;
-    font-weight: 800;
+    font-weight: 400;
     letter-spacing: 0.07em;
     text-transform: uppercase;
   }
@@ -692,12 +692,12 @@
 
 .scopeAdded {
   color: #7ee787;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .scopeDropped {
   color: #ff5c5c;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .scopeHint {
@@ -856,7 +856,7 @@
   h1 {
     margin: 0.3rem 0 0.4rem;
     font-size: clamp(1.5rem, 2.3vw, 2rem);
-    font-weight: 700;
+    font-weight: 400;
     letter-spacing: -0.04em;
     color: var(--moon-text);
   }
@@ -919,7 +919,7 @@
 
 .progressPercent {
   font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: -0.03em;
   color: var(--moon-text);
 }
@@ -949,7 +949,7 @@
   gap: 0.35rem;
   padding: 0.28rem 0.7rem;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text-dim);
   background: var(--moon-surface-1);
   border: 1px solid var(--moon-line-2);
@@ -1015,7 +1015,7 @@
     padding: 0.55rem 0.75rem;
     color: var(--moon-text-mute);
     font-size: 0.62rem;
-    font-weight: 700;
+    font-weight: 400;
     letter-spacing: 0.1em;
     background: rgba(255, 255, 255, 0.015);
     border-bottom: 1px solid var(--moon-line-2);
@@ -1112,7 +1112,7 @@
 .focusCase {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--moon-text);
 }
 
@@ -1128,7 +1128,7 @@
   margin-left: auto;
   padding: 0.2rem 0.6rem;
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--moon-text-dim);
   background: var(--moon-surface-2);
   border: 1px solid var(--moon-line-2);
@@ -1158,7 +1158,7 @@
   padding: 0 0.4rem;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--moon-accent);
   background: var(--moon-accent-08);
   border: 1px solid var(--moon-accent-24);

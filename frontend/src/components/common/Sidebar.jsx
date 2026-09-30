@@ -106,7 +106,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
 
   const mainSessions = sessions.filter((s) => s.is_main && s.type === "session");
   const subSessions = sessions.filter((s) => !s.is_main && s.type === "session");
-  const primarySession = mainSessions[0];
 
   const handleClearContext = () => {
     modal.confirm({
@@ -170,14 +169,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           >
             {workspaceId ? "Workspace" : "Dashboard"}
           </button>
-        </div>
-
-        <div className={styles.engagement}>
-          <div className={styles.engagementText}>
-            <span className={styles.engagementTitle}>
-              {primarySession?.name || "Engagement"}
-            </span>
-          </div>
         </div>
 
         <Tooltip placement="right" title={executionModeHint}>
@@ -255,7 +246,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           className={isOnWorkspace ? styles.activeTab : styles.tab}
         >
           <Image src={quad} width={14} height={14} alt="" />
-          <span className={styles.navText}>Orchestrator</span>
+          <span className={styles.navText}>Chat</span>
         </div>
 
         <div className={styles.navSectionLabel}>Testing</div>
@@ -270,7 +261,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           className={isOnTestPlan ? styles.activeTab : styles.tab}
         >
           <FiCheckSquare />
-          <span className={styles.navText}>WSTG test plan</span>
+          <span className={styles.navText}>Web Security Testing Guide</span>
           {testPlanCoverage?.total > 0 && (
             <span className={styles.navBadge}>
               {testPlanCoverage.executed}/{testPlanCoverage.total}

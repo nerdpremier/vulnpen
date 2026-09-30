@@ -252,12 +252,7 @@ export default function ChatView({ sessionId }) {
               className={styles.emptyStateLogo}
             />
             <h2>VulnPen</h2>
-            <p>
-              Describe the target below, for example &quot;test abc.com&quot;. The
-              assistant will propose an OWASP WSTG v4.2 test plan, work through
-              it case by case, record the evidence and map every finding to the
-              OWASP Top 10:2025.
-            </p>
+            <p>What do you want to secure today?</p>
           </div>
         )}
 

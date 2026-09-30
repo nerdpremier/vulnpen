@@ -58,7 +58,7 @@
   justify-content: center;
   gap: 0.4rem;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   box-shadow: var(--moon-shadow-2);
   transition: background 0.15s, transform 0.15s, box-shadow 0.15s, border-color 0.15s;
   z-index: 10;
@@ -97,7 +97,7 @@
 
   h2 {
     font-size: 1.5rem;
-    font-weight: 600;
+    font-weight: 400;
     color: var(--primary-text, #fff);
   }
 
@@ -158,7 +158,7 @@
 
   h1, h2, h3, h4, h5, h6 {
     margin: 0.75em 0 0.4em;
-    font-weight: 600;
+    font-weight: 400;
     line-height: 1.3;
   }
 
@@ -255,7 +255,7 @@
   margin-bottom: 0.2rem;
   color: var(--moon-accent);
   font-size: 0.66rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -291,7 +291,7 @@
   padding: 0.45rem 0.8rem;
   border-radius: 8px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -371,7 +371,7 @@
 }
 
 .reasoningLabel {
-  font-weight: 600;
+  font-weight: 400;
   color: #e8c547;
   font-size: 0.78rem;
 }
@@ -494,7 +494,7 @@
 }
 
 .toolCallName {
-  font-weight: 600;
+  font-weight: 400;
   color: var(--accent-color, #4a9eff);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.78rem;
@@ -574,7 +574,7 @@
   align-items: center;
   gap: 0.35rem;
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--secondary-text, #666);
@@ -652,7 +652,7 @@
       border: 1px solid rgba(250, 173, 20, 0.22);
       color: #faad14;
       font-size: 0.68rem;
-      font-weight: 700;
+      font-weight: 400;
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }
@@ -663,7 +663,7 @@
     }
 
     .consentTitle {
-      font-weight: 600;
+      font-weight: 400;
       color: #ffd666;
       font-size: 0.84rem;
       line-height: 1.25;
@@ -791,7 +791,7 @@
   border: 1px solid rgba(255, 77, 79, 0.32);
   color: #ff4d4f;
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -828,7 +828,7 @@
 
     .installTitle {
       font-size: 0.82rem;
-      font-weight: 600;
+      font-weight: 400;
       color: rgba(255, 255, 255, 0.92);
     }
 
@@ -860,7 +860,7 @@
   padding: 0 0.72rem;
   border-radius: 8px;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
   transition: all 0.15s ease;
 
@@ -903,7 +903,7 @@
   border: 1px solid rgba(22, 119, 255, 0.32);
   color: #1677ff;
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -919,7 +919,7 @@
   border: 1px solid rgba(82, 196, 26, 0.32);
   color: #73d13d;
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -984,7 +984,7 @@
 }
 
 .manualExecTitle {
-  font-weight: 600;
+  font-weight: 400;
   font-size: 0.8rem;
   color: var(--accent-color, #4a9eff);
 }
@@ -1102,7 +1102,7 @@
 
 .slashMenuHeader {
   font-size: 0.65rem;
-  font-weight: 700;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--secondary-text, #666);
@@ -1127,7 +1127,7 @@
 .slashMenuCmd {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--accent-color, #4a9eff);
   min-width: 100px;
 }
@@ -1166,7 +1166,7 @@
 .slashCommandLabel {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--accent-color, #4a9eff);
 }
 
@@ -1260,7 +1260,7 @@
 .attachmentMethod {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--accent-color, #4a9eff);
   padding: 0.1rem 0.35rem;
   background: rgba(74, 158, 255, 0.1);
@@ -1280,7 +1280,7 @@
 .attachmentStatus {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--secondary-text, #888);
   padding: 0.05rem 0.3rem;
   background: rgba(255, 255, 255, 0.06);
@@ -1344,7 +1344,7 @@
 .burpRequestMethod {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--accent-color, #4a9eff);
   padding: 0.1rem 0.4rem;
   background: rgba(74, 158, 255, 0.12);
@@ -1366,7 +1366,7 @@
 .burpRequestStatus {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--secondary-text, #888);
   padding: 0.05rem 0.35rem;
   background: rgba(255, 255, 255, 0.06);

@@ -147,21 +147,30 @@ CO
         # Discarding it is why the RPC bridge never came back after a restart, so
         # the saved config is loaded instead (and seeded above on a fresh install).
         ensure_burp_user_config
+
+        # Proxy listeners are project options, so a temporary project resets the
+        # bind to loopback on every boot; the rebind below re-applies it via the
+        # Settings UI.
         setsid nohup burpsuite --user-config-file="$BURP_USER_CONFIG" >/tmp/burp.log 2>&1 </dev/null &
 
         # Wizard: Next (temporary project) then Start Burp — both orange, both
         # in the lower-right region. Stop once the proxy port is listening.
-        sleep 40
-        for _ in $(seq 1 30); do
+        # Instead of a fixed sleep, poll for the Burp window so clicking starts
+        # the moment the wizard is actually on screen.
+        burp_window_up() {
+            xwininfo -name "burp-StartBurp" >/dev/null 2>&1
+        }
+        for _ in $(seq 1 90); do burp_window_up && break; sleep 1; done
+        for _ in $(seq 1 60); do
             port_free ":8080" && break
-            click_orange.sh "260x220+860+480" 1 3 || true
-            sleep 3
+            click_orange.sh "260x220+860+480" 1 1 || true
+            sleep 1
         done
-        for _ in $(seq 1 20); do port_free ":8080" && break; sleep 3; done
+        for _ in $(seq 1 30); do port_free ":8080" && break; sleep 1; done
 
         # The saved user config loads burp-rpc at startup, so give the bridge a
         # moment before falling back to the click-driven load below.
-        for _ in $(seq 1 10); do port_free ":50051" && break; sleep 3; done
+        for _ in $(seq 1 30); do port_free ":50051" && break; sleep 1; done
         # Load the burp-rpc extension (gRPC binds 0.0.0.0:50051). The file
         # field renders at slightly different y offsets per boot — try each.
         if ! port_free ":50051"; then
@@ -179,32 +188,47 @@ CO
             done
         fi
 
-        # Rebind the proxy listener to all interfaces.
+        # Rebind the proxy listener to all interfaces. The Edit-listener dialog
+        # opens at a slightly different position on every boot, so the in-dialog
+        # clicks are computed relative to the dialog's live geometry (xwininfo)
+        # instead of hard-coded screen coordinates.
+        dialog_origin() {
+            xwininfo -name "Edit proxy listener" 2>/dev/null | awk '
+                /Absolute upper-left X/ {x = $4}
+                /Absolute upper-left Y/ {y = $4}
+                END {print x + 0, y + 0}'
+        }
+
+        rebind_listener() {
+            xte "mousemove 700 219" "mouseclick 1"   # listener row
+            sleep 1
+            xte "mousemove 461 222" "mouseclick 1"   # Edit
+            # Poll briefly for the Edit dialog instead of a fixed sleep.
+            for _ in $(seq 1 10); do
+                read DIALOG_X DIALOG_Y <<EOF
+            $(dialog_origin)
+EOF
+                [ "$DIALOG_X" -gt 0 ] && break
+                sleep 1
+            done
+            # A zero origin means the dialog was not found — don't click blind.
+            [ "$DIALOG_X" -gt 0 ] || return 1
+            xte "mousemove $((DIALOG_X + 145)) $((DIALOG_Y + 189))" "mouseclick 1"  # All interfaces radio
+            sleep 1
+            xte "mousemove $((DIALOG_X + 546)) $((DIALOG_Y + 432))" "mouseclick 1"  # OK
+            sleep 2
+            click_orange.sh "240x120+$((DIALOG_X + 365))+$((DIALOG_Y + 225))" 5 2   # confirm Yes
+        }
+
         if ss -tln 2>/dev/null | grep ":8080" | grep -q "127.0.0.1"; then
             xte "mousemove 173 81" "mouseclick 1"    # Proxy tab
-            sleep 3
+            sleep 2
             xte "mousemove 551 117" "mouseclick 1"   # Proxy settings
-            sleep 3
-            xte "mousemove 600 256" "mouseclick 1"   # listener row
-            sleep 1
-            xte "mousemove 438 256" "mouseclick 1"   # Edit
-            sleep 3
-            xte "mousemove 456 375" "mouseclick 1"   # All interfaces radio
             sleep 2
-            xte "mousemove 836 628" "mouseclick 1"   # OK
-            sleep 2
-            click_orange.sh "240x120+660+420" 5 5    # confirm Yes
-            sleep 4
+            rebind_listener || true
+            sleep 3
             if ss -tln 2>/dev/null | grep ":8080" | grep -q "127.0.0.1"; then
-                xte "mousemove 600 268" "mouseclick 1"
-                sleep 1
-                xte "mousemove 438 269" "mouseclick 1"
-                sleep 3
-                xte "mousemove 456 388" "mouseclick 1"
-                sleep 2
-                xte "mousemove 836 641" "mouseclick 1"
-                sleep 2
-                click_orange.sh "240x120+660+433" 5 5
+                rebind_listener || true              # one retry pass
             fi
         fi
         echo "Burp Suite started (wizard + burp-rpc + all-interfaces listener)"
@@ -214,33 +238,25 @@ CO
 start_burp() { launch_burp_flow & }
 
 # Watchdog: if the Burp window gets closed (or crashes) while the desktop is
-# up, relaunch the whole flow — wizard clicks included.
+# up, relaunch the whole flow — wizard clicks included. Event-driven: the loop
+# blocks on the live Burp pid itself (`tail --pid` returns exactly when the
+# process exits), so there is no fixed polling interval to wait out.
 burp_watchdog() {
-    # A Burp process that is up but never loaded the extension looks healthy to a
-    # process check, so the RPC port is watched as well, after a boot grace period.
-    missing_rpc=0
+    # Initial start is done by start_burp; block here until that pid exists
+    # so the watchdog never double-launches on boot.
+    until BPID="$(pgrep -f '[b]urpsuite.jar' | head -1)" && [ -n "$BPID" ]; do
+        sleep 5
+    done
     while true; do
-        sleep 30
-        if [ -S "/tmp/.X11-unix/X${VNC_DISPLAY#:}" ]; then
-            if ! ps aux 2>/dev/null | grep -q "[b]urpsuite.jar"; then
-                echo "Burp not running; relaunching via watchdog"
-                missing_rpc=0
-                launch_burp_flow &
-                sleep 60
-                continue
-            fi
-            if ss -tln 2>/dev/null | grep -q ":50051"; then
-                missing_rpc=0
-            else
-                missing_rpc=$((missing_rpc + 1))
-                if [ "$missing_rpc" -ge 12 ]; then
-                    echo "Burp is up but the RPC bridge (:50051) never bound; relaunching"
-                    missing_rpc=0
-                    launch_burp_flow &
-                    sleep 60
-                fi
-            fi
+        BPID="$(pgrep -f '[b]urpsuite.jar' | head -1)"
+        if [ -n "$BPID" ]; then
+            tail --pid="$BPID" -f /dev/null 2>/dev/null
+            echo "Burp closed (pid $BPID); relaunching via watchdog"
         fi
+        launch_burp_flow &
+        # Grace period so a failed relaunch can't spin the loop; after it the
+        # loop simply re-attaches to whatever Burp pid is (or is not) running.
+        sleep 120
     done
 }
 
