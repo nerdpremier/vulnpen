@@ -69,6 +69,37 @@ const SessionMainPage = ({ session_id }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}>
+      {/* While a panel is open, the Brw/Burp switcher sits at the top of the
+          screen; the right strip stays the open/close control */}
+      {activePanel && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "5px 10px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(255,255,255,0.02)",
+            flexShrink: 0,
+          }}
+        >
+          {RAIL_TABS.map((tab) => {
+            const active = activePanel === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActivePanel(active ? null : tab.key)}
+                title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
+                style={railTabStyle(active)}
+              >
+                {tab.key === "browser" && <TbWorldWww size={14} />}
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div
         id="session-split-container"
         style={{
@@ -122,33 +153,6 @@ const SessionMainPage = ({ session_id }) => {
               // resize handle is dragged and strand the drag mid-way.
               pointerEvents: isDragging ? "none" : "auto",
             }}>
-              {/* Panel header sits on the panel's own top strip */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: "5px 8px",
-                  borderBottom: "1px solid rgba(255,255,255,0.08)",
-                  background: "rgba(255,255,255,0.02)",
-                  flexShrink: 0,
-                }}
-              >
-                {RAIL_TABS.map((tab) => {
-                  const active = activePanel === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      onClick={() => setActivePanel(active ? null : tab.key)}
-                      title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
-                      style={railTabStyle(active)}
-                    >
-                      {tab.key === "browser" && <TbWorldWww size={14} />}
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
               {activePanel === "browser" ? (
                 <BrowserAgentPanel />
               ) : (
