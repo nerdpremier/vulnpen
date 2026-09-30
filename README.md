@@ -19,6 +19,8 @@ For authorised testing only — see [the acceptable use policy](frontend/src/app
 - **VPN management** - upload `.ovpn`/`.conf` bundles with referenced certificates, keys, or credentials and connect/disconnect from the browser. Multiple simultaneous connections supported.
 - **Subagent parallelism** - spawn background agents to run tasks concurrently (e.g. directory brute-force + subdomain enum at the same time).
 - **Safety checks** - dangerous commands (recursive deletes, device writes, fork bombs) require explicit approval, even in auto-run mode.
+- **Tool execution modes** - pick how the agent acts from the composer: **Auto run** (tools run automatically; destructive actions still ask), **Approve for me** (a reviewer approves boundary-crossing actions), or **Requires consent** (confirm every tool action). The choice is saved per user.
+- **Composer model and reasoning pickers** - switch the orchestrator model and its reasoning effort (off / low / medium / high) inline from the chat composer, across any model registered under Settings -> Models.
 - **Bring your own model** - OpenAI, Anthropic (API key or OAuth), Google, Mistral, or any OpenAI-compatible endpoint.
 - **Use existing local subscriptions** - VulnPen can use an authenticated Codex CLI in Docker or host mode, and Claude Code in host/developer mode, as normal inference providers while retaining its own tool and consent loop.
 
@@ -26,7 +28,7 @@ For authorised testing only — see [the acceptable use policy](frontend/src/app
 
 VulnPen's assistant is built around web application security testing. It executes the OWASP Web Security Testing Guide v4.2 methodology and reports findings against the OWASP Top 10:2025.
 
-- **Test plans from the WSTG v4.2 catalogue** - all 97 test cases across the 12 WSTG categories (Information Gathering, Configuration and Deployment, Identity Management, Authentication, Authorization, Session Management, Input Validation, Error Handling, Cryptography, Business Logic, Client-side, API). Pick a depth - `smoke` (24 highest-yield cases), `standard` (56), `deep` (90) or `full` (97) - and restrict the plan to specific categories when the scope is narrower. Every case carries its WSTG id, section, objective, method, expected evidence, CWEs and OWASP Top 10:2025 mapping.
+- **Test plans from the WSTG v4.2 catalogue** - all 97 test cases across the 12 WSTG categories (Information Gathering, Configuration and Deployment, Identity Management, Authentication, Authorization, Session Management, Input Validation, Error Handling, Cryptography, Business Logic, Client-side, API). The plan covers the full catalogue by default; restrict it to specific categories or hand-pick individual cases in the **Plan setup** dialog when the scope is narrower. Every case carries its WSTG id, section, objective, method, expected evidence, CWEs and OWASP Top 10:2025 mapping.
 - **Per-case execution and tracking** - the plan is stored in the session and re-injected into the system prompt on every turn, so coverage survives context summarisation. Results are `passed`, `failed`, `blocked`, `in progress`, `skipped` or `not started`; a case that was never run is never reported as passed.
 - **Findings mapped to the OWASP Top 10:2025** - precedence is an explicit classification, then the Top 10 category of the WSTG case that produced the finding, then the CWE lists OWASP publishes for each category, then a keyword classifier. Findings that cannot be placed are reported as *unmapped* instead of guessed, and the confidence and rationale are stored on the finding.
 - **Draft report** - a Web Application Penetration Testing Report (document control, executive summary, scope and methodology, risk summary by severity and by Top 10 category, findings summary and detail, WSTG v4.2 coverage with untested and blocked cases, OWASP Top 10:2025 mapping, remediation roadmap, appendices) generated deterministically from the evidence the session already holds.
@@ -34,7 +36,7 @@ VulnPen's assistant is built around web application security testing. It execute
 | Surface | What it does |
 | --- | --- |
 | Agent tools | `wstg_test_plan` (generate, list, get, update_case, coverage), `map_finding_owasp`, `generate_pentest_report` |
-| Slash commands | `/wstg [smoke\|standard\|deep\|full] [target]`, `/map`, `/report` |
+| Slash commands | `/wstg [target]` (plans the full WSTG catalogue; ask the assistant to restrict categories or add custom cases), `/map`, `/report`, plus general commands (`/summarize`, `/status`, `/clear`, `/help`, `/targets`, `/export`, `/shells`, `/reset`) |
 | Session UI | **WSTG Test Plan** view: one **Plan setup** dialog (target, scope, notes and the WSTG categories to cover, with a keep/add/drop preview before saving), a progress bar with the status counts as clickable filters, the cases grouped into collapsible WSTG categories (complete a category in one click), a result control per case with the method and expected evidence on expand, edit and single or selection removal, and the report draft with markdown download |
 | REST API | `GET`/`POST` `/agent/session/:id/test-plan` (`action`: `generate` for the plan setup dialog, `add_case` to complete a category), `PATCH`/`DELETE` `/agent/session/:id/test-plan/cases/:testId`, `POST /agent/session/:id/test-plan/cases/remove`, `GET /agent/session/:id/owasp-top10`, `GET /agent/session/:id/report` (add `?download=1` for markdown), `POST /agent/session/:id/vulnerabilities/:vulnId/map`, `POST /agent/session/:id/vulnerabilities/map-all` |
 
@@ -42,7 +44,7 @@ VulnPen's assistant is built around web application security testing. It execute
 
 ```bash
 git clone <repository-url>
-cd vulnpen
+cd <repo-directory>
 ./run.sh start
 ```
 
