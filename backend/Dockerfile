@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb x11vnc python3-websockify novnc \
     && rm -rf /var/lib/apt/lists/*
 
+# Default noVNC scaling mode to Local scaling instead of Remote resizing
+RUN sed -i "s/initSetting('resize', 'off')/initSetting('resize', 'scale')/" /usr/share/novnc/app/ui.js
+
 WORKDIR /usr/src/backend
 
 COPY package.json pnpm-lock.yaml* ./

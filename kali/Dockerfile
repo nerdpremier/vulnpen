@@ -71,6 +71,9 @@ RUN apti \
       xfce4 xfce4-goodies tightvncserver novnc websockify \
       xterm dbus-x11 fonts-dejavu-core xfonts-base firefox-esr
 
+# Default noVNC scaling mode to Local scaling instead of Remote resizing
+RUN sed -i "s/initSetting('resize', 'off')/initSetting('resize', 'scale')/" /usr/share/novnc/app/ui.js
+
 # -- Layer 5: Kali core tooling --
 RUN apti \
       kali-linux-headless \
