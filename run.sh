@@ -142,18 +142,26 @@ get_env() {
     fi
 }
 
+escape_sed_replacement() {
+    # Escape characters that are special inside a sed replacement: backslash,
+    # ampersand, and the delimiter we use for the s||| expression.
+    printf '%s' "$1" | sed 's/[\\&|]/\\&/g'
+}
+
 set_toml_var() {
     local file="$1" key="$2" val="$3"
+    local repl
+    repl=$(escape_sed_replacement "$val")
     if grep -q "^${key} " "$file" 2>/dev/null || grep -q "^${key}=" "$file" 2>/dev/null; then
         local tmp="${file}.tmp.$$"
-        sed "s|^${key} *=.*|${key} = \"${val}\"|" "$file" > "$tmp"
+        sed "s|^${key} *=.*|${key} = \"${repl}\"|" "$file" > "$tmp"
         mv "$tmp" "$file"
     elif grep -q "^# *${key} " "$file" 2>/dev/null || grep -q "^# *${key}=" "$file" 2>/dev/null; then
         local tmp="${file}.tmp.$$"
-        sed "s|^# *${key} *=.*|${key} = \"${val}\"|" "$file" > "$tmp"
+        sed "s|^# *${key} *=.*|${key} = \"${repl}\"|" "$file" > "$tmp"
         mv "$tmp" "$file"
     else
-        echo "${key} = \"${val}\"" >> "$file"
+        printf '%s = "%s"\n' "${key}" "${val}" >> "$file"
     fi
     chmod 600 "$file"
 }
@@ -268,7 +276,7 @@ check_selected_environment() {
             ports+=(3000 8080 6080 9020)
         fi
         if [[ "${DEPLOY_MODE:-}" == "kali" || "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
-            ports+=(4242 4200 5901)
+            ports+=(4242 4200)
         fi
         local port listener
         for port in "${ports[@]}"; do
@@ -434,6 +442,8 @@ sync_compose_file_from_config() {
     ssh_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
     if [[ "$ssh_host" == "kali" ]]; then
         set_normal_kali_mode
+    else
+        set_normal_mode
     fi
 }
 
@@ -706,15 +716,6 @@ configure_static_full() {
         set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI" "$val"
     elif [[ -z "$frontend_backend_uri" ]]; then
         set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI" "http://localhost:8080"
-    fi
-
-    frontend_deployment=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT")
-    prompt_input "Frontend deployment mode [LOCAL/PRODUCTION] [${frontend_deployment:-LOCAL}]:"
-    read -r val
-    if [[ -n "$val" ]]; then
-        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "$val"
-    elif [[ -z "$frontend_deployment" ]]; then
-        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "LOCAL"
     fi
 
     cur=$(get_toml_var "$CONFIG_TOML" "cors_origins")
@@ -1277,6 +1278,9 @@ cmd_start() {
     ensure_config_defaults
     ensure_env_defaults
     ensure_frontend_env
+    # The Settings UI can change the SSH target in backend/.env between runs;
+    # re-derive the compose file so a replayed .run-state can't go stale.
+    sync_compose_file_from_config
 
     if [[ "$QUICK_MODE" == true ]]; then
         if is_model_configured; then
@@ -1320,7 +1324,7 @@ cmd_config() {
     echo -e "   ${BOLD}2)${NC} Exploit box               ${DIM}(changeable at runtime via Settings UI)${NC}"
     echo -e "   ${BOLD}3)${NC} All of the above"
     if [[ "${DEV_MODE:-false}" == true ]]; then
-        echo -e "   ${BOLD}5)${NC} Server / Database / CORS  ${DIM}(requires process restart)${NC}"
+        echo -e "   ${BOLD}4)${NC} Server / Database / CORS  ${DIM}(requires process restart)${NC}"
     fi
     echo
     local max_choice=3
@@ -1335,7 +1339,7 @@ cmd_config() {
             configure_langfuse
             configure_exploit_box
             ;;
-        5)
+        4)
             if [[ "${DEV_MODE:-false}" == true ]]; then
                 configure_static_full
             else

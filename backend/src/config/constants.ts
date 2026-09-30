@@ -37,9 +37,6 @@ export function getBrowserAgentNovncPort(): number {
   return parseInt(process.env.BROWSER_AGENT_NOVNC_PORT || "6080", 10);
 }
 
-export const KALI_API_PORT = 5000;
-export const KALI_API_PATH = "/api";
-
 export const SESSION_NAME_MAX_LENGTH = 50;
 export const SESSION_DESC_MAX_LENGTH = 500;
 

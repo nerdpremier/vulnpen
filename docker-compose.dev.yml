@@ -53,5 +53,3 @@ volumes:
     driver: local
   redis-data:
     driver: local
-  kali-data:
-    driver: local

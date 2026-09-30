@@ -15,7 +15,7 @@ redis_url = "redis://redis:6379"
 
 [session]
 secret = "thisismysessionsecret!123"
-lifetime = 1000
+lifetime = 43200
 
 [tracing]
 enabled = false
