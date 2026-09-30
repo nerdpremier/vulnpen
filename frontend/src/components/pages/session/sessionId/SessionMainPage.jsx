@@ -6,26 +6,25 @@ import ChatView from "./ChatView";
 import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
 import BurpProxyPage from "@/components/pages/session/burp/BurpProxyPage";
 
-// Vertical side tabs shown on the right rail. "browser" is always present;
-// "burp" only appears once the rail is open, next to it.
+// Tabs shown at the top of the screen. "browser" is always present;
+// "burp" only appears once a panel is open, next to it.
 const RAIL_TABS = [
   { key: "browser", label: "BROWSER AGENT" },
   { key: "burp", label: "BURP" },
 ];
 
 const railTabStyle = (active) => ({
-  flex: "1 1 0%",
-  border: "none",
-  borderLeft: active ? "2px solid #8e35ff" : "1px solid rgba(255,255,255,0.08)",
-  background: active ? "rgba(142,53,255,0.12)" : "rgba(255,255,255,0.03)",
+  flex: "0 0 auto",
+  padding: "5px 14px",
+  border: "1px solid",
+  borderColor: active ? "rgba(255,255,255,0.16)" : "transparent",
+  borderRadius: 6,
+  background: active ? "rgba(142,53,255,0.18)" : "rgba(255,255,255,0.03)",
   color: active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.55)",
   cursor: "pointer",
   display: "flex",
-  flexDirection: "column",
   alignItems: "center",
-  gap: 8,
-  paddingTop: 12,
-  paddingBottom: 12,
+  gap: 6,
   fontSize: 11,
   letterSpacing: "0.08em",
 });
@@ -70,6 +69,37 @@ const SessionMainPage = ({ session_id }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}>
+      {/* Top screen tabs: single Browser Agent tab when closed; Browser
+          Agent and Burp side by side once a panel is open */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "4px 8px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(255,255,255,0.02)",
+          flexShrink: 0,
+        }}
+      >
+        {RAIL_TABS.map((tab) => {
+          const active = activePanel === tab.key;
+          const visible = activePanel !== null || tab.key === "browser";
+          if (!visible) return null;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActivePanel(active ? null : tab.key)}
+              title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
+              style={railTabStyle(active)}
+            >
+              {tab.key === "browser" && <TbWorldWww size={14} />}
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div
         id="session-split-container"
         style={{
@@ -133,34 +163,6 @@ const SessionMainPage = ({ session_id }) => {
             </div>
           </>
         )}
-
-        {/* Right rail: single strip when closed, tab rail when open */}
-        <div
-          style={{
-            width: activePanel ? 68 : 34,
-            alignSelf: "stretch",
-            flexShrink: 0,
-            display: "flex",
-            transition: "width 0.15s ease",
-          }}
-        >
-          {RAIL_TABS.map((tab) => {
-            const active = activePanel === tab.key;
-            const visible = activePanel !== null || tab.key === "browser";
-            if (!visible) return null;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActivePanel(active ? null : tab.key)}
-                title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
-                style={railTabStyle(active)}
-              >
-                {tab.key === "browser" && <TbWorldWww size={16} />}
-                <span style={{ writingMode: "vertical-rl" }}>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
