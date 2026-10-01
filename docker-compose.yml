@@ -68,6 +68,13 @@ services:
       start_period: 10s
 
 
+  juice-shop:
+    container_name: vulnpen-juice-shop
+    image: bkimminich/juice-shop:latest
+    ports:
+      - "127.0.0.1:4000:3000"
+    restart: unless-stopped
+
 volumes:
   mongodb-data:
     driver: local
