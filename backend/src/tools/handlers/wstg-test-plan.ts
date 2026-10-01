@@ -8,6 +8,8 @@ import {
   nextTestsToRun,
   addTestCase,
   updateTestCase,
+  findDuplicateCases,
+  removeCases,
 } from "../../services/web-security/test-plan.service";
 import { WSTG_VERSION, getWstgTest } from "../../knowledge";
 
@@ -64,7 +66,9 @@ const wstgTestPlan: ToolDefinition = {
     'optionally narrowed by categories or an explicit list of test ids), "list" to see what is planned, ' +
     '"get" to read one test case in full, "update_case" to record the result of a test or edit its text ' +
     '(status, observations, title, objective, method, notes and linked findings), "add_case" to add a ' +
-    'custom case that is not part of the WSTG catalogue, and "coverage" to report progress. ' +
+    'custom case that is not part of the WSTG catalogue (the tool rejects cases that duplicate one ' +
+    'already in the plan — read the existing case it names instead of re-testing it), "delete_case" to ' +
+    'remove cases you added by mistake, and "coverage" to report progress. ' +
     "The plan is persisted in the session and returned to you in the system prompt, so keep it current: " +
     "mark a case in_progress before you start it, and set it to passed or failed as soon as you know the result.",
   parameters: {
@@ -72,7 +76,7 @@ const wstgTestPlan: ToolDefinition = {
     properties: {
       action: {
         type: "string",
-        enum: ["generate", "list", "get", "update_case", "add_case", "coverage"],
+        enum: ["generate", "list", "get", "update_case", "add_case", "delete_case", "coverage"],
         description: "What to do with the WSTG test plan.",
       },
       target: {
@@ -94,7 +98,7 @@ const wstgTestPlan: ToolDefinition = {
         type: "array",
         items: { type: "string" },
         description:
-          'Optional explicit list of WSTG test ids to plan instead of the full catalogue, e.g. ["WSTG-INPV-05", "WSTG-ATHZ-04"].',
+          'Explicit list of WSTG test ids: for "generate" to plan instead of the full catalogue, e.g. ["WSTG-INPV-05"]; for "delete_case" the custom or catalogue cases to drop.',
       },
       test_id: {
         type: "string",
@@ -126,6 +130,12 @@ const wstgTestPlan: ToolDefinition = {
         enum: TEST_STATUSES,
         description:
           "Result of the test for action \"update_case\": not_started, in_progress, passed, failed, blocked or skipped.",
+      },
+      force: {
+        type: "boolean",
+        description:
+          'For action "add_case": set true to add the case even though the plan already holds one that looks ' +
+          "like the same test. Only do this when the existing case genuinely tests something different.",
       },
       observations: {
         type: "string",
@@ -224,6 +234,31 @@ const wstgTestPlan: ToolDefinition = {
       }
 
       if (action === "add_case") {
+        const title = typeof args.title === "string" ? args.title.trim() : "";
+        if (!title) {
+          return { output: '"add_case" requires a title.', exitCode: 1 };
+        }
+        // Refuse cases the plan already covers: duplicated work inflates
+        // coverage numbers without testing anything new.
+        const duplicates = findDuplicateCases(plan, {
+          title,
+          objective: typeof args.objective === "string" ? args.objective : undefined,
+          categoryCode: typeof args.category_code === "string" ? args.category_code : undefined,
+        });
+        if (duplicates.length && args.force !== true) {
+          const lines = [
+            "Could not add the case: the plan already contains case(s) that appear to test the same thing.",
+            "",
+            ...duplicates.map(
+              (hit) =>
+                `- ${hit.testId} ${hit.title} (shared terms: ${hit.sharedTokens.join(", ")})`,
+            ),
+            "",
+            'Read the existing case with action "get" and run it instead of adding a duplicate.',
+            "If the existing case genuinely tests something different, call add_case again with force=true.",
+          ];
+          return { output: lines.join("\n"), exitCode: 1 };
+        }
         const added = addTestCase(plan, {
           testId: typeof args.test_id === "string" ? args.test_id : undefined,
           title: args.title,
@@ -250,6 +285,34 @@ const wstgTestPlan: ToolDefinition = {
           'Work it like any other case: action "update_case" with test_id when you run it.',
         ];
         return { output: lines.filter(Boolean).join("\n"), exitCode: 0 };
+      }
+
+      if (action === "delete_case") {
+        const ids = (Array.isArray(args.test_ids) ? args.test_ids : [])
+          .map((id: any) => String(id).trim())
+          .filter(Boolean);
+        if (typeof args.test_id === "string" && args.test_id.trim()) ids.push(args.test_id.trim());
+        if (!ids.length) {
+          return { output: '"delete_case" requires test_ids (or a single test_id).', exitCode: 1 };
+        }
+        const removed = removeCases(plan, ids);
+        if (!removed) {
+          return {
+            output: `None of [${ids.join(", ")}] are in this plan. Use action "list" to see planned test ids.`,
+            exitCode: 1,
+          };
+        }
+        await persistPlan(sessionId, removed.plan);
+        return {
+          output: [
+            `Removed ${removed.removed.length} case(s): ${removed.removed.join(", ")}.`,
+            removed.plan.cases.some((testCase) => testCase.linkedVulnerabilityIds?.length)
+              ? "Linked findings are unaffected; remove the stale finding itself with update_engagement_state action \"remove_finding\" if it was not real."
+              : "",
+            coverageLine(removed.plan),
+          ].filter(Boolean).join("\n"),
+          exitCode: 0,
+        };
       }
 
       if (action === "get") {

@@ -1,5 +1,10 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
 import { EngagementState } from "../../services/engagement-state";
+import SessionsModel from "../../models/Sessions/Sessions.model";
+import type {
+  SessionVulnerabilityDoc,
+  WebAppTestPlanDoc,
+} from "../../models/Sessions/Sessions.model";
 import {
   normalizeVulnerability,
   upsertSessionVulnerability,
@@ -23,6 +28,7 @@ const updateEngagementState: ToolDefinition = {
           "add_service",
           "add_credential",
           "add_vulnerability",
+          "remove_finding",
           "add_shell",
           "set_phase",
           "add_key_discovery",
@@ -39,7 +45,9 @@ const updateEngagementState: ToolDefinition = {
           "CVSS score/vector, evidence, stepsToReproduce, contextSummary, impact, remediation, and exploited status when known. " +
           "CWE and owaspTop10 are optional: set wstgId to the WSTG v4.2 test case that produced the finding (e.g. WSTG-INPV-05) and set " +
           "owaspTop10/CWE only when you know they fit. A finding with no well-fitting category or CWE is accepted unmapped — never invent a mapping for completeness. " +
-          "For add_key_discovery provide title and/or description (discovery/value are accepted for compatibility).",
+          "For add_key_discovery provide title and/or description (discovery/value are accepted for compatibility). " +
+          'For remove_finding provide vulnerability_id of a finding that turned out not to be real (e.g. a placeholder or false positive); ' +
+          "it is deleted from the session and unlinked from any test case that references it.",
         properties: {
           // Shared fields. Keeping these explicit prevents models from
           // guessing the shape of add_key_discovery calls while retaining the
@@ -63,6 +71,10 @@ const updateEngagementState: ToolDefinition = {
           impact: { type: "string" },
           remediation: { type: "string" },
           exploited: { type: "boolean" },
+          vulnerability_id: {
+            type: "string",
+            description: "Finding id to delete, for action remove_finding (vulnerabilityId or exact title).",
+          },
           wstgId: {
             type: "string",
             description:
@@ -161,6 +173,72 @@ const updateEngagementState: ToolDefinition = {
             `Vulnerability "${persisted.vulnerability.title}" [${persisted.vulnerability.severity}] ` +
             `${persisted.created ? "added" : "updated"}.\n` +
             `vulnerability_id: ${persisted.vulnerability.vulnerabilityId}`,
+          exitCode: 0,
+        };
+      }
+
+      case "remove_finding": {
+        if (!ctx.sessionId) {
+          return { output: "remove_finding requires an active session", exitCode: 1 };
+        }
+        const wanted = str(data.vulnerability_id) || str(data.vulnerabilityId) || str(data.id);
+        if (!wanted) {
+          return {
+            output: 'remove_finding requires data.vulnerability_id (the id add_vulnerability returned).',
+            exitCode: 1,
+          };
+        }
+        const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
+          .select("vulnerabilities webAppTestPlan");
+        if (!session) return { output: "Session not found.", exitCode: 1 };
+
+        const vulns = (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
+        const upper = wanted.toUpperCase();
+        const target = vulns.find(
+          (v) =>
+            v.vulnerabilityId === wanted ||
+            v.vulnerabilityId?.toUpperCase() === upper ||
+            v.title === wanted,
+        );
+        if (!target) {
+          const known = vulns.map((v) => `${v.vulnerabilityId} ${v.title}`).join("; ");
+          return {
+            output: `No finding matches "${wanted}". Known findings: ${known || "(none)"}.`,
+            exitCode: 1,
+          };
+        }
+
+        await SessionsModel.updateOne(
+          { sessionId: ctx.sessionId },
+          { $pull: { vulnerabilities: { vulnerabilityId: target.vulnerabilityId } } },
+        );
+
+        const plan = session.webAppTestPlan as WebAppTestPlanDoc | undefined;
+        if (plan?.cases?.length) {
+          let unlinked = 0;
+          for (const testCase of plan.cases) {
+            if (testCase.linkedVulnerabilityIds?.includes(target.vulnerabilityId)) {
+              testCase.linkedVulnerabilityIds = testCase.linkedVulnerabilityIds.filter(
+                (id) => id !== target.vulnerabilityId,
+              );
+              unlinked += 1;
+            }
+          }
+          if (unlinked) {
+            await SessionsModel.updateOne(
+              { sessionId: ctx.sessionId },
+              { $set: { webAppTestPlan: plan } },
+            );
+          }
+        }
+
+        state.vulnerabilities = state.vulnerabilities.filter(
+          (v) => v.vulnerabilityId !== target.vulnerabilityId,
+        );
+        return {
+          output:
+            `Removed finding ${target.vulnerabilityId} "${target.title}". ` +
+            "If its test case still applies, re-run it rather than re-adding a placeholder.",
           exitCode: 0,
         };
       }

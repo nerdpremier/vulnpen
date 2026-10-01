@@ -248,6 +248,62 @@ export function addTestCase(
   return { plan: { ...base, cases: [...base.cases, testCase], updatedAt: new Date() }, testCase };
 }
 
+/**
+ * Generic words that say nothing about what a case actually tests; stripped
+ * before comparing a proposed custom case against the plan.
+ */
+const DUPLICATE_STOPWORDS = new Set([
+  "testing", "test", "for", "and", "or", "the", "a", "an", "of", "in", "on",
+  "to", "with", "without", "missing", "weak", "misconfiguration", "via",
+  "using", "against", "checks", "check", "checksfor", "absence", "presence",
+  "vulnerabilities", "vulnerability", "security", "assess", "assessing",
+]);
+
+function significantTokens(text: string): Set<string> {
+  return new Set(
+    (text.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter(
+      (token) => !DUPLICATE_STOPWORDS.has(token),
+    ),
+  );
+}
+
+export interface DuplicateCaseHit {
+  testId: string;
+  title: string;
+  sharedTokens: string[];
+}
+
+/**
+ * Find plan cases that already cover what a proposed custom case describes.
+ * A case counts as a near-duplicate when it shares several significant words
+ * in title/objective, or shares any significant word within the same WSTG
+ * category — a brute-force case, say, should not be re-added next to the
+ * lock-out test that already failed.
+ */
+export function findDuplicateCases(
+  plan: WebAppTestPlanDoc,
+  input: { title: string; objective?: string; categoryCode?: string },
+): DuplicateCaseHit[] {
+  const proposed = significantTokens(`${input.title} ${input.objective ?? ""}`);
+  if (!proposed.size) return [];
+  const category =
+    typeof input.categoryCode === "string" ? input.categoryCode.trim().toUpperCase() : "";
+
+  const hits: DuplicateCaseHit[] = [];
+  for (const testCase of plan.cases) {
+    const existing = significantTokens(
+      `${testCase.title} ${testCase.objective} ${testCase.howToTest ?? ""}`,
+    );
+    const shared = [...proposed].filter((token) => existing.has(token));
+    const sameCategory =
+      !!category && testCase.categoryCode.toUpperCase() === category;
+    if (shared.length >= 2 || (sameCategory && shared.length >= 1)) {
+      hits.push({ testId: testCase.testId, title: testCase.title, sharedTokens: shared.slice(0, 6) });
+    }
+  }
+  return hits;
+}
+
 /** Catalogue position of a test id; hand-added cases sort after every catalogue case. */
 const CATALOGUE_ORDER = new Map<string, number>(
   WSTG_TESTS.map((test, index) => [test.id, index] as const),
