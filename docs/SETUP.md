@@ -47,7 +47,10 @@ cd vulnpen
 ./run.sh start
 ```
 
-Open `http://localhost:3000`, create the installation-owner account, then add
+The compose stack serves the backend API only — the frontend runs on your host
+via `pnpm run dev` inside `frontend/` (the launcher prints the commands) or
+behind the reverse proxy in the TLS procedure below. Open the frontend URL
+(`http://localhost:3000` in dev), create the installation-owner account, then add
 and verify an orchestrator under **Settings → Models**. Open a workspace's
 **Connection** page and save a local folder or tested SSH alias.
 
@@ -109,8 +112,8 @@ The supported default is workstation-local. If remote access is required:
    the unauthenticated noVNC port.
 3. Set `deployment = "PROD"`, `base_url_frontend`, and `cors_origins` to the
    same explicit HTTPS origin in `config.toml`.
-4. Set `NEXT_PUBLIC_BACKEND_URI` to that HTTPS origin and
-   `NEXT_PUBLIC_DEPLOYMENT=PROD` in `frontend/.env`, then rebuild the frontend.
+4. Set `NEXT_PUBLIC_BACKEND_URI` to that HTTPS origin in `frontend/.env`, then
+   rebuild the frontend.
 5. Restart and verify login, API requests, shell WebSockets, and registration
    closure from a private browser window.
 
@@ -163,4 +166,4 @@ docker compose restart backend
 
 The source database is detected automatically when the server holds exactly one other database. Pass it explicitly when detection is ambiguous: `docker compose exec backend pnpm migrate:db-name --yes --from <database-name>` (or set `LEGACY_MONGO_DATABASE`). The migration never writes to or drops the source database, so rolling back is a matter of restoring the previous `mongo_uri`. It is also safe to re-run: documents are upserted by `_id` and indexes are recreated idempotently.
 
-Container names are now fixed (`vulnpen-mongodb`, `vulnpen-redis`, `vulnpen-backend`, `vulnpen-frontend`, `vulnpen-kali`) so tooling finds them no matter which directory the project was cloned into. Docker volume names are unchanged, so no existing data is affected.
+Container names are now fixed (`vulnpen-mongodb`, `vulnpen-redis`, `vulnpen-backend`, `vulnpen-kali`) so tooling finds them no matter which directory the project was cloned into. Docker volume names are unchanged, so no existing data is affected.

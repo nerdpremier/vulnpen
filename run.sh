@@ -407,7 +407,7 @@ ensure_env_defaults() {
         info "Created .env from template"
     fi
     if [[ ! -f "$MODEL_REGISTRY_FILE" ]]; then
-        printf '{\n  "models": [],\n  "assignments": {\n    "racerModelIds": []\n  }\n}\n' > "$MODEL_REGISTRY_FILE"
+        printf '{\n  "models": [],\n  "assignments": {}\n}\n' > "$MODEL_REGISTRY_FILE"
         info "Created model-registry.json"
     fi
     chmod 600 "$DYNAMIC_ENV" "$MODEL_REGISTRY_FILE"
