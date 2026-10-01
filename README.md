@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/t-net-logo.png" alt="VulnPen by T-NET IT Solution" height="170" />
+  <img src="frontend/public/t-net-logo.png" alt="VulnPen by T-NET IT Solution" height="170" />
 </p>
 
 # VulnPen
