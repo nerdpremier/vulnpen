@@ -7,10 +7,12 @@ import {
   updateMcpSafety,
 } from "../controllers/mcp.controller";
 
+import { requireHostOwner } from "../services/host-owner.service";
+
 const router = express.Router();
 
 router.get("/config", [verifySess], getMcpConfig);
-router.post("/safety", [verifySess], updateMcpSafety);
+router.post("/safety", [verifySess, requireHostOwner], updateMcpSafety);
 router.post("/tokens", [verifySess], createMcpAccessToken);
 router.delete("/tokens/:tokenId", [verifySess], revokeMcpAccessToken);
 

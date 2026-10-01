@@ -687,6 +687,7 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       "ollama",
       "openai-compatible",
       "kimi",
+      "bedrock",
       "codex-subscription",
       "claude-subscription",
     ];
@@ -1880,7 +1881,8 @@ export const getSSHConfig = async (_req: Request, res: Response) => {
       port: env.SSH_PORT || "22",
       username: env.SSH_USERNAME || "",
       authMethod: env.SSH_PRIVATE_KEY ? "key" : "password",
-      password: env.SSH_PASSWORD || "",
+      // Never send the credential itself back to the client.
+      hasPassword: !!env.SSH_PASSWORD,
       hasPrivateKey: !!env.SSH_PRIVATE_KEY,
       configured: !!(env.SSH_HOST && env.SSH_USERNAME),
       disableSafetyProtections:

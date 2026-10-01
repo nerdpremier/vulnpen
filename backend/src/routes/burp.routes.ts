@@ -19,7 +19,7 @@ import {
 
 const router = express.Router();
 
-router.get("/health", getBurpHealth);
+router.get("/health", [verifySess], getBurpHealth);
 router.get("/connection-status", [verifySess], getBurpConnectionStatus);
 router.get("/ca/status", [verifySess], getBurpCertificateStatus);
 router.post("/ca/configure", [verifySess], configureBurpCertificate);

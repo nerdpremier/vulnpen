@@ -73,9 +73,9 @@ router.get("/get-capabilities", [verifySess], getCapabilities);
 router.post("/update-capabilities", [verifySess], updateCapabilities);
 router.post("/detect-capabilities", [verifySess], detectCapabilities);
 
-router.get("/get-ssh-config", [verifySess], getSSHConfig);
-router.post("/update-ssh-config", [verifySess], updateSSHConfig);
-router.post("/update-safety-protections", [verifySess], updateSafetyProtections);
+router.get("/get-ssh-config", [verifySess, requireHostOwner], getSSHConfig);
+router.post("/update-ssh-config", [verifySess, requireHostOwner], updateSSHConfig);
+router.post("/update-safety-protections", [verifySess, requireHostOwner], updateSafetyProtections);
 
 router.get("/get-vnc-config", [verifySess], getVNCConfig);
 router.post("/update-vnc-config", [verifySess], updateVNCConfig);

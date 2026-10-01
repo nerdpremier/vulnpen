@@ -15,7 +15,10 @@ export interface ModelPresetDoc {
 export interface McpTokenDoc {
   tokenId: string;
   label: string;
-  token: string;
+  /** SHA-256 of the presented token — the at-rest representation. */
+  tokenHash?: string;
+  /** Legacy plaintext. Only set on pre-hashing docs; cleared on first use. */
+  token?: string;
   createdAt: Date;
   lastUsedAt?: Date;
   revokedAt?: Date | null;
@@ -184,7 +187,8 @@ const UserSchema = new Schema({
         {
           tokenId: { type: String, required: true },
           label: { type: String, required: true },
-          token: { type: String, required: true },
+          tokenHash: { type: String },
+          token: { type: String, required: false },
           createdAt: { type: Date, default: Date.now },
           lastUsedAt: { type: Date },
           revokedAt: { type: Date, default: null },

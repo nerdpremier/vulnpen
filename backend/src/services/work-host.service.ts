@@ -171,6 +171,7 @@ export function execSSH(
   ssh: SSHClient,
   command: string,
   timeoutMs = 300_000,
+  input?: string,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     let stdout = "";
@@ -196,6 +197,11 @@ export function execSSH(
       stream.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
       stream.on("close", (code: number | null) => finish(undefined, code ?? 0));
       stream.on("error", (streamError: Error) => finish(streamError));
+      // Written after the listeners are attached so an EPIPE from a command
+      // that exits before reading stdin is observed, not thrown.
+      if (typeof input === "string" && input.length > 0) {
+        stream.stdin?.end(input);
+      }
     });
   });
 }
@@ -308,18 +314,20 @@ export async function execOnWorkHost(
   sessionId: string,
   command: string,
   timeoutMs = 300_000,
+  input?: string,
 ): Promise<CommandResult> {
   const target = await resolveSessionWorkHost(sessionId);
-  return execOnResolvedWorkHost(target, command, timeoutMs);
+  return execOnResolvedWorkHost(target, command, timeoutMs, input);
 }
 
 export async function execOnWorkspaceHost(
   workspaceId: string,
   command: string,
   timeoutMs = 300_000,
+  input?: string,
 ): Promise<CommandResult> {
   const target = await resolveWorkspaceWorkHost(workspaceId);
-  return execOnResolvedWorkHost(target, command, timeoutMs);
+  return execOnResolvedWorkHost(target, command, timeoutMs, input);
 }
 
 /**
@@ -338,6 +346,7 @@ export async function execOnResolvedWorkHost(
   target: ResolvedWorkHost,
   command: string,
   timeoutMs = 300_000,
+  input?: string,
 ): Promise<CommandResult> {
   const folder = target.kind === "local"
     ? shellEscape(expandLocalFolder(target.workFolder))
@@ -361,7 +370,7 @@ export async function execOnResolvedWorkHost(
   }
   const ssh = await connectSSH(target.sshConfig!);
   try {
-    return await execSSH(ssh, inFolder, timeoutMs);
+    return await execSSH(ssh, inFolder, timeoutMs, input);
   } finally {
     ssh.end();
   }

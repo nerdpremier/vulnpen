@@ -73,7 +73,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 
 /**
  * Wraps a command with sudo if needed. Uses the SSH password for `sudo -S`
- * when the SSH user is not root.
+ * when the SSH user is not root. The password is returned as stdin input, NOT
+ * embedded in the command string, so it never appears in the remote process
+ * list or shell history.
  * @param cmdOrPath - Command string to run via sh -c, or script path when isScriptPath is true
  * @param isScriptPath - When true, cmdOrPath is a file path to execute directly (avoids quoting issues)
  */
@@ -81,13 +83,13 @@ function sudoWrap(
   cmdOrPath: string,
   sshConfig: { username?: string; password?: string },
   isScriptPath = false
-): string {
+): { command: string; input?: string } {
   const run = isScriptPath ? `bash ${shellEscape(cmdOrPath)}` : `sh -c ${shellEscape(cmdOrPath)}`;
-  if (sshConfig.username === "root") return run;
+  if (sshConfig.username === "root") return { command: run };
   if (sshConfig.password) {
-    return `echo ${shellEscape(sshConfig.password)} | sudo -S ${run}`;
+    return { command: `sudo -S -p '' ${run}`, input: `${sshConfig.password}\n` };
   }
-  return `sudo -n ${run}`;
+  return { command: `sudo -n ${run}` };
 }
 
 function shellEscape(s: string): string {
@@ -319,7 +321,7 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
 
       console.log("[vpn/connect] 10 starting openvpn...", { profile: safeName, host: target.kind });
       const { stdout, stderr, code } = await withTimeout(
-        execOnWorkHost(session_id, startCmd, 25_000),
+        execOnWorkHost(session_id, startCmd.command, 25_000, startCmd.input),
         25_000,
         "OpenVPN start"
       );
@@ -389,7 +391,7 @@ export const disconnectVPNConnection = async (req: Request, res: Response) => {
 
       const privilege = target.kind === "ssh" ? target.sshConfig! : { username: process.getuid?.() === 0 ? "root" : process.env.USER };
       const killCmd = sudoWrap(rawCmd, privilege);
-      const { stdout } = await execOnWorkHost(session_id, killCmd, 15_000);
+      const { stdout } = await execOnWorkHost(session_id, killCmd.command, 15_000, killCmd.input);
 
       if (stdout.trim().includes("KILLED")) {
         return res.status(200).json({ message: "VPN connection terminated" });
@@ -423,7 +425,8 @@ export const disconnectAllVPN = async (req: Request, res: Response) => {
     {
       const rawCmd = "for f in /tmp/openvpn-*.pid; do [ -f \"$f\" ] || continue; p=$(cat \"$f\"); case \"$p\" in (*[!0-9]*|'') ;; (*) cmd=$(ps -p \"$p\" -o args= 2>/dev/null); case \"$cmd\" in (*openvpn*'/tmp/vpn-'*) kill \"$p\" 2>/dev/null ;; esac ;; esac; rm -f \"$f\"; done; rm -rf /tmp/vpn-*; echo 'DONE'";
       const privilege = target.kind === "ssh" ? target.sshConfig! : { username: process.getuid?.() === 0 ? "root" : process.env.USER };
-      await execOnWorkHost(session_id, sudoWrap(rawCmd, privilege), 15_000);
+      const stopAll = sudoWrap(rawCmd, privilege);
+      await execOnWorkHost(session_id, stopAll.command, 15_000, stopAll.input);
       return res.status(200).json({ message: "All VPN connections terminated" });
     }
   } catch (err) {

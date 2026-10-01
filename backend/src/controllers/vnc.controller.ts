@@ -91,10 +91,12 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
 
             // Set password. Fall back to no VNC auth when the box has no working
             // vncpasswd binary (e.g. Debian tigervnc) so the server still starts;
-            // access stays restricted to the SSH tunnel + loopback.
+            // access stays restricted to the SSH tunnel + loopback. The passwd
+            // file is written for every path so x11vnc can use -rfbauth instead
+            // of -passwd (which would leak the password via the process list).
             const escapedPassword = savedPassword.replace(/'/g, "'\\''");
             let useVncAuth = false;
-            if (!isX11vnc) {
+            {
               const pwProbe = await execWithOutput(
                 writeVncPasswordCmd(escapedPassword)
               );
@@ -118,7 +120,11 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
               await new Promise((r) => setTimeout(r, 2000));
               await exec(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
               await exec(
-                `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escapedPassword}' -forever -shared -noxdamage > /dev/null 2>&1 &`
+                `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} ` +
+                (useVncAuth
+                  ? "-rfbauth ~/.vnc/passwd "
+                  : "") +
+                "-forever -shared -noxdamage > /dev/null 2>&1 &"
               );
               await new Promise((r) => setTimeout(r, 1500));
             } else {
