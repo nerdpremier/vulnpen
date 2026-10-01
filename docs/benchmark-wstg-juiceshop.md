@@ -81,16 +81,21 @@ verification passes and are counted once each in the discussion below).
 
 ### OWASP Top 10 (2025) mapping
 
+Mapping uses the system's OWASP Top 10:2025 knowledge base
+(`backend/src/knowledge/owasp-top10-2025.ts`), which mirrors the published 2025
+list — note the 2025 ordering differs from 2021: SSRF is folded into A01, and
+A10 is now Mishandling of Exceptional Conditions, not SSRF.
+
 | OWASP 2025 Category | Findings |
 |---|---:|
 | A01:2025 Broken Access Control | 7 |
-| A02:2025 Cryptographic Failures | 10 |
-| A04:2025 Insecure Design | 2 |
-| A05:2025 Security Misconfiguration | 2 |
-| A06:2025 Vulnerable Components | 4 |
-| A07:2025 Identification & Authentication Failures | 17 |
-| A09:2025 Logging & Monitoring Failures | 1 |
-| A10:2025 SSRF | 2 |
+| A02:2025 Security Misconfiguration | 10 |
+| A04:2025 Cryptographic Failures | 2 |
+| A05:2025 Injection | 2 |
+| A06:2025 Insecure Design | 4 |
+| A07:2025 Authentication Failures | 17 |
+| A09:2025 Security Logging and Alerting Failures | 1 |
+| A10:2025 Mishandling of Exceptional Conditions | 2 |
 | (not yet mapped) | 8 |
 
 ### Critical findings (exploited, with evidence)
