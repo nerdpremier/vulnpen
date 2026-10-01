@@ -231,6 +231,9 @@ const commandHandlers: Record<string, CommandHandler> = {
           agentState: "idle",
           pendingConsent: null,
           pendingManualExecution: null,
+          turnIndex: 0,
+          totalTokens: 0,
+          tokenHistory: [],
         },
       },
     );

@@ -44,15 +44,6 @@ export type ToolSafetyEvaluator = (input: {
   approvalContext: ToolApprovalContext;
 }) => Promise<{ safe: boolean; reason: string }>;
 
-export function shouldBlockAutonomousTool(
-  toolName: string,
-  safetyTriggered: boolean,
-  _mode: ToolExecutionMode,
-): boolean {
-  if (!safetyTriggered) return false;
-  return true;
-}
-
 export async function decideToolConsent(params: {
   mode: ToolExecutionMode;
   tool: ToolDefinition;

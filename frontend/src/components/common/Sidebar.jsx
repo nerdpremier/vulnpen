@@ -9,7 +9,6 @@ import { useRouter, usePathname } from "next/navigation";
 import { useQuery } from "react-query";
 import { getVulnerabilities } from "@/services/agent.service";
 import { getTestPlan } from "@/services/websecurity.service";
-// import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { FiCheckSquare, FiMonitor, FiAlertOctagon } from "react-icons/fi";
 import { HiOutlineChevronLeft } from "react-icons/hi";
 
@@ -90,9 +89,6 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             <span>{workspaceId ? "Workspace" : "Dashboard"}</span>
           </button>
         </Tooltip>
-
-        {/* AgentToolsPanel hidden by request — re-enable to show tool toggles */}
-        {/* <AgentToolsPanel sessionId={sessionId} /> */}
       </div>
 
       <nav className={styles.sidebarNav}>

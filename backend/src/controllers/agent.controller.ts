@@ -370,11 +370,12 @@ export const deleteSession = async (req: Request, res: Response) => {
 
 export const clearContext = async (req: Request, res: Response) => {
   try {
+    const userId = res.locals.userId;
     const { sessionId } = req.body;
     if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
 
-    const session = await SessionsModel.findOne({ sessionId });
-    if (!session) return res.status(404).json({ message: "Session not found" });
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     abortSession(sessionId);
 

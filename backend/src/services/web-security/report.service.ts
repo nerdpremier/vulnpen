@@ -332,7 +332,7 @@ function scopeAndMethodologySection(options: ReportOptions, findings: ReportFind
   lines.push(
     "### 3.2 Methodology",
     "",
-    `Testing followed the OWASP Web Security Testing Guide (WSTG) v${WSTG_VERSION} (${WSTG_SOURCE}). Each planned test case carries its WSTG identifier, objective, method and the evidence expected from it; results are tracked per case with the statuses passed, failed, blocked, in progress and not started.`,
+    `Testing followed the OWASP Web Security Testing Guide (WSTG) v${WSTG_VERSION} (${WSTG_SOURCE}). Each planned test case carries its WSTG identifier, objective, method and the evidence expected from it; results are tracked per case with the statuses passed, failed, blocked, in progress, skipped and not started.`,
     "",
     "Findings were mapped to the OWASP Top 10:2025 (https://owasp.org/Top10/2025/) using the following precedence: an explicit tester classification, then the Top 10 category associated with the WSTG test case that produced the finding, then the CWE identifiers OWASP publishes for each category, then a keyword classifier. Automated mappings that could not be corroborated are flagged with their confidence level.",
     "",

@@ -8,6 +8,7 @@ Firstly, thank you for considering contributing to **VulnPen**! As an open-sourc
 Before you begin, ensure you have the following installed:
 - **Git**
 - **Node.js 22+**
+- **pnpm v9+**
 - **Docker**
 
 ### Setting Up Your Development Environment

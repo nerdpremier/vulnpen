@@ -167,20 +167,32 @@ function sanitizePreset(
   };
 }
 
+/**
+ * Validate assignments against the model list. With `strict` (the write path)
+ * an unknown non-empty id is an error instead of a silent fallback — silently
+ * remapping to models[0] would answer 200 with different assignments than
+ * requested. The lenient fallback remains for env-var migration and stored
+ * profiles that may reference a since-removed model.
+ */
 function sanitizeAssignments(
   raw: Partial<ModelAssignments>,
   models: ModelPreset[],
+  strict = false,
 ): ModelAssignments {
   const ids = new Set(models.map((model) => model.id));
-  const orchestratorModelId = ids.has(asString(raw.orchestratorModelId))
-    ? asString(raw.orchestratorModelId)
-    : models[0]?.id;
-  const browserModelId = ids.has(asString(raw.browserModelId))
-    ? asString(raw.browserModelId)
-    : undefined;
+  const orchestratorModelId = asString(raw.orchestratorModelId);
+  const browserModelId = asString(raw.browserModelId);
+  if (strict && orchestratorModelId && !ids.has(orchestratorModelId)) {
+    throw new Error(`orchestratorModelId "${orchestratorModelId}" does not match any model in the list`);
+  }
+  if (strict && browserModelId && !ids.has(browserModelId)) {
+    throw new Error(`browserModelId "${browserModelId}" does not match any model in the list`);
+  }
   return {
-    orchestratorModelId,
-    browserModelId,
+    orchestratorModelId: ids.has(orchestratorModelId)
+      ? orchestratorModelId
+      : models[0]?.id,
+    browserModelId: ids.has(browserModelId) ? browserModelId : undefined,
   };
 }
 
@@ -372,7 +384,7 @@ export function normalizeModelRegistryInput(
   const models = modelsInput
     .map((preset) => sanitizePreset(preset, usedIds))
     .filter((preset): preset is ModelPreset => Boolean(preset));
-  const assignments = sanitizeAssignments(assignmentsInput, models);
+  const assignments = sanitizeAssignments(assignmentsInput, models, true);
   return { models, assignments };
 }
 

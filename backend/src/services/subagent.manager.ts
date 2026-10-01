@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { EventEmitter } from "events";
 import SessionsModel, { AgentMessageDoc, SubagentStatus } from "../models/Sessions/Sessions.model";
 import { ShellManager } from "./shell.manager";
-import { SSEWriter, buildTraceTags } from "./agent.service";
+import { SSEWriter, buildTraceTags, buildEngagementState } from "./agent.service";
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { getProvider, invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
@@ -10,7 +10,11 @@ import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.
 import { ExecutionContext, ToolResult } from "../tools/types";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { parseToolArguments } from "../utils/toolArguments";
-import { shouldBlockAutonomousTool } from "./tool-approval.service";
+import {
+  decideToolConsent,
+  compactApprovalTranscript,
+  createAiToolSafetyEvaluator,
+} from "./tool-approval.service";
 
 const MAX_SUBAGENT_ITERATIONS = 15;
 const MAX_SUBAGENT_WALL_CLOCK_MS = 10 * 60 * 1000; // 10 minutes
@@ -176,7 +180,13 @@ export class SubagentManager extends EventEmitter {
     const { subagentId, task, sse, userId, abortSignal } = params;
 
     const session = await SessionsModel.findOne({ sessionId: this.sessionId }).lean();
-    const disabledAgentTools: string[] = session?.disabledAgentTools ?? [];
+    const user = await UserModel.findById(userId).lean();
+    const disabledAgentTools: string[] = [
+      ...new Set([
+        ...(user?.configs?.disabledAgentTools ?? []),
+        ...(session?.disabledAgentTools ?? []),
+      ]),
+    ];
 
     const systemMsg: AgentMessageDoc = {
       id: `sys_${subagentId}`,
@@ -196,6 +206,7 @@ export class SubagentManager extends EventEmitter {
 
     let messages: AgentMessageDoc[] = [systemMsg, userMsg];
     const providerConfig = await getProvider();
+    const engagementState = buildEngagementState(session);
     const shellsCreated: string[] = [];
     let iteration = 0;
     let finalResult = "";
@@ -205,6 +216,7 @@ export class SubagentManager extends EventEmitter {
       agentId: subagentId,
       agentRole: "subagent",
       userId,
+      engagementState,
       runCommand: (cmd, timeoutMs) =>
         this.shellManager.execInShell(cmd, timeoutMs, onChunk, abortSignal),
       spawnShell: async (label, type, purpose) => {
@@ -385,17 +397,51 @@ export class SubagentManager extends EventEmitter {
           const safetyTriggered =
             !disableSafety &&
             (toolDef.shouldRequireConsent?.(args, ctx) ?? false);
-          if (
-            shouldBlockAutonomousTool(
-              tc.name,
-              safetyTriggered,
-              toolExecutionMode,
-            )
-          ) {
+
+          // Subagents cannot surface a consent prompt to the user, so anything
+          // still requiring manual approval is refused with an actionable
+          // message. In "approve for me" mode the same AI reviewer as the main
+          // agent decides, so boundary-crossing actions stay consistent.
+          const approval = await decideToolConsent({
+            mode: toolExecutionMode,
+            tool: toolDef,
+            args,
+            context: ctx,
+            safetyTriggered,
+            evaluator:
+              toolExecutionMode === "auto_approve"
+                ? createAiToolSafetyEvaluator({
+                    provider: providerConfig,
+                    userId,
+                    abortSignal,
+                  })
+                : undefined,
+            approvalContext: {
+              transcript: compactApprovalTranscript(messages),
+            },
+          });
+
+          if (approval.requireConsent) {
             messages.push({
               id: uuidv4(),
               role: "tool",
-              content: "Blocked: this command was flagged as potentially destructive. Subagents cannot execute dangerous commands. Use a different approach or ask the main agent to run this with user approval.",
+              content:
+                "Blocked: this action was flagged as potentially destructive. Subagents cannot execute dangerous commands without user approval. Use a different approach or ask the main agent to run this with user approval.",
+              toolCallId: tc.id,
+              toolName: tc.name,
+              timestamp: new Date(),
+              turnIndex: 0,
+            });
+            continue;
+          }
+
+          if (approval.denied) {
+            messages.push({
+              id: uuidv4(),
+              role: "tool",
+              content:
+                `Approve for me denied this approval-boundary request: ${approval.reason}\n` +
+                "Do not retry the same action or bypass the review. Use a materially safer approach.",
               toolCallId: tc.id,
               toolName: tc.name,
               timestamp: new Date(),

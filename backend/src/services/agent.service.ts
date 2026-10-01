@@ -299,7 +299,14 @@ export async function runAgentLoop(params: {
   const maxAgentIterations = normalizeMaxAgentIterations(
     user?.configs?.maxAgentIterations,
   );
-  const disabledAgentTools: string[] = session.disabledAgentTools ?? [];
+  // Tools disabled at user level (Settings) apply to every session; the
+  // session-level list narrows further.
+  const disabledAgentTools: string[] = [
+    ...new Set([
+      ...(user?.configs?.disabledAgentTools ?? []),
+      ...(session.disabledAgentTools ?? []),
+    ]),
+  ];
 
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
@@ -369,30 +376,7 @@ export async function runAgentLoop(params: {
       })
     : undefined;
 
-  const engagementState = new EngagementState("pentest");
-  engagementState.vulnerabilities = (session.vulnerabilities ?? []).map((vulnerability) => ({
-    vulnerabilityId: vulnerability.vulnerabilityId,
-    fingerprint: vulnerability.fingerprint,
-    host: vulnerability.host,
-    service: vulnerability.service,
-    endpoint: vulnerability.endpoint,
-    title: vulnerability.title,
-    severity: vulnerability.severity,
-    cvssScore: vulnerability.cvssScore,
-    cvssVector: vulnerability.cvssVector,
-    cwe: vulnerability.cwe,
-    evidence: vulnerability.evidence,
-    stepsToReproduce: vulnerability.stepsToReproduce,
-    contextSummary: vulnerability.contextSummary,
-    impact: vulnerability.impact,
-    remediation: vulnerability.remediation,
-    exploited: vulnerability.exploited,
-    cve: vulnerability.cve,
-    status: vulnerability.status,
-    source: vulnerability.source,
-    createdAt: vulnerability.createdAt,
-    updatedAt: vulnerability.updatedAt,
-  }));
+  const engagementState = buildEngagementState(session);
 
   const executionCtx = buildExecutionContext({
     sessionId,
@@ -884,6 +868,41 @@ export async function initAndRun(params: {
   await runAgentLoop({ sessionId, userId, sse, abortSignal });
 }
 
+// ─── Engagement state bootstrap ──────────────────────────────────────
+
+/**
+ * Rebuild the in-memory engagement state from the persisted session document.
+ * Shared by the main agent loop, the consent path and subagents so every
+ * execution context can record state via update_engagement_state.
+ */
+export function buildEngagementState(session: any): EngagementState {
+  const engagementState = new EngagementState("pentest");
+  engagementState.vulnerabilities = (session?.vulnerabilities ?? []).map((vulnerability: any) => ({
+    vulnerabilityId: vulnerability.vulnerabilityId,
+    fingerprint: vulnerability.fingerprint,
+    host: vulnerability.host,
+    service: vulnerability.service,
+    endpoint: vulnerability.endpoint,
+    title: vulnerability.title,
+    severity: vulnerability.severity,
+    cvssScore: vulnerability.cvssScore,
+    cvssVector: vulnerability.cvssVector,
+    cwe: vulnerability.cwe,
+    evidence: vulnerability.evidence,
+    stepsToReproduce: vulnerability.stepsToReproduce,
+    contextSummary: vulnerability.contextSummary,
+    impact: vulnerability.impact,
+    remediation: vulnerability.remediation,
+    exploited: vulnerability.exploited,
+    cve: vulnerability.cve,
+    status: vulnerability.status,
+    source: vulnerability.source,
+    createdAt: vulnerability.createdAt,
+    updatedAt: vulnerability.updatedAt,
+  }));
+  return engagementState;
+}
+
 // ─── Handle consent response and resume ──────────────────────────────
 
 export async function handleConsent(params: {
@@ -938,6 +957,7 @@ export async function handleConsent(params: {
     shellManager,
     userId,
     abortSignal,
+    engagementState: buildEngagementState(session),
   });
 
   const callbacks: ToolExecutionCallbacks = {

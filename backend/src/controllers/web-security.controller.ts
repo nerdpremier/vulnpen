@@ -28,6 +28,7 @@ import {
   WSTG_TESTS,
   WSTG_VERSION,
   getOwaspCategory,
+  normalizeOwaspTop10Id,
 } from "../knowledge";
 
 function catalogPayload() {
@@ -377,12 +378,18 @@ export const getOwaspCoverage = async (req: Request, res: Response) => {
           cwes: category.cwes,
           wstgFocus: category.wstgFocus,
           findings: vulnerabilities.filter(
-            (vulnerability) => vulnerability.owaspTop10 === category.id,
+            // Findings may store the category in variant forms ("a05", "A05:2025");
+            // normalize before comparing, same as the prompt/report paths.
+            (vulnerability) =>
+              vulnerability.owaspTop10 &&
+              normalizeOwaspTop10Id(vulnerability.owaspTop10) === category.id,
           ).length,
         })),
       },
       totalFindings: vulnerabilities.length,
-      unmappedFindings: vulnerabilities.filter((vulnerability) => !vulnerability.owaspTop10).length,
+      unmappedFindings: vulnerabilities.filter(
+        (vulnerability) => !normalizeOwaspTop10Id(vulnerability.owaspTop10),
+      ).length,
     });
   } catch (err: any) {
     console.error("[web-security] owasp coverage error:", err);
