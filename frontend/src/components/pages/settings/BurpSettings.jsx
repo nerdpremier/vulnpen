@@ -65,7 +65,7 @@ const BurpSettingsPage = () => {
   const configureCaMutation = useMutation(configureBurpCa, {
     onSuccess: (status) => {
       refetchCaStatus();
-      queryClient.invalidateQueries("burp-ca-status");
+      queryClient.invalidateQueries("burp-settings-ca-status");
       if (status?.trusted) {
         message.success("Burp CA trusted by the Browser Agent");
       } else {

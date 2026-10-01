@@ -203,15 +203,14 @@ export default function TestPlanPage({ sessionId }) {
 
   // Keep the selection honest: drop ids that are no longer part of the plan
   // (removed via the row menu, plan regeneration, ...), so batch actions never
-  // hit cases that do not exist any more.
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const planned = new Set((plan?.cases ?? []).map((c) => c.testId));
-      const next = new Set([...prev].filter((id) => planned.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [plan]);
+  // hit cases that do not exist any more. Derived during render instead of
+  // synced by an effect, so stale ids never reach the UI.
+  const activeSelectedIds = useMemo(() => {
+    if (selectedIds.size === 0) return selectedIds;
+    const planned = new Set((plan?.cases ?? []).map((c) => c.testId));
+    const next = new Set([...selectedIds].filter((id) => planned.has(id)));
+    return next;
+  }, [selectedIds, plan]);
 
   const catalogueIds = useMemo(
     () => new Set((catalog?.tests ?? []).map((test) => test.id)),
@@ -596,15 +595,15 @@ export default function TestPlanPage({ sessionId }) {
               </div>
             </div>
 
-            {selectedIds.size > 0 && (
+            {activeSelectedIds.size > 0 && (
               <div className={styles.selectionBar}>
-                <span>{selectedIds.size} selected</span>
+                <span>{activeSelectedIds.size} selected</span>
                 <Button
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
                   loading={casesRemoveMutation.isLoading}
-                  onClick={() => confirmRemoveCases(Array.from(selectedIds))}
+                  onClick={() => confirmRemoveCases(Array.from(activeSelectedIds))}
                 >
                   Remove selected
                 </Button>
@@ -637,7 +636,7 @@ export default function TestPlanPage({ sessionId }) {
                   const summary = summarise(group.cases);
                   const groupIds = group.matches.map((testCase) => testCase.testId);
                   const groupSelectedCount = groupIds.filter((testId) =>
-                    selectedIds.has(testId),
+                    activeSelectedIds.has(testId),
                   ).length;
 
                   return (
@@ -722,7 +721,7 @@ export default function TestPlanPage({ sessionId }) {
                                     testCase.testId;
                                   const isFocused =
                                     focusCaseId === testCase.testId;
-                                  const selected = selectedIds.has(testCase.testId);
+                                  const selected = activeSelectedIds.has(testCase.testId);
                                   const rowClass = [
                                     isOpen ? styles.rowOpen : "",
                                     selected ? styles.rowSelected : "",

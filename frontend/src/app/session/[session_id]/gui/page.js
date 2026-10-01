@@ -41,7 +41,7 @@ const GUIpage = ({ params }) => {
   }
 
   const { data: vncConfig, isLoading: configLoading } = useQuery(
-    "vnc-config",
+    ["vnc-config", sessionId || "global"],
     getVNCConfig,
     { staleTime: 30000 }
   );

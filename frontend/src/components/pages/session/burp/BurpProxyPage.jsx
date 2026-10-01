@@ -254,15 +254,18 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace, integration }
   const [targetPort, setTargetPort] = useState(443);
   const [secure, setSecure] = useState(true);
   const [responseText, setResponseText] = useState("");
+  // Start timestamp lives in a ref: mutation callbacks capture the value at
+  // mutate() time, so state would read stale across renders.
+  const requestStartRef = useRef(null);
   const [responseTime, setResponseTime] = useState(null);
   const [loadingEntry, setLoadingEntry] = useState(false);
 
   const sendMutation = useMutation(integration.services.sendRequest, {
     onMutate: () => {
-      setResponseTime(Date.now());
+      requestStartRef.current = Date.now();
     },
     onSuccess: (data) => {
-      const elapsed = Date.now() - responseTime;
+      const elapsed = requestStartRef.current ? Date.now() - requestStartRef.current : 0;
       setResponseTime(elapsed);
       setResponseText(data.rawResponse || "(no response body)");
       message.success({ content: `Response received in ${elapsed}ms`, duration: 2 });
@@ -286,10 +289,10 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace, integration }
 
   const repeaterSendMutation = useMutation(integration.services.replaySend, {
     onMutate: () => {
-      setResponseTime(Date.now());
+      requestStartRef.current = Date.now();
     },
     onSuccess: (data) => {
-      const elapsed = Date.now() - responseTime;
+      const elapsed = requestStartRef.current ? Date.now() - requestStartRef.current : 0;
       setResponseTime(elapsed);
       setResponseText(data.rawResponse || "(no response body)");
       message.success({ content: `${integration.replayName} response in ${elapsed}ms`, duration: 2 });

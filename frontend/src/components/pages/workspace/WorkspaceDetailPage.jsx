@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { FiTrash, FiActivity, FiClock, FiShield } from "react-icons/fi";
 import ModalComponent from "@/components/common/ModalComponent";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
+import { useAgentStreamStore } from "@/store/agentStream.store";
 import {
   AnimatedContent,
   EmptyState,
@@ -68,8 +69,11 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   );
 
   const deleteSessionMutation = useMutation(deleteSession, {
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       message.success("Session deleted");
+      // Abort any in-flight stream and drop the cached store entry, otherwise
+      // the deleted session keeps streaming events into a zombie entry.
+      useAgentStreamStore.getState().clearSession(variables?.sessionId);
       queryClient.invalidateQueries(["workspace-detail", workspaceId]);
     },
     onError: (err) => {

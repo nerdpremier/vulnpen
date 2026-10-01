@@ -18,7 +18,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 const copyText = async (messageApi, text, label) => {
   try {
@@ -37,9 +37,13 @@ const MCPSettingsPage = () => {
   const { message } = App.useApp();
   const { data, isLoading } = useQuery("mcp-config", getMcpConfig);
 
+  const [freshToken, setFreshToken] = useState(null);
+
   const createTokenMutation = useMutation(createMcpAccessToken, {
-    onSuccess: async () => {
-      message.success("New MCP token created");
+    onSuccess: async (res) => {
+      message.success("New MCP token created — copy it now, it is shown only once");
+      // The plaintext is only ever returned on this creation response.
+      setFreshToken(res?.token?.token || null);
       await queryClient.invalidateQueries("mcp-config");
     },
     onError: (error) => {
@@ -83,6 +87,14 @@ const MCPSettingsPage = () => {
       </div>
 
       <section className={styles.mcpPanel}>
+        {freshToken && (
+          <div className={styles.mcpInlineControl} style={{ marginBottom: 16 }}>
+            <Input.Password className={styles.mcpReadOnlyInput} value={freshToken} readOnly visibilityToggle autoFocus />
+            <Tooltip title="Copy token">
+              <Button icon={<CopyOutlined />} onClick={() => copyText(message, freshToken, "Token")} />
+            </Tooltip>
+          </div>
+        )}
         <div className={styles.mcpPanelHeader}>
           <div>
             <div className={styles.mcpPanelTitle}>
@@ -179,18 +191,27 @@ const MCPSettingsPage = () => {
                 : "Never"}
             </div>
             <div className={styles.mcpInlineControl}>
-              <Input.Password
-                className={styles.mcpReadOnlyInput}
-                value={token.token}
-                readOnly
-                visibilityToggle
-              />
-              <Tooltip title="Copy token">
-                <Button
-                  icon={<CopyOutlined />}
-                  onClick={() => copyText(message, token.token, "Token")}
-                />
-              </Tooltip>
+              {token.token ? (
+                <>
+                  <Input.Password
+                    className={styles.mcpReadOnlyInput}
+                    value={token.token}
+                    readOnly
+                    visibilityToggle
+                  />
+                  <Tooltip title="Copy token">
+                    <Button
+                      icon={<CopyOutlined />}
+                      onClick={() => copyText(message, token.token, "Token")}
+                    />
+                  </Tooltip>
+                </>
+              ) : (
+                <span>
+                  Stored hashed — the full token was shown only when created.
+                  Revoke and create a new one to get a fresh token.
+                </span>
+              )}
               <Tooltip
                 title={
                   primaryToken?.tokenId === token.tokenId &&

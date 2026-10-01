@@ -603,7 +603,10 @@ export default function useAgentStream({
             if (prev === "running") return "idle";
             return prev;
           });
-          refs().controllerRef.current = null;
+          // Only clear if a newer stream has not already taken the slot.
+          if (refs().controllerRef.current === stream) {
+            refs().controllerRef.current = null;
+          }
         });
     },
     [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete, onInstallSuggestion, onIterationLimit],
