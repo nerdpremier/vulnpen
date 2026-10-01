@@ -6,7 +6,6 @@ import {
   compactApprovalTranscript,
   decideToolConsent,
   parseToolSafetyAssessment,
-  shouldBlockAutonomousTool,
 } from "../src/services/tool-approval.service";
 import { buildPendingConsentBatch } from "../src/services/agent.tools";
 
@@ -63,11 +62,42 @@ test("built-in safety block still requires review in automatic mode", async () =
   assert.equal(called, false);
 });
 
-test("Safety-triggered tools are blocked outside explicit safe verdicts", () => {
-  assert.equal(shouldBlockAutonomousTool("run_bash", true, "auto"), true);
-  assert.equal(shouldBlockAutonomousTool("run_bash", true, "auto_approve"), true);
-  assert.equal(shouldBlockAutonomousTool("run_bash", true, "requires_consent"), true);
-  assert.equal(shouldBlockAutonomousTool("run_bash", false, "auto"), false);
+test("Safety-triggered tools are blocked outside explicit safe verdicts", async () => {
+  // Subagents refuse (requireConsent signals the caller to block); the main
+  // agent surfaces a consent prompt. Either way, no silent execution.
+  const modes = ["auto", "auto_approve", "requires_consent"] as const;
+  for (const mode of modes) {
+    const result = await decideToolConsent({
+      mode,
+      tool,
+      args: { command: "rm -rf /" },
+      context,
+      safetyTriggered: true,
+    });
+    assert.equal(result.requireConsent, true, `mode ${mode}`);
+  }
+
+  // auto_approve only bypasses the block on an explicit safe verdict.
+  const approved = await decideToolConsent({
+    mode: "auto_approve",
+    tool,
+    args: { command: "rm -rf /tmp/own-file" },
+    context,
+    safetyTriggered: true,
+    evaluator: async () => ({ safe: true, reason: "Bounded to workspace file." }),
+  });
+  assert.equal(approved.requireConsent, false);
+  assert.equal(approved.reviewed, true);
+
+  // And even the reviewer never runs when safety is not triggered.
+  const unflagged = await decideToolConsent({
+    mode: "auto",
+    tool,
+    args: { command: "pwd" },
+    context,
+    safetyTriggered: false,
+  });
+  assert.equal(unflagged.requireConsent, false);
 });
 
 test("auto approve runs only an explicitly safe AI verdict", async () => {
