@@ -203,7 +203,8 @@
 
 .streamingCursor {
   &::after {
-    content: "â–Š";
+    /* U+258A LEFT THREE QUARTERS BLOCK, as a CSS escape so the file stays ASCII-safe. */
+    content: "\258A";
     animation: blink 0.8s step-end infinite;
     color: var(--accent-color, #4a9eff);
   }
@@ -1748,3 +1749,20 @@
   color: var(--moon-accent-ink) !important;
 }
 
+
+.toolCallImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.toolCallImage {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: block;
+  cursor: zoom-in;
+}

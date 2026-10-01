@@ -266,15 +266,6 @@ export default function useAgentStream({
           const r2 = refs();
           r2.toolNameMapRef.current[data.id] = data.name;
 
-          if (data.name === "browser_action") {
-            notification.info({
-              message: "Browser Agent",
-              description: `Running: ${data.args?.goal || data.args?.action || "browser action"}`,
-              duration: 4,
-              placement: "bottomRight",
-            });
-          }
-
           setMessages((prev) => [
             ...prev,
             {
@@ -307,25 +298,6 @@ export default function useAgentStream({
 
           const toolName = r2.toolNameMapRef.current[data.id];
           if (toolName === "browser_action") {
-            const output = data.output || "";
-            const isXServerError = /X server|XServer|Missing X server|\$DISPLAY|headed browser/i.test(output);
-            if (data.exitCode !== 0) {
-              notification.error({
-                message: "Browser Agent Failed",
-                description: isXServerError
-                  ? "Missing X server or display. Set up VNC for headed mode, or enable headless in Settings → Magnitude."
-                  : output.length > 200 ? output.slice(0, 200) + "…" : output,
-                duration: 8,
-                placement: "bottomRight",
-              });
-            } else {
-              notification.success({
-                message: "Browser Agent",
-                description: output.length > 200 ? output.slice(0, 200) + "…" : (output || "Action completed successfully"),
-                duration: 5,
-                placement: "bottomRight",
-              });
-            }
             delete r2.toolNameMapRef.current[data.id];
           }
 
@@ -338,6 +310,7 @@ export default function useAgentStream({
                 content: useServerOutput ? data.output : m.content,
                 streaming: false,
                 exitCode: data.exitCode,
+                files: data.files ?? m.files,
               };
             }),
           );
@@ -352,16 +325,6 @@ export default function useAgentStream({
 
           const toolName = r2.toolNameMapRef.current[data.id];
           if (toolName === "browser_action") {
-            const errMsg = data.error || "Unknown error";
-            const isXServerError = /X server|XServer|Missing X server|\$DISPLAY|headed browser/i.test(errMsg);
-            notification.error({
-              message: "Browser Agent Error",
-              description: isXServerError
-                ? "Missing X server or display. Set up VNC for headed mode, or enable headless in Settings → Magnitude."
-                : errMsg.length > 200 ? errMsg.slice(0, 200) + "…" : errMsg,
-              duration: 8,
-              placement: "bottomRight",
-            });
             delete r2.toolNameMapRef.current[data.id];
           }
 

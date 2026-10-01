@@ -17,7 +17,7 @@ import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
-import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
+import MCPSettingsPage from "@/components/pages/settings/McpSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
 import SSHConnectionPage from "@/components/pages/session/connection/SSHConnectionPage";
 import VPNMainPage from "@/components/pages/session/vpn/VPNMainPage";

@@ -105,7 +105,7 @@ function findToolOutput(toolCallId, allMessages) {
   );
 }
 
-const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
+const ChatMessage = React.memo(function ChatMessage({ message, allMessages, sessionId }) {
   const { role, content, streaming, isError, isSummary, toolCalls, reasoning, reasoningStreaming, burpMeta } = message;
 
   if (role === "tool") {
@@ -132,7 +132,7 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
         }
       }
     }
-    return <ToolCallBlock message={enrichedMessage} />;
+    return <ToolCallBlock message={enrichedMessage} sessionId={sessionId} />;
   }
 
   if (role === "system") {
@@ -189,7 +189,7 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
                 content: "",
                 streaming: false,
               };
-          return <ToolCallBlock key={tc.id} message={toolMsg} />;
+          return <ToolCallBlock key={tc.id} message={toolMsg} sessionId={sessionId} />;
         })}
       </div>
     );

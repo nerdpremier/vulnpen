@@ -262,7 +262,7 @@ export default function ChatView({ sessionId }) {
           if (msg.role === "slash_command_result") {
             return <SlashCommandResult key={msg.id} message={msg} />;
           }
-          return <ChatMessage key={msg.id} message={msg} allMessages={messages} />;
+          return <ChatMessage key={msg.id} message={msg} allMessages={messages} sessionId={sessionId} />;
         })}
 
         {pendingConsent && agentState === "waiting_consent" && (

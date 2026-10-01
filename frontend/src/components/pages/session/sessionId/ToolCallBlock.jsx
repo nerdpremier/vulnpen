@@ -8,6 +8,7 @@ import React, {
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import styles from "@/styles/components/Chat.module.scss";
+import { apiBaseURL } from "@/utils/axios.config";
 import {
   CaretRightOutlined,
   LoadingOutlined,
@@ -135,13 +136,15 @@ const highlighterCustomStyle = {
   padding: "0.6rem 0.75rem",
 };
 
-const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
-  const [codeCollapsed, setCodeCollapsed] = useState(false);
+const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) {
+  // Show only the output by default — the command stays folded behind the
+  // header until clicked, like the reasoning block.
+  const [codeCollapsed, setCodeCollapsed] = useState(true);
   const [outputCollapsed, setOutputCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const outputRef = useRef(null);
 
-  const { toolName, args, content, streaming, exitCode } = message;
+  const { toolName, args, content, streaming, exitCode, files } = message;
 
   const label = TOOL_LABELS[toolName] ?? toolName;
   const parsed = useMemo(() => parseArgs(args), [args]);
@@ -263,6 +266,26 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
           )}
         </span>
       </div>
+
+      {files?.length > 0 && sessionId && (
+        <div className={styles.toolCallImages}>
+          {files
+            .filter((name) => /\.(png|jpe?g|gif|webp)$/i.test(name))
+            .map((name) => {
+              const fileUrl = `${apiBaseURL}/agent/session/${sessionId}/files/${encodeURIComponent(name)}`;
+              return (
+                <a key={name} href={fileUrl} target="_blank" rel="noreferrer">
+                  <img
+                    src={fileUrl}
+                    alt={name}
+                    className={styles.toolCallImage}
+                    loading="lazy"
+                  />
+                </a>
+              );
+            })}
+        </div>
+      )}
 
       {hasCode && !codeCollapsed && (
         <div className={styles.toolCallCodePreview}>
