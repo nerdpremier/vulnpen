@@ -25,6 +25,10 @@ export function zipFiles(
       reject(err);
     });
 
+    output.on("error", (err: any) => {
+      reject(err);
+    });
+
     archive.pipe(output);
 
     files.forEach((file) => {

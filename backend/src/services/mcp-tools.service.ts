@@ -295,16 +295,14 @@ async function withSerializedLock<T>(
   const current = new Promise<void>((resolve) => {
     release = resolve;
   });
-  operationLocks.set(
-    key,
-    prior.then(() => current),
-  );
+  const chained = prior.then(() => current);
+  operationLocks.set(key, chained);
   await prior;
   try {
     return await work();
   } finally {
     release();
-    if (operationLocks.get(key) === current) {
+    if (operationLocks.get(key) === chained) {
       operationLocks.delete(key);
     }
   }

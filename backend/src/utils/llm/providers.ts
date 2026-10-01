@@ -846,12 +846,7 @@ async function runAnthropicThinkingStream(
         opts.onDelta({ type: "text", content: delta.text });
       }
       if (delta.type === "input_json_delta" && delta.partial_json) {
-        const currentBlockIdx = event.index;
-        const acc =
-          [...toolCallAccumulators.values()].find(
-            (_, i) =>
-              i === currentBlockIdx - (reasoningParts.length > 0 ? 2 : 1),
-          ) ?? [...toolCallAccumulators.values()].at(-1);
+        const acc = toolCallAccumulators.get(String(event.index));
         if (acc) {
           acc.argParts.push(delta.partial_json);
           opts.onDelta({
@@ -867,7 +862,7 @@ async function runAnthropicThinkingStream(
       const block = (event as any).content_block;
       if (block?.type === "tool_use") {
         const idx = toolCallAccumulators.size;
-        toolCallAccumulators.set(block.id, {
+        toolCallAccumulators.set(String(event.index), {
           id: block.id,
           name: block.name,
           argParts: [],
@@ -885,10 +880,14 @@ async function runAnthropicThinkingStream(
         finishReason = normalizeFinishReason(md.delta.stop_reason);
       }
       if (md.usage) {
+        // message_delta arrives after message_start and only carries output
+        // tokens; merge instead of replacing so prompt_tokens survives.
+        const output = md.usage.output_tokens ?? 0;
+        const prompt = usage?.prompt_tokens ?? 0;
         usage = {
-          prompt_tokens: 0,
-          completion_tokens: md.usage.output_tokens ?? 0,
-          total_tokens: md.usage.output_tokens ?? 0,
+          prompt_tokens: prompt,
+          completion_tokens: output,
+          total_tokens: prompt + output,
         };
       }
     }

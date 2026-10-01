@@ -24,18 +24,26 @@ const ANSI_REGEX = /\x1B\[[0-?]*[-[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_TOOL_TIMEOUT_MS = 60_000;
 
-function executeWithTimeout(
+async function executeWithTimeout(
   toolDef: import("../tools/types").ToolDefinition,
   args: Record<string, any>,
   ctx: import("../tools/types").ExecutionContext,
 ): Promise<ToolResult> {
   const timeoutMs = toolDef.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
-  return Promise.race([
-    toolDef.execute(args, ctx),
-    new Promise<ToolResult>((_, reject) =>
-      setTimeout(() => reject(new Error(`Tool '${toolDef.name}' timed out after ${timeoutMs / 1000}s`)), timeoutMs),
-    ),
-  ]);
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      toolDef.execute(args, ctx),
+      new Promise<ToolResult>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Tool '${toolDef.name}' timed out after ${timeoutMs / 1000}s`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export interface SubagentResult {

@@ -17,6 +17,16 @@ import {
   hasActiveController,
 } from "../services/agent.service";
 import { parseSlashCommand, executeSlashCommand, SLASH_COMMANDS } from "../services/slash-commands";
+
+// Every agent run exit path goes through this: release the controller slot and
+// arm the idle timer so ShellManagers (SSH connections, local shells) are torn
+// down after 30 idle minutes instead of leaking until process restart.
+function releaseAfterRun(sessionId: string, abortCtrl: AbortController): void {
+  releaseAbortController(sessionId, abortCtrl);
+  if (sessionLifecycle.hasShellManager(sessionId)) {
+    sessionLifecycle.scheduleDestroy(sessionId);
+  }
+}
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { getProvider } from "../utils/llm/providers";
@@ -114,7 +124,7 @@ export const sendMessage = async (req: Request, res: Response) => {
       userMessage: message,
       sse,
       abortSignal: abortCtrl.signal,
-    }).finally(() => releaseAbortController(sessionId, abortCtrl));
+    }).finally(() => releaseAfterRun(sessionId, abortCtrl));
   } catch (err: any) {
     console.error("[agent] sendMessage error:", err);
     if (!res.headersSent) {
@@ -181,7 +191,7 @@ export const resumeAgent = async (req: Request, res: Response) => {
     const run = message
       ? initAndRun({ sessionId, userId, userMessage: message, sse, abortSignal: abortCtrl.signal })
       : runAgentLoop({ sessionId, userId, sse, abortSignal: abortCtrl.signal });
-    await run.finally(() => releaseAbortController(sessionId, abortCtrl));
+    await run.finally(() => releaseAfterRun(sessionId, abortCtrl));
   } catch (err: any) {
     console.error("[agent] resumeAgent error:", err);
     if (!res.headersSent) {
@@ -218,7 +228,7 @@ export const respondToConsent = async (req: Request, res: Response) => {
     });
 
     await handleConsent({ sessionId, userId, approved, sse, abortSignal: abortCtrl.signal })
-      .finally(() => releaseAbortController(sessionId, abortCtrl));
+      .finally(() => releaseAfterRun(sessionId, abortCtrl));
   } catch (err: any) {
     console.error("[agent] respondToConsent error:", err);
     if (!res.headersSent) {
@@ -255,7 +265,7 @@ export const submitManualOutput = async (req: Request, res: Response) => {
     });
 
     await handleManualOutput({ sessionId, userId, output, sse, abortSignal: abortCtrl.signal })
-      .finally(() => releaseAbortController(sessionId, abortCtrl));
+      .finally(() => releaseAfterRun(sessionId, abortCtrl));
   } catch (err: any) {
     console.error("[agent] submitManualOutput error:", err);
     if (!res.headersSent) {

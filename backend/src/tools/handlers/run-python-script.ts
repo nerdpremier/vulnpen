@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { findCapabilityForCommand } from "../../capabilities/registry";
+import crypto from "crypto";
 
 const MODULE_NOT_FOUND_PATTERNS = [
   /No module named ['"]*(\S+?)['"]*\s*$/im,
@@ -50,12 +51,16 @@ const runPythonScript: ToolDefinition = {
 
     const files: string[] = [];
 
+    // Random delimiter: a fixed one could appear inside the (LLM-generated)
+    // script and terminate the heredoc early, executing the rest as shell.
+    const delimiter = `PY_EOF_${crypto.randomBytes(8).toString("hex")}`;
+
     // Persist to disk as a side effect if requested (best-effort, don't block execution)
     if (file_name) {
       const safeName = file_name.replace(/^.*[\\/]/, "");
       if (safeName) {
         ctx.runCommand(
-          `cat > './${safeName.replace(/'/g, "'\\''")}' << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
+          `cat > './${safeName.replace(/'/g, "'\\''")}' << '${delimiter}'\n${script}\n${delimiter}`,
           10_000,
         ).catch(() => {});
         files.push(safeName);
@@ -64,7 +69,7 @@ const runPythonScript: ToolDefinition = {
 
     // Always run in-memory via stdin — faster and avoids path issues
     const { output, exitCode } = await ctx.runCommand(
-      `python3 << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
+      `python3 << '${delimiter}'\n${script}\n${delimiter}`,
       this.timeoutMs,
     );
     const suggestion = exitCode !== 0 ? detectMissingModule(output) : null;

@@ -277,6 +277,13 @@ const initializeApp = async () => {
         console.log("HTTP server closed.");
         process.exit(0);
       });
+
+      // Open SSE/WebSocket connections can keep close() waiting forever —
+      // force the exit so containers do not fall back to SIGKILL.
+      setTimeout(() => {
+        console.log("Graceful shutdown timed out; forcing exit.");
+        process.exit(0);
+      }, 10_000).unref();
     });
   } catch (error) {
     console.error("Error initializing app", error);

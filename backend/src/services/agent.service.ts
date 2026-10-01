@@ -401,7 +401,9 @@ export async function runAgentLoop(params: {
       //
       // Sits at the top of the loop so it also covers iterations that ended via
       // `continue`; the final iteration is still flushed by the exit paths.
-      if (newMessages.length > 0) {
+      // Skipped after abort/clear: clearContext wipes the document and stale
+      // pre-clear messages must not be re-appended into the cleared session.
+      if (newMessages.length > 0 && !params.abortSignal?.aborted) {
         await appendMessages(sessionId, newMessages);
         newMessages.length = 0;
       }
@@ -816,7 +818,12 @@ export async function runAgentLoop(params: {
     sse.end();
   } catch (err: any) {
     console.error("[agent] Loop error:", err);
-    await appendMessages(sessionId, newMessages);
+    // Skip the flush on abort/clear — the session document may have just been
+    // wiped by clearContext and must not be re-polluted with stale messages.
+    if (!params.abortSignal?.aborted) {
+      await appendMessages(sessionId, newMessages);
+    }
+    newMessages.length = 0;
     const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
     await subagentManager.cancelAll();
     await setAgentState(sessionId, isAbort ? "paused" : "idle");

@@ -217,15 +217,17 @@ export const loginUser = async (req: Request, res: Response) => {
       userId: user._id.toString(),
     };
 
-    // saving the session
-    req.session.save(function (err) {
-      if (err) {
-        console.log(err);
-        return res.status(400).json({ message: "Failed to save session!" });
-      }
+    // saving the session — the response must wait so the client never holds a
+    // cookie the store has not persisted yet.
+    await new Promise<void>((resolve) => {
+      req.session.save((err) => {
+        if (err) console.error("Failed to save session:", err);
+        resolve();
+      });
     });
-
-
+    if (!req.session.user) {
+      return res.status(500).json({ message: "Failed to save session!" });
+    }
 
     return res.status(200).json({
       message: "User logged in successfully",

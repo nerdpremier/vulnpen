@@ -134,6 +134,7 @@ export class ShellManager extends EventEmitter {
   private shells: Map<string, ManagedShell> = new Map();
   private connected: boolean = false;
   private connecting: boolean = false;
+  private connectPromise: Promise<void> | null = null;
   private destroyed: boolean = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private reconnectAttempt: number = 0;
@@ -157,12 +158,25 @@ export class ShellManager extends EventEmitter {
   }
 
   async connect(): Promise<void> {
-    if (this.connected || this.connecting || this.destroyed) return;
+    if (this.connected || this.destroyed) return;
+    // Concurrent callers must await the same in-flight handshake instead of
+    // returning early and racing ahead of the connection.
+    if (this.connecting) {
+      if (this.connectPromise) return this.connectPromise;
+      return;
+    }
     this.connecting = true;
+    this.connectPromise = this.performConnect().finally(() => {
+      this.connecting = false;
+      this.connectPromise = null;
+    });
+    return this.connectPromise;
+  }
+
+  private async performConnect(): Promise<void> {
     try {
       this.target = await this.loadTarget();
     } catch (error: any) {
-      this.connecting = false;
       this.emit("connection_status", {
         sshConnected: false,
         error: error?.message || "Could not resolve workspace work host",
@@ -173,7 +187,6 @@ export class ShellManager extends EventEmitter {
     if (this.target.kind === "local") {
       await import("fs").then(({ promises }) => promises.mkdir(expandLocalFolder(this.target!.workFolder), { recursive: true }));
       this.connected = true;
-      this.connecting = false;
       this.reconnectAttempt = 0;
       this.emit("connection_status", { sshConnected: false, hostConnected: true, kind: "local" });
       return;
@@ -188,7 +201,6 @@ export class ShellManager extends EventEmitter {
         settled = true;
         this.sshConnection = ssh;
         this.connected = true;
-        this.connecting = false;
         this.reconnectAttempt = 0;
         console.log(`[ShellManager:${this.sessionId}] SSH connected`);
         ssh.exec(`mkdir -p -- ${shellFolderExpression(this.target!.workFolder)}`, (err) => {
@@ -202,7 +214,6 @@ export class ShellManager extends EventEmitter {
         console.error(`[ShellManager:${this.sessionId}] SSH error:`, err.message);
         if (!settled) {
           settled = true;
-          this.connecting = false;
           try { ssh.end(); } catch { /* ignore */ }
           this.emit("connection_status", { sshConnected: false, error: err.message });
           reject(err);
@@ -238,6 +249,7 @@ export class ShellManager extends EventEmitter {
     }
     this.connected = false;
     this.connecting = false;
+    this.connectPromise = null;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -389,7 +401,12 @@ export class ShellManager extends EventEmitter {
     };
 
     this.shells.set(shellId, shell);
-    await this.openChannel(shell);
+    try {
+      await this.openChannel(shell);
+    } catch (error) {
+      this.shells.delete(shellId);
+      throw error;
+    }
 
     this.emit("shell_created", {
       shellId,
