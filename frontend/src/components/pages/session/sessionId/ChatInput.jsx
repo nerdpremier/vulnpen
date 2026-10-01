@@ -31,7 +31,6 @@ export default function ChatInput({
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef(null);
-  const menuRef = useRef(null);
 
   const { data: sessionInfo } = useQuery(
     ["session-info", sessionId],
@@ -194,7 +193,7 @@ export default function ChatInput({
       )}
 
       {showMenu && (
-        <div className={styles.slashMenu} ref={menuRef}>
+        <div className={styles.slashMenu}>
           <div className={styles.slashMenuHeader}>Commands</div>
           {slashMatches.map((cmd, i) => (
             <div

@@ -306,6 +306,21 @@ export const updateSwarmModels = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "models must be an array" });
     }
 
+    // Duplicate ids would make the sanitizer rename one of them, so the
+    // masked-key restore and verification would then look up (and re-verify)
+    // under the wrong saved preset. Reject the request instead.
+    const requestedIds = new Set<string>();
+    for (const model of models) {
+      const id = typeof model?.id === "string" ? model.id.trim() : "";
+      if (!id) {
+        return res.status(400).json({ message: "Each model must have an id" });
+      }
+      if (requestedIds.has(id)) {
+        return res.status(400).json({ message: `Duplicate model id "${id}"` });
+      }
+      requestedIds.add(id);
+    }
+
     const normalized = normalizeModelRegistryInput(models, assignments || {});
     if (models.length > 0 && normalized.models.length !== models.length) {
       return res.status(400).json({

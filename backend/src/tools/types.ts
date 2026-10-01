@@ -14,6 +14,8 @@ export interface ToolResult {
   exitCode?: number;
   files?: string[];
   installSuggestion?: InstallSuggestion;
+  /** Machine-readable id for tools that spawn background work (spawn_subagent). */
+  spawnedSubagentId?: string;
 }
 
 export type AgentRole = "main" | "subagent" | "orchestrator";

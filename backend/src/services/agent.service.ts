@@ -407,7 +407,6 @@ export async function runAgentLoop(params: {
       }
 
       if (await isPaused(sessionId)) {
-        await appendMessages(sessionId, newMessages);
         await setAgentState(sessionId, "paused");
         sse.write("paused", { message: "Agent paused by user" });
         sse.end();
@@ -469,10 +468,13 @@ export async function runAgentLoop(params: {
         const stateBlock = engagementState.toPromptBlock();
         const sysContent = messages[0].content ?? "";
         const markerStart = sysContent.indexOf("<engagement_state");
-        if (markerStart !== -1) {
-          const markerEnd = sysContent.indexOf("</engagement_state>") + "</engagement_state>".length;
-          messages[0] = { ...messages[0], content: sysContent.slice(0, markerStart) + stateBlock + sysContent.slice(markerEnd) };
+        const markerEnd = sysContent.indexOf("</engagement_state>");
+        if (markerStart !== -1 && markerEnd !== -1) {
+          const end = markerEnd + "</engagement_state>".length;
+          messages[0] = { ...messages[0], content: sysContent.slice(0, markerStart) + stateBlock + sysContent.slice(end) };
         } else {
+          // No (complete) existing block — append instead of splicing, a
+          // partial marker pair would otherwise truncate the system prompt.
           messages[0] = { ...messages[0], content: sysContent + "\n\n" + stateBlock };
         }
       }
@@ -643,13 +645,11 @@ export async function runAgentLoop(params: {
           approvalCircuitOpen;
       }
 
-      // Track spawned subagents
+      // Track spawned subagents via the structured result field, not the
+      // free-text output — rewording the output must not break collection.
       for (const tr of toolResults) {
-        if (tr.toolName === "spawn_subagent" && tr.result.output.includes("subagent_id:")) {
-          const match = tr.result.output.match(/subagent_id:\s*(\S+)/);
-          if (match) {
-            spawnedSubagentIds.push(match[1]);
-          }
+        if (tr.result.spawnedSubagentId) {
+          spawnedSubagentIds.push(tr.result.spawnedSubagentId);
         }
       }
 

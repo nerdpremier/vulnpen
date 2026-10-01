@@ -36,6 +36,7 @@ const spawnSubagent: ToolDefinition = {
       return {
         output: `Subagent spawned successfully.\nsubagent_id: ${subagentId}\ntask: ${task}\n\nThe subagent is now running in the background. Its results will be provided to you when it completes.`,
         exitCode: 0,
+        spawnedSubagentId: subagentId,
       };
     } catch (err: any) {
       return { output: `Failed to spawn subagent: ${err.message}`, exitCode: 1 };
