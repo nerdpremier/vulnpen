@@ -23,32 +23,38 @@ function resolveBackendBaseUrl(req: Request): string {
 function serializeToken(token: {
   tokenId: string;
   label: string;
-  token: string;
+  token?: string;
   createdAt: Date;
   lastUsedAt?: Date;
 }) {
   return {
     tokenId: token.tokenId,
     label: token.label,
-    token: token.token,
+    // Plaintext only exists on legacy docs not yet upgraded; new tokens are
+    // stored hashed and were shown once at creation time.
+    token: token.token || null,
     createdAt: token.createdAt,
     lastUsedAt: token.lastUsedAt || null,
   };
 }
+
+const MCP_TOKEN_PLACEHOLDER = "<your-mcp-token>";
 
 export async function getMcpConfig(req: Request, res: Response) {
   try {
     const user = res.locals.user;
     const env = readEnvFile();
     const baseUrl = resolveBackendBaseUrl(req);
-    const token = await ensureDefaultMcpToken(user);
+    const { doc: token, plaintextToken } = await ensureDefaultMcpToken(user);
     const activeTokens = listActiveMcpTokens(user);
+
+    const displayToken = plaintextToken ?? token.token ?? null;
 
     return res.status(200).json({
       endpoint: buildMcpEndpoint(baseUrl),
-      token: token.token,
-      configTemplate: buildMcpConfigTemplate(baseUrl, token.token),
-      envTemplate: buildMcpEnvTemplate(baseUrl, token.token),
+      token: displayToken,
+      configTemplate: buildMcpConfigTemplate(baseUrl, displayToken ?? MCP_TOKEN_PLACEHOLDER),
+      envTemplate: buildMcpEnvTemplate(baseUrl, displayToken ?? MCP_TOKEN_PLACEHOLDER),
       safety: {
         allowDangerousMcp: env.PENTEST_MCP_ALLOW_DANGEROUS === "1",
         maxOutputChars: Number(env.PENTEST_MCP_MAX_OUTPUT_CHARS || 60000),
@@ -90,9 +96,10 @@ export async function createMcpAccessToken(req: Request, res: Response) {
   try {
     const user = res.locals.user;
     const { label } = req.body || {};
-    const created = await createMcpToken(user, label);
+    const { doc, plaintextToken } = await createMcpToken(user, label);
     return res.status(200).json({
-      token: serializeToken(created),
+      // The only response that carries this token's plaintext.
+      token: { ...serializeToken(doc), token: plaintextToken },
       message: "MCP token created",
     });
   } catch (error) {
