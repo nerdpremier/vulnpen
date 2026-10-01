@@ -9,6 +9,7 @@ import {
   defaultWorkFolder,
   listResolvedWorkHostDirectories,
   normalizeWorkHost,
+  purgeWorkFolder,
   resolveWorkspaceWorkHost,
   testWorkHost,
 } from "../services/work-host.service";
@@ -309,13 +310,22 @@ export const deleteWorkspace = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Workspace not found" });
     }
 
-    workspace.status = "archived";
-    await workspace.save();
+    const sessionIds = (
+      await SessionsModel.find({ workspaceId, uid: userId }).select("sessionId").lean()
+    ).map((s) => s.sessionId);
 
-    await SessionsModel.updateMany(
-      { workspaceId, uid: userId, status: "active" },
-      { $set: { status: "archived" } },
-    );
+    try {
+      const target = await resolveWorkspaceWorkHost(workspaceId);
+      await purgeWorkFolder(target);
+    } catch (err) {
+      console.error("[workspace] deleteWorkspace work-folder cleanup error:", err);
+    }
+
+    if (sessionIds.length > 0) {
+      await HistoryArchiveModel.deleteMany({ sessionId: { $in: sessionIds } });
+    }
+    await SessionsModel.deleteMany({ workspaceId, uid: userId });
+    await WorkspaceModel.deleteOne({ workspaceId, uid: userId });
 
     return res.status(200).json({ message: "Workspace deleted" });
   } catch (err: any) {

@@ -376,6 +376,18 @@ export async function execOnResolvedWorkHost(
   }
 }
 
+/**
+ * Removes everything inside the workspace work folder (the folder itself is kept,
+ * since execOnResolvedWorkHost recreates it on every call).
+ */
+export async function purgeWorkFolder(target: ResolvedWorkHost, timeoutMs = 300_000): Promise<CommandResult> {
+  return execOnResolvedWorkHost(
+    target,
+    "find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +",
+    timeoutMs,
+  );
+}
+
 export function spawnLocalShell(workFolder: string, interactive: boolean) {
   const folder = expandLocalFolder(workFolder);
   fs.mkdirSync(folder, { recursive: true });
