@@ -1577,6 +1577,12 @@ cmd_help() {
 main() {
     cd "$SCRIPT_DIR"
 
+    # Keep every clone protected by the secret-scanning pre-commit hook.
+    # Skipped when the working tree is not a git checkout (e.g. release archive).
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git config core.hooksPath .githooks
+    fi
+
     # Parse global flags
     local args=()
     for arg in "$@"; do

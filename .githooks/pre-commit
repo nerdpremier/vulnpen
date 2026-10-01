@@ -1,0 +1,30 @@
+#!/bin/sh
+# Block commits that contain what looks like a live secret. Runtime
+# credentials (backend/.env, model-registry.json, config.toml) are
+# gitignored, but this is the last line of defense against an accidental
+# `git add -f` or a copied file landing in a tracked path.
+#
+# To bypass for a known-safe commit: git commit --no-verify
+
+set -o errexit
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+PATTERNS='sk-or-v1-[0-9a-zA-Z]{20,}|sk-ant-[0-9a-zA-Z_-]{20,}|sk-proj-[0-9a-zA-Z_-]{20,}|AKIA[0-9A-Z]{16}|ghp_[0-9a-zA-Z]{20,}|gho_[0-9a-zA-Z]{20,}|github_pat_[0-9a-zA-Z_]{20,}|xox[abpr]-[0-9a-zA-Z-]{10,}|mtk_[0-9a-f]{16,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
+
+hits=$(git diff --cached -U0 --no-color | grep -E "$PATTERNS" || true)
+if [ -n "$hits" ]; then
+  printf "${RED}pre-commit: possible secret(s) in staged changes:${NC}\n"
+  printf '%s\n' "$hits" | sed 's/^/  /'
+  cat <<'EOF'
+
+The values above look like API keys or private keys. Secrets must live in
+gitignored files (backend/.env, backend/model-registry.json, config.toml),
+never in tracked sources.
+
+If this is a false positive, commit with: git commit --no-verify
+EOF
+  exit 1
+fi
+exit 0
