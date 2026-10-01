@@ -60,9 +60,10 @@ export function getMagnitudeModelIssue(
   return null;
 }
 
-export function resolveMagnitudeLlmConfig(
+export async function resolveMagnitudeLlmConfig(
   config: MagnitudeProviderInput,
-): MagnitudeLlmConfig {
+  reasoningMode?: string,
+): Promise<MagnitudeLlmConfig> {
   const issue = getMagnitudeModelIssue(config);
   if (issue) {
     throw new Error(issue);
@@ -86,6 +87,22 @@ export function resolveMagnitudeLlmConfig(
         ? "http://localhost:11434/v1"
         : "";
   const resolvedBaseURL = baseURL || defaultBaseURL;
+
+  // Magnitude's BAML client has no reasoning knob; route through our signed
+  // proxy so the requested reasoning effort reaches the provider.
+  if (
+    magnitudeProvider === "openai-generic" &&
+    resolvedBaseURL &&
+    reasoningMode &&
+    reasoningMode !== "off"
+  ) {
+    const { buildProxiedBaseUrl } = await import("./llmProxy");
+    const baseUrl = await buildProxiedBaseUrl(resolvedBaseURL, reasoningMode);
+    return {
+      provider: magnitudeProvider,
+      options: { model: config.model, apiKey: config.apiKey, baseUrl },
+    };
+  }
 
   return {
     provider: magnitudeProvider,

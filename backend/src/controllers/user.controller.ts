@@ -2220,7 +2220,7 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     process.env.DISPLAY = normalizedDisplay;
 
     const { startBrowserAgent } = await import("magnitude-core");
-    const llm = resolveMagnitudeLlmConfig(providerConfig);
+    const llm = await resolveMagnitudeLlmConfig(providerConfig, browserModel.reasoningMode);
 
     const browserEnv = { ...process.env, HOME: getBurpBrowserHome() };
     const launchOptions: any = { headless, env: browserEnv };

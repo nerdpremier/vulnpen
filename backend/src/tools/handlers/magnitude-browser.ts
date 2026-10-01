@@ -1,4 +1,4 @@
-import { ToolDefinition } from "../types";
+import { ToolDefinition, ToolResult } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
 import { formatMagnitudeError } from "../../utils/magnitudeError";
 import { presetToProviderConfig } from "../../utils/llm/providers";
@@ -7,7 +7,10 @@ import { isSubscriptionProvider } from "../../services/subscription-inference.se
 import { isHostOwner } from "../../services/host-owner.service";
 import { resolveMagnitudeLlmConfig } from "../../utils/magnitudeLlm";
 import { getBurpBrowserHome } from "../../services/burp-ca.service";
+import { getDataDir } from "../../utils/loadConfig";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
 
 const magnitudeBrowser: ToolDefinition = {
   name: "browser_action",
@@ -37,12 +40,17 @@ const magnitudeBrowser: ToolDefinition = {
           "Optional. A description of what data to extract from the page after performing the action " +
           "(e.g. 'Extract all usernames and email addresses from the table')",
       },
+      screenshot: {
+        type: "boolean",
+        description:
+          "Capture a PNG screenshot of the page after the action and show it to the user in the chat (default true).",
+      },
     },
     required: ["url", "goal"],
   },
   requiresConsent: true,
   timeoutMs: 300_000,
-  async execute(args, ctx) {
+  async execute(args, ctx): Promise<ToolResult> {
     const { url, goal, extract } = args;
 
     if (!url || !goal) {
@@ -109,23 +117,31 @@ const magnitudeBrowser: ToolDefinition = {
 
     try {
       const { startBrowserAgent } = await import("magnitude-core");
-      const llm = resolveMagnitudeLlmConfig(providerConfig);
+      const llm = await resolveMagnitudeLlmConfig(
+        providerConfig,
+        browserModel.reasoningMode,
+      );
 
       const browserEnv = { ...process.env, HOME: getBurpBrowserHome() };
       const launchOptions: any = { headless, env: browserEnv };
       if (proxyUrl) {
         launchOptions.proxy = { server: proxyUrl };
       }
+      // Magnitude merges an explicit deviceScaleFactor into every context, and
+      // Playwright rejects deviceScaleFactor combined with viewport: null — so
+      // the viewport must always be a real size. Size it to the Xvfb screen so
+      // a headful browser fills the display.
+      const [, screenW, screenH] =
+        (process.env.BROWSER_AGENT_SCREEN || "1280x800x24").match(/^(\d+)x(\d+)/) || [];
+      const viewport = {
+        width: screenW ? Number(screenW) : 1280,
+        height: screenH ? Number(screenH) : 800,
+      };
       if (!headless) {
-        launchOptions.env = { ...browserEnv, DISPLAY: normalizedDisplay };
         // No window manager runs on the Xvfb display, so --start-maximized is a
-        // no-op; size the window to the screen explicitly and let the page fill
-        // the window (viewport: null) so the whole screen shows the browser.
-        const [, screenW, screenH] =
-          (process.env.BROWSER_AGENT_SCREEN || "1280x800x24").match(/^(\d+)x(\d+)/) || [];
-        if (screenW && screenH) {
-          launchOptions.args = [`--window-size=${screenW},${screenH}`];
-        }
+        // no-op; size the window to the screen explicitly and render the page
+        // at the same viewport so the whole screen is used.
+        launchOptions.args = [`--window-size=${viewport.width},${viewport.height}`];
       }
 
       const agentConfig: any = {
@@ -133,7 +149,7 @@ const magnitudeBrowser: ToolDefinition = {
         narrate: false,
         browser: {
           launchOptions,
-          contextOptions: { ignoreHTTPSErrors: true, viewport: null },
+          contextOptions: { ignoreHTTPSErrors: true, viewport },
         },
         llm: {
           provider: llm.provider,
@@ -152,11 +168,30 @@ const magnitudeBrowser: ToolDefinition = {
           extractedData = `\n\nExtracted data:\n${JSON.stringify(data, null, 2)}`;
         }
 
+        // Screenshot the final state so the user can see the page in the chat.
+        let files: string[] | undefined;
+        let screenshotNote = "";
+        if (args.screenshot !== false) {
+          try {
+            const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const safeSession = (ctx.sessionId || "session").replace(/[^a-zA-Z0-9_-]/g, "_");
+            const dir = path.join(getDataDir(), "screenshots", safeSession);
+            fs.mkdirSync(dir, { recursive: true });
+            const fileName = `${stamp}.png`;
+            await agent.page.screenshot({ path: path.join(dir, fileName), fullPage: false });
+            files = [fileName];
+            screenshotNote = `\n\nScreenshot captured: ${fileName} (shown to the user in the chat).`;
+          } catch (shotErr: any) {
+            screenshotNote = `\n\nScreenshot failed: ${shotErr?.message ?? shotErr}`;
+          }
+        }
+
         await agent.stop();
 
         return {
-          output: `Browser agent completed successfully.\nGoal: ${goal}\nURL: ${url}${extractedData}`,
+          output: `Browser agent completed successfully.\nGoal: ${goal}\nURL: ${url}${extractedData}${screenshotNote}`,
           exitCode: 0,
+          files,
         };
       } catch (agentError: any) {
         try {
