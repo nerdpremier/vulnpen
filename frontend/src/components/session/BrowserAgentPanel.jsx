@@ -1,6 +1,10 @@
 "use client";
 
 import { getBrowserAgentVNC, getMagnitudeConfig } from "@/services/user.service";
+import {
+  BrowserModelSelector,
+  BrowserReasoningSelector,
+} from "@/components/agent/ModelSelector";
 import { Spin, Result, Button, Typography } from "antd";
 import { GlobalOutlined, SettingOutlined, DesktopOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useMemo } from "react";
@@ -203,17 +207,41 @@ const BrowserAgentPanel = () => {
   }
 
   return (
-    <iframe
-      id="browser-agent-vnc-panel"
-      src={`${novncUrl}/vnc.html?autoconnect=true&resize=scale`}
-      width="100%"
-      height="100%"
-      frameBorder="0"
-      allow="fullscreen"
-      style={{ display: "block", background: "#000" }}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+      }}
     >
-      Browser not compatible.
-    </iframe>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: "0.5rem",
+          padding: "0.35rem 0.6rem",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+          background: "var(--cli-bg, rgba(0, 0, 0, 0.35))",
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: "0.72rem", opacity: 0.6 }}>Browser model</span>
+        <BrowserModelSelector />
+        <BrowserReasoningSelector />
+      </div>
+      <iframe
+        id="browser-agent-vnc-panel"
+        src={`${novncUrl}/vnc.html?autoconnect=true&resize=scale`}
+        width="100%"
+        height="100%"
+        frameBorder="0"
+        allow="fullscreen"
+        style={{ flex: 1, minHeight: 0, display: "block", background: "#000" }}
+      >
+        Browser not compatible.
+      </iframe>
+    </div>
   );
 };
 
