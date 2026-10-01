@@ -170,10 +170,11 @@ function formatMessageForSummary(m: any): string {
 }
 
 /**
- * Builds conversation text for the summarize prompt, keeping the latest
- * messages when the full history would exceed the model's input token budget.
+ * Builds conversation text for LLM-backed commands (/summarize, /export),
+ * keeping the latest messages when the full history would exceed the model's
+ * input token budget.
  */
-async function buildConversationTextForSummarize(messages: any[]): Promise<string> {
+async function buildConversationText(messages: any[]): Promise<string> {
   const maxTokens = await getMaxInputTokens();
 
   const formatted = messages.map(formatMessageForSummary);
@@ -294,7 +295,7 @@ const commandHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    const conversationText = await buildConversationTextForSummarize(nonSystemMessages);
+    const conversationText = await buildConversationText(nonSystemMessages);
 
     const resultId = `slash_result_${Date.now()}`;
     sse.write("slash_command_ack", { command: "summarize", message: "Generating summary..." });
@@ -403,8 +404,19 @@ const commandHandlers: Record<string, CommandHandler> = {
     const hostnamePattern = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b/g;
 
     const ips = [...new Set(allContent.match(ipv4Pattern) ?? [])];
-    const hostnames = [...new Set(allContent.match(hostnamePattern) ?? [])].filter(
-      (h) => !h.match(/\.(js|ts|py|txt|json|xml|html|css|scss|md|log|csv|pdf|png|jpg)$/i),
+    const hostnames = [
+      ...new Set(
+        (allContent.match(hostnamePattern) ?? []).map((h) =>
+          h.replace(/\.+$/, "").toLowerCase(),
+        ),
+      ),
+    ].filter(
+      (h) =>
+        // Skip prose artifacts ("e.g."), sentence-ending capture that shrank
+        // to a single-letter label, and anything that is really a file name.
+        h.length > 3 &&
+        !/^[a-z]\.[a-z]$/.test(h) &&
+        !h.match(/\.(js|ts|py|txt|json|xml|html|css|scss|md|log|csv|pdf|png|jpg)$/i),
     );
 
     const lines: string[] = ["### Discovered Targets", ""];
@@ -458,21 +470,6 @@ const commandHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    const conversationText = nonSystemMessages
-      .map((m: any) => {
-        if (m.role === "assistant" && m.toolCalls?.length) {
-          const toolDesc = m.toolCalls
-            .map((tc: any) => `[Tool: ${tc.name}](${tc.arguments})`)
-            .join(", ");
-          return `Assistant: ${m.content ?? ""} ${toolDesc}`;
-        }
-        if (m.role === "tool") {
-          return `Tool Result (${m.toolName ?? "unknown"}): ${m.content?.slice(0, 1000) ?? ""}`;
-        }
-        return `${m.role}: ${m.content ?? ""}`;
-      })
-      .join("\n\n");
-
     const structuredFindings = (session.vulnerabilities ?? []).map((v) => ({
       id: v.vulnerabilityId,
       title: v.title,
@@ -493,6 +490,10 @@ const commandHandlers: Record<string, CommandHandler> = {
       exploited: v.exploited,
       status: v.status,
     }));
+
+    const conversationText = await buildConversationText(
+      nonSystemMessages,
+    );
 
     const reportSource = structuredFindings.length
       ? `${conversationText}\n\n<structured_vulnerabilities>\n${JSON.stringify(structuredFindings, null, 2)}\n</structured_vulnerabilities>`

@@ -275,9 +275,13 @@ export async function executeToolCalls(
   toolSafetyEvaluator?: ToolSafetyEvaluator,
   approvalContext?: ToolApprovalContext,
 ): Promise<ToolExecutionResult[]> {
-  const results = await Promise.all(
-    toolCalls.map((tc) =>
-      executeToolCall(
+  // Run sequentially, not Promise.all: tool calls in one turn share the
+  // session's shell manager, and two run_bash/shell tools racing would
+  // interleave input on the same SSH shell and corrupt each other's output.
+  const results: ToolExecutionResult[] = [];
+  for (const tc of toolCalls) {
+    results.push(
+      await executeToolCall(
         sessionId,
         tc,
         callbacks,
@@ -287,8 +291,8 @@ export async function executeToolCalls(
         toolSafetyEvaluator,
         approvalContext,
       ),
-    ),
-  );
+    );
+  }
   return results;
 }
 

@@ -36,9 +36,17 @@ const runBash: ToolDefinition = {
     const { output, exitCode } = await ctx.runCommand(command, timeoutMs);
 
     const files: string[] = [];
-    const redirectMatch = command.match(/-o\w?\s+(\S+)|>\s*(\S+)/);
-    if (redirectMatch) {
-      files.push(redirectMatch[1] || redirectMatch[2]);
+    // Heuristic output-file detection: `-o`/`-oN`/`--output` flags and
+    // `>`/`>>` redirects. Guarded so flag-like tokens (`find . -or ...`),
+    // /dev/null and bare words that don't look like paths don't register.
+    for (const match of command.matchAll(
+      /(?:^|\s)-o[a-zA-Z]?\s+(\S+)|(?:^|\s)--output[= ](\S+)|(?:^|\s)>{1,2}\s*(\S+)/g,
+    )) {
+      const token = (match[1] || match[2] || match[3])?.replace(/^["']|["']$/g, "");
+      if (!token || token.startsWith("-") || token === "/dev/null") continue;
+      const looksLikeFile = token.includes("/") || /\.[A-Za-z0-9]{1,5}$/.test(token);
+      if (!looksLikeFile) continue;
+      if (!files.includes(token)) files.push(token);
     }
 
     const result: { output: string; exitCode: number; files?: string[]; installSuggestion?: { name: string; label: string; installCommand: string; size: string } } = { output, exitCode, files };

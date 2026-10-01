@@ -3,12 +3,12 @@ import styles from "@/styles/components/Chat.module.scss";
 import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import { useQuery } from "react-query";
-import { getSessionInfo } from "@/services/agent.service";
+import { getSlashCommands, getSessionInfo } from "@/services/agent.service";
 import ExecutionModeSelector from "@/components/agent/ExecutionModeSelector";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
 import { ModelSelector, ReasoningSelector } from "@/components/agent/ModelSelector";
 
-const SLASH_COMMANDS = [
+const FALLBACK_SLASH_COMMANDS = [
   { name: "summarize", description: "Summarize the entire session so far" },
   { name: "status", description: "Show current engagement status" },
   { name: "clear", description: "Clear the conversation context" },
@@ -39,6 +39,15 @@ export default function ChatInput({
     { enabled: !!sessionId, staleTime: 60000 }
   );
 
+  // The authoritative list lives in the backend so the autocomplete can't
+  // drift from the commands that actually execute.
+  const { data: slashCommandsData } = useQuery("slash-commands", getSlashCommands, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const slashCommands = slashCommandsData?.length
+    ? slashCommandsData
+    : FALLBACK_SLASH_COMMANDS;
+
   const isRunning = agentState === "running";
   const canSend = !isRunning && (value.trim().length > 0 || !!burpAttachment) && !disabled;
 
@@ -47,9 +56,9 @@ export default function ChatInput({
     if (!trimmed.startsWith("/")) return [];
     const partial = trimmed.split(/\s/)[0].slice(1).toLowerCase();
     if (trimmed.includes(" ")) return [];
-    if (!partial) return SLASH_COMMANDS;
-    return SLASH_COMMANDS.filter((cmd) => cmd.name.startsWith(partial));
-  }, [value]);
+    if (!partial) return slashCommands;
+    return slashCommands.filter((cmd) => cmd.name.startsWith(partial));
+  }, [value, slashCommands]);
 
   const showMenu = slashMatches.length > 0 && !isRunning;
 

@@ -492,7 +492,7 @@ select_mode_for_configuration() {
 
 detect_running_mode() {
     local has_kali has_backend
-    has_kali=$(docker ps --filter "name=kali" --format '{{.Names}}' 2>/dev/null | head -1)
+    has_kali=$(docker ps --filter "name=^vulnpen-kali$" --format '{{.Names}}' 2>/dev/null | head -1)
     has_backend=$(docker ps --filter "name=vulnpen-backend" --format '{{.Names}}' 2>/dev/null | head -1)
 
     if [[ -n "$has_kali" && -n "$has_backend" ]]; then
