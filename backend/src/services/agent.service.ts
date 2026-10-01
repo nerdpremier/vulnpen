@@ -604,7 +604,7 @@ export async function runAgentLoop(params: {
           sse.write("tool_output", { id, chunk });
         },
         onToolDone(id, result) {
-          sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length });
+          sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length, files: result.files });
         },
         onToolError(id, error) {
           sse.write("tool_error", { id, error });
@@ -665,6 +665,7 @@ export async function runAgentLoop(params: {
             content: tr.result.output,
             toolCallId: tr.toolCallId,
             toolName: tr.toolName,
+            files: tr.result.files,
             timestamp: new Date(),
             turnIndex,
           };
@@ -716,6 +717,7 @@ export async function runAgentLoop(params: {
             content: tr.result.output,
             toolCallId: tr.toolCallId,
             toolName: tr.toolName,
+            files: tr.result.files,
             timestamp: new Date(),
             turnIndex,
           };
@@ -740,6 +742,7 @@ export async function runAgentLoop(params: {
           content: tr.result.output,
           toolCallId: tr.toolCallId,
           toolName: tr.toolName,
+          files: tr.result.files,
           timestamp: new Date(),
           turnIndex,
         };
@@ -970,7 +973,7 @@ export async function handleConsent(params: {
   const callbacks: ToolExecutionCallbacks = {
     onToolStart(id, name, args) { sse.write("tool_start", { id, name, args }); },
     onToolOutput(id, chunk) { sse.write("tool_output", { id, chunk }); },
-    onToolDone(id, result) { sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length }); },
+    onToolDone(id, result) { sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length, files: result.files }); },
     onToolError(id, error) { sse.write("tool_error", { id, error }); },
     onConsentRequired() {},
   };

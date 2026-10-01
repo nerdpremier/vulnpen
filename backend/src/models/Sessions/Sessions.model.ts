@@ -21,6 +21,8 @@ export interface AgentMessageDoc {
   toolCalls?: AgentToolCallData[];
   toolCallId?: string;
   toolName?: string;
+  /** Server-side artifact filenames (e.g. browser screenshots) the UI renders inline. */
+  files?: string[];
   timestamp: Date;
   turnIndex: number;
   isSummary?: boolean;
@@ -262,6 +264,7 @@ const AgentMessageSchema = new Schema(
     toolCalls: { type: [ToolCallSchema], default: undefined },
     toolCallId: { type: String },
     toolName: { type: String },
+    files: { type: [String], default: undefined },
     timestamp: { type: Date, default: Date.now },
     turnIndex: { type: Number, default: 0 },
     isSummary: { type: Boolean, default: false },
@@ -299,6 +302,7 @@ const SubagentMessageSchema = new Schema(
     toolCalls: { type: [ToolCallSchema], default: undefined },
     toolCallId: { type: String },
     toolName: { type: String },
+    files: { type: [String], default: undefined },
     timestamp: { type: Date, default: Date.now },
     turnIndex: { type: Number, default: 0 },
     isSummary: { type: Boolean, default: false },

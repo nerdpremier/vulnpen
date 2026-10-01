@@ -1,4 +1,6 @@
 import { Response, Request } from "express";
+import fs from "fs";
+import path from "path";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
@@ -368,8 +370,8 @@ export const deleteSession = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    session.status = "archived";
-    await session.save();
+    await SessionsModel.deleteOne({ sessionId, uid: userId });
+    await HistoryArchiveModel.deleteMany({ sessionId });
 
     return res.status(200).json({ message: "Session deleted" });
   } catch (err: any) {
@@ -595,5 +597,46 @@ export const installCapability = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[agent] installCapability error:", err);
     return res.status(500).json({ message: err.message ?? "Install failed" });
+  }
+};
+
+const SESSION_FILE_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  txt: "text/plain; charset=utf-8",
+};
+
+// Serves agent-produced artifacts (browser screenshots) by stored filename —
+// names carry no path components, so traversal is impossible by construction.
+export const getSessionFile = async (req: Request, res: Response) => {
+  try {
+    // verifySess puts the authenticated user on res.locals, not req.user.
+    const userId = res.locals?.userId ?? (req as any).user?.uid;
+    const { sessionId, filename } = req.params;
+    if (!filename || /[\/]|\.\./.test(filename)) {
+      return res.status(400).json({ message: "Invalid filename" });
+    }
+
+    const session = await SessionsModel.findOne({ sessionId, uid: userId }).select("_id");
+    if (!session) return res.status(404).json({ message: "Session not found" });
+
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+    const mime = SESSION_FILE_MIME[ext];
+    if (!mime) return res.status(400).json({ message: "Unsupported file type" });
+
+    const { getDataDir } = await import("../utils/loadConfig");
+    const safeSession = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const filePath = path.join(getDataDir(), "screenshots", safeSession, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found" });
+
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    return res.sendFile(filePath);
+  } catch (err: any) {
+    console.error("[agent] getSessionFile error:", err);
+    return res.status(500).json({ message: err.message ?? "Failed to read file" });
   }
 };

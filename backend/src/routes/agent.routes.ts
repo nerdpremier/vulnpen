@@ -17,6 +17,7 @@ import {
   getSessionAgentToolsConfig,
   updateSessionAgentToolsConfig,
   installCapability,
+  getSessionFile,
 } from "../controllers/agent.controller";
 import {
   chatAboutVulnerability,
@@ -37,6 +38,11 @@ import {
 
 const router = express.Router();
 
+// Signed LLM pass-through for the Magnitude browser agent — mounted without
+// verifySess because the in-container agent authenticates via HMAC'd URL.
+import { llmProxyRouter } from "../utils/llmProxy";
+router.use("/llm-proxy", llmProxyRouter);
+
 router.post("/create-session", [verifySess], createSession);
 router.post("/sessions", [verifySess], getUserSessions);
 router.get("/session/:sessionId", [verifySess], getSessionInfo);
@@ -56,6 +62,7 @@ router.delete("/session/:sessionId/test-plan/cases/:testId", [verifySess], remov
 router.post("/session/:sessionId/test-plan/cases/remove", [verifySess], removeTestCases);
 router.get("/session/:sessionId/report", [verifySess], getReport);
 router.get("/session/:sessionId/owasp-top10", [verifySess], getOwaspCoverage);
+router.get("/session/:sessionId/files/:filename", [verifySess], getSessionFile);
 router.post("/delete-session", [verifySess], deleteSession);
 
 router.post("/message", [verifySess], sendMessage);
