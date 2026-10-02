@@ -808,8 +808,11 @@ export function buildDetectionScript(capabilityNames: string[]): string {
   for (const name of capabilityNames) {
     const cap = getCapabilityByName(name);
     if (!cap) continue;
+    // Brace-group the check so the redirect silences a multi-command
+    // checkCommand too — otherwise a leading `which` leaks its path into the
+    // "name:yes" line and the parser reads the tool as missing.
     checks.push(
-      `echo -n "${cap.name}:"; ${cap.checkCommand} > /dev/null 2>&1 && echo "yes" || echo "no"`
+      `echo -n "${cap.name}:"; { ${cap.checkCommand}; } > /dev/null 2>&1 && echo "yes" || echo "no"`
     );
   }
   // Detection runs over non-interactive SSH, which does not source ~/.bashrc, so

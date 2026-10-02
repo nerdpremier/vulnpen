@@ -95,11 +95,11 @@ const CapabilitiesPage = () => {
 
   const { mutateAsync: updateCapabilitiesAsync } = useMutation(updateCapabilities, {
     onSuccess: () => {
-      message.success("Capabilities updated");
+      message.success("Tools updated");
       queryClient.invalidateQueries("capabilities");
     },
     onError: () => {
-      message.error("Failed to update capabilities");
+      message.error("Failed to update tools");
     },
   });
 
@@ -107,7 +107,7 @@ const CapabilitiesPage = () => {
     onSuccess: (result) => {
       setDetecting(false);
       const installed = result?.installedCapabilities ?? [];
-      message.success(`Detection complete: ${installed.length} capabilities found`);
+      message.success(`Detection complete: ${installed.length} tools found`);
       queryClient.invalidateQueries("capabilities");
     },
     onError: () => {
@@ -255,7 +255,7 @@ const CapabilitiesPage = () => {
       <div className={styles.topBar}>
         <div className={styles.searchWrapper}>
           <Input
-            placeholder="Search capabilities..."
+            placeholder="Search tools..."
             prefix={<HiOutlineMagnifyingGlass className={styles.searchIcon} />}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -264,7 +264,7 @@ const CapabilitiesPage = () => {
           />
         </div>
         <div className={styles.stats}>
-          <span>{selectedSet.size} capabilities selected</span>
+          <span>{selectedSet.size} tools selected</span>
           <span className={styles.statDivider}>·</span>
           <span>{installedSet.size} installed</span>
         </div>

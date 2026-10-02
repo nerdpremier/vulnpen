@@ -217,6 +217,26 @@
   :global(.ant-checkbox-inner) {
     background: none !important;
   }
+
+  // The antd tick is white: on this monochrome theme a checked box must be
+  // painted light with a dark tick, or the selection is invisible on the card.
+  :global(.ant-checkbox-checked .ant-checkbox-inner) {
+    background: var(--moon-accent) !important;
+    border-color: var(--moon-accent) !important;
+
+    &::after {
+      border-color: #0a0a0a !important;
+    }
+  }
+
+  :global(.ant-checkbox-indeterminate .ant-checkbox-inner) {
+    background: var(--moon-accent) !important;
+    border-color: var(--moon-accent) !important;
+
+    &::after {
+      background: #0a0a0a !important;
+    }
+  }
 }
 
 .capInfo {

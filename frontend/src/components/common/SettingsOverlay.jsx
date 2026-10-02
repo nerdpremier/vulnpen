@@ -71,7 +71,7 @@ const TABS = [
   {
     key: "capabilities",
     section: "Tools & integrations",
-    label: "Capabilities",
+    label: "Tools",
     description:
       "Manage CLI tools and Python packages available on your exploit box.",
     icon: TbTools,
