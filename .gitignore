@@ -33,3 +33,6 @@ ssh-keys/
 
 # ── Generated deliverables (decks, reports) ──
 /output/
+
+# Academic paper build - never publish to the repository
+paper-build/
