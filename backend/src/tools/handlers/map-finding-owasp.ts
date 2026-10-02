@@ -8,26 +8,18 @@ import {
 } from "../../services/web-security/owasp-mapping.service";
 import { classifyWithLlm } from "../../services/web-security/owasp-llm-classifier";
 import {
-  OWASP_TOP10_2025,
   getOwaspCategory,
   getWstgTest,
   normalizeOwaspTop10Id,
 } from "../../knowledge";
 
-function owaspRoster(): string {
-  return OWASP_TOP10_2025.map((category) => `${category.id} ${category.title}`).join("; ");
-}
-
 const mapFindingOwasp: ToolDefinition = {
   name: "map_finding_owasp",
   description:
-    "Classify a finding against the OWASP Top 10:2025 and persist the classification on the tracked finding. " +
-    "Mapping precedence is: an explicit category you supply, then the OWASP category of the WSTG v4.2 test case " +
-    "that produced the finding, then the CWE identifiers OWASP publishes for each category, then an LLM classifier, " +
-    "and only findings that survive none of those stay unmapped. " +
-    "Pass vulnerability_id to classify a finding that already exists (with apply=true to store the result), " +
-    "or pass title/cwe/wstg_id to classify a finding you are still investigating. " +
-    `Valid categories: ${owaspRoster()}.`,
+    "Classify a finding against the OWASP Top 10:2025 and persist the classification. " +
+    "Pass vulnerability_id to classify an existing finding (apply=true to store), or title/cwe/wstg_id for one still being investigated; " +
+    "apply_to_all=true maps every unmapped finding in the session. The cascade (your category → WSTG case → CWE → LLM) runs automatically. " +
+    "Valid categories are listed in the system prompt's OWASP risk vocabulary.",
   parameters: {
     type: "object",
     properties: {
@@ -45,22 +37,20 @@ const mapFindingOwasp: ToolDefinition = {
       wstg_id: {
         type: "string",
         description:
-          "WSTG v4.2 test case that produced the finding, e.g. WSTG-INPV-05. The strongest signal for the mapping.",
+          "WSTG test case that produced the finding, e.g. WSTG-INPV-05 — the strongest mapping signal.",
       },
       owasp_top10: {
         type: "string",
         description:
-          "Explicit OWASP Top 10:2025 category (A01:2025 ... A10:2025). Provide it only when the correct classification is clear from the evidence.",
+          "Explicit category (A01:2025 ... A10:2025); supply only when the classification is clear from the evidence.",
       },
       apply: {
         type: "boolean",
-        description:
-          "Persist the classification on the finding (only used with vulnerability_id). Default false: classification is returned for you to review.",
+        description: "Persist the classification on the finding (with vulnerability_id). Default false.",
       },
       apply_to_all: {
         type: "boolean",
-        description:
-          "Classify and persist mappings for every finding in this session that has no OWASP Top 10:2025 category yet.",
+        description: "Map and persist every finding in this session that has no OWASP category yet.",
       },
     },
     required: [],

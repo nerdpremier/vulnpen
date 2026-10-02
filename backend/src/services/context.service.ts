@@ -17,6 +17,10 @@ const PRESERVE_RECENT_MESSAGES = 6;
 // full scan output for hundreds of turns was pure token burn.
 const RECENT_FULL_TOOL_RESULTS = 20;
 const STALE_TOOL_RESULT_CHARS = 1_500;
+// Old tool-call ARGUMENTS are stubbed too: re-sending a 5k-char nmap command
+// or a full add_vulnerability payload hundreds of turns later is pure burn.
+// The result stub and the summary carry the outcome.
+const STALE_TOOL_CALL_ARGS_CHARS = 500;
 
 function estimateTokens(text: string | null): number {
   if (!text) return 0;
@@ -202,7 +206,16 @@ export function messagesToOpenAI(
         tool_calls: validToolCalls.map((tc) => ({
           id: tc.id,
           type: "function" as const,
-          function: { name: tc.name, arguments: tc.arguments },
+          function: {
+            name: tc.name,
+            arguments:
+              tc.arguments.length > STALE_TOOL_CALL_ARGS_CHARS &&
+              index < messages.length - RECENT_FULL_TOOL_RESULTS
+                ? tc.arguments.slice(0, Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2)) +
+                  ` ... [older tool-call arguments elided from context] ... ` +
+                  tc.arguments.slice(-Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2))
+                : tc.arguments,
+          },
         })),
       };
       if (includeReasoningContent && m.reasoning) {

@@ -540,7 +540,7 @@ test("the assistant proposes a WSTG plan as soon as the user names a target", ()
   assert.match(prompt, /wstg_test_plan/);
   assert.match(
     prompt,
-    /Never start firing payloads at a target the user has not confirmed is in scope/,
+    /Never fire payloads at a target the user has not confirmed is in scope/,
   );
   assert.match(prompt, /OWASP Top 10:2025 — the risk vocabulary/);
   assert.match(prompt, /A10:2025 Mishandling of Exceptional Conditions/);

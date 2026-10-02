@@ -15,7 +15,6 @@ import {
 import {
   CheckCircleFilled,
   InfoCircleOutlined,
-  LoadingOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
@@ -289,7 +288,6 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
                   disabled={!selectedModel}
                   style={{ height: "2rem", fontSize: "0.75rem" }}
                 >
-                  {running ? <LoadingOutlined /> : null}
                   Run Test
                 </PrimaryButton>
               </Col>

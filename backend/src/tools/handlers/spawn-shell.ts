@@ -3,31 +3,27 @@ import { ToolDefinition } from "../types";
 const spawnShell: ToolDefinition = {
   name: "spawn_shell",
   description:
-    "Create a new persistent named shell on the attack box. Returns a shell_id that can " +
-    "be used with run_bash (shell_id param), write_to_shell, and read_shell. " +
-    "Use this for: long-running processes (nmap scans), netcat listeners, " +
-    "interactive sessions, or any task that needs a dedicated terminal.",
+    "Create a new persistent named shell on the attack box; returns a shell_id for run_bash (shell_id), " +
+    "write_to_shell and read_shell. For long-running processes, listeners and interactive sessions.",
   parameters: {
     type: "object",
     properties: {
       label: {
         type: "string",
-        description: "A short descriptive label for this shell (e.g. 'nmap-scan', 'nc-listener-4444', 'exploit-session')",
+        description: "Short label, e.g. 'nmap-scan', 'nc-listener-4444'.",
       },
       purpose: {
         type: "string",
         enum: ["exploit-box", "reverse-shell", "listener"],
-        description: "Shell purpose. Use 'exploit-box' (default) for commands on the attack box, " +
-          "'reverse-shell' for shells that will receive reverse connections from targets, " +
-          "'listener' for netcat/socat listeners waiting for connections.",
+        description: "'exploit-box' (default) for attack-box commands, 'reverse-shell' for shells receiving reverse connections, 'listener' for netcat/socat listeners.",
       },
       rows: {
         type: "number",
-        description: "Terminal rows (default 50). Set higher for TUI/game challenges (e.g. 60).",
+        description: "Terminal rows (default 50).",
       },
       cols: {
         type: "number",
-        description: "Terminal columns (default 200). Set wider for TUI/game challenges (e.g. 120).",
+        description: "Terminal columns (default 200).",
       },
     },
     required: ["label"],

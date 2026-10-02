@@ -47,13 +47,12 @@ const updateEngagementState: ToolDefinition = {
       data: {
         type: "object",
         description:
-          "The action-specific state data. For add_vulnerability: title, host/target, service or endpoint, " +
-          "likelihood and impactRating (1-3 each — the system derives severity; never declare a severity word), " +
-          "evidence, stepsToReproduce, contextSummary, impact, remediation, exploited when known. Set wstgId to the " +
-          "test case that produced the finding; omit owaspTop10/CWE unless you are confident. " +
-          "For add_key_discovery: title and/or description. For remove_finding: vulnerability_id of a false positive. " +
-          "Proof-of-concept engagement: a destructive capability you proved without carrying it out is recorded with " +
-          "exploited=false and the deliberate omission stated in impact.",
+          "Action-specific data. add_vulnerability: title, host/target, service or endpoint, likelihood + " +
+          "impactRating (1-3 — the system derives severity; never declare a severity word), evidence, " +
+          "stepsToReproduce, impact, remediation, exploited; set wstgId to the producing test case and omit " +
+          "owaspTop10/CWE unless confident. For proof-of-concept findings, a destructive capability proved " +
+          "without carrying it out is exploited=false with the omission stated in impact. " +
+          "add_key_discovery: title and/or description. remove_finding: vulnerability_id.",
         properties: {
           // Shared fields. Keeping these explicit prevents models from
           // guessing the shape of add_key_discovery calls while retaining the
@@ -75,42 +74,36 @@ const updateEngagementState: ToolDefinition = {
           remediation: { type: "string" },
           exploited: {
             type: "boolean",
-            description:
-              "true only when the action was actually carried out under explicit operator authorisation. A vulnerability proven non-destructively stays false.",
+            description: "true only when actually carried out under operator authorisation.",
           },
           vulnerability_id: {
             type: "string",
-            description: "Finding id to delete, for action remove_finding (vulnerabilityId or exact title).",
+            description: "Finding id to delete (remove_finding).",
           },
           wstgId: {
             type: "string",
             description:
-              "WSTG v4.2 case that produced this finding (e.g. WSTG-INPV-05); must exist in the plan — the tool links the case as failed automatically.",
+              "WSTG case that produced this finding (e.g. WSTG-INPV-05); must exist in the plan — linked as failed automatically.",
           },
           owaspTop10: {
             type: "string",
-            description:
-              "Explicit OWASP Top 10:2025 category (A01:2025 ... A10:2025). Omit it to classify from the WSTG test case, CWE and finding text.",
+            description: "Explicit category (A01:2025 ... A10:2025); omit to classify automatically.",
           },
           screenshots: {
             type: "array",
             items: { type: "string" },
             description:
-              "Filenames of browser screenshots that prove this finding (the names browser_action reports on its " +
-              '"Screenshot captured: <name>.png" line). Attach one only when the page itself is the evidence — an admin ' +
-              "console reached without authorisation, exposed records, a debug panel — not for every finding.",
+              "Screenshot filenames from browser_action's \"Screenshot captured: <name>.png\" line — attach only when the page itself is the evidence.",
           },
           likelihood: {
             type: "number",
             enum: [1, 2, 3],
-            description:
-              "Likelihood factor: 1 = low, 2 = medium, 3 = high.",
+            description: "1 = low, 2 = medium, 3 = high.",
           },
           impactRating: {
             type: "number",
             enum: [1, 2, 3],
-            description:
-              "Impact factor: 1 = low, 2 = medium, 3 = high (worst realistic business damage).",
+            description: "1 = low, 2 = medium, 3 = high (worst realistic business damage).",
           },
         },
         additionalProperties: true,

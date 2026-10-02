@@ -148,9 +148,8 @@ const wstgTestPlan: ToolDefinition = {
       vulnerability_id: {
         type: "string",
         description:
-          "Existing finding id to link to this test case when the test produced a vulnerability. Required when setting status to failed. " +
-          "The finding's wstgId must agree with the case: a finding with no wstgId is re-tagged to this case automatically, " +
-          "and a link that contradicts the finding's wstgId is refused.",
+          "Finding id to link when the test produced a vulnerability. Required when status is failed; " +
+          "a finding with no wstgId is re-tagged to this case automatically, a contradicting link is refused.",
       },
       limit: {
         type: "number",
