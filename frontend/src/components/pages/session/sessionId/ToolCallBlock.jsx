@@ -158,11 +158,17 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
     }
   }, [content, streaming]);
 
-  // The Browser Agent live panel listens for this and unfolds itself so the
-  // user sees the automation as it happens.
+  // The Browser Agent live panel unfolds while the agent drives the browser
+  // and folds back to the rail once that call finishes.
+  const wasBrowserStreamingRef = useRef(false);
   useEffect(() => {
-    if (streaming && /browser/i.test(toolName)) {
+    const isBrowserTool = /browser/i.test(toolName);
+    if (isBrowserTool && streaming) {
+      wasBrowserStreamingRef.current = true;
       window.dispatchEvent(new CustomEvent("browser-agent-active"));
+    } else if (wasBrowserStreamingRef.current && !streaming) {
+      wasBrowserStreamingRef.current = false;
+      window.dispatchEvent(new CustomEvent("browser-agent-idle"));
     }
   }, [toolName, streaming]);
 

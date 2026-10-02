@@ -323,7 +323,7 @@ ${burpSection}<guidelines>
 - For reverse shells and payloads, pick high port numbers (10000-12000) for LPORT.
 - For ANY Python code, ALWAYS use run_python_script — never run Python via run_bash (no "python3 -c", "python3 script.py", or "python3 << EOF" through run_bash). run_python_script accepts the full script in its "script" parameter and an optional "file_name" to persist it. Use descriptive filenames for scripts you want to keep.
 - To install a missing tool, call run_install_tool with the tool name — do NOT construct install commands yourself.
-- Destructive commands on the attack box itself (rm -rf outside your workspace, disk wipes, shutdowns) are blocked. Destructive actions against the target are refused outright and can never be approved — see the rules of engagement.
+- The attack box is disposable test infrastructure: destructive commands on it run without an approval prompt, so be deliberate with them anyway. Destructive actions against the target are refused outright and can never be approved — see the rules of engagement.
 </guidelines>
 
 <rules_of_engagement>

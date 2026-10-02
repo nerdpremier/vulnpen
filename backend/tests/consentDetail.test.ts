@@ -71,7 +71,8 @@ test("an internal host is never treated as public reconnaissance", () => {
   }
 });
 
-test("a destructive command is reported as dangerous, not out of scope", () => {
+test("a destructive command on the attack box no longer gates consent", () => {
+  // The box is disposable test infrastructure — the user cut this category.
   const detail = shellSafetyDetail("rm --recursive --force /", ctx("juice-shop:3000"));
-  assert.equal(detail?.kind, "dangerous");
+  assert.equal(detail, undefined);
 });

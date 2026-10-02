@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { TbWorldWww } from "react-icons/tb";
 import ChatView from "./ChatView";
 import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
@@ -38,11 +38,28 @@ const SessionMainPage = ({ session_id }) => {
   const [activePanel, setActivePanel] = useState(null);
 
   // Unfold the live browser view whenever the agent starts driving the
-  // browser (ToolCallBlock broadcasts browser tool activity).
+  // browser (ToolCallBlock broadcasts browser tool activity), and fold it
+  // back to the rail when that call finishes — unless the user opened it
+  // themselves (manualOpenRef keeps their choice).
+  const manualOpenRef = useRef(false);
   useEffect(() => {
-    const open = () => setActivePanel("browser");
+    const open = () => {
+      manualOpenRef.current = true;
+      setActivePanel("browser");
+    };
+    const close = () => {
+      if (manualOpenRef.current) {
+        manualOpenRef.current = false;
+        return;
+      }
+      setActivePanel((prev) => (prev === "browser" ? null : prev));
+    };
     window.addEventListener("browser-agent-active", open);
-    return () => window.removeEventListener("browser-agent-active", open);
+    window.addEventListener("browser-agent-idle", close);
+    return () => {
+      window.removeEventListener("browser-agent-active", open);
+      window.removeEventListener("browser-agent-idle", close);
+    };
   }, []);
 
   const handleMouseDown = useCallback((e) => {

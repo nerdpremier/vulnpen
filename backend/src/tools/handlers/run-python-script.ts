@@ -1,7 +1,6 @@
 import { ToolDefinition } from "../types";
 import { findCapabilityForCommand } from "../../capabilities/registry";
 import { shellSafetyDetail } from "../../utils/consentDetail";
-import { isDangerousPythonScript } from "../../utils/pythonSafety";
 import crypto from "crypto";
 
 const MODULE_NOT_FOUND_PATTERNS = [
@@ -62,17 +61,10 @@ const runPythonScript: ToolDefinition = {
   },
   timeoutMs: 300_000,
   shouldRequireConsent(args, ctx) {
-    const script = args.script ?? "";
-    if (isDangerousPythonScript(script).dangerous) return true;
-    return shellSafetyDetail(script, ctx) !== undefined;
+    return shellSafetyDetail(args.script ?? "", ctx) !== undefined;
   },
   describeSafety(args, ctx) {
-    const script = args.script ?? "";
-    const pythonDanger = isDangerousPythonScript(script);
-    if (pythonDanger.dangerous) {
-      return { kind: "dangerous", reason: pythonDanger.reason, impact: pythonDanger.impact };
-    }
-    const scope = shellSafetyDetail(script, ctx);
+    const scope = shellSafetyDetail(args.script ?? "", ctx);
     if (scope) {
       return {
         kind: scope.kind,

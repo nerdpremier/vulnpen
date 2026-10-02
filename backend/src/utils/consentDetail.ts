@@ -1,5 +1,5 @@
 import { ExecutionContext, SafetyDetail } from "../tools/types";
-import { isDangerousCommand, isDangerousShellInput } from "./commandSafety";
+import { isDangerousShellInput } from "./commandSafety";
 import {
   detectDestructiveBrowserGoal,
   detectDestructiveTargetAction,
@@ -88,17 +88,14 @@ function destructiveTargetDetail(text: string): SafetyDetail | undefined {
   };
 }
 
-/** Combined deterministic boundary for a shell command: attack-box destructive
- *  patterns first, then destructive target actions, then the out-of-scope
- *  target check. */
+/** Combined deterministic boundary for a shell command: destructive target
+ *  actions first, then the out-of-scope target check. Destructive patterns on
+ *  the attack box itself no longer gate — the box is disposable test
+ *  infrastructure, and the user asked for consent to stay quiet about it. */
 export function shellSafetyDetail(
   text: string,
   ctx: ExecutionContext,
 ): SafetyDetail | undefined {
-  const danger = isDangerousCommand(text);
-  if (danger.dangerous) {
-    return { kind: "dangerous", reason: danger.reason, impact: danger.impact };
-  }
   const target = destructiveTargetDetail(text);
   if (target) return target;
   const crossing = crossingHosts(text, ctx);
@@ -117,10 +114,6 @@ export function shellInputSafetyDetail(
   text: string,
   ctx: ExecutionContext,
 ): SafetyDetail | undefined {
-  const danger = isDangerousShellInput(text);
-  if (danger.dangerous) {
-    return { kind: "dangerous", reason: danger.reason, impact: danger.impact };
-  }
   const target = destructiveTargetDetail(text);
   if (target) return target;
   const crossing = crossingHosts(text, ctx);

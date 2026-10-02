@@ -36,32 +36,6 @@ const DEFAULT_CONFIG = {
 const GENERIC_SAFETY_REASON = "คำสั่งนี้ข้ามเส้นแบ่งการอนุมัติตามกฎความปลอดภัยของระบบ";
 const GENERIC_SAFETY_IMPACT = "อาจทำให้เครื่องทดสอบหรือข้อมูลเสียหาย";
 
-/** Wording per safety kind. "dangerous" is a destructive pattern on the attack
- *  box; "destructive_target" is a destructive action against the engagement
- *  target, which a proof-of-concept engagement never carries out; "out_of_scope"
- *  is a target outside the declared boundary, a much milder verdict that used to
- *  be shown with the destructive wording and read as nonsense for a plain curl. */
-const SAFETY_KIND_LABELS = {
-  dangerous: {
-    badge: "อันตราย — ต้องขออนุมัติ",
-    title: "คำสั่งนี้อาจทำลายระบบ — ตรวจสอบก่อนอนุมัติ",
-  },
-  destructive_target: {
-    badge: "ทำลายข้อมูลเป้าหมาย — ต้องขออนุมัติ",
-    title: "รายการนี้ลบหรือแก้ไขข้อมูลบนเป้าหมาย — งานนี้เป็นแบบ PoC",
-  },
-  out_of_scope: {
-    badge: "นอกขอบเขต — ต้องขออนุมัติ",
-    title: "คำสั่งนี้แตะเป้าหมายนอกขอบเขตการทดสอบ",
-  },
-};
-
-function safetyKindOf(action) {
-  if (action.safetyKind) return action.safetyKind;
-  // Older pending-consent records only carry the boolean.
-  return action.safetyBlock ? "dangerous" : undefined;
-}
-
 const highlighterCustomStyle = {
   margin: 0,
   borderRadius: "6px",
@@ -82,25 +56,11 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
       }))
     : [{ toolName, args, safetyBlock, approvalReason, safetyReason, safetyImpact, safetyKind }];
   const isBatch = actions.length > 1;
-  const kinds = new Set(actions.map(safetyKindOf).filter(Boolean));
-  // Only a destructive pattern earns the red "may destroy the system" wording.
-  const dangerVerdict = kinds.has("dangerous") || kinds.has("destructive_target");
-  const destructiveVerdict = kinds.has("destructive_target");
-  const scopeVerdict = kinds.has("out_of_scope");
-  const hasSafetyBlock = actions.some((action) => action.safetyBlock);
 
-  const badgeLabel = dangerVerdict
-    ? SAFETY_KIND_LABELS.dangerous.badge
-    : scopeVerdict
-      ? SAFETY_KIND_LABELS.out_of_scope.badge
-      : "ต้องขออนุมัติ";
-  const headerTitle = isBatch
-    ? "มีหลายรายการที่ต้องขออนุมัติ"
-    : dangerVerdict
-      ? SAFETY_KIND_LABELS.dangerous.title
-      : scopeVerdict
-        ? SAFETY_KIND_LABELS.out_of_scope.title
-        : config.title;
+  // One calm wording for every approval request: the reason / impact rows on
+  // each item carry the specific why, so the header no longer grades verdicts.
+  const badgeLabel = "ต้องขออนุมัติ";
+  const headerTitle = isBatch ? "มีหลายรายการที่ต้องขออนุมัติ" : config.title;
 
   return (
     <div className={styles.consentBanner}>
@@ -115,11 +75,7 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
             <div className={styles.consentSubtitle}>
               {isBatch
                 ? "กดอนุมัติจะรันทุกรายการด้านล่างพร้อมกัน"
-                : destructiveVerdict
-                  ? "งานนี้เป็นแบบ PoC — ระบบหยุดไว้ก่อน เพื่อไม่ให้ข้อมูลจริงบนเป้าหมายถูกลบหรือแก้ไข"
-                  : hasSafetyBlock
-                    ? "ระบบขอความยินยอมก่อนปล่อยคำสั่งนี้ผ่าน"
-                    : "เอเจนต์ขออนุญาตก่อนทำรายการนี้"}
+                : "เอเจนต์ขออนุญาตก่อนทำรายการนี้"}
             </div>
           </div>
           <div className={styles.consentActions}>
