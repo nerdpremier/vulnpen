@@ -57,7 +57,7 @@ const runBash: ToolDefinition = {
     const result: { output: string; exitCode: number; files?: string[]; installSuggestion?: { name: string; label: string; installCommand: string; size: string } } = { output, exitCode, files };
 
     if (exitCode !== 0) {
-      const suggestion = detectMissingCapability(output, command);
+      const suggestion = await detectMissingCapability(output, command, ctx.runCommand);
       if (suggestion) {
         result.installSuggestion = suggestion;
       }
@@ -75,13 +75,17 @@ const NOT_FOUND_PATTERNS = [
   /ImportError: No module named ['"]*(\S+?)['"]*$/im,
 ];
 
-function detectMissingCapability(output: string, command: string): { name: string; label: string; installCommand: string; size: string } | null {
+async function detectMissingCapability(
+  output: string,
+  command: string,
+  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
+): Promise<{ name: string; label: string; installCommand: string; size: string } | null> {
   for (const pattern of NOT_FOUND_PATTERNS) {
     const match = output.match(pattern);
     if (match) {
       const missingName = match[1];
       const cap = findCapabilityForCommand(missingName);
-      if (cap) {
+      if (cap && (await isGenuinelyMissing(cap, runCommand))) {
         return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
       }
     }
@@ -90,12 +94,24 @@ function detectMissingCapability(output: string, command: string): { name: strin
   const firstWord = command.trim().split(/\s+/)[0];
   if (firstWord && output.includes("not found")) {
     const cap = findCapabilityForCommand(firstWord);
-    if (cap) {
+    // The patterns only read the output text — a `curl --fail` against a 404
+    // page looks exactly like a missing tool. Confirm the tool is genuinely
+    // absent with its own check before offering an install.
+    if (cap && (await isGenuinelyMissing(cap, runCommand))) {
       return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
     }
   }
 
   return null;
+}
+
+async function isGenuinelyMissing(
+  cap: { name: string; checkCommand?: string },
+  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
+): Promise<boolean> {
+  if (!cap.checkCommand) return true;
+  const probe = await runCommand(`{ ${cap.checkCommand}; } >/dev/null 2>&1`, 10_000);
+  return probe.exitCode !== 0;
 }
 
 export default runBash;

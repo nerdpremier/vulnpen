@@ -10,17 +10,31 @@ const MODULE_NOT_FOUND_PATTERNS = [
   /ImportError: No module named ['"]*(\S+?)['"]*$/im,
 ];
 
-function detectMissingModule(output: string) {
+async function detectMissingModule(
+  output: string,
+  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
+) {
   for (const pattern of MODULE_NOT_FOUND_PATTERNS) {
     const match = output.match(pattern);
     if (match) {
       const cap = findCapabilityForCommand(match[1]);
-      if (cap) {
+      // The pattern only reads the output text, so confirm the module is
+      // genuinely absent before offering an install.
+      if (cap && (await isGenuinelyMissing(cap, runCommand))) {
         return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
       }
     }
   }
   return null;
+}
+
+async function isGenuinelyMissing(
+  cap: { name: string; checkCommand?: string },
+  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
+): Promise<boolean> {
+  if (!cap.checkCommand) return true;
+  const probe = await runCommand(`{ ${cap.checkCommand}; } >/dev/null 2>&1`, 10_000);
+  return probe.exitCode !== 0;
 }
 
 const runPythonScript: ToolDefinition = {
@@ -97,7 +111,7 @@ const runPythonScript: ToolDefinition = {
       `python3 << '${delimiter}'\n${script}\n${delimiter}`,
       this.timeoutMs,
     );
-    const suggestion = exitCode !== 0 ? detectMissingModule(output) : null;
+    const suggestion = exitCode !== 0 ? await detectMissingModule(output, ctx.runCommand) : null;
     return { output, exitCode, ...(files.length ? { files } : {}), ...(suggestion ? { installSuggestion: suggestion } : {}) };
   },
 };
