@@ -282,9 +282,12 @@ const ModelModal = ({
                 options={PROVIDER_OPTIONS}
                 popupMatchSelectWidth={false}
                 classNames={{ popup: { root: styles.modelSelectDropdown } }}
-                onChange={() => {
-                  form.setFieldValue("model", "");
-                  form.setFieldValue("baseURL", "");
+                onChange={(value) => {
+                  // Re-clear the provider-specific fields only when the
+                  // provider actually changed, in one store update.
+                  if (value !== initialValues.provider) {
+                    form.setFieldsValue({ model: "", baseURL: "" });
+                  }
                 }}
               />
             </Form.Item>
