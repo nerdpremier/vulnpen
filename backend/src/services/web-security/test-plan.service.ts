@@ -527,6 +527,30 @@ export function updateTestCase(
   return { plan: { ...base, cases, updatedAt: new Date() }, testCase };
 }
 
+/** A case marked "failed" claims the test produced a vulnerability, so it
+ *  must end up with a linked finding — otherwise coverage counts a failure
+ *  the report can never trace back. Returns the refusal message for the
+ *  update_case handler, or undefined when the patch is acceptable. */
+export function caseUpdateError(
+  plan: WebAppTestPlanDoc,
+  testId: string,
+  patch: UpdateTestCasePatch,
+): string | undefined {
+  const preview = updateTestCase(plan, testId, patch);
+  if (!preview) return undefined;
+  const testCase = preview.testCase;
+  if (testCase.status === "failed" && !testCase.linkedVulnerabilityIds?.length) {
+    return (
+      `"update_case" refused: status "failed" claims the test produced a vulnerability, ` +
+      `so a finding must be linked to it. Record the finding first with update_engagement_state ` +
+      `action "add_vulnerability" (data.wstgId = ${testCase.testId}), then retry this call with ` +
+      `vulnerability_id set to the new finding id. If the test ran and found nothing, mark it ` +
+      `"passed"; if you could not complete it, use "blocked" or "skipped" with a note.`
+    );
+  }
+  return undefined;
+}
+
 export function computeCoverage(cases: SessionTestCaseDoc[]): TestPlanCoverage {
   const count = (status: WstgTestStatus) =>
     cases.filter((testCase) => testCase.status === status).length;

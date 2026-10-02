@@ -11,6 +11,7 @@ import {
 import {
   addCatalogueCases,
   addTestCase,
+  caseUpdateError,
   computeCoverage,
   createTestPlan,
   nextTestsToRun,
@@ -286,6 +287,37 @@ test("status aliases normalise and unknown statuses are ignored", () => {
 
   const unchanged = updateTestCase(passed.plan, "WSTG-INFO-01", { status: "not-a-status" })!;
   assert.equal(unchanged.testCase.status, "passed");
+});
+
+test("a failed case must carry a linked finding", () => {
+  const plan = createTestPlan({}).plan;
+
+  // failed without a finding is refused, and the plan is left untouched
+  const refusal = caseUpdateError(plan, "WSTG-INFO-01", { status: "failed" });
+  assert.match(refusal!, /add_vulnerability/);
+  const untouched = plan.cases.find((testCase) => testCase.testId === "WSTG-INFO-01")!;
+  assert.equal(untouched.status, "not_started");
+
+  // linking a finding in the same call makes the update acceptable
+  assert.equal(
+    caseUpdateError(plan, "WSTG-INFO-01", {
+      status: "failed",
+      addLinkedVulnerabilityId: "vuln_abc",
+    }),
+    undefined,
+  );
+
+  // a case that already carries a finding can stay failed
+  const linked = updateTestCase(plan, "WSTG-INFO-01", {
+    status: "failed",
+    addLinkedVulnerabilityId: "vuln_abc",
+  })!;
+  assert.equal(caseUpdateError(linked.plan, "WSTG-INFO-01", { status: "failed" }), undefined);
+
+  // other statuses and unknown ids are not this rule's business
+  assert.equal(caseUpdateError(plan, "WSTG-INFO-02", { status: "passed" }), undefined);
+  assert.equal(caseUpdateError(plan, "WSTG-INFO-02", { status: "blocked" }), undefined);
+  assert.equal(caseUpdateError(plan, "WSTG-NOPE-99", { status: "failed" }), undefined);
 });
 
 test("case text can be edited through update_case", () => {

@@ -8,6 +8,7 @@ import {
   nextTestsToRun,
   addTestCase,
   updateTestCase,
+  caseUpdateError,
   findDuplicateCases,
   removeCases,
 } from "../../services/web-security/test-plan.service";
@@ -129,7 +130,8 @@ const wstgTestPlan: ToolDefinition = {
         type: "string",
         enum: TEST_STATUSES,
         description:
-          "Result of the test for action \"update_case\": not_started, in_progress, passed, failed, blocked or skipped.",
+          "Result of the test for action \"update_case\": not_started, in_progress, passed, failed, blocked or skipped. " +
+          "Setting a case to failed requires vulnerability_id — the tool refuses a failed case with no linked finding.",
       },
       force: {
         type: "boolean",
@@ -149,7 +151,7 @@ const wstgTestPlan: ToolDefinition = {
       vulnerability_id: {
         type: "string",
         description:
-          "Existing finding id to link to this test case when the test produced a vulnerability.",
+          "Existing finding id to link to this test case when the test produced a vulnerability. Required when setting status to failed.",
       },
       limit: {
         type: "number",
@@ -215,10 +217,11 @@ const wstgTestPlan: ToolDefinition = {
         ];
         const failures = plan.cases.filter((testCase) => testCase.status === "failed");
         if (failures.length) {
-          lines.push("", "Tests that produced findings:");
+          lines.push("", "Failed cases (each must carry a linked finding):");
           for (const testCase of failures) {
+            const linked = testCase.linkedVulnerabilityIds?.join(", ");
             lines.push(
-              `- ${testCase.testId} ${testCase.title} — findings: ${testCase.linkedVulnerabilityIds?.join(", ") || "none linked yet"}`,
+              `- ${testCase.testId} ${testCase.title} — findings: ${linked || "none linked yet — record the finding with update_engagement_state and link it with update_case (vulnerability_id), or fix the status"}`,
             );
           }
         }
@@ -336,7 +339,7 @@ const wstgTestPlan: ToolDefinition = {
         if (!testId) {
           return { output: '"update_case" requires test_id.', exitCode: 1 };
         }
-        const updated = updateTestCase(plan, testId, {
+        const patch = {
           status: args.status,
           title: typeof args.title === "string" ? args.title : undefined,
           objective: typeof args.objective === "string" ? args.objective : undefined,
@@ -350,7 +353,33 @@ const wstgTestPlan: ToolDefinition = {
           observations: typeof args.observations === "string" ? args.observations : undefined,
           addLinkedVulnerabilityId:
             typeof args.vulnerability_id === "string" ? args.vulnerability_id : undefined,
-        });
+        };
+        const refusal = caseUpdateError(plan, testId, patch);
+        if (refusal) return { output: refusal, exitCode: 1 };
+
+        const vulnerabilityId =
+          typeof args.vulnerability_id === "string" ? args.vulnerability_id.trim() : "";
+        if (vulnerabilityId) {
+          const session = await SessionsModel.findOne({ sessionId })
+            .select("vulnerabilities.vulnerabilityId")
+            .lean();
+          const known = new Set(
+            ((session?.vulnerabilities as Array<{ vulnerabilityId?: string }> | undefined) ?? [])
+              .map((v) => v?.vulnerabilityId)
+              .filter(Boolean),
+          );
+          if (!known.has(vulnerabilityId)) {
+            return {
+              output:
+                `Cannot link "${vulnerabilityId}": no finding with that id exists in this session. ` +
+                `Record it first with update_engagement_state action "add_vulnerability", then link ` +
+                `the id it returns.`,
+              exitCode: 1,
+            };
+          }
+        }
+
+        const updated = updateTestCase(plan, testId, patch);
         if (!updated) {
           return {
             output: `${testId} is not in this plan. Use action "list" to see planned test ids, regenerate the plan to include it, or add it with action "add_case".`,
@@ -363,14 +392,6 @@ const wstgTestPlan: ToolDefinition = {
           `${updated.testCase.testId} → ${updated.testCase.status}`,
           coverageLine(updated.plan),
         ];
-        if (updated.testCase.status === "failed" && !updated.testCase.linkedVulnerabilityIds?.length) {
-          lines.push(
-            "",
-            "This test found something but no finding is linked yet. Record it with update_engagement_state action \"add_vulnerability\" (include wstg_id = " +
-              updated.testCase.testId +
-              "), then link it here with vulnerability_id so the report can trace the finding back to the test.",
-          );
-        }
         return { output: lines.join("\n"), exitCode: 0 };
       }
 
