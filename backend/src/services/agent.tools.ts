@@ -14,7 +14,7 @@ import {
 
 // ANSI escape sequences necessarily contain a control character.
 // eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /\x1B\[[0-?]*[-[\]#-~]/g;
+const ANSI_REGEX = /\x1B\[[0-?]*[-[\]#-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[@-_]|\r(?!\n)/g;
 // The model only ever sees this much of a tool result. Too small and it has to
 // re-run scans to read their own output; too large and every turn pays for it.
 const MAX_OUTPUT_CHARS = 30_000;
@@ -105,7 +105,10 @@ export function buildPendingConsentBatch(
 }
 
 function truncateOutput(output: string): string {
-  const cleaned = output.replace(ANSI_REGEX, "").trim();
+  let cleaned = output.replace(ANSI_REGEX, "");
+  // Progress bars and redraws leave runs of blank/whitespace-only lines that
+  // render as stacked stray marks in the chat — collapse them to one.
+  cleaned = cleaned.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   if (cleaned.length <= MAX_OUTPUT_CHARS) return cleaned;
   // Weight the tail: scan results, summaries and errors live at the end.
   const head = Math.floor(MAX_OUTPUT_CHARS * 0.4);

@@ -1,4 +1,6 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
+import fs from "fs";
+import path from "path";
 import { EngagementState } from "../../services/engagement-state";
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import type {
@@ -94,6 +96,14 @@ const updateEngagementState: ToolDefinition = {
             type: "string",
             description:
               "Explicit OWASP Top 10:2025 category (A01:2025 ... A10:2025). Omit it to classify from the WSTG test case, CWE and finding text.",
+          },
+          screenshots: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Filenames of browser screenshots that prove this finding (the names browser_action reports on its " +
+              '"Screenshot captured: <name>.png" line). Attach one only when the page itself is the evidence — an admin ' +
+              "console reached without authorisation, exposed records, a debug panel — not for every finding.",
           },
           likelihood: {
             type: "number",
@@ -218,6 +228,27 @@ const updateEngagementState: ToolDefinition = {
           source: `agent:${ctx.agentId ?? "main"}`,
         });
         if (planCase) normalized.wstgId = planCase.testId;
+        // Screenshot evidence must point at captures this session actually
+        // produced — a made-up filename would render as a broken image.
+        let screenshotNote = "";
+        if (normalized.screenshots.length) {
+          const { getDataDir } = await import("../../utils/loadConfig");
+          const safeSession = (ctx.sessionId || "session").replace(/[^a-zA-Z0-9_-]/g, "_");
+          const dir = path.join(getDataDir(), "screenshots", safeSession);
+          const kept: string[] = [];
+          for (const name of normalized.screenshots) {
+            if (fs.existsSync(path.join(dir, name))) kept.push(name);
+          }
+          const dropped = normalized.screenshots.filter((name) => !kept.includes(name));
+          normalized.screenshots = kept;
+          if (kept.length) {
+            screenshotNote = `\nAttached screenshot evidence: ${kept.join(", ")}.`;
+          }
+          if (dropped.length) {
+            screenshotNote += `\nDropped unknown screenshot filename(s): ${dropped.join(", ")}. ` +
+              "Attach only names exactly as browser_action reported them in its \"Screenshot captured:\" line.";
+          }
+        }
         if (!normalized.owaspTop10) {
           // Deterministic layers could not decide (no explicit/WSTG/single-CWE
           // signal) — ask the LLM classifier before the finding is stored.
@@ -281,7 +312,8 @@ const updateEngagementState: ToolDefinition = {
             `vulnerability_id: ${persisted.vulnerability.vulnerabilityId}` +
             (linkedCaseId
               ? `\ncase ${linkedCaseId} → failed (finding linked automatically).`
-              : "\nNo data.wstgId given — the finding is not linked to any test case. If a WSTG case produced it, record the finding with data.wstgId set to that case's id.") ,
+              : "\nNo data.wstgId given — the finding is not linked to any test case. If a WSTG case produced it, record the finding with data.wstgId set to that case's id.") +
+            screenshotNote,
           exitCode: 0,
         };
       }

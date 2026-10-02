@@ -190,6 +190,8 @@ export interface SessionVulnerabilityDoc {
   /** Impact factor for the WSTG risk matrix: 1 = low, 2 = medium, 3 = high. */
   impactRating?: number;
   chatMessages: VulnerabilityChatMessageDoc[];
+  /** Browser screenshots attached to this finding (filenames served via /agent/session/:id/files/:name). */
+  screenshots: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -420,6 +422,8 @@ const SessionVulnerabilitySchema = new Schema(
     likelihood: { type: Number },
     impactRating: { type: Number },
     chatMessages: { type: [VulnerabilityChatMessageSchema], default: [] },
+    /** Browser screenshots attached to this finding, served via /agent/session/:id/files/:name. */
+    screenshots: { type: [String], default: [] },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },

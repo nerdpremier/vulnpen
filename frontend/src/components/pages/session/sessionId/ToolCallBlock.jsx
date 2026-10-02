@@ -200,11 +200,18 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
   );
 
   const trimmed = hasContent && content.length > OUTPUT_WINDOW;
-  const outputLines = hasContent ? content.split("\n").length : 0;
+  const cleanedContent = hasContent
+    ? content
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1B\[[0-?]*[-[\]#-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[@-_]|\r(?!\n)/g, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+    : content;
+  const outputLines = hasContent ? cleanedContent.split("\n").length : 0;
   const displayContent = hasContent
     ? trimmed
-      ? "[... earlier output trimmed ...]\n" + content.slice(-OUTPUT_WINDOW)
-      : content
+      ? "[... earlier output trimmed ...]\n" + cleanedContent.slice(-OUTPUT_WINDOW)
+      : cleanedContent
     : null;
 
   return (

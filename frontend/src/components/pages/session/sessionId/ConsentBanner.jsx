@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckOutlined, CloseOutlined, WarningOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import styles from "@/styles/components/Chat.module.scss";
@@ -103,11 +103,11 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
         : config.title;
 
   return (
-    <div className={`${styles.consentBanner} ${dangerVerdict ? styles.consentBannerDanger : ""}`}>
+    <div className={styles.consentBanner}>
       <div className={styles.consentInfo}>
         <div className={styles.consentHeader}>
-          <div className={dangerVerdict ? styles.consentBadgeDanger : styles.consentBadge}>
-            {dangerVerdict ? <WarningOutlined /> : <ExclamationCircleOutlined />}
+          <div className={styles.consentBadge}>
+            <ExclamationCircleOutlined />
             <span>{badgeLabel}</span>
           </div>
           <div className={styles.consentTitleGroup}>
