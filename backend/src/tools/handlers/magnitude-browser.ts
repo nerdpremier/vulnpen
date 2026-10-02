@@ -1,7 +1,7 @@
 import { ToolDefinition, ToolResult } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
 import { browserActionSafetyDetail } from "../../utils/consentDetail";
-import { formatMagnitudeError } from "../../utils/magnitudeError";
+import { formatMagnitudeError, isTransientBrowserLlmFailure, browserLlmErrorHint } from "../../utils/magnitudeError";
 import { presetToProviderConfig } from "../../utils/llm/providers";
 import { getAssignedModels } from "../../utils/modelRegistryStore";
 import { isSubscriptionProvider } from "../../services/subscription-inference.service";
@@ -125,6 +125,13 @@ const magnitudeBrowser: ToolDefinition = {
     // Always ensure DISPLAY is set for the process
     process.env.DISPLAY = normalizedDisplay;
 
+    // A provider hiccup (429 / 5xx) on the browser agent's own LLM kills the
+    // whole run, so retry transient failures with a backoff instead of handing
+    // the caller an error a second call would have survived. 404s are not
+    // retried: the model is gone from the provider and only a different
+    // assignment helps.
+    const MAX_ATTEMPTS = 3;
+
     try {
       const { startBrowserAgent } = await import("magnitude-core");
       const llm = await resolveMagnitudeLlmConfig(
@@ -167,52 +174,69 @@ const magnitudeBrowser: ToolDefinition = {
         },
       };
 
-      const agent = await startBrowserAgent(agentConfig);
-
-      try {
-        await agent.act(goal);
-
-        let extractedData = "";
-        if (extract) {
-          const data = await agent.extract(extract, z.record(z.any()));
-          extractedData = `\n\nExtracted data:\n${JSON.stringify(data, null, 2)}`;
-        }
-
-        // Screenshot the final state so the user can see the page in the chat.
-        let files: string[] | undefined;
-        let screenshotNote = "";
-        if (args.screenshot !== false) {
-          try {
-            const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const safeSession = (ctx.sessionId || "session").replace(/[^a-zA-Z0-9_-]/g, "_");
-            const dir = path.join(getDataDir(), "screenshots", safeSession);
-            fs.mkdirSync(dir, { recursive: true });
-            const fileName = `${stamp}.png`;
-            await agent.page.screenshot({ path: path.join(dir, fileName), fullPage: false });
-            files = [fileName];
-            screenshotNote = `\n\nScreenshot captured: ${fileName} (shown to the user in the chat).`;
-          } catch (shotErr: any) {
-            screenshotNote = `\n\nScreenshot failed: ${shotErr?.message ?? shotErr}`;
-          }
-        }
-
-        await agent.stop();
-
-        return {
-          output: `Browser agent completed successfully.\nGoal: ${goal}\nURL: ${url}${extractedData}${screenshotNote}`,
-          exitCode: 0,
-          files,
-        };
-      } catch (agentError: any) {
+      for (let attempt = 1; ; attempt++) {
+        let agent;
         try {
-          await agent.stop();
-        } catch (stopError) {
-          console.warn("Failed to stop Browser Agent after an error:", stopError);
+          agent = await startBrowserAgent(agentConfig);
+        } catch (startError: any) {
+          return {
+            output: `Failed to start Magnitude browser agent: ${formatMagnitudeError(startError)}`,
+            exitCode: 1,
+          };
         }
-        return {
-          output: `Browser agent failed during execution: ${formatMagnitudeError(agentError)}`,
-          exitCode: 1,
-        };
+
+        try {
+          await agent.act(goal);
+
+          let extractedData = "";
+          if (extract) {
+            const data = await agent.extract(extract, z.record(z.any()));
+            extractedData = `\n\nExtracted data:\n${JSON.stringify(data, null, 2)}`;
+          }
+
+          // Screenshot the final state so the user can see the page in the chat.
+          let files: string[] | undefined;
+          let screenshotNote = "";
+          if (args.screenshot !== false) {
+            try {
+              const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+              const safeSession = (ctx.sessionId || "session").replace(/[^a-zA-Z0-9_-]/g, "_");
+              const dir = path.join(getDataDir(), "screenshots", safeSession);
+              fs.mkdirSync(dir, { recursive: true });
+              const fileName = `${stamp}.png`;
+              await agent.page.screenshot({ path: path.join(dir, fileName), fullPage: false });
+              files = [fileName];
+              screenshotNote = `\n\nScreenshot captured: ${fileName} (shown to the user in the chat).`;
+            } catch (shotErr: any) {
+              screenshotNote = `\n\nScreenshot failed: ${shotErr?.message ?? shotErr}`;
+            }
+          }
+
+          await agent.stop();
+
+          return {
+            output: `Browser agent completed successfully.\nGoal: ${goal}\nURL: ${url}${extractedData}${screenshotNote}`,
+            exitCode: 0,
+            files,
+          };
+        } catch (agentError: any) {
+          try {
+            await agent.stop();
+          } catch (stopError) {
+            console.warn("Failed to stop Browser Agent after an error:", stopError);
+          }
+          const message = String(agentError?.message ?? agentError);
+          if (attempt < MAX_ATTEMPTS && isTransientBrowserLlmFailure(message)) {
+            await new Promise((resolve) => setTimeout(resolve, attempt * 10_000));
+            continue;
+          }
+          return {
+            output:
+              `Browser agent failed during execution: ${formatMagnitudeError(agentError)}` +
+              browserLlmErrorHint(message, browserModel.label),
+            exitCode: 1,
+          };
+        }
       }
     } catch (err: any) {
       return {
