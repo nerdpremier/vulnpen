@@ -272,16 +272,6 @@ export const getHistory = async (req: Request, res: Response) => {
       promptTokens: latestTokenSnapshot?.promptTokens ?? null,
       completionTokens: latestTokenSnapshot?.completionTokens ?? null,
       contextLimit,
-      subagents: (session.subagents ?? []).map((s) => ({
-        subagentId: s.subagentId,
-        parentId: s.parentId,
-        task: s.task,
-        status: s.status,
-        result: s.result,
-        shells: s.shells,
-        createdAt: s.createdAt,
-        completedAt: s.completedAt,
-      })),
       connectionState: session.connectionState ?? { sshConnected: false, hostConnected: false },
     });
   } catch (err: any) {

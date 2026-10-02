@@ -12,6 +12,7 @@ import {
   addCatalogueCases,
   addTestCase,
   caseUpdateError,
+  findPlanCase,
   computeCoverage,
   createTestPlan,
   nextTestsToRun,
@@ -332,6 +333,15 @@ test("case text can be edited through update_case", () => {
   assert.equal(edited.testCase.objective, "Check the published mail policy.");
   assert.equal(edited.testCase.howToTest, "dig TXT example.com");
   assert.equal(edited.testCase.notes, "user asked to tailor this case");
+});
+
+test("findPlanCase matches ids case-insensitively and rejects unknown ones", () => {
+  const plan = createTestPlan({}).plan;
+  assert.equal(findPlanCase(plan, "WSTG-INFO-01")?.testId, "WSTG-INFO-01");
+  assert.equal(findPlanCase(plan, "wstg-info-01")?.testId, "WSTG-INFO-01");
+  assert.equal(findPlanCase(plan, "  wstg-inpv-05  ")?.testId, "WSTG-INPV-05");
+  assert.equal(findPlanCase(plan, "WSTG-NOPE-99"), undefined);
+  assert.equal(findPlanCase(plan, ""), undefined);
 });
 
 test("coverage is reported per WSTG category without OWASP pre-mapping", () => {

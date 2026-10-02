@@ -26,7 +26,6 @@ const TOOL_LABELS = {
   read_shell: "Read Shell",
   list_shells: "List Shells",
   close_shell: "Close Shell",
-  spawn_subagent: "Spawn Subagent",
   view_image: "View Image",
   send_to_burp: "Burp Request",
   send_to_burp_repeater: "Burp Repeater",
@@ -64,7 +63,6 @@ function formatArgsPreview(toolName, parsed) {
     return `[${parsed.shell_id}] ${(parsed.input ?? "").slice(0, 60)}`;
   if (toolName === "read_shell") return `[${parsed.shell_id}]`;
   if (toolName === "close_shell") return `[${parsed.shell_id}]`;
-  if (toolName === "spawn_subagent") return (parsed.task ?? "").slice(0, 80);
   if (toolName === "view_image") return parsed.image_path ?? "";
   if (toolName === "send_to_burp_repeater" || toolName === "send_to_burp_intruder") {
     const req = parsed.raw_request ?? "";

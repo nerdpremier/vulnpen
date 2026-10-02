@@ -367,15 +367,6 @@ const commandHandlers: Record<string, CommandHandler> = {
     lines.push(`- **Turn Index:** ${session.turnIndex}`);
     lines.push(`- **Total Tokens Used:** ${session.totalTokens?.toLocaleString() ?? 0}`);
 
-    const subagents = session.subagents ?? [];
-    if (subagents.length > 0) {
-      lines.push(``);
-      lines.push(`#### Subagents`);
-      for (const s of subagents) {
-        lines.push(`- \`${s.subagentId}\` — ${s.task} (${s.status})`);
-      }
-    }
-
     sse.write("slash_command_result", {
       command: "status",
       success: true,

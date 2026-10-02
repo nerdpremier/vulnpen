@@ -2,7 +2,6 @@ import { toolRegistry } from "../tools/registry";
 import { ExecutionContext, ToolResult, AgentRole, SafetyKind } from "../tools/types";
 import { ToolCallData } from "../utils/llm/providers";
 import { ShellManager, ShellPurpose } from "./shell.manager";
-import { SubagentManager } from "./subagent.manager";
 import { SSEWriter } from "./agent.service";
 import { EngagementState } from "./engagement-state";
 import { parseToolArguments } from "../utils/toolArguments";
@@ -123,7 +122,6 @@ export function buildExecutionContext(params: {
   agentId: string;
   agentRole?: AgentRole;
   shellManager: ShellManager;
-  subagentManager?: SubagentManager;
   sse?: SSEWriter;
   userId?: string;
   onChunk?: (chunk: string) => void;
@@ -131,7 +129,7 @@ export function buildExecutionContext(params: {
   engagementState?: EngagementState;
 }): ExecutionContext {
   const {
-    sessionId, agentId, shellManager, subagentManager,
+    sessionId, agentId, shellManager,
     sse, userId, onChunk, abortSignal, engagementState,
   } = params;
   const agentRole = params.agentRole ?? "main";
@@ -144,7 +142,7 @@ export function buildExecutionContext(params: {
     runCommand: (command: string, timeoutMs?: number) =>
       shellManager.execInShell(command, timeoutMs, onChunk, abortSignal),
     spawnShell: (label: string, type?: "pty" | "exec", purpose?: ShellPurpose) =>
-      shellManager.spawnShell({ label, type, purpose, createdBy: agentId === "main" ? "agent" : "subagent", subagentId: agentId !== "main" ? agentId : undefined }),
+      shellManager.spawnShell({ label, type, purpose, createdBy: "agent" }),
     writeToShell: (shellId: string, data: string) =>
       shellManager.writeToShell(shellId, data),
     readShellOutput: (shellId: string, fromOffset?: number) =>
@@ -157,15 +155,6 @@ export function buildExecutionContext(params: {
       shellManager.getShellList(),
     getShellInfo: (shellId: string) =>
       shellManager.getShell(shellId),
-    spawnSubagent: subagentManager && sse && userId
-      ? (task: string) =>
-          subagentManager.spawn({
-            parentId: agentId,
-            task,
-            sse,
-            userId,
-          })
-      : undefined,
     onOutput: onChunk,
     engagementState,
   };

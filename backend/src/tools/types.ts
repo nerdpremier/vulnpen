@@ -14,11 +14,9 @@ export interface ToolResult {
   exitCode?: number;
   files?: string[];
   installSuggestion?: InstallSuggestion;
-  /** Machine-readable id for tools that spawn background work (spawn_subagent). */
-  spawnedSubagentId?: string;
 }
 
-export type AgentRole = "main" | "subagent";
+export type AgentRole = "main";
 
 export interface ExecutionContext {
   sessionId: string;
@@ -33,7 +31,6 @@ export interface ExecutionContext {
   resizeShell: (shellId: string, cols: number, rows: number) => void;
   listShells: () => ShellInfo[];
   getShellInfo: (shellId: string) => ShellInfo | undefined;
-  spawnSubagent?: (task: string) => Promise<string>;
   onOutput?: (chunk: string) => void;
   engagementState?: EngagementState;
 }

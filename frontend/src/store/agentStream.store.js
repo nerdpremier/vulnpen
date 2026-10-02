@@ -6,7 +6,6 @@ function createSessionState() {
     messages: [],
     agentState: "idle",
     pendingConsent: null,
-    subagents: [],
     sidebarExpanded: true,
     historyLoaded: false,
     tokenUsage: null,
@@ -87,24 +86,6 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
     });
   },
 
-  setSubagents: (sessionId, subagentsOrUpdater) => {
-    set((state) => {
-      const s = state.sessions[sessionId];
-      if (!s) return state;
-      const newSubagents =
-        typeof subagentsOrUpdater === "function"
-          ? subagentsOrUpdater(s.subagents)
-          : subagentsOrUpdater;
-      return {
-        sessions: {
-          ...state.sessions,
-          [sessionId]: { ...s, subagents: newSubagents },
-        },
-      };
-    });
-  },
-
-
   setSidebarExpanded: (sessionId, expanded) => {
     set((state) => {
       const s = state.sessions[sessionId];
@@ -144,7 +125,7 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
     });
   },
 
-  loadHistory: (sessionId, historyMessages, historySubagents) => {
+  loadHistory: (sessionId, historyMessages) => {
     set((state) => {
       const s = state.sessions[sessionId];
       if (!s) return state;
@@ -154,7 +135,6 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
           [sessionId]: {
             ...s,
             messages: historyMessages.map((m) => ({ ...m, streaming: false })),
-            subagents: historySubagents || s.subagents,
             historyLoaded: true,
           },
         },

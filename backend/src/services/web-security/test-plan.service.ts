@@ -543,12 +543,25 @@ export function caseUpdateError(
     return (
       `"update_case" refused: status "failed" claims the test produced a vulnerability, ` +
       `so a finding must be linked to it. Record the finding first with update_engagement_state ` +
-      `action "add_vulnerability" (data.wstgId = ${testCase.testId}), then retry this call with ` +
-      `vulnerability_id set to the new finding id. If the test ran and found nothing, mark it ` +
-      `"passed"; if you could not complete it, use "blocked" or "skipped" with a note.`
+      `action "add_vulnerability" (data.wstgId = ${testCase.testId}) — recording it with wstgId also ` +
+      `links the case automatically — then retry this call with vulnerability_id set to the new ` +
+      `finding id. If the test ran and found nothing, mark it "passed"; if you could not complete ` +
+      `it, use "blocked" or "skipped" with a note.`
     );
   }
   return undefined;
+}
+
+/** Look a plan case up by test id, tolerating case differences ("wstg-inpv-05"). */
+export function findPlanCase(
+  plan: WebAppTestPlanDoc,
+  testId: string,
+): SessionTestCaseDoc | undefined {
+  const wanted = String(testId ?? "").trim().toUpperCase();
+  if (!wanted) return undefined;
+  return plan.cases.find(
+    (testCase) => testCase.testId.toUpperCase() === wanted,
+  );
 }
 
 export function computeCoverage(cases: SessionTestCaseDoc[]): TestPlanCoverage {

@@ -25,7 +25,7 @@ export default function AgentStreamConnector({ sessionId }) {
         const { loadHistory, setAgentState, setPendingConsent, setTokenUsage } =
           store.getState();
         if (data.messages) {
-          loadHistory(sessionId, data.messages, data.subagents);
+          loadHistory(sessionId, data.messages);
         }
         if (data.agentState) {
           setAgentState(sessionId, data.agentState);
@@ -61,7 +61,6 @@ export default function AgentStreamConnector({ sessionId }) {
       st.setMessages(sessionId, []);
       st.setAgentState(sessionId, "idle");
       st.setPendingConsent(sessionId, null);
-      st.setSubagents(sessionId, []);
       st.setTokenUsage(sessionId, null);
     };
     window.addEventListener("context-cleared", onContextCleared);

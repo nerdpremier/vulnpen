@@ -10,6 +10,7 @@ import {
   updateTestCase,
   caseUpdateError,
   findDuplicateCases,
+  findPlanCase,
   removeCases,
 } from "../../services/web-security/test-plan.service";
 import { WSTG_VERSION, getWstgTest } from "../../knowledge";
@@ -151,7 +152,9 @@ const wstgTestPlan: ToolDefinition = {
       vulnerability_id: {
         type: "string",
         description:
-          "Existing finding id to link to this test case when the test produced a vulnerability. Required when setting status to failed.",
+          "Existing finding id to link to this test case when the test produced a vulnerability. Required when setting status to failed. " +
+          "The finding's wstgId must agree with the case: a finding with no wstgId is re-tagged to this case automatically, " +
+          "and a link that contradicts the finding's wstgId is refused.",
       },
       limit: {
         type: "number",
@@ -361,14 +364,15 @@ const wstgTestPlan: ToolDefinition = {
           typeof args.vulnerability_id === "string" ? args.vulnerability_id.trim() : "";
         if (vulnerabilityId) {
           const session = await SessionsModel.findOne({ sessionId })
-            .select("vulnerabilities.vulnerabilityId")
+            .select("vulnerabilities.vulnerabilityId vulnerabilities.wstgId")
             .lean();
-          const known = new Set(
-            ((session?.vulnerabilities as Array<{ vulnerabilityId?: string }> | undefined) ?? [])
-              .map((v) => v?.vulnerabilityId)
-              .filter(Boolean),
-          );
-          if (!known.has(vulnerabilityId)) {
+          const findings = (
+            session?.vulnerabilities as
+              | Array<{ vulnerabilityId?: string; wstgId?: string }>
+              | undefined
+          ) ?? [];
+          const finding = findings.find((v) => v?.vulnerabilityId === vulnerabilityId);
+          if (!finding) {
             return {
               output:
                 `Cannot link "${vulnerabilityId}": no finding with that id exists in this session. ` +
@@ -376,6 +380,34 @@ const wstgTestPlan: ToolDefinition = {
                 `the id it returns.`,
               exitCode: 1,
             };
+          }
+
+          // Keep a finding's wstgId and the cases it is linked to consistent:
+          // the report traces every finding through its wstgId, so a link to a
+          // case the finding does not claim (or a wstgId pointing at a case the
+          // finding never touched) breaks that chain.
+          const caseId = findPlanCase(plan, testId)?.testId;
+          const findingWstg = (finding.wstgId ?? "").trim().toUpperCase();
+          if (caseId && !findingWstg) {
+            await SessionsModel.updateOne(
+              { sessionId, "vulnerabilities.vulnerabilityId": vulnerabilityId },
+              { $set: { "vulnerabilities.$.wstgId": caseId } },
+            );
+          } else if (caseId && findingWstg && findingWstg !== caseId.toUpperCase()) {
+            const primaryCase = plan.cases.find(
+              (c) => c.testId.toUpperCase() === findingWstg,
+            );
+            if (!primaryCase?.linkedVulnerabilityIds?.includes(vulnerabilityId)) {
+              return {
+                output:
+                  `Cannot link "${vulnerabilityId}" to ${caseId}: the finding is recorded with ` +
+                  `wstgId ${findingWstg.toUpperCase()} and that case is not linked to it. Either link ` +
+                  `${findingWstg.toUpperCase()} first (update_case ${findingWstg.toUpperCase()} with ` +
+                  `vulnerability_id), or record the finding again with data.wstgId = ${caseId} if this ` +
+                  `case is where it actually belongs.`,
+                exitCode: 1,
+              };
+            }
           }
         }
 

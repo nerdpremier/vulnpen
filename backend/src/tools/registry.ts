@@ -10,7 +10,6 @@ import writeToShell from "./handlers/write-to-shell";
 import readShell from "./handlers/read-shell";
 import listShells from "./handlers/list-shells";
 import closeShell from "./handlers/close-shell";
-import spawnSubagent from "./handlers/spawn-subagent";
 import sendToBurp from "./handlers/send-to-burp";
 import burpIntruder from "./handlers/burp-intruder";
 import burpCollaborator from "./handlers/burp-collaborator";
@@ -46,7 +45,6 @@ class ToolRegistry {
   }
 
   toOpenAISchemas(opts?: {
-    excludeSubagent?: boolean;
     agentRole?: AgentRole;
     disabledTools?: string[];
     unconfiguredTools?: string[];
@@ -54,8 +52,6 @@ class ToolRegistry {
     let tools = this.getAll();
     if (opts?.agentRole) {
       tools = tools.filter((t) => !t.allowedRoles || t.allowedRoles.includes(opts.agentRole!));
-    } else if (opts?.excludeSubagent) {
-      tools = tools.filter((t) => t.name !== "spawn_subagent");
     }
     if (opts?.disabledTools?.length) {
       const disabled = new Set(opts.disabledTools);
@@ -80,7 +76,6 @@ toolRegistry.register(writeToShell);
 toolRegistry.register(readShell);
 toolRegistry.register(listShells);
 toolRegistry.register(closeShell);
-toolRegistry.register(spawnSubagent);
 toolRegistry.register(sendToBurp);
 toolRegistry.register(burpIntruder);
 toolRegistry.register(burpCollaborator);

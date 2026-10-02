@@ -10,6 +10,10 @@ import {
   upsertSessionVulnerability,
 } from "../../services/vulnerability.service";
 import { classifyWithLlm } from "../../services/web-security/owasp-llm-classifier";
+import {
+  findPlanCase,
+  updateTestCase,
+} from "../../services/web-security/test-plan.service";
 
 function str(v: any): string {
   return typeof v === "string" ? v.trim() : "";
@@ -82,7 +86,9 @@ const updateEngagementState: ToolDefinition = {
           wstgId: {
             type: "string",
             description:
-              "WSTG v4.2 test case that produced this finding, e.g. WSTG-INPV-05. The OWASP Top 10:2025 mapping is derived from it.",
+              "WSTG v4.2 test case that produced this finding, e.g. WSTG-INPV-05. Must be a case that exists in this " +
+              "session's test plan — the tool refuses unknown ids and marks that case failed with this finding linked automatically. " +
+              "The OWASP Top 10:2025 mapping is derived from it.",
           },
           owaspTop10: {
             type: "string",
@@ -174,9 +180,44 @@ const updateEngagementState: ToolDefinition = {
         if (!ctx.sessionId) {
           return { output: "add_vulnerability requires an active session", exitCode: 1 };
         }
+
+        // A finding tagged with a WSTG id must point at a real plan case: the
+        // report traces every finding back through it, and a made-up or
+        // mistyped id silently breaks that chain.
+        const wstgId = str(data.wstgId).toUpperCase();
+        let planCase: ReturnType<typeof findPlanCase> | undefined;
+        if (wstgId) {
+          const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
+            .select("webAppTestPlan");
+          const plan = session?.webAppTestPlan as WebAppTestPlanDoc | undefined;
+          if (!plan?.cases?.length) {
+            return {
+              output:
+                `"add_vulnerability" refused: data.wstgId "${wstgId}" cannot be verified — ` +
+                "this session has no test plan. Re-record without data.wstgId, or generate the " +
+                'plan first (wstg_test_plan action "generate").',
+              exitCode: 1,
+            };
+          }
+          planCase = findPlanCase(plan, wstgId);
+          if (!planCase) {
+            const ids = plan.cases.map((c) => c.testId);
+            const near = ids.filter((id) => id.split("-")[1] === wstgId.split("-")[1]).slice(0, 8);
+            return {
+              output:
+                `"add_vulnerability" refused: data.wstgId "${wstgId}" is not a case in this ` +
+                `session's test plan${near.length ? `. Cases in that category: ${near.join(", ")}` : ""}. ` +
+                "Re-record with the exact test id of the case that produced this finding (see the " +
+                'plan via wstg_test_plan action "coverage"), or omit data.wstgId if no plan case fits.',
+              exitCode: 1,
+            };
+          }
+        }
+
         const normalized = normalizeVulnerability(data, {
           source: `agent:${ctx.agentId ?? "main"}`,
         });
+        if (planCase) normalized.wstgId = planCase.testId;
         if (!normalized.owaspTop10) {
           // Deterministic layers could not decide (no explicit/WSTG/single-CWE
           // signal) — ask the LLM classifier before the finding is stored.
@@ -209,11 +250,38 @@ const updateEngagementState: ToolDefinition = {
         );
         if (existingIndex >= 0) state.vulnerabilities[existingIndex] = persisted.vulnerability;
         else state.vulnerabilities.push(persisted.vulnerability);
+
+        // Recording a finding against a WSTG case IS the failed result for that
+        // case: link it here so wstgId and the plan can never drift apart (the
+        // old two-step add_vulnerability → update_case path let them disagree).
+        let linkedCaseId: string | undefined;
+        if (planCase) {
+          const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
+            .select("webAppTestPlan");
+          const plan = session?.webAppTestPlan as WebAppTestPlanDoc | undefined;
+          if (plan?.cases?.length) {
+            const linked = updateTestCase(plan, planCase.testId, {
+              status: "failed",
+              addLinkedVulnerabilityId: persisted.vulnerability.vulnerabilityId,
+            });
+            if (linked) {
+              await SessionsModel.updateOne(
+                { sessionId: ctx.sessionId },
+                { $set: { webAppTestPlan: linked.plan } },
+              );
+              linkedCaseId = linked.testCase.testId;
+            }
+          }
+        }
+
         return {
           output:
             `Vulnerability "${persisted.vulnerability.title}" [${persisted.vulnerability.severity}] ` +
             `${persisted.created ? "added" : "updated"}.\n` +
-            `vulnerability_id: ${persisted.vulnerability.vulnerabilityId}`,
+            `vulnerability_id: ${persisted.vulnerability.vulnerabilityId}` +
+            (linkedCaseId
+              ? `\ncase ${linkedCaseId} → failed (finding linked automatically).`
+              : "\nNo data.wstgId given — the finding is not linked to any test case. If a WSTG case produced it, record the finding with data.wstgId set to that case's id.") ,
           exitCode: 0,
         };
       }

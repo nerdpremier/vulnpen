@@ -112,11 +112,6 @@ export const reconnectWorkHost = async (sessionId) => {
   return res.data;
 };
 
-export const getSubagents = async (sessionId) => {
-  const res = await apiClient.get(`/shell/${sessionId}/subagents`);
-  return res.data;
-};
-
 export function connectAgentStream({ sessionId, message, endpoint = "message" }) {
   return new Promise((resolve) => {
     const url = `${apiBaseURL}/agent/${endpoint}`;

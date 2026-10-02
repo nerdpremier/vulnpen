@@ -29,7 +29,6 @@ import { OWASP_TOP10_2025, normalizeOwaspTop10Id } from "../knowledge";
 import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
-import { SubagentManager } from "./subagent.manager";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
@@ -353,9 +352,6 @@ export async function runAgentLoop(params: {
     messages[0] = updatedSysMsg;
   }
 
-  const subagentManager = new SubagentManager(sessionId, shellManager);
-  subagentManager.envInfo = envInfo;
-  const spawnedSubagentIds: string[] = [];
   const turnIndex = session.turnIndex;
   let iteration = 0;
   let lastPromptTokens: number | undefined;
@@ -383,7 +379,6 @@ export async function runAgentLoop(params: {
     agentId: "main",
     agentRole: "main",
     shellManager,
-    subagentManager,
     sse,
     userId,
     abortSignal: params.abortSignal,
@@ -417,35 +412,6 @@ export async function runAgentLoop(params: {
 
       if (params.abortSignal?.aborted) {
         break;
-      }
-
-      // Collect completed subagent results and inject into messages
-      if (spawnedSubagentIds.length > 0) {
-        const completedIds = spawnedSubagentIds.filter((id) => !subagentManager.isRunning(id));
-        if (completedIds.length > 0) {
-          const results = await subagentManager.waitFor(completedIds);
-          for (const r of results) {
-            const resultMsg: AgentMessageDoc = {
-              id: uuidv4(),
-              role: "user",
-              content: `[Subagent ${r.subagentId} completed (${r.status})]\n\n${r.result}`,
-              timestamp: new Date(),
-              turnIndex,
-            };
-            messages.push(resultMsg);
-            newMessages.push(resultMsg);
-          }
-          for (const id of completedIds) {
-            spawnedSubagentIds.splice(spawnedSubagentIds.indexOf(id), 1);
-          }
-          // Subagents persist findings straight to Mongo, so the orchestrator's
-          // in-memory state is stale the moment they write. Re-hydrate the
-          // persisted fields before the next engagement_state block is built.
-          const fresh = await SessionsModel.findOne({ sessionId }).select("vulnerabilities");
-          if (fresh) {
-            engagementState.vulnerabilities = buildEngagementState(fresh).vulnerabilities;
-          }
-        }
       }
 
       if (await shouldSummarize(messages, lastPromptTokens)) {
@@ -653,14 +619,6 @@ export async function runAgentLoop(params: {
           approvalCircuitOpen;
       }
 
-      // Track spawned subagents via the structured result field, not the
-      // free-text output — rewording the output must not break collection.
-      for (const tr of toolResults) {
-        if (tr.result.spawnedSubagentId) {
-          spawnedSubagentIds.push(tr.result.spawnedSubagentId);
-        }
-      }
-
       const consentResults = toolResults.filter((r) => r.needsConsent);
       if (consentResults.length > 0) {
         for (const tr of toolResults) {
@@ -775,24 +733,6 @@ export async function runAgentLoop(params: {
         completedNormally = true;
         break;
       }
-
-      // If subagents are running and the agent has no more tool calls to make,
-      // wait for them to complete before the next iteration
-      if (spawnedSubagentIds.length > 0 && assistantToolCalls.every((tc) => tc.name === "spawn_subagent")) {
-        const results = await subagentManager.waitFor([...spawnedSubagentIds]);
-        for (const r of results) {
-          const resultMsg: AgentMessageDoc = {
-            id: uuidv4(),
-            role: "user",
-            content: `[Subagent ${r.subagentId} completed (${r.status})]\n\n${r.result}`,
-            timestamp: new Date(),
-            turnIndex,
-          };
-          messages.push(resultMsg);
-          newMessages.push(resultMsg);
-        }
-        spawnedSubagentIds.length = 0;
-      }
     }
 
     const reachedIterationLimit =
@@ -800,26 +740,9 @@ export async function runAgentLoop(params: {
       !completedNormally &&
       !params.abortSignal?.aborted;
 
-    // Wait for remaining subagents before ending
-    if (spawnedSubagentIds.length > 0) {
-      sse.write("thinking", { content: "\n\nWaiting for subagents to complete..." });
-      const results = await subagentManager.waitFor(spawnedSubagentIds);
-      for (const r of results) {
-        const resultMsg: AgentMessageDoc = {
-          id: uuidv4(),
-          role: "user",
-          content: `[Subagent ${r.subagentId} completed (${r.status})]\n\n${r.result}`,
-          timestamp: new Date(),
-          turnIndex: session.turnIndex,
-        };
-        newMessages.push(resultMsg);
-      }
-    }
-
     await appendMessages(sessionId, newMessages);
 
     if (params.abortSignal?.aborted) {
-      await subagentManager.cancelAll();
       await setAgentState(sessionId, "paused");
       sse.write("paused", { message: "Agent paused by user" });
     } else {
@@ -848,7 +771,6 @@ export async function runAgentLoop(params: {
     }
     newMessages.length = 0;
     const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
-    await subagentManager.cancelAll();
     await setAgentState(sessionId, isAbort ? "paused" : "idle");
     if (isAbort) {
       sse.write("paused", { message: "Agent paused by user" });
@@ -902,7 +824,7 @@ export async function initAndRun(params: {
 
 /**
  * Rebuild the in-memory engagement state from the persisted session document.
- * Shared by the main agent loop, the consent path and subagents so every
+ * Shared by the main agent loop and the consent path so every
  * execution context can record state via update_engagement_state.
  */
 export function buildEngagementState(session: any): EngagementState {
@@ -1000,15 +922,11 @@ export async function handleConsent(params: {
     try { await shellManager.connect(); } catch { /* handled below */ }
   }
 
-  const subagentManager = new SubagentManager(sessionId, shellManager);
-  subagentManager.envInfo = undefined;
-
   const ctx = buildExecutionContext({
     sessionId,
     agentId: "main",
     agentRole: "main",
     shellManager,
-    subagentManager,
     sse,
     userId,
     abortSignal,

@@ -263,30 +263,4 @@ router.post("/:sessionId/reconnect", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/:sessionId/subagents", async (req: Request, res: Response) => {
-  try {
-    const userId = res.locals.userId;
-    const { sessionId } = req.params;
-
-    const session = await requireActiveSession(userId, sessionId, res);
-    if (!session) return;
-
-    const subagents = (session.subagents ?? []).map((s) => ({
-      subagentId: s.subagentId,
-      parentId: s.parentId,
-      task: s.task,
-      status: s.status,
-      result: s.result,
-      shells: s.shells,
-      createdAt: s.createdAt,
-      completedAt: s.completedAt,
-      messageCount: s.messages?.length ?? 0,
-    }));
-
-    return res.status(200).json({ subagents });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
-  }
-});
-
 export const shellRoutes = router;

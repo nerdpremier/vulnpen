@@ -6,13 +6,11 @@ import { useShallow } from "zustand/react/shallow";
 import { notification } from "antd";
 
 const EMPTY_MESSAGES = [];
-const EMPTY_SUBAGENTS = [];
 
 // Cap live tool output held in client state. A chatty scan streams far more
 // stdout than the UI ever shows (the block renders the tail only), and keeping
 // every byte makes each later render - and the GC - pay for invisible text.
 const MAX_LIVE_TOOL_CHARS = 60_000;
-const MAX_SUBAGENT_LIVE_CHARS = 20_000;
 
 // ReactMarkdown re-parses the whole assistant document on every render, so
 // coalesce streaming content updates into at most one update per interval.
@@ -22,7 +20,6 @@ const DEFAULT_STATE = {
   messages: EMPTY_MESSAGES,
   agentState: "idle",
   pendingConsent: null,
-  subagents: EMPTY_SUBAGENTS,
   tokenUsage: null,
 };
 
@@ -38,7 +35,7 @@ export default function useAgentStream({
     store.getState().getOrCreate(sessionId);
   }, [sessionId, store]);
 
-  const { messages, agentState, pendingConsent, subagents, tokenUsage } =
+  const { messages, agentState, pendingConsent, tokenUsage } =
     useAgentStreamStore(
       useShallow((state) => {
         const s = state.sessions[sessionId];
@@ -47,7 +44,6 @@ export default function useAgentStream({
           messages: s.messages ?? EMPTY_MESSAGES,
           agentState: s.agentState ?? "idle",
           pendingConsent: s.pendingConsent ?? null,
-          subagents: s.subagents ?? EMPTY_SUBAGENTS,
           tokenUsage: s.tokenUsage ?? null,
         };
       }),
@@ -70,11 +66,6 @@ export default function useAgentStream({
 
   const setPendingConsent = useCallback(
     (val) => store.getState().setPendingConsent(sessionId, val),
-    [sessionId, store],
-  );
-
-  const setSubagents = useCallback(
-    (val) => store.getState().setSubagents(sessionId, val),
     [sessionId, store],
   );
 
@@ -379,96 +370,6 @@ export default function useAgentStream({
           flushAssistant();
           onIterationLimit?.(data);
         })
-        .onEvent("subagent_spawned", (data) => {
-          setSubagents((prev) => [
-            ...prev,
-            {
-              subagentId: data.subagentId,
-              task: data.task,
-              parentId: data.parentId,
-              status: "running",
-              thinkingContent: "",
-              toolCalls: [],
-              createdAt: new Date(),
-            },
-          ]);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `subagent_${data.subagentId}`,
-              role: "subagent",
-              subagentId: data.subagentId,
-              task: data.task,
-              status: "running",
-              content: "",
-              timestamp: new Date(),
-            },
-          ]);
-        })
-        .onEvent("subagent_progress", (data) => {
-          const MAX_THINKING = 20_000;
-          setSubagents((prev) =>
-            prev.map((s) => {
-              if (s.subagentId !== data.subagentId) return s;
-              if (data.type === "thinking") {
-                const full = s.thinkingContent + data.content;
-                return { ...s, thinkingContent: full.length > MAX_THINKING ? full.slice(-MAX_THINKING) : full };
-              }
-              if (data.type === "tool_start" || data.type === "tool_done" || data.type === "tool_call_start") {
-                return { ...s, toolCalls: [...s.toolCalls, { type: data.type, content: data.content }] };
-              }
-              return s;
-            }),
-          );
-          setMessages((prev) =>
-            prev.map((m) => {
-              if (m.id !== `subagent_${data.subagentId}`) return m;
-              if (data.type === "thinking") {
-                const full = m.content + data.content;
-                return {
-                  ...m,
-                  content:
-                    full.length > MAX_SUBAGENT_LIVE_CHARS
-                      ? full.slice(-MAX_SUBAGENT_LIVE_CHARS)
-                      : full,
-                };
-              }
-              return m;
-            }),
-          );
-        })
-        .onEvent("subagent_completed", (data) => {
-          setSubagents((prev) =>
-            prev.map((s) =>
-              s.subagentId === data.subagentId
-                ? { ...s, status: "completed", result: data.result }
-                : s,
-            ),
-          );
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === `subagent_${data.subagentId}`
-                ? { ...m, status: "completed", result: data.result }
-                : m,
-            ),
-          );
-        })
-        .onEvent("subagent_failed", (data) => {
-          setSubagents((prev) =>
-            prev.map((s) =>
-              s.subagentId === data.subagentId
-                ? { ...s, status: "failed", error: data.error }
-                : s,
-            ),
-          );
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === `subagent_${data.subagentId}`
-                ? { ...m, status: "failed", error: data.error }
-                : m,
-            ),
-          );
-        })
         .onEvent("slash_command_ack", (data) => {
           setMessages((prev) => [
             ...prev,
@@ -594,7 +495,7 @@ export default function useAgentStream({
           }
         });
     },
-    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, scheduleThinkingFlush, flushReasoningBuffer, onComplete, onInstallSuggestion, onIterationLimit],
+    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setTokenUsage, flushAssistant, flushToolOutputBuffer, scheduleThinkingFlush, flushReasoningBuffer, onComplete, onInstallSuggestion, onIterationLimit],
   );
 
   const abort = useCallback(() => {
@@ -605,8 +506,8 @@ export default function useAgentStream({
   }, [refs, flushAssistant, setAgentState]);
 
   const loadHistory = useCallback(
-    (historyMessages, historySubagents) => {
-      store.getState().loadHistory(sessionId, historyMessages, historySubagents);
+    (historyMessages) => {
+      store.getState().loadHistory(sessionId, historyMessages);
     },
     [sessionId, store],
   );
@@ -618,8 +519,6 @@ export default function useAgentStream({
     setAgentState,
     pendingConsent,
     setPendingConsent,
-    subagents,
-    setSubagents,
     tokenUsage,
     setTokenUsage,
     startStream,

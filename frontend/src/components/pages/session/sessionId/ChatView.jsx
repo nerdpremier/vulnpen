@@ -12,7 +12,6 @@ import SlashCommandResult from "./SlashCommandResult";
 import ConsentBanner from "./ConsentBanner";
 import InstallSuggestionBanner from "./InstallSuggestionBanner";
 import IterationLimitBanner from "./IterationLimitBanner";
-import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
@@ -55,7 +54,6 @@ export default function ChatView({ sessionId }) {
     setAgentState,
     pendingConsent,
     setPendingConsent,
-    subagents,
     setTokenUsage,
     startStream,
     abort,
@@ -284,9 +282,6 @@ export default function ChatView({ sessionId }) {
         )}
 
         {visibleMessages.map((msg) => {
-          if (msg.role === "subagent") {
-            return <SubagentBlock key={msg.id} message={msg} />;
-          }
           if (msg.role === "slash_command_result") {
             return <SlashCommandResult key={msg.id} message={msg} />;
           }
