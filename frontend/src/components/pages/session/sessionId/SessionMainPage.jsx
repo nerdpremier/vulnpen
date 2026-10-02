@@ -39,12 +39,19 @@ const SessionMainPage = ({ session_id }) => {
 
   // Unfold the live browser view whenever the agent starts driving the
   // browser (ToolCallBlock broadcasts browser tool activity), and fold it
-  // back to the rail when that call finishes — unless the user opened it
-  // themselves (manualOpenRef keeps their choice).
+  // back to the rail when that call finishes — unless the user opened the
+  // panel themselves (manualOpenRef keeps their choice until the agent's
+  // next browser action supersedes it).
   const manualOpenRef = useRef(false);
+  const openPanelManually = useCallback(() => {
+    manualOpenRef.current = true;
+    setActivePanel((prev) => (prev === "browser" ? null : "browser"));
+  }, []);
   useEffect(() => {
     const open = () => {
-      manualOpenRef.current = true;
+      // The agent opening the panel supersedes a previous manual open:
+      // when its work finishes the panel must fold back automatically.
+      manualOpenRef.current = false;
       setActivePanel("browser");
     };
     const close = () => {
@@ -166,7 +173,7 @@ const SessionMainPage = ({ session_id }) => {
             return (
               <button
                 key={tab.key}
-                onClick={() => setActivePanel(active ? null : tab.key)}
+                onClick={openPanelManually}
                 title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
                 style={railTabStyle(active)}
               >
