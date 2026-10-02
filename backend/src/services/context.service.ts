@@ -5,10 +5,11 @@ import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 
-// Summarize at half the context window, not 70%: prompt tokens are paid every
-// turn, so a history that idles near the threshold is the single biggest cost
-// driver (a measured run idled at ~88k prompt tokens for hundreds of turns).
-const SUMMARIZE_THRESHOLD = 0.50;
+// Summarize well below half the context window, not 70%: prompt tokens are
+// paid every inference call, so a history that idles near the threshold is the
+// single biggest cost driver (a measured run idled at ~88k prompt tokens for
+// hundreds of turns).
+const SUMMARIZE_THRESHOLD = 0.40;
 const CHARS_PER_TOKEN_ESTIMATE = 3.5;
 const PRESERVE_RECENT_MESSAGES = 6;
 // Tool results older than this many messages are collapsed to a stub: the

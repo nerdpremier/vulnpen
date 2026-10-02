@@ -64,16 +64,12 @@ function caseLine(plan: WebAppTestPlanDoc, testId: string, verbose: boolean): st
 const wstgTestPlan: ToolDefinition = {
   name: "wstg_test_plan",
   description:
-    `Plan and track OWASP WSTG v${WSTG_VERSION} test cases for this web application engagement. ` +
-    'Use action "generate" to build or refresh the plan for a target (full WSTG catalogue by default, ' +
-    'optionally narrowed by categories or an explicit list of test ids), "list" to see what is planned, ' +
-    '"get" to read one test case in full, "update_case" to record the result of a test or edit its text ' +
-    '(status, observations, title, objective, method, notes and linked findings), "add_case" to add a ' +
-    'custom case that is not part of the WSTG catalogue (the tool rejects cases that duplicate one ' +
-    'already in the plan — read the existing case it names instead of re-testing it), "delete_case" to ' +
-    'remove cases you added by mistake, and "coverage" to report progress. ' +
-    "The plan is persisted in the session and returned to you in the system prompt, so keep it current: " +
-    "mark a case in_progress before you start it, and set it to passed or failed as soon as you know the result.",
+    `Plan and track OWASP WSTG v${WSTG_VERSION} test cases. Actions: "generate" (build/refresh the plan; ` +
+    'full catalogue by default, narrow with categories or test_ids), "list", "get" (one case in full), ' +
+    '"update_case" (record a result or edit case text), "add_case" (custom case; duplicates rejected — read ' +
+    'the existing case instead of re-testing), "delete_case", "coverage" (progress). The plan is injected into ' +
+    'the system prompt, so keep it current: mark a case in_progress before starting it, set passed/failed as ' +
+    "soon as the result is known.",
   parameters: {
     type: "object",
     properties: {
@@ -132,9 +128,7 @@ const wstgTestPlan: ToolDefinition = {
         type: "string",
         enum: TEST_STATUSES,
         description:
-          "Result of the test for action \"update_case\": not_started, in_progress, passed, failed, blocked or skipped. " +
-          "Setting a case to failed requires vulnerability_id — the tool refuses a failed case with no linked finding. " +
-          "Setting a case to blocked requires a concrete missing-dependency note — and a browser-related reason requires that browser_action was called at least once this session.",
+          "Result for update_case. failed requires vulnerability_id (the tool refuses without one); blocked requires a concrete missing-dependency note.",
       },
       force: {
         type: "boolean",

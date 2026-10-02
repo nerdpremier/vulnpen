@@ -47,16 +47,13 @@ const updateEngagementState: ToolDefinition = {
       data: {
         type: "object",
         description:
-          "The action-specific state data. For add_vulnerability include title, host/target, service or endpoint, " +
-          "likelihood and impactRating (risk matrix factors the severity is computed from), evidence, stepsToReproduce, contextSummary, impact, remediation, and exploited status when known. " +
-          "Never declare a severity word directly: rate the likelihood and impact factors honestly and the system derives the severity from the risk matrix. " +
-          "CWE and owaspTop10 are optional: set wstgId to the WSTG v4.2 test case that produced the finding (e.g. WSTG-INPV-05) and set " +
-          "owaspTop10/CWE only when you know they fit. A finding with no well-fitting category or CWE is accepted unmapped — never invent a mapping for completeness. " +
-          "For add_key_discovery provide title and/or description (discovery/value are accepted for compatibility). " +
-          'For remove_finding provide vulnerability_id of a finding that turned out not to be real (e.g. a placeholder or false positive); ' +
-          "it is deleted from the session and unlinked from any test case that references it. " +
-          "This is a proof-of-concept engagement: when the finding is a destructive capability you proved without carrying it out " +
-          "(for example a delete endpoint a low-privilege user can reach), record it with exploited set to false and state in the impact that the destructive step was deliberately not performed.",
+          "The action-specific state data. For add_vulnerability: title, host/target, service or endpoint, " +
+          "likelihood and impactRating (1-3 each — the system derives severity; never declare a severity word), " +
+          "evidence, stepsToReproduce, contextSummary, impact, remediation, exploited when known. Set wstgId to the " +
+          "test case that produced the finding; omit owaspTop10/CWE unless you are confident. " +
+          "For add_key_discovery: title and/or description. For remove_finding: vulnerability_id of a false positive. " +
+          "Proof-of-concept engagement: a destructive capability you proved without carrying it out is recorded with " +
+          "exploited=false and the deliberate omission stated in impact.",
         properties: {
           // Shared fields. Keeping these explicit prevents models from
           // guessing the shape of add_key_discovery calls while retaining the
@@ -88,9 +85,7 @@ const updateEngagementState: ToolDefinition = {
           wstgId: {
             type: "string",
             description:
-              "WSTG v4.2 test case that produced this finding, e.g. WSTG-INPV-05. Must be a case that exists in this " +
-              "session's test plan — the tool refuses unknown ids and marks that case failed with this finding linked automatically. " +
-              "The OWASP Top 10:2025 mapping is derived from it.",
+              "WSTG v4.2 case that produced this finding (e.g. WSTG-INPV-05); must exist in the plan — the tool links the case as failed automatically.",
           },
           owaspTop10: {
             type: "string",
@@ -109,13 +104,13 @@ const updateEngagementState: ToolDefinition = {
             type: "number",
             enum: [1, 2, 3],
             description:
-              "Risk matrix likelihood factor: 1 = low, 2 = medium, 3 = high. How likely this finding is to be exercised by the threat agents that apply here.",
+              "Likelihood factor: 1 = low, 2 = medium, 3 = high.",
           },
           impactRating: {
             type: "number",
             enum: [1, 2, 3],
             description:
-              "Risk matrix impact factor: 1 = low, 2 = medium, 3 = high. Worst realistic damage to the business if exercised.",
+              "Impact factor: 1 = low, 2 = medium, 3 = high (worst realistic business damage).",
           },
         },
         additionalProperties: true,
