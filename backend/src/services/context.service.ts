@@ -5,9 +5,17 @@ import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 
-const SUMMARIZE_THRESHOLD = 0.70;
+// Summarize at half the context window, not 70%: prompt tokens are paid every
+// turn, so a history that idles near the threshold is the single biggest cost
+// driver (a measured run idled at ~88k prompt tokens for hundreds of turns).
+const SUMMARIZE_THRESHOLD = 0.50;
 const CHARS_PER_TOKEN_ESTIMATE = 3.5;
-const PRESERVE_RECENT_MESSAGES = 8;
+const PRESERVE_RECENT_MESSAGES = 6;
+// Tool results older than this many messages are collapsed to a stub: the
+// summary and the engagement state already carry what mattered, and re-sending
+// full scan output for hundreds of turns was pure token burn.
+const RECENT_FULL_TOOL_RESULTS = 20;
+const STALE_TOOL_RESULT_CHARS = 1_500;
 
 function estimateTokens(text: string | null): number {
   if (!text) return 0;
@@ -168,7 +176,7 @@ export function messagesToOpenAI(
     }
   }
 
-  return messages.flatMap((m) => {
+  return messages.flatMap((m, index) => {
     if (m.role === "assistant" && m.toolCalls?.length) {
       const validToolCalls = m.toolCalls.filter((tc) => toolResponseIds.has(tc.id));
 
@@ -209,9 +217,24 @@ export function messagesToOpenAI(
       if (!m.toolCallId || !assistantToolCallIds.has(m.toolCallId)) {
         return [];
       }
+      let content = m.content ?? "";
+      // Stale results collapse to head+tail stubs: fresh ones (inside the
+      // recent window) go to the model whole so an in-flight scan stays
+      // readable while it is still being acted on.
+      if (
+        content.length > STALE_TOOL_RESULT_CHARS &&
+        index < messages.length - RECENT_FULL_TOOL_RESULTS
+      ) {
+        const head = Math.floor(STALE_TOOL_RESULT_CHARS * 0.5);
+        const tail = STALE_TOOL_RESULT_CHARS - head;
+        content =
+          content.slice(0, head) +
+          `\n... [${content.length - STALE_TOOL_RESULT_CHARS} chars of this older tool output elided from context] ...\n` +
+          content.slice(-tail);
+      }
       return {
         role: "tool" as const,
-        content: m.content ?? "",
+        content,
         tool_call_id: m.toolCallId,
       };
     }

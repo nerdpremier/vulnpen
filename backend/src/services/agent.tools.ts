@@ -17,7 +17,9 @@ import {
 const ANSI_REGEX = /\x1B\[[0-?]*[-[\]#-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[@-_]|\r(?!\n)/g;
 // The model only ever sees this much of a tool result. Too small and it has to
 // re-run scans to read their own output; too large and every turn pays for it.
-const MAX_OUTPUT_CHARS = 30_000;
+// 12k chars ≈ 3.4k tokens: scan verdicts and errors live in the tail, which
+// truncateOutput keeps, so the interesting part always survives.
+const MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_TOOL_TIMEOUT_MS = 60_000; // 1 min hard cap if no timeoutMs on the definition
 
 async function executeWithTimeout(
