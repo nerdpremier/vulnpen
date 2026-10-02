@@ -198,7 +198,7 @@ async function buildAgentPromptConfig(
 ): Promise<AgentPromptConfig> {
   const user = await UserModel.findById(userId);
   const session = await SessionsModel.findOne({ sessionId })
-    .select("workspaceId webAppTestPlan vulnerabilities")
+    .select("workspaceId engagementContext webAppTestPlan vulnerabilities")
     .lean();
   const now = new Date();
   const promptConfig: AgentPromptConfig = {
@@ -209,6 +209,10 @@ async function buildAgentPromptConfig(
     currentDay: now.toLocaleDateString("en-US", { weekday: "long" }),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     envInfo,
+    engagement: {
+      target: session?.engagementContext?.target ?? "",
+      scope: session?.engagementContext?.scope ?? "",
+    },
   };
 
   const storedVulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];

@@ -29,6 +29,14 @@ export interface AgentPromptConfig {
   timezone?: string;
   envInfo?: BoxEnvInfo;
   /**
+   * Target and scope declared when the session was created. Re-injected every
+   * turn so the model never has to ask the user for a target it already has.
+   */
+  engagement?: {
+    target?: string;
+    scope?: string;
+  };
+  /**
    * WSTG v4.2 plan and OWASP Top 10:2025 posture for this session. The plan is
    * re-injected on every turn so coverage survives context summarisation.
    */
@@ -51,9 +59,22 @@ function buildWebAppSecuritySection(
     (category) => `${category.id} ${category.title}`,
   ).join("; ");
 
+  const declaredTarget = config.engagement?.target?.trim() ?? "";
+  const declaredScope = config.engagement?.scope?.trim() ?? "";
+  // The target was captured when the session was created — state it as fact so
+  // a general first question ("use curl / wget") cannot make the model ask for
+  // information it already holds.
+  const engagementSection = declaredTarget
+    ? `The declared target of this engagement is **${declaredTarget}**${
+        declaredScope ? ` — scope: ${declaredScope}` : ""
+      }. It was set when this session was created; never ask the user to provide it again. All probing, plan generation and findings default to this target unless the user explicitly moves or widens the boundary.\n\n`
+    : "";
+
   const planSection = web?.testPlan?.cases?.length
     ? renderTestPlanPrompt(web.testPlan, { maxNext: 10 })
-    : `No WSTG test plan exists for this session yet. As soon as the user gives you a target or scope, create one: call \`wstg_test_plan\` with action "generate", the target and, when known, the scope and categories. The plan covers the full WSTG catalogue by default; narrow it with categories or test_ids when the user asks, and add custom cases with action "add_case" whenever the user requests a test that is not in the catalogue.`;
+    : declaredTarget
+      ? `No WSTG test plan exists for this session yet. The target is already declared above: call \`wstg_test_plan\` with action "generate" for it as soon as the user asks for anything security-testing related (or immediately if the user's message reads as a go-ahead), passing that same target and the scope when known. The plan covers the full WSTG catalogue by default; narrow it with categories or test_ids when the user asks, and add custom cases with action "add_case" whenever the user requests a test that is not in the catalogue.`
+      : `No WSTG test plan exists for this session yet. As soon as the user gives you a target or scope, create one: call \`wstg_test_plan\` with action "generate", the target and, when known, the scope and categories. The plan covers the full WSTG catalogue by default; narrow it with categories or test_ids when the user asks, and add custom cases with action "add_case" whenever the user requests a test that is not in the catalogue.`;
 
   const postureParts: string[] = [];
   if (typeof web?.findingCount === "number") {
@@ -77,7 +98,7 @@ function buildWebAppSecuritySection(
   const postureSection = postureParts.length ? `${postureParts.join(" ")}\n\n` : "";
 
   return `\n<web_application_security_testing framework="OWASP WSTG v${WSTG_VERSION}" risk_model="OWASP Top 10:2025" source="${WSTG_SOURCE}">
-Your primary discipline is web application security testing. The OWASP Web Security Testing Guide v${WSTG_VERSION} is the methodology you plan, execute and report against, and the OWASP Top 10:2025 is the risk vocabulary you classify findings into. Depth on the network or C2 tooling below is in service of that discipline, not a replacement for it.
+${engagementSection}Your primary discipline is web application security testing. The OWASP Web Security Testing Guide v${WSTG_VERSION} is the methodology you plan, execute and report against, and the OWASP Top 10:2025 is the risk vocabulary you classify findings into. Depth on the network or C2 tooling below is in service of that discipline, not a replacement for it.
 
 ## The loop you work in
 1. **Plan — and show the plan before you test.** When the user names a target and no plan exists yet, create one immediately (\`wstg_test_plan\` action "generate" with the target and, when known, scope and categories). You may plan freely: restrict to categories or test ids, and add custom cases the catalogue does not cover with action "add_case". Then present the plan back in chat as a short proposal: target and scope you assumed, how many cases that is and which categories they cover, which cases you will start with, and anything you still need (credentials, roles to test as, an exclusion list). Invite the user to add, edit or remove cases, restrict categories or correct the scope before you work through it. Never start firing payloads at a target the user has not confirmed is in scope.

@@ -547,6 +547,21 @@ test("the assistant proposes a WSTG plan as soon as the user names a target", ()
   assert.match(prompt, /Current WSTG v4\.2 test plan/);
 });
 
+test("the declared target from session creation is injected into the prompt", () => {
+  const prompt = buildSystemPrompt({
+    sessionId: "sess-chat",
+    engagement: { target: "http://juice-shop:3000", scope: "Storefront, REST API" },
+    webAppSecurity: { testPlan: null },
+  });
+
+  assert.match(prompt, /declared target of this engagement is \*\*http:\/\/juice-shop:3000\*\*/);
+  assert.match(prompt, /scope: Storefront, REST API/);
+  assert.match(prompt, /never ask the user to provide it again/);
+  // The no-plan wording must lean on the declared target, not wait for the user.
+  assert.match(prompt, /The target is already declared above/);
+  assert.doesNotMatch(prompt, /As soon as the user gives you a target/);
+});
+
 test("an existing plan is re-injected with coverage, results and next cases", () => {
   const plan = createTestPlan({ target: "https://abc.example.com" }).plan;
   const failed = updateTestCase(plan, "WSTG-INPV-05", {
