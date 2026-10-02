@@ -17,7 +17,6 @@ import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
-import MCPSettingsPage from "@/components/pages/settings/McpSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
 import SSHConnectionPage from "@/components/pages/session/connection/SSHConnectionPage";
 import VPNMainPage from "@/components/pages/session/vpn/VPNMainPage";
@@ -94,15 +93,6 @@ const TABS = [
       "Configure Magnitude for agentic browser automation during pentests.",
     icon: TbWorldWww,
     component: MagnitudeSettingsPage,
-  },
-  {
-    key: "mcp",
-    section: "Tools & integrations",
-    label: "MCP Access",
-    description:
-      "Generate MCP tokens and copy the backend-integrated MCP endpoint config.",
-    icon: TbWorldWww,
-    component: MCPSettingsPage,
   },
 ];
 

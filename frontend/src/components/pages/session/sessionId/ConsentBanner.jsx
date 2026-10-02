@@ -1,45 +1,65 @@
 import React from "react";
-import { CheckOutlined, CloseOutlined, ExclamationCircleOutlined, WarningOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, WarningOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import styles from "@/styles/components/Chat.module.scss";
 
 const CONSENT_CONFIG = {
   run_install_tool: {
-    title: "Tool installation requires approval",
+    title: "ติดตั้งเครื่องมือใหม่ลงเครื่องทดสอบ",
     getCode: (args) => args?.tool_name ? `Install: ${args.tool_name}` : "",
     language: "text",
   },
   run_bash: {
-    title: "Command execution requires approval",
+    title: "รันคำสั่งบนเครื่องทดสอบ",
     getCode: (args) => args?.command ?? "",
     language: "bash",
   },
   run_python_script: {
-    title: "Python script execution requires approval",
+    title: "รันสคริปต์ Python บนเครื่องทดสอบ",
     getCode: (args) => args?.script ?? "",
     language: "python",
   },
   write_to_shell: {
-    title: "Shell input requires approval",
+    title: "ส่งข้อความเข้าเชลล์ที่เปิดค้างไว้",
     getCode: (args) => args?.input ?? "",
     language: "bash",
   },
 };
 
 const DEFAULT_CONFIG = {
-  title: "Tool execution requires approval",
+  title: "เรียกใช้เครื่องมือ",
   getCode: (args) => (args?.command ?? JSON.stringify(args, null, 2)),
   language: "text",
 };
 
-function getConsentSummary(toolName, safetyBlock) {
-  if (safetyBlock) return "Dangerous command blocked by safety system";
-  if (toolName === "run_bash") return "Review command";
-  if (toolName === "run_python_script") return "Review script";
-  if (toolName === "run_install_tool") return "Review install";
-  if (toolName === "write_to_shell") return "Review shell input";
-  return "Review action";
+const GENERIC_SAFETY_REASON = "คำสั่งนี้ข้ามเส้นแบ่งการอนุมัติตามกฎความปลอดภัยของระบบ";
+const GENERIC_SAFETY_IMPACT = "อาจทำให้เครื่องทดสอบหรือข้อมูลเสียหาย";
+
+/** Wording per safety kind. "dangerous" is a destructive pattern on the attack
+ *  box; "destructive_target" is a destructive action against the engagement
+ *  target, which a proof-of-concept engagement never carries out; "out_of_scope"
+ *  is a target outside the declared boundary, a much milder verdict that used to
+ *  be shown with the destructive wording and read as nonsense for a plain curl. */
+const SAFETY_KIND_LABELS = {
+  dangerous: {
+    badge: "อันตราย — ต้องขออนุมัติ",
+    title: "คำสั่งนี้อาจทำลายระบบ — ตรวจสอบก่อนอนุมัติ",
+  },
+  destructive_target: {
+    badge: "ทำลายข้อมูลเป้าหมาย — ต้องขออนุมัติ",
+    title: "รายการนี้ลบหรือแก้ไขข้อมูลบนเป้าหมาย — งานนี้เป็นแบบ PoC",
+  },
+  out_of_scope: {
+    badge: "นอกขอบเขต — ต้องขออนุมัติ",
+    title: "คำสั่งนี้แตะเป้าหมายนอกขอบเขตการทดสอบ",
+  },
+};
+
+function safetyKindOf(action) {
+  if (action.safetyKind) return action.safetyKind;
+  // Older pending-consent records only carry the boolean.
+  return action.safetyBlock ? "dangerous" : undefined;
 }
 
 const highlighterCustomStyle = {
@@ -51,7 +71,8 @@ const highlighterCustomStyle = {
 };
 
 export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
-  const { toolName, safetyBlock, approvalReason } = pendingConsent;
+  const { toolName, safetyBlock, approvalReason, safetyReason, safetyImpact, safetyKind } =
+    pendingConsent;
   const args = pendingConsent.args ?? pendingConsent.arguments;
   const config = CONSENT_CONFIG[toolName] ?? DEFAULT_CONFIG;
   const actions = pendingConsent.batch?.length
@@ -59,71 +80,83 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
         ...action,
         args: action.args ?? action.arguments,
       }))
-    : [{ toolName, args, safetyBlock, approvalReason }];
+    : [{ toolName, args, safetyBlock, approvalReason, safetyReason, safetyImpact, safetyKind }];
+  const isBatch = actions.length > 1;
+  const kinds = new Set(actions.map(safetyKindOf).filter(Boolean));
+  // Only a destructive pattern earns the red "may destroy the system" wording.
+  const dangerVerdict = kinds.has("dangerous") || kinds.has("destructive_target");
+  const destructiveVerdict = kinds.has("destructive_target");
+  const scopeVerdict = kinds.has("out_of_scope");
   const hasSafetyBlock = actions.some((action) => action.safetyBlock);
-  const summary = getConsentSummary(toolName, safetyBlock);
 
-  const bannerClassName = hasSafetyBlock
-    ? `${styles.consentBanner} ${styles.consentBannerDanger}`
-    : styles.consentBanner;
-
-  const BadgeIcon = hasSafetyBlock ? WarningOutlined : ExclamationCircleOutlined;
-  const badgeLabel = hasSafetyBlock ? "Safety Block" : "Approval";
+  const badgeLabel = dangerVerdict
+    ? SAFETY_KIND_LABELS.dangerous.badge
+    : scopeVerdict
+      ? SAFETY_KIND_LABELS.out_of_scope.badge
+      : "ต้องขออนุมัติ";
+  const headerTitle = isBatch
+    ? "มีหลายรายการที่ต้องขออนุมัติ"
+    : dangerVerdict
+      ? SAFETY_KIND_LABELS.dangerous.title
+      : scopeVerdict
+        ? SAFETY_KIND_LABELS.out_of_scope.title
+        : config.title;
 
   return (
-    <div className={bannerClassName}>
+    <div className={`${styles.consentBanner} ${dangerVerdict ? styles.consentBannerDanger : ""}`}>
       <div className={styles.consentInfo}>
         <div className={styles.consentHeader}>
-          <div className={hasSafetyBlock ? styles.consentBadgeDanger : styles.consentBadge}>
-            <BadgeIcon />
+          <div className={dangerVerdict ? styles.consentBadgeDanger : styles.consentBadge}>
+            {dangerVerdict ? <WarningOutlined /> : <ExclamationCircleOutlined />}
             <span>{badgeLabel}</span>
           </div>
           <div className={styles.consentTitleGroup}>
-            <div className={styles.consentTitle}>
-              {actions.length > 1
-                ? `${actions.length} tool actions require approval`
-                : hasSafetyBlock
-                  ? "Potentially destructive command blocked"
-                  : config.title}
-            </div>
+            <div className={styles.consentTitle}>{headerTitle}</div>
             <div className={styles.consentSubtitle}>
-              {actions.length > 1
-                ? "Approving will run every action listed below."
-                : approvalReason || summary}
+              {isBatch
+                ? "กดอนุมัติจะรันทุกรายการด้านล่างพร้อมกัน"
+                : destructiveVerdict
+                  ? "งานนี้เป็นแบบ PoC — ระบบหยุดไว้ก่อน เพื่อไม่ให้ข้อมูลจริงบนเป้าหมายถูกลบหรือแก้ไข"
+                  : hasSafetyBlock
+                    ? "ระบบขอความยินยอมก่อนปล่อยคำสั่งนี้ผ่าน"
+                    : "เอเจนต์ขออนุญาตก่อนทำรายการนี้"}
             </div>
           </div>
           <div className={styles.consentActions}>
             <button
               className={styles.consentApproveBtn}
               onClick={onApprove}
-              title="Approve"
-              aria-label="Approve"
+              title="อนุมัติ"
+              aria-label="อนุมัติ"
             >
               <CheckOutlined />
+              <span>อนุมัติ</span>
             </button>
             <button
               className={styles.consentDenyBtn}
               onClick={onDeny}
-              title="Deny"
-              aria-label="Deny"
+              title="ปฏิเสธ"
+              aria-label="ปฏิเสธ"
             >
               <CloseOutlined />
+              <span>ปฏิเสธ</span>
             </button>
           </div>
         </div>
         {actions.map((action, index) => {
           const actionConfig = CONSENT_CONFIG[action.toolName] ?? DEFAULT_CONFIG;
           const code = actionConfig.getCode(action.args);
+          const reason = action.safetyReason ?? (action.safetyBlock ? GENERIC_SAFETY_REASON : action.approvalReason);
+          const impact = action.safetyImpact ?? (action.safetyBlock ? GENERIC_SAFETY_IMPACT : undefined);
           return (
             <div
               key={action.toolCallId ?? `${action.toolName}-${index}`}
               className={styles.consentCodePreview}
-              style={{ marginTop: index === 0 ? 0 : "0.65rem" }}
+              style={{ marginTop: index === 0 ? "0.65rem" : "0.65rem" }}
             >
-              {actions.length > 1 && (
-                <div style={{ marginBottom: "0.4rem", color: "var(--primary-text)", fontSize: "0.75rem" }}>
-                  <strong>{index + 1}. {action.toolName}</strong>
-                  {action.approvalReason && <span> — {action.approvalReason}</span>}
+              {isBatch && (
+                <div className={styles.consentItemLabel}>
+                  <strong>{index + 1}. {actionConfig.title}</strong>
                 </div>
               )}
               {code && (
@@ -135,6 +168,22 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
                 >
                   {code}
                 </SyntaxHighlighter>
+              )}
+              {(reason || impact) && (
+                <div className={styles.consentExplain}>
+                  {reason && (
+                    <div className={styles.consentExplainRow}>
+                      <span className={styles.consentExplainLabel}>เหตุผล</span>
+                      <span>{reason}</span>
+                    </div>
+                  )}
+                  {impact && (
+                    <div className={styles.consentExplainRow}>
+                      <span className={`${styles.consentExplainLabel} ${styles.consentExplainLabelDanger}`}>ผลกระทบ</span>
+                      <span>{impact}</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           );

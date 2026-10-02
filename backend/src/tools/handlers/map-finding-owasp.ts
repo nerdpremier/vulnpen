@@ -6,6 +6,7 @@ import {
   mapFindingToOwaspTop10,
   suggestWstgTestsForFinding,
 } from "../../services/web-security/owasp-mapping.service";
+import { classifyWithLlm } from "../../services/web-security/owasp-llm-classifier";
 import {
   OWASP_TOP10_2025,
   getOwaspCategory,
@@ -22,7 +23,8 @@ const mapFindingOwasp: ToolDefinition = {
   description:
     "Classify a finding against the OWASP Top 10:2025 and persist the classification on the tracked finding. " +
     "Mapping precedence is: an explicit category you supply, then the OWASP category of the WSTG v4.2 test case " +
-    "that produced the finding, then the CWE identifiers OWASP publishes for each category, then a keyword classifier. " +
+    "that produced the finding, then the CWE identifiers OWASP publishes for each category, then an LLM classifier, " +
+    "and only findings that survive none of those stay unmapped. " +
     "Pass vulnerability_id to classify a finding that already exists (with apply=true to store the result), " +
     "or pass title/cwe/wstg_id to classify a finding you are still investigating. " +
     `Valid categories: ${owaspRoster()}.`,
@@ -86,7 +88,7 @@ const mapFindingOwasp: ToolDefinition = {
 
         const lines: string[] = [];
         for (const vulnerability of unmapped) {
-          const result = mapFindingToOwaspTop10({
+          let result = mapFindingToOwaspTop10({
             title: vulnerability.title,
             description: vulnerability.description,
             contextSummary: vulnerability.contextSummary,
@@ -96,6 +98,21 @@ const mapFindingOwasp: ToolDefinition = {
             cwe: vulnerability.cwe,
             wstgId: vulnerability.wstgId,
           });
+          if (!result.primary) {
+            const llmResult = await classifyWithLlm(
+              {
+                title: vulnerability.title,
+                description: vulnerability.description,
+                contextSummary: vulnerability.contextSummary,
+                evidence: vulnerability.evidence,
+                endpoint: vulnerability.endpoint,
+                cwe: vulnerability.cwe,
+                wstgId: vulnerability.wstgId,
+              },
+              { userId: ctx.userId, sessionId, candidates: result.ambiguous },
+            );
+            if (llmResult) result = llmResult;
+          }
           if (!result.primary) {
             lines.push(`- ${vulnerability.title}: still unmapped — ${result.rationale}`);
             continue;
@@ -124,7 +141,7 @@ const mapFindingOwasp: ToolDefinition = {
         }
       }
 
-      const result = mapFindingToOwaspTop10({
+      let result = mapFindingToOwaspTop10({
         title: args.title ?? target?.title,
         description: args.description ?? target?.description,
         contextSummary: target?.contextSummary,
@@ -135,6 +152,21 @@ const mapFindingOwasp: ToolDefinition = {
         wstgId: args.wstg_id ?? target?.wstgId,
         owaspTop10: args.owasp_top10 ?? target?.owaspTop10,
       });
+      if (!result.primary) {
+        const llmResult = await classifyWithLlm(
+          {
+            title: args.title ?? target?.title,
+            description: args.description ?? target?.description,
+            contextSummary: target?.contextSummary,
+            evidence: args.evidence ?? target?.evidence,
+            endpoint: target?.endpoint,
+            cwe: args.cwe ?? target?.cwe,
+            wstgId: args.wstg_id ?? target?.wstgId,
+          },
+          { userId: ctx.userId, sessionId, candidates: result.ambiguous },
+        );
+        if (llmResult) result = llmResult;
+      }
 
       const lines: string[] = [describeOwaspMapping(result)];
       const wstg = getWstgTest(args.wstg_id ?? target?.wstgId);

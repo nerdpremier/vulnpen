@@ -98,38 +98,49 @@ function BurpRequestBlock({ content, meta }) {
   );
 }
 
-function findToolOutput(toolCallId, allMessages) {
-  if (!toolCallId || !allMessages) return null;
-  return allMessages.find(
-    (m) => m.role === "tool" && m.toolCallId === toolCallId,
-  );
+/**
+ * Cheap re-render gate. Message objects keep their identity unless their own
+ * content changed, so a row only needs to re-render when its own message, or a
+ * tool output it renders inline, actually changed. Without this every row
+ * re-rendered on every streaming frame and long sessions froze.
+ */
+function areMessagePropsEqual(prev, next) {
+  if (prev.message !== next.message) return false;
+  if (prev.sessionId !== next.sessionId) return false;
+
+  const prevCalls = prev.message.toolCalls;
+  const nextCalls = next.message.toolCalls;
+  if (prevCalls !== nextCalls) return false;
+  if (prevCalls) {
+    for (const tc of prevCalls) {
+      const before = prev.toolIndex?.outputs.get(tc.id);
+      const after = next.toolIndex?.outputs.get(tc.id);
+      if (before !== after) return false;
+    }
+  }
+
+  // A standalone tool row hides itself once its parent block claims the call.
+  const callId = prev.message.toolCallId;
+  if (callId) {
+    const before = prev.toolIndex?.callIds.has(callId);
+    const after = next.toolIndex?.callIds.has(callId);
+    if (before !== after) return false;
+  }
+
+  return true;
 }
 
-const ChatMessage = React.memo(function ChatMessage({ message, allMessages, sessionId }) {
+const ChatMessage = React.memo(function ChatMessage({ message, toolIndex, sessionId }) {
   const { role, content, streaming, isError, isSummary, toolCalls, reasoning, reasoningStreaming, burpMeta } = message;
 
   if (role === "tool") {
-    const hasPairedAssistant = allMessages?.some(
-      (m) =>
-        m.role === "assistant" &&
-        m.toolCalls?.some((tc) => tc.id === message.toolCallId),
-    );
-    if (hasPairedAssistant) return null;
+    if (toolIndex?.callIds.has(message.toolCallId)) return null;
 
     let enrichedMessage = message;
-    if (!message.args && message.toolCallId && allMessages) {
-      const assistantMsg = [...allMessages].reverse().find(
-        (m) =>
-          m.role === "assistant" &&
-          m.toolCalls?.some((tc) => tc.id === message.toolCallId),
-      );
-      if (assistantMsg) {
-        const tc = assistantMsg.toolCalls.find(
-          (tc) => tc.id === message.toolCallId,
-        );
-        if (tc) {
-          enrichedMessage = { ...message, args: tc.arguments };
-        }
+    if (message.args == null) {
+      const fromCall = toolIndex?.args.get(message.toolCallId);
+      if (fromCall != null) {
+        enrichedMessage = { ...message, args: fromCall };
       }
     }
     return <ToolCallBlock message={enrichedMessage} sessionId={sessionId} />;
@@ -173,7 +184,7 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages, sess
           </div>
         )}
         {toolCalls?.map((tc) => {
-          const toolOutput = findToolOutput(tc.id, allMessages);
+          const toolOutput = toolIndex?.outputs.get(tc.id) ?? null;
           const toolMsg = toolOutput
             ? {
                 ...toolOutput,
@@ -196,6 +207,6 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages, sess
   }
 
   return null;
-});
+}, areMessagePropsEqual);
 
 export default ChatMessage;

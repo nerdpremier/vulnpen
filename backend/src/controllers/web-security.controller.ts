@@ -157,7 +157,6 @@ export const generateTestPlan = async (req: Request, res: Response) => {
     const result = createTestPlan({
       target: typeof body.target === "string" ? body.target : undefined,
       scope: typeof body.scope === "string" ? body.scope : undefined,
-      notes: typeof body.notes === "string" ? body.notes : undefined,
       categories: Array.isArray(body.categories) ? body.categories : undefined,
       testIds: Array.isArray(body.testIds)
         ? body.testIds
@@ -168,6 +167,20 @@ export const generateTestPlan = async (req: Request, res: Response) => {
     });
 
     await persistTestPlan(sessionId, userId, result.plan);
+
+    // Keep the engagement boundary in step with the plan: the scope gate reads
+    // engagementContext, so "edit the plan later" must update it too.
+    await SessionsModel.updateOne(
+      { sessionId, uid: userId },
+      {
+        $set: {
+          "engagementContext.target":
+            typeof body.target === "string" ? body.target.trim() : "",
+          "engagementContext.scope":
+            typeof body.scope === "string" ? body.scope.trim() : "",
+        },
+      },
+    );
 
     return res.status(200).json({
       ...planPayload(result.plan),

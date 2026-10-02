@@ -141,14 +141,30 @@ test("a known CWE maps the finding without any model input", () => {
   assert.match(mapping.rationale, /CWE-639/);
 });
 
-test("keyword classification is used when no CWE or test case is available", () => {
+test("findings without deterministic signals stay unmapped for the LLM layer", () => {
   const mapping = mapFindingToOwaspTop10({
     title: "Stored XSS in the support ticket subject",
     description: "A script payload in the subject executes for the support agent.",
   });
-  assert.equal(mapping.primary, "A05:2025");
-  assert.equal(mapping.source, "keyword");
-  assert.ok(mapping.wstgIds.includes("WSTG-INPV-02"));
+  assert.equal(mapping.primary, undefined);
+  assert.equal(mapping.source, "unmapped");
+});
+
+test("an ambiguous CWE refuses to guess and reports its candidates", () => {
+  const mapping = mapFindingToOwaspTop10({
+    title: "Weakness surfaced by an ambiguous weakness id",
+    cwe: "CWE-79",
+  });
+  // CWE-79 is listed under several 2025 categories in the knowledge base, so
+  // the deterministic layer must hand the decision to the LLM classifier.
+  if (mapping.ambiguous?.length) {
+    assert.equal(mapping.primary, undefined);
+    assert.equal(mapping.source, "unmapped");
+    assert.ok(mapping.ambiguous.length > 1);
+  } else {
+    assert.equal(mapping.primary, "A05:2025");
+    assert.equal(mapping.source, "cwe");
+  }
 });
 
 test("an unrecognisable finding is reported as unmapped rather than guessed", () => {
@@ -331,8 +347,8 @@ test("the report draft is complete enough to hand to a reviewer", () => {
       title: "Unauthenticated SQL injection in product search",
       target: "shop.example.test",
       endpoint: "GET https://shop.example.test/api/products?q=",
-      cvss: "9.1",
-      cvssVector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+      likelihood: 3,
+      impactRating: 3,
       cwe: "CWE-89",
       wstgId: "WSTG-INPV-05",
       evidence: "q=' returned SQLSTATE syntax error.",
@@ -358,7 +374,7 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   });
 
   assert.equal(report.stats.totalFindings, 2);
-  assert.equal(report.stats.bySeverity.critical, 1);
+  assert.equal(report.stats.bySeverity.high, 1);
   assert.equal(report.stats.exploited, 1);
   assert.equal(report.stats.unmapped, 1);
   assert.equal(report.stats.coverage.executed, 2);
@@ -366,15 +382,22 @@ test("the report draft is complete enough to hand to a reviewer", () => {
     report.stats.byOwasp.find((row) => row.id === "A05:2025")?.findings,
     1,
   );
-  assert.equal(report.findings[0].owaspTop10, "A05:2025", "critical finding sorts first");
+  assert.equal(report.findings[0].owaspTop10, "A05:2025", "highest-severity finding sorts first");
   assert.equal(report.fileName, "shop-example-com-web-app-pentest-report-2026-02-01.md");
 
   const markdown = report.markdown;
   for (const heading of [
     "# Shop review — Web Application Penetration Testing Report (draft)",
-    "## 1. Document control",
+    "## 1. Introduction",
+    "### 1.1 Version control",
+    "### 1.2 Table of contents",
+    "### 1.3 Test team",
+    "### 1.4 Engagement details",
+    "### 1.5 Disclaimer",
+    "### 1.6 Timeline",
+    "### 1.7 Standards and references applied",
     "## 2. Executive summary",
-    "## 3. Scope and methodology",
+    "## 3. Scope, methodology and limitations",
     "## 4. Risk summary",
     "## 5. Findings summary",
     "## 6. Detailed findings",
@@ -382,7 +405,8 @@ test("the report draft is complete enough to hand to a reviewer", () => {
     "## 8. OWASP Top 10:2025 mapping",
     "## 9. Recommendations",
     "## 10. Appendix A — Test case inventory",
-    "## 11. Appendix B — Glossary and references",
+    "## 11. Appendix B - Risk rating methodology",
+    "## 12. Appendix C - Glossary and references",
   ]) {
     assert.ok(markdown.includes(heading), `missing heading: ${heading}`);
   }
@@ -392,7 +416,8 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   assert.match(markdown, /WSTG-INPV-05/);
   assert.match(markdown, /Unmapped/);
   assert.match(markdown, /OWASP WSTG v4\.2/);
-  assert.match(markdown, /CVSS 9\.1/);
+  assert.ok(!/CVSS/.test(markdown), "CVSS is gone from the report");
+  assert.match(markdown, /Risk \(likelihood x impact, equal weight\) \| high/);
   assert.match(markdown, /Use parameterised queries\./);
   assert.match(markdown, /2 of 97 planned WSTG test cases were executed/);
 });
@@ -440,7 +465,7 @@ test("the assistant proposes a WSTG plan as soon as the user names a target", ()
     /Never start firing payloads at a target the user has not confirmed is in scope/,
   );
   assert.match(prompt, /OWASP Top 10:2025 — the risk vocabulary/);
-  assert.match(prompt, /- A10:2025 Mishandling of Exceptional Conditions/);
+  assert.match(prompt, /A10:2025 Mishandling of Exceptional Conditions/);
   assert.match(prompt, /Current WSTG v4\.2 test plan/);
 });
 

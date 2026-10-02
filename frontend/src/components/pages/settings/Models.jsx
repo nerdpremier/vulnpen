@@ -583,13 +583,13 @@ const ModelsPage = () => {
           style={{ margin: "24px 0" }}
         />
       ) : (
-        <div className={styles.mcpTokenList}>
+        <div className={styles.settingsList}>
           {models.map((model) => {
             const isAssigned = protectedIds.has(model.id);
             return (
-              <div key={model.id} className={styles.mcpTokenItem}>
-                <div className={styles.mcpTokenHeader}>
-                  <div className={styles.mcpTokenTitle}>
+              <div key={model.id} className={styles.settingsListItem}>
+                <div className={styles.settingsListItemHeader}>
+                  <div className={styles.settingsListItemTitle}>
                     <ApiOutlined />
                     {model.label}
                   </div>
@@ -604,7 +604,7 @@ const ModelsPage = () => {
                     )}
                   </div>
                 </div>
-                <div className={styles.mcpTokenMeta}>
+                <div className={styles.settingsListItemMeta}>
                   {providerLabel(model.provider)} · {model.model} · Reasoning{" "}
                   {(model.reasoningMode || "off").toUpperCase()}
                 </div>

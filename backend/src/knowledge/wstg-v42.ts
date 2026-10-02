@@ -9,6 +9,11 @@
  * (e.g. "4.7.5"). v4.2 ends at 4.12.1 Testing GraphQL: there is no REST API and
  * no WebAssembly test in this release, so none is invented here.
  *
+ * The `owasp` field on each test is NOT published by OWASP: it is this project''s
+ * curated WSTG-to-Top-10:2025 crosswalk (see knowledge/provenance.ts), derived
+ * from the CWE lists OWASP publishes per category. The ids, sections and titles
+ * of the test cases themselves are official WSTG v4.2 facts.
+ *
  * The catalogs are plain compile-time data: no I/O, no side effects.
  */
 

@@ -133,11 +133,11 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
         </div>
       )}
 
-      <div className={styles.mcpPanel}>
-        <div className={styles.mcpPanelHeader} style={{ marginBottom: 0 }}>
+      <div className={styles.settingsPanel}>
+        <div className={styles.settingsPanelHeader} style={{ marginBottom: 0 }}>
           <div>
-            <div className={styles.mcpPanelTitle}>Browser Model</div>
-            <div className={styles.mcpPanelDescription}>
+            <div className={styles.settingsPanelTitle}>Browser Model</div>
+            <div className={styles.settingsPanelDescription}>
               {selectedModel
                 ? `${selectedModel.label} · ${selectedModel.provider}/${selectedModel.model}`
                 : "No Browser Agent model is assigned yet."}

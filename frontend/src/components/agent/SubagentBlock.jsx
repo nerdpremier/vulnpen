@@ -173,7 +173,7 @@ function SubagentModal({ message, onClose }) {
   );
 }
 
-export default function SubagentBlock({ message }) {
+const SubagentBlock = React.memo(function SubagentBlock({ message }) {
   const status = message.status || "running";
   const [modalOpen, setModalOpen] = useState(false);
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.running;
@@ -254,4 +254,6 @@ export default function SubagentBlock({ message }) {
       )}
     </>
   );
-}
+});
+
+export default SubagentBlock;

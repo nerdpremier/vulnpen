@@ -1,6 +1,6 @@
 import { ToolDefinition } from "../types";
-import { isDangerousCommand } from "../../utils/commandSafety";
 import { findCapabilityForCommand } from "../../capabilities/registry";
+import { shellSafetyDetail } from "../../utils/consentDetail";
 
 const runBash: ToolDefinition = {
   name: "run_bash",
@@ -9,7 +9,9 @@ const runBash: ToolDefinition = {
     "Uses a one-shot exec channel — the command runs to completion (or timeout) and " +
     "stdout+stderr are returned. Use this for all CLI tools (nmap, gobuster, sqlmap, " +
     "ffuf, curl, etc.). For long-running or interactive tasks, use spawn_shell + " +
-    "write_to_shell + read_shell instead.",
+    "write_to_shell + read_shell instead. " +
+    "The engagement is a proof of concept: never run a command that deletes, overwrites " +
+    "or disables data, accounts or configuration on the target.",
   parameters: {
     type: "object",
     properties: {
@@ -25,8 +27,11 @@ const runBash: ToolDefinition = {
     required: ["command"],
   },
   timeoutMs: 300_000,
-  shouldRequireConsent(args) {
-    return isDangerousCommand(args.command).dangerous;
+  shouldRequireConsent(args, ctx) {
+    return shellSafetyDetail(args.command ?? "", ctx) !== undefined;
+  },
+  describeSafety(args, ctx) {
+    return shellSafetyDetail(args.command ?? "", ctx);
   },
   async execute(args, ctx) {
     const command = args.command;

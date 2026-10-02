@@ -5,7 +5,12 @@ import { ShellManager } from "./shell.manager";
 import { SSEWriter, buildTraceTags, buildEngagementState } from "./agent.service";
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
-import { getProvider, invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
+import {
+  getUserModels,
+  presetToProviderConfig,
+  invoke_llm_streaming,
+  ToolCallData,
+} from "../utils/llm/providers";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { ExecutionContext, ToolResult } from "../tools/types";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
@@ -71,7 +76,12 @@ interface BoxEnvInfo {
   workspacePath: string;
 }
 
-function buildSubagentSystemPrompt(task: string, parentSessionId: string, envInfo?: BoxEnvInfo): string {
+function buildSubagentSystemPrompt(
+  task: string,
+  parentSessionId: string,
+  envInfo?: BoxEnvInfo,
+  engagementStateBlock?: string,
+): string {
   const boxDesc = envInfo ? `${envInfo.os} attack box` : "attack box";
   const userDesc = envInfo ? ` as ${envInfo.user}` : "";
 
@@ -98,7 +108,7 @@ ${task}
 - Attack box: ${boxDesc}${envInfo ? `\n- User: ${envInfo.user} (home: ${envInfo.home})` : ""}
 - Working directory: ${envInfo?.workspacePath ?? "~/pentest-workspace"}
 </environment>
-
+${engagementStateBlock ? `\n${engagementStateBlock}\n` : ""}
 <output_format>
 When you complete your investigation, provide a structured summary:
 - TEST CASES: the WSTG v4.2 ids you covered with the result of each (passed, failed, blocked, not tested) and what supports that result
@@ -196,10 +206,17 @@ export class SubagentManager extends EventEmitter {
       ]),
     ];
 
+    const engagementState = buildEngagementState(session);
+
     const systemMsg: AgentMessageDoc = {
       id: `sys_${subagentId}`,
       role: "system",
-      content: buildSubagentSystemPrompt(task, this.sessionId, this.envInfo),
+      content: buildSubagentSystemPrompt(
+        task,
+        this.sessionId,
+        this.envInfo,
+        engagementState.isEmpty() ? undefined : engagementState.toPromptBlock(),
+      ),
       timestamp: new Date(),
       turnIndex: 0,
     };
@@ -213,8 +230,10 @@ export class SubagentManager extends EventEmitter {
     };
 
     let messages: AgentMessageDoc[] = [systemMsg, userMsg];
-    const providerConfig = await getProvider();
-    const engagementState = buildEngagementState(session);
+    // Subagents run on the orchestrator model the user assigned in Settings,
+    // not on the global default provider.
+    const userModels = await getUserModels(userId);
+    const providerConfig = await presetToProviderConfig(userModels.orchestrator);
     const shellsCreated: string[] = [];
     let iteration = 0;
     let finalResult = "";
@@ -267,6 +286,27 @@ export class SubagentManager extends EventEmitter {
 
           const shellStatusMsg = this.buildShellStatusMessage(shellsCreated);
           if (shellStatusMsg) messages.push(shellStatusMsg);
+        }
+
+        // Refresh persisted state (findings the subagent or the main agent
+        // recorded through Mongo) and re-splice the block into the system
+        // message so the model always sees current engagement state.
+        const fresh = await SessionsModel.findOne({ sessionId: this.sessionId })
+          .select("vulnerabilities");
+        if (fresh) {
+          engagementState.vulnerabilities = buildEngagementState(fresh).vulnerabilities;
+        }
+        if (!engagementState.isEmpty() && messages.length > 0 && messages[0].role === "system") {
+          const stateBlock = engagementState.toPromptBlock();
+          const sysContent = messages[0].content ?? "";
+          const markerStart = sysContent.indexOf("<engagement_state");
+          const markerEnd = sysContent.indexOf("</engagement_state>");
+          if (markerStart !== -1 && markerEnd !== -1) {
+            const end = markerEnd + "</engagement_state>".length;
+            messages[0] = { ...messages[0], content: sysContent.slice(0, markerStart) + stateBlock + sysContent.slice(end) };
+          } else {
+            messages[0] = { ...messages[0], content: `${sysContent}\n\n${stateBlock}` };
+          }
         }
 
         const openaiMessages = messagesToOpenAI(messages, providerConfig.provider === "kimi");
@@ -390,7 +430,6 @@ export class SubagentManager extends EventEmitter {
             continue;
           }
 
-          const user = await UserModel.findById(userId).lean();
           const disableSafety = user?.configs?.disableSafetyProtections ?? false;
           const toolExecutionMode = resolveToolExecutionMode(user?.configs);
 
@@ -424,7 +463,16 @@ export class SubagentManager extends EventEmitter {
                     abortSignal,
                   })
                 : undefined,
+            // The reviewer must judge scope the same way for delegated work,
+            // so it gets the same engagement boundary as the main agent.
             approvalContext: {
+              workspacePath: this.envInfo?.workspacePath,
+              engagement: {
+                name: session?.name,
+                description: session?.description,
+                target: session?.engagementContext?.target,
+                scope: session?.engagementContext?.scope,
+              },
               transcript: compactApprovalTranscript(messages),
             },
           });
@@ -639,10 +687,6 @@ export class SubagentManager extends EventEmitter {
     for (const [, ctrl] of this.runningSubagents) {
       ctrl.abort();
     }
-  }
-
-  getRunningIds(): string[] {
-    return Array.from(this.runningSubagents.keys());
   }
 
   isRunning(subagentId: string): boolean {

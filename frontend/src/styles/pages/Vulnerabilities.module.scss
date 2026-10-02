@@ -94,7 +94,6 @@
   }
 }
 
-.metricCritical strong { color: #ff5c5c; }
 .metricHigh strong { color: #ff9f43; }
 .metricUnmapped strong { color: #ff9f43; }
 
@@ -188,7 +187,6 @@
   text-transform: uppercase;
 }
 
-.critical { color: #ff5c5c; background: rgba(255, 92, 92, 0.09); }
 .high { color: #ff9f43; background: rgba(255, 159, 67, 0.09); }
 .medium { color: #f5d76e; background: rgba(245, 215, 110, 0.08); }
 .low { color: #58a6ff; background: rgba(88, 166, 255, 0.08); }
@@ -770,12 +768,6 @@
   font-size: 0.62rem;
   font-weight: 400;
   letter-spacing: 0.07em;
-}
-
-.critical {
-  color: var(--moon-critical);
-  background: rgba(255, 107, 107, 0.12);
-  border-color: rgba(255, 107, 107, 0.32);
 }
 
 .high {

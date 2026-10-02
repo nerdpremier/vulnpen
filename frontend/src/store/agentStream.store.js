@@ -6,7 +6,6 @@ function createSessionState() {
     messages: [],
     agentState: "idle",
     pendingConsent: null,
-    pendingManualExecution: null,
     subagents: [],
     sidebarExpanded: true,
     historyLoaded: false,
@@ -18,7 +17,8 @@ function createSessionState() {
     toolOutputBufferRef: { current: {} },
     toolOutputRafRef: { current: null },
     thinkingBufferRef: { current: null },
-    thinkingRafRef: { current: null },
+    thinkingFlushTimerRef: { current: null },
+    lastThinkingFlushRef: { current: 0 },
     reasoningBufferRef: { current: null },
     reasoningRafRef: { current: null },
     slashStreamRef: { current: null },
@@ -82,19 +82,6 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
         sessions: {
           ...state.sessions,
           [sessionId]: { ...s, pendingConsent },
-        },
-      };
-    });
-  },
-
-  setPendingManualExecution: (sessionId, pendingManualExecution) => {
-    set((state) => {
-      const s = state.sessions[sessionId];
-      if (!s) return state;
-      return {
-        sessions: {
-          ...state.sessions,
-          [sessionId]: { ...s, pendingManualExecution },
         },
       };
     });

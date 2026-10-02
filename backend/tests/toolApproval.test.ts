@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ExecutionContext, ToolDefinition } from "../src/tools/types";
+import type {
+  ExecutionContext,
+  SafetyDetail,
+  ToolDefinition,
+} from "../src/tools/types";
 import {
   ApprovalRejectionTracker,
   compactApprovalTranscript,
   decideToolConsent,
   parseToolSafetyAssessment,
 } from "../src/services/tool-approval.service";
-import { buildPendingConsentBatch } from "../src/services/agent.tools";
+import {
+  buildPendingConsentBatch,
+  executeToolCall,
+} from "../src/services/agent.tools";
 
 const tool: ToolDefinition = {
   name: "run_bash",
@@ -265,4 +272,60 @@ test("consent batches retain every action, reason, arguments, and safety flag", 
   assert.equal(batch[0].approvalReason, "Writes outside the workspace.");
   assert.equal(batch[1].safetyBlock, true);
   assert.match(batch[1].approvalReason ?? "", /destructive/);
+});
+
+test("a destructive target action is refused in every mode, with no approval path", async () => {
+  const destructive: SafetyDetail = {
+    kind: "destructive_target",
+    reason: "ส่งคำขอ HTTP ด้วยเมธอด DELETE ไปยังเป้าหมาย",
+    impact: "ข้อมูลบนเป้าหมายถูกลบถาวร",
+  };
+  const modes = ["auto", "auto_approve", "requires_consent"] as const;
+  for (const mode of modes) {
+    const result = await decideToolConsent({
+      mode,
+      tool,
+      args: { command: "curl -s -X DELETE http://juice-shop:3000/api/Users/7" },
+      context,
+      safetyTriggered: true,
+      safetyDetail: destructive,
+      // Worst case on purpose: the reviewer model is mistaken, drifted or
+      // prompt-injected through the (untrusted) tool arguments and answers
+      // safe. A probabilistic verdict must never be able to unlock something
+      // irreversible, so the deterministic boundary has to refuse anyway.
+      evaluator: async () => ({ safe: true, reason: "must be ignored" }),
+    });
+    assert.equal(result.denied, true, `mode ${mode}`);
+    assert.equal(result.requireConsent, false, `mode ${mode}`);
+    assert.equal(result.source, "boundary", `mode ${mode}`);
+  }
+});
+
+test("a destructive command is blocked end to end without ever asking for consent", async () => {
+  const errors: string[] = [];
+  const consents: string[] = [];
+  const callbacks = {
+    onToolStart: () => {},
+    onToolOutput: () => {},
+    onToolDone: () => {},
+    onToolError: (_id: string, error: string) => errors.push(error),
+    onConsentRequired: (id: string) => consents.push(id),
+  };
+  const result = await executeToolCall(
+    "session-1",
+    {
+      id: "call-1",
+      name: "run_bash",
+      arguments: JSON.stringify({ command: "curl -s -X DELETE http://juice-shop:3000/api/Users/7" }),
+    },
+    (callbacks as unknown) as Parameters<typeof executeToolCall>[2],
+    ({ sessionId: "session-1" } as unknown) as ExecutionContext,
+    false,
+    "auto",
+  );
+  assert.equal(result.needsConsent, false);
+  assert.equal(result.approvalDenied, true);
+  assert.equal(result.safetyKind, "destructive_target");
+  assert.equal(consents.length, 0);
+  assert.match(errors.join("\n"), /proof-of-concept boundary/);
 });

@@ -25,6 +25,13 @@ const runInstallTool: ToolDefinition = {
     required: ["tool_name"],
   },
   requiresConsent: true,
+  describeSafety(args) {
+    return {
+      kind: "dangerous",
+      reason: `ติดตั้งเครื่องมือใหม่ (${args.tool_name ?? "ไม่ทราบชื่อ"}) ลงเครื่องทดสอบ`,
+      impact: "เพิ่มซอฟต์แวร์ใหม่และใช้พื้นที่ดิสก์บนเครื่องทดสอบ",
+    };
+  },
   timeoutMs: 600_000,
   async execute(args, ctx) {
     const toolName = args.tool_name;

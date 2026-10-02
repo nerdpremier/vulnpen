@@ -37,6 +37,7 @@ import {
   removeTestCases,
   updateTestCase,
 } from "@/services/websecurity.service";
+import { getSessionInfo } from "@/services/agent.service";
 import { apiErrorMessage } from "@/utils/apiError";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import PlanSetupModal from "./PlanSetupModal";
@@ -165,6 +166,13 @@ export default function TestPlanPage({ sessionId }) {
 
   const planQuery = useQuery(["test-plan", sessionId], () => getTestPlan(sessionId));
 
+  // The engagement boundary is captured when the session is created; the setup
+  // screen edits those same values, so it starts from them instead of blank.
+  const { data: sessionInfo } = useQuery(["session-info", sessionId], () =>
+    getSessionInfo(sessionId),
+  );
+  const engagement = sessionInfo?.engagement ?? null;
+
   const plan = planQuery.data?.plan ?? null;
   const catalog = planQuery.data?.catalog;
   const coverage = planQuery.data?.coverage ?? null;
@@ -274,6 +282,9 @@ export default function TestPlanPage({ sessionId }) {
 
   const invalidate = () => {
     queryClient.invalidateQueries(["test-plan", sessionId]);
+    // Setup writes the engagement boundary too, so the cached values the modal
+    // starts from have to be refreshed alongside the plan.
+    queryClient.invalidateQueries(["session-info", sessionId]);
   };
 
   const statusMutation = useMutation(updateTestCase, {
@@ -451,12 +462,9 @@ export default function TestPlanPage({ sessionId }) {
           <h1>Web Application Security Testing</h1>
           <p className={styles.headerContext}>
             {plan ? (
-              [
-                plan.target,
-                plan.scope,
-              ]
-                .filter(Boolean)
-                .join("  ·  ")
+              [plan.target, plan.scope].filter(Boolean).join("  ·  ")
+            ) : engagement?.target ? (
+              `${engagement.target}${engagement.scope ? `  ·  ${engagement.scope}` : ""} - no plan yet`
             ) : (
               `The ${catalog?.totalTests ?? 97} WSTG v4.2 cases, ready to scope to this engagement.`
             )}
@@ -909,6 +917,7 @@ export default function TestPlanPage({ sessionId }) {
           sessionId={sessionId}
           plan={plan}
           catalog={catalog}
+          engagement={engagement}
           onClose={() => setSetupOpen(false)}
           onSaved={invalidate}
         />

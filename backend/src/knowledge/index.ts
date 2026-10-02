@@ -8,6 +8,8 @@
 
 import {
   OWASP_TOP10_2025,
+  OWASP_TOP10_2025_CWE_SOURCE,
+  OWASP_TOP10_2025_CWES_RETRIEVED,
   OWASP_TOP10_2025_SOURCE,
   OWASP_TOP10_2025_VERSION,
 } from "./owasp-top10-2025";
@@ -18,9 +20,12 @@ import type {
   WstgTest,
 } from "./types";
 import { WSTG_CATEGORIES, WSTG_SOURCE, WSTG_TESTS, WSTG_VERSION } from "./wstg-v42";
+import { wstgRiskRating } from "./risk-matrix";
 
 export {
   OWASP_TOP10_2025,
+  OWASP_TOP10_2025_CWE_SOURCE,
+  OWASP_TOP10_2025_CWES_RETRIEVED,
   OWASP_TOP10_2025_SOURCE,
   OWASP_TOP10_2025_VERSION,
   WSTG_CATEGORIES,
@@ -28,6 +33,7 @@ export {
   WSTG_TESTS,
   WSTG_VERSION,
 };
+export { wstgRiskRating };
 export type {
   OwaspTop10Category,
   OwaspTop10Id,

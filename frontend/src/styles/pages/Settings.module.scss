@@ -569,7 +569,7 @@
   color: #ff8b8b;
 }
 
-.mcpPanel {
+.settingsPanel {
   padding: 0.9rem 1rem;
   margin-bottom: 1rem;
   background: var(--surface-hover);
@@ -609,7 +609,7 @@
   }
 }
 
-.mcpPanelHeader {
+.settingsPanelHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -617,7 +617,7 @@
   margin-bottom: 1rem;
 }
 
-.mcpPanelTitle {
+.settingsPanelTitle {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -627,151 +627,26 @@
   margin-bottom: 0.3rem;
 }
 
-.mcpPanelDescription {
+.settingsPanelDescription {
   color: var(--secondary-text);
   font-size: 0.72rem;
   line-height: 1.6;
 }
 
-.mcpSafetyControl {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-
-  :global(.ant-switch) {
-    flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  :global(.ant-switch-checked) {
-    background: var(--danger) !important;
-  }
-}
-
-.mcpInlineControl {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-
-  .mcpReadOnlyInput {
-    flex: 1;
-    min-width: 0;
-  }
-
-  :global(.ant-btn) {
-    height: 2.25rem;
-    min-width: 2.25rem;
-    border-radius: 6px;
-  }
-}
-
-.mcpReadOnlyInput {
-  &:global(.ant-input),
-  &:global(.ant-input-affix-wrapper) {
-    min-height: 2.25rem;
-    border-radius: 6px;
-    background: var(--input-bg) !important;
-    border: 1px solid var(--border-color-100);
-    color: var(--primary-text);
-    font-family: var(--font-mono), monospace;
-    font-size: 0.76rem;
-    box-shadow: none;
-
-    &:hover,
-    &:focus,
-    &:focus-within {
-      border-color: var(--filled-purple-100);
-      background: var(--input-bg) !important;
-      box-shadow: none;
-    }
-  }
-
-  &:global(.ant-input-affix-wrapper) {
-    padding: 0.38rem 0.7rem;
-
-    :global(.ant-input) {
-      background: transparent !important;
-      color: var(--primary-text);
-      font-family: var(--font-mono), monospace;
-      font-size: 0.76rem;
-    }
-
-    :global(.ant-input-suffix),
-    :global(.anticon) {
-      color: var(--secondary-text);
-    }
-  }
-}
-
-.mcpActionRow {
-  margin-top: 0.15rem;
-
-  :global(.ant-btn) {
-    height: 2rem;
-    border-radius: 6px;
-    font-size: 0.74rem;
-    font-weight: 400;
-  }
-}
-
-.mcpCodeHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.45rem;
-  color: var(--secondary-text);
-
-  .fieldLabel,
-  label {
-    margin-bottom: 0;
-    color: var(--secondary-text) !important;
-  }
-
-  :global(.ant-btn) {
-    height: 1.75rem;
-    border-radius: 5px;
-    font-size: 0.7rem;
-    color: var(--secondary-text) !important;
-  }
-}
-
-.mcpCodeBlock {
-  width: 100%;
-  max-height: 13rem;
-  overflow: auto;
-  margin: 0 0 1rem 0;
-  padding: 0.75rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-color-100);
-  background: var(--input-bg);
-  color: var(--primary-text) !important;
-  font-family: var(--font-mono), monospace;
-  font-size: 0.73rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.mcpTokenList {
+.settingsList {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.mcpTokenItem {
+.settingsListItem {
   padding: 0.85rem 1rem;
   border-radius: 6px;
   border: 1px solid var(--border-color-100);
   background: var(--surface-hover);
 }
 
-.mcpTokenHeader {
+.settingsListItemHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -779,7 +654,7 @@
   margin-bottom: 0.3rem;
 }
 
-.mcpTokenTitle {
+.settingsListItemTitle {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -788,7 +663,7 @@
   font-weight: 400;
 }
 
-.mcpTokenMeta {
+.settingsListItemMeta {
   color: var(--secondary-text);
   font-size: 0.7rem;
   line-height: 1.5;

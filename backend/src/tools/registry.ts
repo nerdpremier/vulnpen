@@ -53,12 +53,7 @@ class ToolRegistry {
   }): OpenAI.Chat.ChatCompletionTool[] {
     let tools = this.getAll();
     if (opts?.agentRole) {
-      tools = tools.filter((t) => {
-        if (!t.allowedRoles) {
-          return opts.agentRole !== "orchestrator";
-        }
-        return t.allowedRoles.includes(opts.agentRole!);
-      });
+      tools = tools.filter((t) => !t.allowedRoles || t.allowedRoles.includes(opts.agentRole!));
     } else if (opts?.excludeSubagent) {
       tools = tools.filter((t) => t.name !== "spawn_subagent");
     }
@@ -71,14 +66,6 @@ class ToolRegistry {
       tools = tools.filter((t) => !unconf.has(t.name));
     }
     return tools.map(toolToOpenAISchema);
-  }
-
-  requiresConsent(name: string): boolean {
-    return this.tools.get(name)?.requiresConsent ?? false;
-  }
-
-  getTimeout(name: string): number {
-    return this.tools.get(name)?.timeoutMs ?? 300_000;
   }
 }
 
@@ -97,7 +84,6 @@ toolRegistry.register(spawnSubagent);
 toolRegistry.register(sendToBurp);
 toolRegistry.register(burpIntruder);
 toolRegistry.register(burpCollaborator);
-// toolRegistry.register(burpProxyControl);
 toolRegistry.register(burpProxyHistory);
 toolRegistry.register(magnitudeBrowser);
 toolRegistry.register(viewImage);

@@ -60,11 +60,11 @@ export default function AgentBehaviorPage() {
         </span>
       </div>
 
-      <div className={styles.mcpPanel}>
-        <div className={styles.mcpPanelHeader}>
+      <div className={styles.settingsPanel}>
+        <div className={styles.settingsPanelHeader}>
           <div>
-            <div className={styles.mcpPanelTitle}>Agentic turn limit</div>
-            <div className={styles.mcpPanelDescription}>
+            <div className={styles.settingsPanelTitle}>Agentic turn limit</div>
+            <div className={styles.settingsPanelDescription}>
               Maximum model/tool cycles before VulnPen asks whether to
               continue. Higher values can consume more subscription usage.
             </div>

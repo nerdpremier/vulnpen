@@ -18,7 +18,7 @@ export interface ToolResult {
   spawnedSubagentId?: string;
 }
 
-export type AgentRole = "main" | "subagent" | "orchestrator";
+export type AgentRole = "main" | "subagent";
 
 export interface ExecutionContext {
   sessionId: string;
@@ -46,7 +46,22 @@ export interface ToolDefinition {
   timeoutMs?: number;
   allowedRoles?: AgentRole[];
   shouldRequireConsent?: (args: Record<string, any>, ctx: ExecutionContext) => boolean;
+  /** Thai reason/impact for the consent dialog when the boundary is crossed. */
+  describeSafety?: (args: Record<string, any>, ctx: ExecutionContext) => SafetyDetail | undefined;
   execute: (args: Record<string, any>, ctx: ExecutionContext) => Promise<ToolResult>;
+}
+
+/** Which boundary stopped the tool: a destructive pattern on the attack box, a
+ *  destructive action against the engagement target (the proof-of-concept
+ *  boundary), or a target outside the declared engagement scope. The consent
+ *  dialog labels them differently, so the reason travels with its kind instead
+ *  of being guessed from the text. */
+export type SafetyKind = "dangerous" | "destructive_target" | "out_of_scope";
+
+export interface SafetyDetail {
+  kind: SafetyKind;
+  reason: string;
+  impact: string;
 }
 
 export function toolToOpenAISchema(tool: ToolDefinition): OpenAI.Chat.ChatCompletionTool {

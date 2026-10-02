@@ -1,0 +1,41 @@
+name: Standards conformance
+
+on:
+  push:
+    paths:
+      - "backend/src/knowledge/**"
+      - "backend/src/services/web-security/**"
+      - "backend/src/services/vulnerability.service.ts"
+      - "backend/tests/catalogConformance.test.ts"
+      - "backend/tests/webAppSecurity.test.ts"
+      - ".github/workflows/catalog-conformance.yml"
+  pull_request:
+    paths:
+      - "backend/src/knowledge/**"
+      - "backend/src/services/web-security/**"
+      - "backend/src/services/vulnerability.service.ts"
+      - "backend/tests/catalogConformance.test.ts"
+      - "backend/tests/webAppSecurity.test.ts"
+  workflow_dispatch:
+
+jobs:
+  catalog-conformance:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm run build
+      - name: OWASP catalog and report conformance
+        run: npx tsx --test tests/catalogConformance.test.ts tests/webAppSecurity.test.ts

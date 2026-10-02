@@ -170,7 +170,6 @@ const wstgTestPlan: ToolDefinition = {
         const result = createTestPlan({
           target: typeof args.target === "string" ? args.target : undefined,
           scope: typeof args.scope === "string" ? args.scope : undefined,
-          notes: typeof args.notes === "string" ? args.notes : undefined,
           categories: Array.isArray(args.categories) ? args.categories : undefined,
           testIds: Array.isArray(args.test_ids) ? args.test_ids : undefined,
           existing,

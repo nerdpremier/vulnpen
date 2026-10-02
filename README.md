@@ -4,21 +4,21 @@
 
 # VulnPen
 
-VulnPen is T-NET IT Solution's AI assistant for web application security testing. It plans and executes the OWASP WSTG v4.2 catalogue against a target, records the evidence, maps every finding to the OWASP Top 10:2025 and drafts the web application penetration testing report. A Kali attack box provides the tooling; you describe the target and it works the plan.
+VulnPen is T-NET IT Solution's AI assistant for web application security testing. It plans and executes the OWASP WSTG v4.2 catalogue against a target, records the evidence, maps every finding to the OWASP Top 10:2025 and drafts the web application penetration testing report to the WSTG Reporting structure (version control, team, scope, limitations, timeline, disclaimer, findings and appendices). A Kali attack box provides the tooling; you describe the target and it works the plan. Progress is tracked per WSTG test case, and every finding is scored with the WSTG likelihood x impact risk matrix (the two factors carry equal weight) — severity is always derived from the matrix, never declared.
 
 For authorised testing only — see [the acceptable use policy](frontend/src/app/terms/page.js) and the disclaimer at the end of this file.
 
 ## What It Does
 
 - **Agentic execution** - the AI runs commands directly on the attack box, reads output, decides next steps, and loops. Up to 25 iterations per turn, no manual nudging required.
-- **Web application security testing** - the assistant plans and works the OWASP WSTG v4.2 catalogue (97 test cases across 12 categories), records a result per test case, maps every finding to the OWASP Top 10:2025, and drafts the Web Application Penetration Testing Report.
+- **Web application security testing** - the assistant plans and works the OWASP WSTG v4.2 catalogue (97 test cases across 12 categories), records a result per test case, maps every finding to the OWASP Top 10:2025, and drafts the Web Application Penetration Testing Report. Every finding keeps the source of its OWASP mapping (official CWE list, the project's curated WSTG crosswalk, a tester decision or the model) so a report never claims OWASP authorship it does not have.
 - **Agent tools** - bash, Python scripts, tool installation, shell management, Google search, subagent spawning, Burp Suite (proxy history, Repeater, Intruder, Collaborator), browser automation, and the web application security testing tools (WSTG test plan, OWASP Top 10:2025 mapping, report generation).
 - **100+ capabilities** - curated registry of security tools and Python packages across 7 categories (network, rev, pwn, crypto, forensics, stego, core). Select what you need, the agent installs the rest.
 - **Burp Suite integration** - proxy history viewer, send requests to Repeater/Intruder, Collaborator for out-of-band testing. All accessible to the agent and through the UI.
 - **Browser agent** - real browser automation via [Magnitude](https://github.com/magnitude-dev/magnitude). Test login flows, fill forms, interact with JavaScript-heavy apps. Optionally proxy traffic through Burp. In Docker mode, watch the browser via the built-in VNC stream; in developer mode, the browser opens on your local desktop.
 - **VPN management** - upload `.ovpn`/`.conf` bundles with referenced certificates, keys, or credentials and connect/disconnect from the browser. Multiple simultaneous connections supported.
 - **Subagent parallelism** - spawn background agents to run tasks concurrently (e.g. directory brute-force + subdomain enum at the same time).
-- **Safety checks** - dangerous commands (recursive deletes, device writes, fork bombs) require explicit approval, even in auto-run mode.
+- **Safety checks** - the attack box is guarded against dangerous commands (recursive deletes, device writes, fork bombs), and the target is guarded against destructive testing. This is a proof-of-concept engagement by design: a destructive action against the target (an HTTP DELETE, destructive SQL such as DROP / TRUNCATE / DELETE FROM / mass UPDATE, sqlmap --os-shell or --file-write, a delete or disable endpoint, a raw request through Burp, a browser goal that deletes something) is refused outright, in every execution mode - it never reaches the approval dialog and neither the operator nor a reviewer can authorise it. The agent is instructed to prove that a control is missing - never to carry the destructive step out.
 - **Tool execution modes** - pick how the agent acts from the composer: **Auto run** (tools run automatically; destructive actions still ask), **Approve for me** (a reviewer approves boundary-crossing actions), or **Requires consent** (confirm every tool action). The choice is saved per user.
 - **Composer model and reasoning pickers** - switch the orchestrator model and its reasoning effort (off / low / medium / high) inline from the chat composer, across any model registered under Settings -> Models.
 - **Bring your own model** - OpenAI, Anthropic (API key or OAuth), Google, Mistral, or any OpenAI-compatible endpoint.
@@ -120,21 +120,6 @@ deployment scenario matrix, see **[Setup and Troubleshooting](./docs/SETUP.md)**
 ./run.sh config     # Update configuration
 ./run.sh dev        # Developer mode (infra only, run frontend/backend locally)
 ./run.sh help       # Full help
-```
-
-### MCP Access
-
-VulnPen can expose its local control plane over MCP for clients such as Claude Code or Codex. Open Settings -> MCP Access to copy the local MCP endpoint and bearer token.
-
-Treat the token as local admin access: it can run commands on the configured exploit box, operate Burp, browser automation, and VPN flows, read artifacts, write findings, and update local VulnPen configuration. MCP actions tied to an engagement are recorded in that session so they remain visible in the VulnPen UI.
-
-After copying the endpoint and token, you can smoke test the MCP connection:
-
-```bash
-cd backend
-VULNPEN_MCP_URL=http://localhost:8080/mcp \
-VULNPEN_MCP_TOKEN=vp_mcp_... \
-corepack pnpm run mcp:smoke
 ```
 
 ### System Requirements

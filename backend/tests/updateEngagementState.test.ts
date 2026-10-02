@@ -7,7 +7,7 @@ function context(state: EngagementState): any {
   return {
     sessionId: "test-session",
     agentId: "test-agent",
-    agentRole: "orchestrator",
+    agentRole: "main",
     engagementState: state,
   };
 }

@@ -231,7 +231,6 @@ const commandHandlers: Record<string, CommandHandler> = {
           subagents: [],
           agentState: "idle",
           pendingConsent: null,
-          pendingManualExecution: null,
           turnIndex: 0,
           totalTokens: 0,
           tokenHistory: [],
@@ -256,7 +255,6 @@ const commandHandlers: Record<string, CommandHandler> = {
         $set: {
           agentState: "idle",
           pendingConsent: null,
-          pendingManualExecution: null,
         },
       },
     );
@@ -474,8 +472,8 @@ const commandHandlers: Record<string, CommandHandler> = {
       id: v.vulnerabilityId,
       title: v.title,
       severity: v.severity,
-      cvssScore: v.cvssScore,
-      cvssVector: v.cvssVector,
+      likelihood: v.likelihood,
+      impactRating: v.impactRating,
       cwe: v.cwe,
       cve: v.cve,
       host: v.host,
@@ -518,7 +516,7 @@ List of in-scope targets, IP addresses, networks.
 ## Findings
 
 ### Finding 1: [Title]
-- **Severity:** Critical/High/Medium/Low/Info
+- **Severity:** Info/Low/Medium/High (derived from the likelihood x impact risk matrix — never declare Critical)
 - **Affected Systems:** ...
 - **Description:** ...
 - **Evidence:** ...

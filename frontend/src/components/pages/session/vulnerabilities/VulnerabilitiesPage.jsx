@@ -18,10 +18,10 @@ import { getTestPlan } from "@/services/websecurity.service";
 import styles from "@/styles/pages/Vulnerabilities.module.scss";
 import { AnimatedContent, EmptyState, StatTile } from "@/components/common/ui";
 
-const SEVERITY_ORDER = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+const SEVERITY_ORDER = { high: 4, medium: 3, low: 2, info: 1 };
 
 function SeverityBadge({ severity }) {
-  const value = severity || "medium";
+  const value = severity || "info";
   return <span className={`${styles.severity} ${styles[value]}`}>{value}</span>;
 }
 
@@ -105,8 +105,6 @@ export default function VulnerabilitiesPage({ sessionId }) {
 
   const counts = useMemo(
     () => ({
-      critical: vulnerabilities.filter((item) => item.severity === "critical")
-        .length,
       high: vulnerabilities.filter((item) => item.severity === "high").length,
       exploited: vulnerabilities.filter((item) => item.exploited).length,
       unmapped: vulnerabilities.filter((item) => !item.owaspTop10).length,
@@ -158,18 +156,10 @@ export default function VulnerabilitiesPage({ sessionId }) {
           onClick={() => setSeverity("all")}
         />
         <StatTile
-          label="Critical"
-          value={counts.critical}
-          tone="danger"
-          icon={<FiAlertOctagon />}
-          active={severity === "critical"}
-          onClick={() => setSeverity("critical")}
-        />
-        <StatTile
           label="High"
           value={counts.high}
           tone="warning"
-          icon={<FiAlertTriangle />}
+          icon={<FiAlertOctagon />}
           active={severity === "high"}
           onClick={() => setSeverity("high")}
         />
@@ -210,7 +200,6 @@ export default function VulnerabilitiesPage({ sessionId }) {
             aria-label="Filter by severity"
             options={[
               { value: "all", label: "All severities" },
-              { value: "critical", label: "Critical" },
               { value: "high", label: "High" },
               { value: "medium", label: "Medium" },
               { value: "low", label: "Low" },
@@ -280,7 +269,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
                   <th scope="col">Severity</th>
                   <th scope="col">Finding</th>
                   <th scope="col">Affected asset</th>
-                  <th scope="col">CVSS</th>
+                  <th scope="col">Risk (L×I)</th>
                   <th scope="col">Classification</th>
                   <th scope="col">Test case</th>
                   <th scope="col">OWASP Top 10:2025</th>
@@ -330,7 +319,11 @@ export default function VulnerabilitiesPage({ sessionId }) {
                         {item.endpoint || item.service || "none recorded"}
                       </span>
                     </td>
-                    <td>{item.cvssScore ?? "none"}</td>
+                    <td>
+                      {item.likelihood != null && item.impactRating != null
+                        ? `L${item.likelihood} × I${item.impactRating}`
+                        : "not rated"}
+                    </td>
                     <td>{item.cwe || item.cve || "none"}</td>
                     <td>
                       {item.wstgId ? (

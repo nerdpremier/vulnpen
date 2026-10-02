@@ -77,7 +77,6 @@ export interface TestPlanCoverage {
 export interface CreateTestPlanInput {
   target?: string;
   scope?: string;
-  notes?: string;
   categories?: string[];
   testIds?: string[];
   existing?: WebAppTestPlanDoc | null;
@@ -474,7 +473,6 @@ export function createTestPlan(input: CreateTestPlanInput): {
     version: WSTG_VERSION,
     target: input.target ?? input.existing?.target ?? "",
     scope: input.scope ?? input.existing?.scope ?? "",
-    notes: input.notes ?? input.existing?.notes ?? "",
     // Record exactly what was asked for, so an explicit empty list stays empty.
     categories: Array.isArray(input.categories)
       ? categories

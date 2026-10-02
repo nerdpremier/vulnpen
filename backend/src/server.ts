@@ -17,8 +17,6 @@ import { vpnRoutes } from "./routes/vpn.routes";
 import { vncRoutes } from "./routes/vnc.routes";
 import { burpRoutes } from "./routes/burp.routes";
 import { workspaceRoutes } from "./routes/workspace.routes";
-import { mcpRoutes } from "./routes/mcp.routes";
-import { mcpHttpRoutes } from "./routes/mcp-http.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
 import { setupShellWebSocket } from "./services/shell.socket";
@@ -213,8 +211,6 @@ const initializeApp = async () => {
     app.use("/api/infra", vncRoutes);
     app.use("/api/burp", burpRoutes);
     app.use("/api/workspace", workspaceRoutes);
-    app.use("/api/mcp", mcpRoutes);
-    app.use("/mcp", mcpHttpRoutes);
 
     app.use(function (err: any, _req: any, res: any, _next: any) {
       if (err instanceof multer.MulterError) {

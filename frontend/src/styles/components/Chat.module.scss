@@ -17,10 +17,10 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 1.5rem 2rem 2rem;
+  padding: 1.25rem 1.6rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 
@@ -147,13 +147,13 @@
   min-width: 0;
   color: var(--primary-text, #e0e0e0);
   font-size: 0.875rem;
-  line-height: 1.7;
-  padding: 0.5rem 0;
+  line-height: 1.65;
+  padding: 0.4rem 0;
   word-break: break-word;
   overflow-wrap: break-word;
 
   p {
-    margin: 0.3em 0;
+    margin: 0.45em 0;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -334,7 +334,7 @@
 
 .reasoningBlock {
   width: 100%;
-  margin: 0.25rem 0;
+  margin: 0.4rem 0;
   border: 1px solid rgba(250, 200, 50, 0.12);
   border-radius: 8px;
   overflow: hidden;
@@ -437,20 +437,26 @@
 .toolCallBlock {
   width: 100%;
   min-width: 0;
-  margin: 0.25rem 0;
+  margin: 0.4rem 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
 }
 
 .toolCallHeader {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.7rem;
   cursor: pointer;
   user-select: none;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--secondary-text, #aaa);
   transition: background 0.15s;
 
@@ -503,18 +509,33 @@
 
 .toolCallArgs {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: "JetBrains Mono", monospace;
   font-size: 0.72rem;
   color: var(--secondary-text, #666);
+  opacity: 0.9;
 }
 
 .toolCallStatus {
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: 0.35rem;
   font-size: 0.7rem;
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
+}
+
+/* Line-count hint shown next to the Output toggle. */
+.toolCallOutputHint {
+  margin-left: auto;
+  padding-right: 0.25rem;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .toolCallRunning {
@@ -726,14 +747,52 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
+    gap: 0.3rem;
+    padding: 0 0.8rem;
     height: 2rem;
-    padding: 0;
     border-radius: 999px;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     cursor: pointer;
     border: 1px solid transparent;
     transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .consentItemLabel {
+    padding: 0.4rem 0.6rem;
+    color: var(--primary-text);
+    font-size: 0.75rem;
+  }
+
+  .consentExplain {
+    padding: 0.5rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.78);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .consentExplainRow {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+
+  .consentExplainLabel {
+    flex-shrink: 0;
+    padding: 0.05rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .consentExplainLabelDanger {
+    background: rgba(255, 77, 79, 0.16);
+    color: #ff9c9b;
   }
 
   .consentApproveBtn {
@@ -1738,14 +1797,17 @@
 /* ============================================================================
    CHAT SURFACES - Lunar Monochrome
    Text colours for the action buttons whose fill became moonwhite.
-   ========================================================================== */.scrollToBottomBtn,.iterationContinueBtn {
+   ========================================================================== */
+.scrollToBottomBtn,
+.iterationContinueBtn {
   color: var(--moon-accent-ink) !important;
 
   span {
     color: var(--moon-accent-ink);
   }
 }
-.scrollToBottomBtn:hover {
+
+.scrollToBottomBtn:hover {
   color: var(--moon-accent-ink) !important;
 }
 
@@ -1765,4 +1827,23 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   display: block;
   cursor: zoom-in;
+}
+
+/* ============================================================================
+   CHAT POLISH
+   Denser message rhythm and a calmer output surface so long agent runs stay
+   readable instead of turning into a wall of text.
+   ========================================================================== */
+.messagesArea .message {
+  animation-duration: 0.16s;
+}
+
+.toolCallOutput pre {
+  tab-size: 2;
+}
+
+/* Reserve the scrollbar gutter so the panes do not jitter while streaming. */
+.toolCallOutput,
+.toolCallCodePreview {
+  scrollbar-gutter: stable;
 }

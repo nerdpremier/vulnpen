@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
+import { rawRequestSafetyDetail } from "../../utils/consentDetail";
 
 const MAX_RESPONSE_LENGTH = 8000;
 
@@ -33,7 +34,9 @@ const sendToBurp: ToolDefinition = {
     "payloads (SQLi, XSS, IDOR, SSRF, etc.), and analyzing the raw response in detail. " +
     "Each request is sent individually through Burp's HTTP engine which handles TLS, HTTP/2, " +
     "and connection management. Provide a complete raw HTTP request (request line + headers + body). " +
-    "The tool automatically normalizes line endings and recalculates Content-Length.",
+    "The tool automatically normalizes line endings and recalculates Content-Length. " +
+    "Proving that a control is missing is the finding - do not carry a deletion or " +
+    "any other destructive step out against the target: this engagement is proof of concept only.",
   parameters: {
     type: "object",
     properties: {
@@ -59,6 +62,12 @@ const sendToBurp: ToolDefinition = {
     required: ["host", "raw_request"],
   },
   timeoutMs: 60_000,
+  shouldRequireConsent(args, ctx) {
+    return rawRequestSafetyDetail(args, ctx) !== undefined;
+  },
+  describeSafety(args, ctx) {
+    return rawRequestSafetyDetail(args, ctx);
+  },
   async execute(args, _ctx) {
     const { host, raw_request } = args;
     const port = args.port ?? 443;

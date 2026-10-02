@@ -6,7 +6,6 @@ import {
   pauseAgent,
   resumeAgent,
   respondToConsent,
-  submitManualOutput,
   getHistory,
   getSessionInfo,
   deleteSession,
@@ -69,7 +68,6 @@ router.post("/message", [verifySess], sendMessage);
 router.post("/pause", [verifySess], pauseAgent);
 router.post("/resume", [verifySess], resumeAgent);
 router.post("/consent", [verifySess], respondToConsent);
-router.post("/manual-output", [verifySess], submitManualOutput);
 router.post("/clear-context", [verifySess], clearContext);
 router.post("/slash-command", [verifySess], handleSlashCommand);
 router.get("/slash-commands", [verifySess], getSlashCommands);

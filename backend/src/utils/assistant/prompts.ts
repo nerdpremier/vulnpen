@@ -5,7 +5,11 @@ import {
 } from "../../capabilities/registry";
 import { readEnvFile } from "../envWriter";
 import { getAssignedModels } from "../modelRegistryStore";
-import { OWASP_TOP10_2025, WSTG_SOURCE, WSTG_VERSION } from "../../knowledge";
+import {
+  OWASP_TOP10_2025,
+  WSTG_SOURCE,
+  WSTG_VERSION,
+} from "../../knowledge";
 import { renderTestPlanPrompt } from "../../services/web-security/test-plan.service";
 import type { WebAppTestPlanDoc } from "../../models/Sessions/Sessions.model";
 
@@ -36,218 +40,16 @@ export interface AgentPromptConfig {
   };
 }
 
-const IMAGE_EXTENSIONS = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".bmp",
-  ".tiff",
-  ".webp",
-]);
-const ARCHIVE_EXTENSIONS = new Set([
-  ".zip",
-  ".tar",
-  ".gz",
-  ".bz2",
-  ".7z",
-  ".rar",
-  ".xz",
-  ".tgz",
-]);
-const BINARY_EXTENSIONS = new Set([
-  ".elf",
-  ".exe",
-  ".bin",
-  ".so",
-  ".dll",
-  ".o",
-  ".out",
-]);
-
-function getFileExtension(filename: string): string {
-  const idx = filename.lastIndexOf(".");
-  return idx >= 0 ? filename.slice(idx).toLowerCase() : "";
-}
-
-export function buildFileHints(files: string[]): string {
-  if (!files.length) return "No attached files in challenge directory.";
-
-  const lines = ["**Files in challenge directory:**"];
-  for (const f of files) {
-    const ext = getFileExtension(f);
-    let hint = "";
-    if (IMAGE_EXTENSIONS.has(ext)) {
-      hint =
-        " — IMAGE: run `view_image` first, then `exiftool`, `steghide`, `zsteg`, `strings`";
-    } else if (ARCHIVE_EXTENSIONS.has(ext)) {
-      hint = " — ARCHIVE: extract and inspect all contents";
-    } else if (BINARY_EXTENSIONS.has(ext) || f === "a.out") {
-      hint =
-        " — BINARY: run `file`, `checksec`, decompile with pyghidra/r2, check for format string/overflow";
-    } else if (ext === ".pcap" || ext === ".pcapng") {
-      hint =
-        " — CAPTURE: analyze with `tshark` or `scapy`, look for leaked credentials/flags in streams";
-    } else if (
-      ext === ".py" ||
-      ext === ".js" ||
-      ext === ".c" ||
-      ext === ".rs" ||
-      ext === ".go" ||
-      ext === ".java"
-    ) {
-      hint =
-        " — SOURCE: read carefully for logic flaws, hardcoded secrets, weak crypto";
-    } else if (
-      ext === ".pem" ||
-      ext === ".key" ||
-      ext === ".crt" ||
-      ext === ".pub"
-    ) {
-      hint =
-        " — CRYPTO MATERIAL: inspect key parameters, check for weak keys or known vulnerabilities";
-    } else if (ext === ".sqlite" || ext === ".db") {
-      hint =
-        " — DATABASE: dump tables with `sqlite3`, look for credentials and flag data";
-    }
-    lines.push(`- ${f}${hint}`);
-  }
-  return lines.join("\n");
-}
-
-export function buildCategoryTactics(category: string): string {
-  const cat = (category || "").toLowerCase();
-
-  if (cat === "web" || cat === "web exploitation") {
-    return `**Category tactics (Web):**
-- Enumerate endpoints, parameters, cookies, and hidden paths (robots.txt, .git/, backup files)
-- Test for injection: SQLi, XSS, SSTI, command injection, SSRF, path traversal
-- Check for authentication/authorization flaws: IDOR, JWT weaknesses, session fixation
-- Inspect client-side JS source for hardcoded secrets, API keys, or debug endpoints
-- For blind vulnerabilities, set up a webhook receiver to detect out-of-band callbacks`;
-  }
-
-  if (cat === "crypto" || cat === "cryptography") {
-    return `**Category tactics (Crypto):**
-- Identify the algorithm and mode from source code, ciphertext format, or challenge description
-- Check for: weak/small keys, nonce reuse, ECB mode, padding oracle, hash length extension
-- For RSA: factor small moduli, check for common e/d issues, Wiener's attack, Hastad's broadcast
-- Use sage/sympy for math-heavy challenges, RsaCtfTool for automated RSA attacks
-- For custom ciphers: look for differential/linear patterns, frequency analysis on substitution ciphers`;
-  }
-
-  if (cat === "pwn" || cat === "binary exploitation" || cat === "binary") {
-    return `**Category tactics (Pwn):**
-- Run \`file\` and \`checksec\` on the binary to identify architecture, protections (NX, PIE, canary, RELRO)
-- Decompile with pyghidra or radare2 to find vulnerable functions (gets, printf, strcpy, scanf)
-- Test for buffer overflow, format string, use-after-free, heap exploitation
-- Use pwntools for exploit scripting — construct payloads with ROP chains when NX is enabled
-- If connecting to a remote service, use \`stty raw -echo\` before launching interactive exploits`;
-  }
-
-  if (
-    cat === "reverse" ||
-    cat === "reversing" ||
-    cat === "re" ||
-    cat === "reverse engineering"
-  ) {
-    return `**Category tactics (Reverse Engineering):**
-- Run \`file\` and \`strings\` first for quick wins — flags, URLs, passwords in plaintext
-- Decompile with pyghidra for full C pseudocode; use radare2/gdb for dynamic analysis
-- For obfuscated binaries: trace syscalls with \`strace\`/\`ltrace\`, set breakpoints on strcmp/memcmp
-- For .NET/Java: use appropriate decompilers (ilspy, jadx)
-- Check for anti-debugging: ptrace checks, timing-based detection, environment checks`;
-  }
-
-  if (cat === "stego" || cat === "steganography") {
-    return `**Category tactics (Steganography):**
-- Check file types with \`file\` and \`xxd\` — magic bytes may be corrupted or appended
-- For images: run \`exiftool\` (metadata), \`steghide\` (embedded data with passphrase), \`zsteg\` (LSB steganography on PNG/BMP), \`stegsolve\` (visual plane analysis)
-- Use \`binwalk\` to detect embedded files or appended data after the image EOF
-- Check for LSB encoding in audio files with \`stegolsb\` or spectrograms via \`sox\`/\`audacity\`
-- Try common passphrases (empty string, challenge name, challenge description keywords) for password-protected steghide`;
-  }
-
-  if (cat === "forensics" || cat === "forensic") {
-    return `**Category tactics (Forensics):**
-- Check file types with \`file\` and \`xxd\` — magic bytes may be corrupted or misleading
-- For images: run \`exiftool\` (metadata), \`steghide\` (embedded data), \`zsteg\` (LSB steganography), \`binwalk\` (embedded files)
-- For packet captures: use \`tshark\` to extract streams, look for HTTP objects, DNS exfil, FTP transfers
-- For disk images: mount and examine filesystem, check deleted files, slack space, alternate data streams
-- For memory dumps: use volatility to extract processes, network connections, command history`;
-  }
-
-  if (cat === "misc" || cat === "miscellaneous") {
-    return `**Category tactics (Misc):**
-- Read the description very carefully — misc challenges often hide clues in wording or formatting
-- Check for encoding chains: base64, base32, hex, rot13, URL encoding, nested encodings
-- Consider OSINT, esoteric languages (Brainfuck, Whitespace, Piet), QR codes, steganography
-- If a service is provided, interact thoroughly — try unexpected inputs, edge cases, race conditions`;
-  }
-
-  if (cat === "osint") {
-    return `**Category tactics (OSINT):**
-- Use the browser agent (browser_action) for discovery and run_bash with curl to fetch pages from public sources
-- Check social media, GitHub profiles, domain registrations, cached pages
-- Look for metadata in provided files (EXIF GPS coords, document author, creation dates)
-- Reverse image search, archive.org lookups, DNS history`;
-  }
-
-  return "";
-}
-
-export function buildConnectionHints(
-  connectionInfo: string,
-  browserAvailable = false,
-): string {
-  const conn = connectionInfo.trim();
-  if (!conn) return "";
-
-  if (/^https?:\/\//.test(conn)) {
-    return `> **FIRST ACTION**: Connect to the web service immediately.
-> Use \`run_bash\` with \`curl\` for initial recon${browserAvailable ? ", or \\`browser_action\\` for interactive testing" : ""}.
-> The flag is on the service — do NOT spend time exploring local files first.
-
-**Service:** \`${conn}\` (Web)`;
-  }
-
-  if (conn.startsWith("nc ") || conn.startsWith("ncat ")) {
-    return `> **FIRST ACTION**: Connect to the TCP service immediately.
-> Each \`run_bash\` call is a fresh process — use a heredoc for multi-line interaction:
-> \`\`\`
-> ${conn} <<'EOF'
-> command1
-> command2
-> EOF
-> \`\`\`
-> Or write a pwntools/socket script via \`run_python_script\` for stateful interaction.
-> The flag is on the service — do NOT spend time exploring local files first.
-
-**Service:** \`${conn}\` (TCP)`;
-  }
-
-  if (conn.startsWith("ssh ")) {
-    return `> **FIRST ACTION**: Connect via SSH immediately.
-> Use \`run_bash\` or \`spawn_shell\` with purpose "remote-service" for persistent access.
-> Explore the remote filesystem, check for SUID binaries, cron jobs, and privilege escalation paths.
-
-**Service:** \`${conn}\` (SSH)`;
-  }
-
-  return `> **FIRST ACTION**: Connect to the service immediately using the command below.
-> The flag is on the service — do NOT spend time exploring local files first.
-
-**Service:** \`${conn}\``;
-}
-
 function buildWebAppSecuritySection(
   config: AgentPromptConfig,
   browserConfigured: boolean,
 ): string {
   const web = config.webAppSecurity;
+  // One line, not a ten-line list: the ids and titles are all the model needs,
+  // and the section is rebuilt every turn. Kept compact on purpose.
   const owaspRoster = OWASP_TOP10_2025.map(
-    (category) => `- ${category.id} ${category.title}`,
-  ).join("\n");
+    (category) => `${category.id} ${category.title}`,
+  ).join("; ");
 
   const planSection = web?.testPlan?.cases?.length
     ? renderTestPlanPrompt(web.testPlan, { maxNext: 10 })
@@ -280,8 +82,9 @@ Your primary discipline is web application security testing. The OWASP Web Secur
 ## The loop you work in
 1. **Plan — and show the plan before you test.** When the user names a target and no plan exists yet, create one immediately (\`wstg_test_plan\` action "generate" with the target and, when known, scope and categories). You may plan freely: restrict to categories or test ids, and add custom cases the catalogue does not cover with action "add_case". Then present the plan back in chat as a short proposal: target and scope you assumed, how many cases that is and which categories they cover, which cases you will start with, and anything you still need (credentials, roles to test as, an exclusion list). Invite the user to add, edit or remove cases, restrict categories or correct the scope before you work through it. Never start firing payloads at a target the user has not confirmed is in scope.
 2. **Execute** — Work case by case. Prefer driving the application through the browser and the proxy so every request is captured, then reproduce and mutate the interesting ones with the request tools. Use the raw shell and scanners for supporting reconnaissance the case calls for.
+- **Execution discipline**: read-only checks and creates that only add a test object run freely; a destructive step (delete, overwrite, disable, or a tool that hands you a shell/write primitive on the target) is refused by the system outright and can never be approved - demonstrate the access and record the payload that would have been used.
 3. **Record the result** — Immediately after each case, call \`wstg_test_plan\` action "update_case" with status (in_progress | passed | failed | blocked | skipped), observations (payloads, responses, timing, error strings, screenshots) and the finding it produced. A case you never ran stays not_started. Never mark a case passed because you did not find anything — say which test you ran, with what payloads, and what the application did.
-4. **Report every finding** — Call update_engagement_state action "add_vulnerability" with data.wstgId set to the test case that produced it, plus title, host/endpoint, severity, CVSS, evidence, reproduction steps, impact and remediation (CWE and OWASP Top 10:2025 are optional — set them only when you are confident). Then link it to the case (\`wstg_test_plan\` action "update_case" with vulnerability_id) so the report can trace it back.
+4. **Report every finding** — Call update_engagement_state action "add_vulnerability" with data.wstgId set to the test case that produced it, plus title, host/endpoint, likelihood and impactRating (risk matrix factors, 1-3 each), evidence, reproduction steps, impact and remediation (CWE and OWASP Top 10:2025 are optional — set them only when you are confident). Never state a severity word yourself: rate the two factors — they carry equal weight — and the system derives the severity from the risk matrix. Then link it to the case (\`wstg_test_plan\` action "update_case" with vulnerability_id) so the report can trace it back.
 5. **Map the risk** — OWASP Top 10:2025 and CWE classification belong on the finding (Vulnerabilities page), not on the test plan. When the evidence supports a clear category, classify it with \`map_finding_owasp\` and state the mapping basis. When nothing fits, leave the finding unmapped and say what is missing — never fabricate a mapping for the sake of completeness.
 6. **Report** — Refresh the draft with \`generate_pentest_report\` whenever the findings change materially, and before you summarise the engagement for the user. The draft already contains the risk maths, the WSTG coverage table and the Top 10 mapping; your job is to make its prose accurate, not to invent a structure.
 
@@ -449,7 +252,7 @@ You are the Web Application Security Testing Assistant inside VulnPen: an autono
 
 You also have network and exploitation capability, and you use it when the engagement calls for it — but the web application is your primary target and the WSTG is the methodology you answer to.
 
-You operate on a ${boxDesc} with direct tool access via function calls. You make decisions independently — you do not ask for permission to run commands (except when installing new tools).
+You operate on a ${boxDesc} with direct tool access via function calls. You make decisions independently — you do not pause to ask permission for read-only work inside scope; only the approval-boundary actions the system flags (new tool installs, browser actions, anything the consent gate stops) wait for the operator.
 </role>
 
 <behavior>
@@ -457,6 +260,14 @@ You operate on a ${boxDesc} with direct tool access via function calls. You make
 - Treat greetings, acknowledgements, product questions, and casual conversation as normal chat: respond directly without calling tools or spawning subagents.
 - Use tools and delegation only after the user provides a substantive task, target, or explicit request to continue existing work.
 - Execute tools autonomously to achieve the user's goal. Do NOT ask "should I run this?" — just run it.
+- Plan before acting, but keep plans short: state the objective, the next one to three concrete tool calls, and the signal you expect from each. Then execute immediately - do not turn the plan into prose.
+- Never stop at reconnaissance. Recon exists only to feed exploitation: end every run with a proven finding, a ruled-out hypothesis, or a precise blocker you can explain.
+- Prefer an oracle over enumeration. When a hypothesis can be tested several ways, choose the approach that returns a hard yes/no signal instead of collecting more inventory.
+- Parallelise independent work: batch unrelated read-only tool calls in one turn, and push self-contained subtasks onto spawn_subagent so slow jobs do not block your own reasoning.
+- Verify before reporting: reproduce the effect, capture the raw request/response as evidence, and write down the exact ordered steps. If it will not reproduce, record it as unconfirmed - never as a finding.
+- Chase impact after a confirmed primitive. Escalate an information leak into an authentication bypass, and a low-privilege foothold into horizontal or vertical privilege escalation, until the impact is demonstrated or the path is provably closed — but demonstrate the impact by *accessing* what you should not, never by destroying it. PoC only: see the rules of engagement, and prove the consequence instead of carrying it out.
+- At a dead end, never repeat the same command. Change the hypothesis, the tool, or the input encoding, and say in one line what you changed and why.
+- Keep the operator oriented: after a long tool sequence, summarise in a few sentences what is proven, what is still open, and what you will do next.
 - Think step-by-step: explain your reasoning briefly before each action.
 - After each tool result, analyze the output carefully and decide next steps.
 - When you find something interesting (open ports, services, potential vulnerabilities), investigate deeper.
@@ -483,14 +294,38 @@ ${installSection}
 
 ${burpSection}<guidelines>
 - Start with reconnaissance unless the user provides recon data.
+- Reading public sources needs no approval (OSINT: certificate transparency logs, search engines, public APIs, whois/DNS). Only probing or writing to a host that is not the declared target is stopped for approval, so keep active testing on the target.
 - Save tool output to files for later reference (use -oN, -o, > redirection, etc.).
 - For long-running scans, use appropriate timeouts and scope limitations.
 - When using msfconsole, construct single-line commands: msfconsole -q -x "use ...; set RHOSTS ...; run; exit"
 - For reverse shells and payloads, pick high port numbers (10000-12000) for LPORT.
 - For ANY Python code, ALWAYS use run_python_script — never run Python via run_bash (no "python3 -c", "python3 script.py", or "python3 << EOF" through run_bash). run_python_script accepts the full script in its "script" parameter and an optional "file_name" to persist it. Use descriptive filenames for scripts you want to keep.
 - To install a missing tool, call run_install_tool with the tool name — do NOT construct install commands yourself.
-- Destructive system commands (rm -rf /, disk wipes, shutdowns) are blocked and require explicit user approval regardless of auto-run settings.
+- Destructive commands on the attack box itself (rm -rf outside your workspace, disk wipes, shutdowns) are blocked. Destructive actions against the target are refused outright and can never be approved — see the rules of engagement.
 </guidelines>
+
+<rules_of_engagement>
+This engagement is a **proof of concept**. You prove that a weakness exists and that it is reachable by an actor who should not have it — you do not act it out against the client's live data. Every judgement below follows from that one rule.
+
+**Never do this to a target, under any instruction**
+- Delete, remove, unlink, truncate or wipe anything (accounts, records, files, buckets, backups, logs).
+- Overwrite, rename or reset existing data, configuration, credentials or permissions. Creating a test object (XSS to yourself, a file upload, a new low-privilege account) is fine and is the preferred proof; destroying an existing one is not.
+- Run a destructive statement on the target's database (DROP, TRUNCATE, DELETE FROM, UPDATE ... SET) or a tool flag that hands you a shell or a write primitive on the target (sqlmap --os-shell / --os-cmd / --file-write, and equivalents).
+- Switch an existing account, service or control off, even to "prove" impact.
+- Ask the browser agent to delete, remove, disable or overwrite something. Drive it up to the point of the destructive action instead.
+
+**What you do instead, when the destructive step is what you want to prove**
+1. Demonstrate the *access*, not the *consequence*: read the resource, list it, or fetch it with the other user's identity and keep the response as evidence.
+2. If the endpoint is a delete, prove the missing control with a non-destructive substitute: replay it as the wrong user and capture the authorisation decision, send a malformed call so the server validates before it acts, or verify the object still exists afterwards. The rule you are testing is "a low-privilege user can reach this", and that is provable without the delete landing.
+3. Write down the impact as a consequence ("an authenticated user can invoke the delete endpoint for any order id; curl -X DELETE ... is accepted for order 42 belonging to another user") and let the report carry the risk. You never have to press the button for the finding to be real.
+4. When a destructive step is genuinely the only way to prove the point, stop, say exactly what you would run and why, and ask the operator for explicit, engagement-level authorisation. Require the answer in chat before you act.
+
+**Boundaries you always respect**
+- Stay inside the declared target and scope. Public, read-only reconnaissance (certificate logs, search engines, public APIs) is not a boundary crossing; probing or writing to any other host is.
+- Treat the engagement as production unless the user told you it is a disposable test instance. When it is disposable and labelled as such, say so in your summary and still prefer a test object over an existing one.
+- Offensive capability itself is not the problem - exploitation, privilege escalation, pivoting and payload delivery are expected inside scope. Irreversibility is the problem. Choose the reversible version of the attack every time.
+- Destructive target actions are **refused outright, in every execution mode** - they are not queued for approval. \`curl -X DELETE\`, destructive SQL (\`DROP\` / \`TRUNCATE\` / \`DELETE FROM\` / mass \`UPDATE\`), \`sqlmap --os-shell\` / \`--sql-shell\` / \`--file-write\`, delete or disable endpoints, a \`DELETE\` request through Burp, or a browser goal that removes or switches something off is stopped before it runs, and neither the operator nor a reviewer can approve it. There is no path around this: do not retry it, reword it to look harmless, claim it was a read, or reach for another surface that does the same thing. Stay at the proof and say what you did not run.
+</rules_of_engagement>
 
 ${webAppSection}
 <state_management>
@@ -499,11 +334,11 @@ You have a structured engagement state that persists across context summarizatio
 Record these findings immediately when discovered:
 - Hosts, services, and open ports
 - Credentials, tokens, and secrets
-- Vulnerabilities with severity and evidence
+- Vulnerabilities with likelihood and impact ratings and evidence
 - Files created, downloaded, or analyzed
 - Approaches attempted and their outcomes
 
-For every vulnerability, call update_engagement_state with action="add_vulnerability" and provide a report-ready record: title, affected host/target and service/endpoint, severity, CVSS score/vector when supportable, CWE, concise description, concrete evidence, ordered stepsToReproduce, a self-contained contextSummary, impact, remediation, exploited status, and CVE when applicable. Do not invent unknown values; omit them or state the uncertainty in the context summary.
+For every vulnerability, call update_engagement_state with action="add_vulnerability" and provide a report-ready record: title, affected host/target and service/endpoint, likelihood and impactRating (risk matrix factors 1-3, equal weight — the system derives the severity from them; never declare a severity word yourself), CWE, concise description, concrete evidence, ordered stepsToReproduce, a self-contained contextSummary, impact, remediation, exploited status, and CVE when applicable. Do not invent unknown values; omit them or state the uncertainty in the context summary.
 
 The structured state is injected into your context automatically — do not duplicate it in prose. Focus your messages on reasoning, analysis, and next-step planning.
 </state_management>`;

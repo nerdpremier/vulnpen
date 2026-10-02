@@ -76,7 +76,7 @@ export const getUserWorkspaces = async (req: Request, res: Response) => {
           waitingSessions: {
             $sum: {
               $cond: [
-                { $in: ["$agentState", ["waiting_consent", "waiting_manual_execution", "paused"]] },
+                { $in: ["$agentState", ["waiting_consent", "paused"]] },
                 1,
                 0,
               ],
@@ -338,7 +338,7 @@ export const createSessionInWorkspace = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
     const { workspaceId } = req.params;
-    const { name, description } = req.body;
+    const { name, description, target, scope } = req.body;
 
     if (!workspaceId) {
       return res.status(400).json({ message: "workspaceId is required" });
@@ -346,6 +346,10 @@ export const createSessionInWorkspace = async (req: Request, res: Response) => {
 
     if (!name) {
       return res.status(400).json({ message: "Session name is required" });
+    }
+
+    if (target !== undefined && typeof target !== "string") {
+      return res.status(400).json({ message: "target must be a string" });
     }
 
     const workspace = await WorkspaceModel.findOne({
@@ -372,6 +376,10 @@ export const createSessionInWorkspace = async (req: Request, res: Response) => {
       workspaceId,
       name: name.length > 50 ? name.substring(0, 50) + "..." : name,
       description: description?.substring(0, 500) ?? "",
+      engagementContext: {
+        target: typeof target === "string" ? target.trim() : "",
+        scope: typeof scope === "string" ? scope.trim() : "",
+      },
       createdAt: new Date(),
     });
 

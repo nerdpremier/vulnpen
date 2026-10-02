@@ -641,12 +641,6 @@
   gap: 0.25rem;
 }
 
-.twoUp {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 0.9rem;
-}
-
 .categoryPicker {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
@@ -931,7 +925,6 @@
     margin-left: 0;
   }
 
-  .twoUp,
   .categoryPicker {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1101,7 +1094,7 @@
 }
 
 .barFailed {
-  background: linear-gradient(90deg, var(--moon-high), var(--moon-critical));
+  background: linear-gradient(90deg, var(--moon-high), var(--moon-danger));
 }
 
 .tableWrap {

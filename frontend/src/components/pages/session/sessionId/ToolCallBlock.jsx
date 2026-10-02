@@ -29,24 +29,16 @@ const TOOL_LABELS = {
   spawn_subagent: "Spawn Subagent",
   view_image: "View Image",
   send_to_burp: "Burp Request",
-  platform_health: "MCP Platform Health",
-  platform_setup: "MCP Platform Setup",
-  platform_repair: "MCP Platform Repair",
-  engagement_open: "MCP Engagement Open",
-  engagement_status: "MCP Engagement Status",
-  engagement_update: "MCP Engagement Update",
-  engagement_pause: "MCP Engagement Pause",
-  engagement_history: "MCP Engagement History",
-  agent_message: "MCP Agent Message",
-  shell_exec: "MCP Shell Exec",
-  shell_session: "MCP Shell Session",
-  burp: "MCP Burp",
-  browser_run: "MCP Browser",
-  vpn_manage: "MCP VPN",
-  findings_manage: "MCP Findings",
-  artifact_add: "MCP Artifact Add",
-  browser_observation_add: "MCP Browser Observation",
-  artifact_get: "MCP Artifact Get",
+  send_to_burp_repeater: "Burp Repeater",
+  send_to_burp_intruder: "Burp Intruder",
+  search_burp_proxy_history: "Burp Proxy History",
+  burp_collaborator: "Burp Collaborator",
+  browser_action: "Browser Action",
+  magnitude_browser: "Browser Agent",
+  update_engagement_state: "Engagement State",
+  wstg_test_plan: "WSTG Test Plan",
+  map_finding_owasp: "OWASP Mapping",
+  generate_pentest_report: "Pentest Report",
 };
 
 function parseArgs(args) {
@@ -74,6 +66,20 @@ function formatArgsPreview(toolName, parsed) {
   if (toolName === "close_shell") return `[${parsed.shell_id}]`;
   if (toolName === "spawn_subagent") return (parsed.task ?? "").slice(0, 80);
   if (toolName === "view_image") return parsed.image_path ?? "";
+  if (toolName === "send_to_burp_repeater" || toolName === "send_to_burp_intruder") {
+    const req = parsed.raw_request ?? "";
+    const firstLine = req.split(/\r?\n/)[0] || "";
+    return parsed.host ?? firstLine.split(" ")[1] ?? "";
+  }
+  if (toolName === "search_burp_proxy_history")
+    return `${parsed.query ?? ""} ${parsed.host ?? ""}`.trim();
+  if (toolName === "burp_collaborator") return parsed.action ?? "";
+  if (toolName === "browser_action")
+    return `${parsed.url ?? ""} ${(parsed.goal ?? "").slice(0, 60)}`.trim();
+  if (toolName === "magnitude_browser")
+    return `${parsed.url ?? ""} ${(parsed.task ?? parsed.goal ?? "").slice(0, 50)}`.trim();
+  if (toolName === "update_engagement_state")
+    return `${parsed.action ?? ""} ${parsed.title ?? parsed.host ?? parsed.port ?? ""}`.trim();
   if (toolName === "send_to_burp") {
     const req = parsed.raw_request ?? "";
     const firstLine = req.split(/\r?\n/)[0] || "";
@@ -81,31 +87,12 @@ function formatArgsPreview(toolName, parsed) {
     const path = firstLine.split(" ")[1] || "";
     return `${method} ${parsed.host ?? ""}${path ? `:${parsed.port ?? 443}${path}` : ""}`;
   }
-  if (toolName === "agent_message") return (parsed.message ?? "").slice(0, 80);
-  if (toolName === "shell_exec") return parsed.command ?? "";
-  if (toolName === "shell_session")
-    return `${parsed.action ?? ""} ${parsed.shell_id ?? parsed.label ?? ""}`;
-  if (toolName === "browser_run")
-    return `${parsed.url ?? ""} ${(parsed.goal ?? "").slice(0, 60)}`;
-  if (toolName === "burp") return parsed.action ?? "";
-  if (toolName === "vpn_manage")
-    return `${parsed.action ?? ""} ${parsed.profile_name ?? ""}`;
-  if (toolName === "findings_manage")
-    return `${parsed.action ?? ""} ${parsed.title ?? parsed.finding_id ?? ""}`;
-  if (toolName === "artifact_add")
-    return `${parsed.type ?? ""} ${parsed.title ?? ""}`;
-  if (toolName === "browser_observation_add") return parsed.url ?? "";
-  if (toolName === "artifact_get")
-    return `${parsed.action ?? ""} ${parsed.path ?? ""}`;
   if (toolName === "wstg_test_plan")
     return `${parsed.action ?? ""} ${parsed.test_id ?? parsed.depth ?? parsed.target ?? ""}`.trim();
   if (toolName === "map_finding_owasp")
     return `${parsed.vulnerability_id ?? parsed.title ?? parsed.wstg_id ?? ""}`.trim();
   if (toolName === "generate_pentest_report")
     return `${parsed.path ?? parsed.target ?? "draft report"}`.trim();
-  if (toolName?.startsWith("engagement_"))
-    return parsed.engagement_id ?? parsed.name ?? "";
-  if (toolName?.startsWith("platform_")) return parsed.component ?? "";
   return JSON.stringify(parsed);
 }
 
@@ -128,6 +115,11 @@ function getCodePreview(toolName, parsed) {
   return null;
 }
 
+// Above this size an output block starts folded: long scan logs are rarely
+// read inline and cost the most to lay out.
+const LONG_OUTPUT_COLLAPSE_AT = 4000;
+const OUTPUT_WINDOW = 12_000;
+
 const highlighterCustomStyle = {
   margin: 0,
   borderRadius: "0",
@@ -140,7 +132,9 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
   // Show only the output by default — the command stays folded behind the
   // header until clicked, like the reasoning block.
   const [codeCollapsed, setCodeCollapsed] = useState(true);
-  const [outputCollapsed, setOutputCollapsed] = useState(false);
+  const [outputCollapsed, setOutputCollapsed] = useState(
+    () => (message.content?.length ?? 0) > LONG_OUTPUT_COLLAPSE_AT,
+  );
   const [copied, setCopied] = useState(false);
   const outputRef = useRef(null);
 
@@ -207,9 +201,11 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
     [argsPreview, hasCode, codePreview, copyText],
   );
 
+  const trimmed = hasContent && content.length > OUTPUT_WINDOW;
+  const outputLines = hasContent ? content.split("\n").length : 0;
   const displayContent = hasContent
-    ? content.length > 8000
-      ? "..." + content.slice(-8000)
+    ? trimmed
+      ? "[... earlier output trimmed ...]\n" + content.slice(-OUTPUT_WINDOW)
       : content
     : null;
 
@@ -318,6 +314,13 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
               <CaretRightOutlined />
             </span>
             Output
+            {outputLines > 0 && (
+              <span className={styles.toolCallOutputHint}>
+                {trimmed
+                  ? `tail of ${outputLines.toLocaleString()} lines`
+                  : `${outputLines.toLocaleString()} lines`}
+              </span>
+            )}
           </div>
           {!outputCollapsed && (
             <div className={styles.toolCallOutput} ref={outputRef}>

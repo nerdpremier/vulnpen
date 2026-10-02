@@ -43,7 +43,18 @@ export const deleteWorkspace = async ({ workspaceId }) => {
   return res.data;
 };
 
-export const createSessionInWorkspace = async ({ workspaceId, name, description }) => {
-  const res = await apiClient.post(`/workspace/${workspaceId}/create-session`, { name, description });
+export const createSessionInWorkspace = async ({
+  workspaceId,
+  name,
+  description,
+  target,
+  scope,
+}) => {
+  const res = await apiClient.post(`/workspace/${workspaceId}/create-session`, {
+    name,
+    description,
+    target,
+    scope,
+  });
   return res.data;
 };

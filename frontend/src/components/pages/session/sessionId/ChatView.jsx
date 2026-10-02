@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { notification } from "antd";
 import { DownOutlined } from "@ant-design/icons";
@@ -8,7 +8,7 @@ import ChatMessage from "./ChatMessage";
 
 import ChatInput from "./ChatInput";
 import SlashCommandResult from "./SlashCommandResult";
-import ManualExecutionBlock from "./ManualExecutionBlock";
+
 import ConsentBanner from "./ConsentBanner";
 import InstallSuggestionBanner from "./InstallSuggestionBanner";
 import IterationLimitBanner from "./IterationLimitBanner";
@@ -55,8 +55,6 @@ export default function ChatView({ sessionId }) {
     setAgentState,
     pendingConsent,
     setPendingConsent,
-    pendingManualExecution,
-    setPendingManualExecution,
     subagents,
     setTokenUsage,
     startStream,
@@ -97,11 +95,27 @@ export default function ChatView({ sessionId }) {
     }
   }, [historyLoaded, scrollToBottom]);
 
+  const scrollRafRef = useRef(null);
+
   useEffect(() => {
-    if (shouldStickToBottomRef.current) {
+    if (!shouldStickToBottomRef.current) return;
+    // Streaming updates land far faster than the browser paints, so coalesce
+    // scroll writes into the next frame instead of one per update.
+    if (scrollRafRef.current != null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
       scrollToBottom();
-    }
+    });
   }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current != null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleContextCleared = (e) => {
@@ -109,14 +123,13 @@ export default function ChatView({ sessionId }) {
       setMessages([]);
       setAgentState("idle");
       setPendingConsent(null);
-      setPendingManualExecution(null);
       setTokenUsage(null);
       setIterationLimit(null);
       abort();
     };
     window.addEventListener("context-cleared", handleContextCleared);
     return () => window.removeEventListener("context-cleared", handleContextCleared);
-  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setTokenUsage, abort]);
+  }, [sessionId, setMessages, setAgentState, setPendingConsent, setTokenUsage, abort]);
 
   const [burpAttachment, setBurpAttachment] = useState(null);
 
@@ -206,15 +219,6 @@ export default function ChatView({ sessionId }) {
     [setPendingConsent, setAgentState, startStream],
   );
 
-  const handleManualOutput = useCallback(
-    (output) => {
-      setPendingManualExecution(null);
-      setAgentState("running");
-      startStream({ message: JSON.stringify({ output }), endpoint: "manual-output" });
-    },
-    [setPendingManualExecution, setAgentState, startStream],
-  );
-
   const burpPendingProcessed = useRef(false);
   useEffect(() => {
     if (historyLoading || burpPendingProcessed.current) return;
@@ -232,6 +236,30 @@ export default function ChatView({ sessionId }) {
       }
     }
   }, [historyLoading]);
+
+  // Tool calls and their results are indexed once per message-list change.
+  // ChatMessage used to scan the whole list (twice per rendered message, on
+  // every streaming frame), which made long sessions quadratic. The index also
+  // lets tool results render inline inside their parent assistant block.
+  const { toolIndex, visibleMessages } = useMemo(() => {
+    const outputs = new Map();
+    const callIds = new Set();
+    const args = new Map();
+    for (const m of messages) {
+      if (m.role === "assistant" && m.toolCalls) {
+        for (const tc of m.toolCalls) {
+          callIds.add(tc.id);
+          if (tc.arguments != null) args.set(tc.id, tc.arguments);
+        }
+      } else if (m.role === "tool" && m.toolCallId) {
+        outputs.set(m.toolCallId, m);
+      }
+    }
+    const visible = messages.filter(
+      (m) => m.role !== "tool" || !callIds.has(m.toolCallId),
+    );
+    return { toolIndex: { outputs, callIds, args }, visibleMessages: visible };
+  }, [messages]);
 
   const isEmpty = messages.length === 0 && !historyLoading;
 
@@ -255,14 +283,21 @@ export default function ChatView({ sessionId }) {
           </div>
         )}
 
-        {messages.map((msg) => {
+        {visibleMessages.map((msg) => {
           if (msg.role === "subagent") {
             return <SubagentBlock key={msg.id} message={msg} />;
           }
           if (msg.role === "slash_command_result") {
             return <SlashCommandResult key={msg.id} message={msg} />;
           }
-          return <ChatMessage key={msg.id} message={msg} allMessages={messages} sessionId={sessionId} />;
+          return (
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              toolIndex={toolIndex}
+              sessionId={sessionId}
+            />
+          );
         })}
 
         {pendingConsent && agentState === "waiting_consent" && (
@@ -270,13 +305,6 @@ export default function ChatView({ sessionId }) {
             pendingConsent={pendingConsent}
             onApprove={() => handleConsent(true)}
             onDeny={() => handleConsent(false)}
-          />
-        )}
-
-        {pendingManualExecution && agentState === "waiting_manual_execution" && (
-          <ManualExecutionBlock
-            pending={pendingManualExecution}
-            onSubmit={handleManualOutput}
           />
         )}
 
@@ -317,7 +345,7 @@ export default function ChatView({ sessionId }) {
         onSend={handleSend}
         onPause={handlePause}
         agentState={agentState}
-        disabled={historyLoading || agentState === "waiting_consent" || agentState === "waiting_manual_execution"}
+        disabled={historyLoading || agentState === "waiting_consent"}
         burpAttachment={burpAttachment}
         onDismissBurpAttachment={() => setBurpAttachment(null)}
       />

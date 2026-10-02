@@ -34,6 +34,9 @@ export interface PendingConsentToolCall {
   arguments: Record<string, any>;
   safetyBlock?: boolean;
   approvalReason?: string;
+  safetyReason?: string;
+  safetyImpact?: string;
+  safetyKind?: "dangerous" | "destructive_target" | "out_of_scope";
 }
 
 export interface PendingConsentDoc {
@@ -42,21 +45,25 @@ export interface PendingConsentDoc {
   arguments: Record<string, any>;
   safetyBlock?: boolean;
   approvalReason?: string;
+  safetyReason?: string;
+  safetyImpact?: string;
+  safetyKind?: "dangerous" | "destructive_target" | "out_of_scope";
   batch?: PendingConsentToolCall[];
 }
 
-export interface PendingManualExecutionDoc {
-  toolCallId: string;
-  toolName: string;
-  command: string;
+export interface ConsentStatsDoc {
+  prompts: number;
+  approvals: number;
+  denials: number;
+  safetyBlocks: number;
+  circuitOpens: number;
 }
 
 export type AgentState =
   | "idle"
   | "running"
   | "paused"
-  | "waiting_consent"
-  | "waiting_manual_execution";
+  | "waiting_consent";
 
 export type ShellType = "pty" | "exec";
 export type ShellStatus = "active" | "closed";
@@ -100,36 +107,11 @@ export interface ConnectionStateDoc {
   lastError?: string;
 }
 
-export interface SessionFindingDoc {
-  findingId: string;
-  title: string;
-  content: string;
-  severity: "info" | "low" | "medium" | "high" | "critical";
-  status: "open" | "closed";
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface McpContextDoc {
+export interface EngagementContextDoc {
   target?: string;
   scope?: string;
-  notes?: string;
   credentials?: string;
   labels?: string[];
-  metadata?: Record<string, string>;
-}
-
-export interface SessionArtifactDoc {
-  artifactId: string;
-  type: "note" | "file" | "image" | "browser_observation" | "request" | "other";
-  title: string;
-  content?: string;
-  url?: string;
-  path?: string;
-  mimeType?: string;
-  createdBy: string;
-  createdAt: Date;
   metadata?: Record<string, string>;
 }
 
@@ -166,7 +148,6 @@ export interface WebAppTestPlanDoc {
   version: string;
   target: string;
   scope: string;
-  notes: string;
   categories: string[];
   cases: SessionTestCaseDoc[];
   createdAt: Date;
@@ -179,9 +160,7 @@ export interface SessionVulnerabilityDoc {
   host: string;
   service?: string;
   endpoint?: string;
-  severity: "info" | "low" | "medium" | "high" | "critical";
-  cvssScore?: number;
-  cvssVector?: string;
+  severity: "info" | "low" | "medium" | "high";
   cwe?: string;
   cve?: string;
   description?: string;
@@ -204,6 +183,12 @@ export interface SessionVulnerabilityDoc {
   owaspConfidence?: "high" | "medium" | "low";
   owaspRationale?: string;
   owaspMappedAt?: Date;
+  /** How the OWASP mapping was decided: official, curated, tester or model. */
+  owaspProvenance?: string;
+  /** Likelihood factor for the WSTG risk matrix: 1 = low, 2 = medium, 3 = high. */
+  likelihood?: number;
+  /** Impact factor for the WSTG risk matrix: 1 = low, 2 = medium, 3 = high. */
+  impactRating?: number;
   chatMessages: VulnerabilityChatMessageDoc[];
   createdAt: Date;
   updatedAt: Date;
@@ -221,7 +206,7 @@ export interface SessionDoc extends mongoose.Document {
   agentState: AgentState;
   messages: AgentMessageDoc[];
   pendingConsent?: PendingConsentDoc;
-  pendingManualExecution?: PendingManualExecutionDoc;
+  consentStats?: ConsentStatsDoc;
   turnIndex: number;
   totalTokens: number;
   tokenHistory: Array<{
@@ -234,9 +219,8 @@ export interface SessionDoc extends mongoose.Document {
   subagents: SubagentDoc[];
   connectionState: ConnectionStateDoc;
   disabledAgentTools?: string[];
-  mcpFindings?: SessionFindingDoc[];
-  mcpContext?: McpContextDoc;
-  mcpArtifacts?: SessionArtifactDoc[];
+  /** Engagement scope handed to the tool-approval evaluator. */
+  engagementContext?: EngagementContextDoc;
   vulnerabilities?: SessionVulnerabilityDoc[];
   vulnerabilityBackfillVersion?: number;
   webAppTestPlan?: WebAppTestPlanDoc;
@@ -329,65 +313,12 @@ const SubagentSchema = new Schema(
   { _id: false },
 );
 
-const SessionFindingSchema = new Schema(
-  {
-    findingId: { type: String, required: true },
-    title: { type: String, required: true },
-    content: { type: String, required: true },
-    severity: {
-      type: String,
-      required: true,
-      enum: ["info", "low", "medium", "high", "critical"],
-      default: "info",
-    },
-    status: {
-      type: String,
-      required: true,
-      enum: ["open", "closed"],
-      default: "open",
-    },
-    createdBy: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
-  },
-  { _id: false },
-);
-
-const McpContextSchema = new Schema(
+const EngagementContextSchema = new Schema(
   {
     target: { type: String },
     scope: { type: String },
-    notes: { type: String },
     credentials: { type: String },
     labels: { type: [String], default: [] },
-    metadata: { type: Map, of: String, default: {} },
-  },
-  { _id: false },
-);
-
-const SessionArtifactSchema = new Schema(
-  {
-    artifactId: { type: String, required: true },
-    type: {
-      type: String,
-      required: true,
-      enum: [
-        "note",
-        "file",
-        "image",
-        "browser_observation",
-        "request",
-        "other",
-      ],
-      default: "other",
-    },
-    title: { type: String, required: true },
-    content: { type: String },
-    url: { type: String },
-    path: { type: String },
-    mimeType: { type: String },
-    createdBy: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now },
     metadata: { type: Map, of: String, default: {} },
   },
   { _id: false },
@@ -440,7 +371,6 @@ const WebAppTestPlanSchema = new Schema(
     version: { type: String, default: "4.2" },
     target: { type: String, default: "" },
     scope: { type: String, default: "" },
-    notes: { type: String, default: "" },
     categories: { type: [String], default: [] },
     cases: { type: [SessionTestCaseSchema], default: [] },
     createdAt: { type: Date, default: Date.now },
@@ -459,11 +389,9 @@ const SessionVulnerabilitySchema = new Schema(
     severity: {
       type: String,
       required: true,
-      enum: ["info", "low", "medium", "high", "critical"],
-      default: "medium",
+      enum: ["info", "low", "medium", "high"],
+      default: "info",
     },
-    cvssScore: { type: Number, min: 0, max: 10 },
-    cvssVector: { type: String },
     cwe: { type: String },
     cve: { type: String },
     description: { type: String },
@@ -488,6 +416,9 @@ const SessionVulnerabilitySchema = new Schema(
     owaspConfidence: { type: String, enum: ["high", "medium", "low"] },
     owaspRationale: { type: String },
     owaspMappedAt: { type: Date },
+    owaspProvenance: { type: String },
+    likelihood: { type: Number },
+    impactRating: { type: Number },
     chatMessages: { type: [VulnerabilityChatMessageSchema], default: [] },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
@@ -512,7 +443,6 @@ const SessionSchema = new Schema({
       "running",
       "paused",
       "waiting_consent",
-      "waiting_manual_execution",
     ],
   },
   messages: { type: [AgentMessageSchema], default: [] },
@@ -523,6 +453,9 @@ const SessionSchema = new Schema({
       arguments: { type: Schema.Types.Mixed, required: true },
       safetyBlock: { type: Boolean, default: false },
       approvalReason: { type: String },
+      safetyReason: { type: String },
+      safetyImpact: { type: String },
+      safetyKind: { type: String },
       batch: {
         type: [
           {
@@ -531,6 +464,9 @@ const SessionSchema = new Schema({
             arguments: { type: Schema.Types.Mixed, required: true },
             safetyBlock: { type: Boolean, default: false },
             approvalReason: { type: String },
+            safetyReason: { type: String },
+            safetyImpact: { type: String },
+            safetyKind: { type: String },
           },
         ],
         default: undefined,
@@ -538,11 +474,13 @@ const SessionSchema = new Schema({
     },
     default: undefined,
   },
-  pendingManualExecution: {
+  consentStats: {
     type: {
-      toolCallId: { type: String, required: true },
-      toolName: { type: String, required: true },
-      command: { type: String, required: true },
+      prompts: { type: Number, default: 0 },
+      approvals: { type: Number, default: 0 },
+      denials: { type: Number, default: 0 },
+      safetyBlocks: { type: Number, default: 0 },
+      circuitOpens: { type: Number, default: 0 },
     },
     default: undefined,
   },
@@ -575,17 +513,9 @@ const SessionSchema = new Schema({
     type: [{ type: String }],
     default: [],
   },
-  mcpFindings: {
-    type: [SessionFindingSchema],
-    default: [],
-  },
-  mcpContext: {
-    type: McpContextSchema,
+  engagementContext: {
+    type: EngagementContextSchema,
     default: undefined,
-  },
-  mcpArtifacts: {
-    type: [SessionArtifactSchema],
-    default: [],
   },
   vulnerabilities: {
     type: [SessionVulnerabilitySchema],

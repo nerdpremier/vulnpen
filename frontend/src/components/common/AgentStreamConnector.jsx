@@ -22,7 +22,7 @@ export default function AgentStreamConnector({ sessionId }) {
     getSessionHistory(sessionId)
       .then((data) => {
         if (!data) return;
-        const { loadHistory, setAgentState, setPendingConsent, setPendingManualExecution, setTokenUsage } =
+        const { loadHistory, setAgentState, setPendingConsent, setTokenUsage } =
           store.getState();
         if (data.messages) {
           loadHistory(sessionId, data.messages, data.subagents);
@@ -32,9 +32,6 @@ export default function AgentStreamConnector({ sessionId }) {
         }
         if (data.pendingConsent) {
           setPendingConsent(sessionId, data.pendingConsent);
-        }
-        if (data.pendingManualExecution) {
-          setPendingManualExecution(sessionId, data.pendingManualExecution);
         }
         if (data.totalTokens != null) {
           setTokenUsage(sessionId, {
@@ -64,7 +61,6 @@ export default function AgentStreamConnector({ sessionId }) {
       st.setMessages(sessionId, []);
       st.setAgentState(sessionId, "idle");
       st.setPendingConsent(sessionId, null);
-      st.setPendingManualExecution(sessionId, null);
       st.setSubagents(sessionId, []);
       st.setTokenUsage(sessionId, null);
     };

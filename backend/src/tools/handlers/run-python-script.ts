@@ -1,5 +1,7 @@
 import { ToolDefinition } from "../types";
 import { findCapabilityForCommand } from "../../capabilities/registry";
+import { shellSafetyDetail } from "../../utils/consentDetail";
+import { isDangerousPythonScript } from "../../utils/pythonSafety";
 import crypto from "crypto";
 
 const MODULE_NOT_FOUND_PATTERNS = [
@@ -27,7 +29,9 @@ const runPythonScript: ToolDefinition = {
     "Execute a Python 3 script on the attack box. Use this for custom exploits, " +
     "data parsing, protocol interactions, brute-force logic, or any task requiring Python libraries " +
     "like requests, socket, struct, pwntools, etc. " +
-    "Scripts always run in-memory via stdin. If file_name is provided, the script is also saved to disk for reference.",
+    "Scripts always run in-memory via stdin. If file_name is provided, the script is also saved to disk for reference. " +
+    "Never script a destructive action against the target (delete, overwrite, DROP/TRUNCATE, --os-shell, --file-write): " +
+    "this engagement is proof of concept only.",
   parameters: {
     type: "object",
     properties: {
@@ -43,6 +47,27 @@ const runPythonScript: ToolDefinition = {
     required: ["script"],
   },
   timeoutMs: 300_000,
+  shouldRequireConsent(args, ctx) {
+    const script = args.script ?? "";
+    if (isDangerousPythonScript(script).dangerous) return true;
+    return shellSafetyDetail(script, ctx) !== undefined;
+  },
+  describeSafety(args, ctx) {
+    const script = args.script ?? "";
+    const pythonDanger = isDangerousPythonScript(script);
+    if (pythonDanger.dangerous) {
+      return { kind: "dangerous", reason: pythonDanger.reason, impact: pythonDanger.impact };
+    }
+    const scope = shellSafetyDetail(script, ctx);
+    if (scope) {
+      return {
+        kind: scope.kind,
+        reason: scope.reason.replace("คำสั่ง", "สคริปต์"),
+        impact: scope.impact,
+      };
+    }
+    return undefined;
+  },
   async execute(args, ctx) {
     const { script, file_name } = args;
     if (!script) {

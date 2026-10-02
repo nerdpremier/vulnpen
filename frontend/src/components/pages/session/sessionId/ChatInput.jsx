@@ -147,18 +147,16 @@ export default function ChatInput({
         ? "Agent paused"
         : agentState === "waiting_consent"
           ? "Waiting for your approval"
-          : agentState === "waiting_manual_execution"
-            ? "Waiting for command output"
-            : "Ready";
+          : "Ready";
 
-  const isReady = !["running", "paused", "waiting_consent", "waiting_manual_execution"].includes(agentState);
+  const isReady = !["running", "paused", "waiting_consent"].includes(agentState);
 
   const statusClass =
     agentState === "running"
       ? styles.running
       : agentState === "paused"
         ? styles.paused
-        : agentState === "waiting_consent" || agentState === "waiting_manual_execution"
+        : agentState === "waiting_consent"
           ? styles.waitingConsent
           : styles.ready;
 

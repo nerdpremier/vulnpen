@@ -47,9 +47,9 @@ export interface Vulnerability {
   service?: string;
   endpoint?: string;
   title: string;
-  severity: "critical" | "high" | "medium" | "low" | "info";
-  cvssScore?: number;
-  cvssVector?: string;
+  severity: "high" | "medium" | "low" | "info";
+  likelihood?: number;
+  impactRating?: number;
   cwe?: string;
   evidence: string;
   stepsToReproduce: string[];
@@ -95,7 +95,9 @@ export class EngagementState {
   mode: EngagementMode;
 
   // Pentest fields
-  phase: string = "recon";
+  /** The Target entered for the engagement - the only field that arms the
+   *  deterministic scope gate. */
+  declaredTarget?: string;
   scope?: string;
   hosts: DiscoveredHost[] = [];
   services: DiscoveredService[] = [];
@@ -135,7 +137,7 @@ export class EngagementState {
 
   private renderPentestState(): string {
     const sections: string[] = [
-      `<engagement_state type="pentest" phase="${this.phase}">`,
+      `<engagement_state type="pentest">`,
     ];
 
     if (this.hosts.length) {
@@ -178,7 +180,9 @@ export class EngagementState {
         const exploited = v.exploited ? "EXPLOITED" : "not yet exploited";
         const cve = v.cve ? ` (${v.cve})` : "";
         const scoring = [
-          v.cvssScore != null ? `CVSS ${v.cvssScore}` : "",
+          v.likelihood != null && v.impactRating != null
+            ? `risk L${v.likelihood}xI${v.impactRating} (equal weight)`
+            : "",
           v.cwe ?? "",
         ].filter(Boolean).join(", ");
         sections.push(

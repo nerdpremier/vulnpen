@@ -10,7 +10,6 @@ import {
   createSSEWriter,
   initAndRun,
   handleConsent,
-  handleManualOutput,
   runAgentLoop,
   setPaused,
   reserveAbortController,
@@ -239,43 +238,6 @@ export const respondToConsent = async (req: Request, res: Response) => {
   }
 };
 
-export const submitManualOutput = async (req: Request, res: Response) => {
-  try {
-    const userId = res.locals.userId;
-    const { sessionId, output } = req.body;
-
-    if (!sessionId || typeof output !== "string") {
-      return res.status(400).json({ message: "sessionId and output (string) are required" });
-    }
-
-    const session = await requireActiveSession(userId, sessionId, res);
-    if (!session) return;
-
-    if (session.agentState !== "waiting_manual_execution") {
-      return res.status(400).json({ message: "No pending manual execution" });
-    }
-
-    const abortCtrl = reserveAbortController(sessionId);
-    if (!abortCtrl) {
-      return res.status(409).json({ message: "Agent is already running" });
-    }
-    const sse = createSSEWriter(res);
-
-    req.on("close", () => {
-      abortSession(sessionId);
-      setPaused(sessionId, true).catch(() => {});
-    });
-
-    await handleManualOutput({ sessionId, userId, output, sse, abortSignal: abortCtrl.signal })
-      .finally(() => releaseAfterRun(sessionId, abortCtrl));
-  } catch (err: any) {
-    console.error("[agent] submitManualOutput error:", err);
-    if (!res.headersSent) {
-      return res.status(500).json({ message: err.message ?? "Manual execution error" });
-    }
-  }
-};
-
 export const getHistory = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
@@ -302,7 +264,6 @@ export const getHistory = async (req: Request, res: Response) => {
       agentState: session.agentState,
       turnIndex: session.turnIndex,
       pendingConsent: session.pendingConsent ?? null,
-      pendingManualExecution: session.pendingManualExecution ?? null,
       shells: session.shells ?? [],
       // totalTokens here powers the context-usage widget; use latest prompt tokens
       // (current window usage), not cumulative lifetime spend.
@@ -351,6 +312,12 @@ export const getSessionInfo = async (req: Request, res: Response) => {
       totalTokens: session.totalTokens,
       messageCount: session.messages.length,
       connectionState: session.connectionState ?? { sshConnected: false },
+      // Engagement boundary captured when the session was created. The plan
+      // setup screen edits these same values, so both surfaces stay in step.
+      engagement: {
+        target: session.engagementContext?.target ?? "",
+        scope: session.engagementContext?.scope ?? "",
+      },
     });
   } catch (err: any) {
     console.error("[agent] getSessionInfo error:", err);
@@ -401,7 +368,6 @@ export const clearContext = async (req: Request, res: Response) => {
           subagents: [],
           agentState: "idle",
           pendingConsent: null,
-          pendingManualExecution: null,
           turnIndex: 0,
           totalTokens: 0,
           tokenHistory: [],
@@ -616,7 +582,7 @@ export const getSessionFile = async (req: Request, res: Response) => {
     // verifySess puts the authenticated user on res.locals, not req.user.
     const userId = res.locals?.userId ?? (req as any).user?.uid;
     const { sessionId, filename } = req.params;
-    if (!filename || /[\/]|\.\./.test(filename)) {
+    if (!filename || /[/]|\.\./.test(filename)) {
       return res.status(400).json({ message: "Invalid filename" });
     }
 

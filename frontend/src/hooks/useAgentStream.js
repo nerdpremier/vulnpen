@@ -7,11 +7,21 @@ import { notification } from "antd";
 
 const EMPTY_MESSAGES = [];
 const EMPTY_SUBAGENTS = [];
+
+// Cap live tool output held in client state. A chatty scan streams far more
+// stdout than the UI ever shows (the block renders the tail only), and keeping
+// every byte makes each later render - and the GC - pay for invisible text.
+const MAX_LIVE_TOOL_CHARS = 60_000;
+const MAX_SUBAGENT_LIVE_CHARS = 20_000;
+
+// ReactMarkdown re-parses the whole assistant document on every render, so
+// coalesce streaming content updates into at most one update per interval.
+const THINKING_FLUSH_INTERVAL_MS = 90;
+
 const DEFAULT_STATE = {
   messages: EMPTY_MESSAGES,
   agentState: "idle",
   pendingConsent: null,
-  pendingManualExecution: null,
   subagents: EMPTY_SUBAGENTS,
   tokenUsage: null,
 };
@@ -28,7 +38,7 @@ export default function useAgentStream({
     store.getState().getOrCreate(sessionId);
   }, [sessionId, store]);
 
-  const { messages, agentState, pendingConsent, pendingManualExecution, subagents, tokenUsage } =
+  const { messages, agentState, pendingConsent, subagents, tokenUsage } =
     useAgentStreamStore(
       useShallow((state) => {
         const s = state.sessions[sessionId];
@@ -37,7 +47,6 @@ export default function useAgentStream({
           messages: s.messages ?? EMPTY_MESSAGES,
           agentState: s.agentState ?? "idle",
           pendingConsent: s.pendingConsent ?? null,
-          pendingManualExecution: s.pendingManualExecution ?? null,
           subagents: s.subagents ?? EMPTY_SUBAGENTS,
           tokenUsage: s.tokenUsage ?? null,
         };
@@ -64,11 +73,6 @@ export default function useAgentStream({
     [sessionId, store],
   );
 
-  const setPendingManualExecution = useCallback(
-    (val) => store.getState().setPendingManualExecution(sessionId, val),
-    [sessionId, store],
-  );
-
   const setSubagents = useCallback(
     (val) => store.getState().setSubagents(sessionId, val),
     [sessionId, store],
@@ -82,22 +86,29 @@ export default function useAgentStream({
   const flushToolOutputBuffer = useCallback(() => {
     const r = refs();
     const buffer = r.toolOutputBufferRef.current;
-    const ids = Object.keys(buffer);
-    if (ids.length === 0) return;
+    r.toolOutputRafRef.current = null;
+    if (Object.keys(buffer).length === 0) return;
 
+    // One pass over the message list no matter how many tools streamed in
+    // parallel, instead of a full map per tool id.
     setMessages((prev) => {
-      let next = prev;
-      for (const id of ids) {
-        const chunk = buffer[id];
-        if (!chunk) continue;
-        next = next.map((m) =>
-          m.id === id ? { ...m, content: m.content + chunk } : m,
-        );
-      }
-      return next;
+      let changed = false;
+      const next = prev.map((m) => {
+        const chunk = buffer[m.id];
+        if (!chunk) return m;
+        changed = true;
+        const combined = m.content + chunk;
+        return {
+          ...m,
+          content:
+            combined.length > MAX_LIVE_TOOL_CHARS
+              ? "[... earlier output trimmed ...]\n" + combined.slice(-MAX_LIVE_TOOL_CHARS)
+              : combined,
+        };
+      });
+      return changed ? next : prev;
     });
     r.toolOutputBufferRef.current = {};
-    r.toolOutputRafRef.current = null;
   }, [refs, setMessages]);
 
   const flushReasoningBuffer = useCallback(() => {
@@ -114,22 +125,35 @@ export default function useAgentStream({
   const flushThinkingBuffer = useCallback(() => {
     const r = refs();
     const ref = r.streamingAssistantRef.current;
+    r.thinkingFlushTimerRef.current = null;
     if (!ref || r.thinkingBufferRef.current === null) return;
+    r.lastThinkingFlushRef.current = Date.now();
     setMessages((prev) =>
       prev.map((m) => (m.id === ref.id ? { ...m, content: ref.content } : m)),
     );
     r.thinkingBufferRef.current = null;
-    r.thinkingRafRef.current = null;
   }, [refs, setMessages]);
+
+  // Throttled rather than per-animation-frame: every flush re-parses the whole
+  // markdown document, which is what made long replies feel stuck.
+  const scheduleThinkingFlush = useCallback(() => {
+    const r = refs();
+    if (r.thinkingFlushTimerRef.current) return;
+    const elapsed = Date.now() - r.lastThinkingFlushRef.current;
+    r.thinkingFlushTimerRef.current = setTimeout(
+      flushThinkingBuffer,
+      Math.max(0, THINKING_FLUSH_INTERVAL_MS - elapsed),
+    );
+  }, [refs, flushThinkingBuffer]);
 
   const flushAssistant = useCallback(() => {
     const r = refs();
     const ref = r.streamingAssistantRef.current;
     if (!ref) return;
 
-    if (r.thinkingRafRef.current) {
-      cancelAnimationFrame(r.thinkingRafRef.current);
-      r.thinkingRafRef.current = null;
+    if (r.thinkingFlushTimerRef.current) {
+      clearTimeout(r.thinkingFlushTimerRef.current);
+      r.thinkingFlushTimerRef.current = null;
       r.thinkingBufferRef.current = null;
     }
     if (r.reasoningRafRef.current) {
@@ -226,9 +250,7 @@ export default function useAgentStream({
           }
           r2.streamingAssistantRef.current.content += data.content;
           r2.thinkingBufferRef.current = true;
-          if (!r2.thinkingRafRef.current) {
-            r2.thinkingRafRef.current = requestAnimationFrame(flushThinkingBuffer);
-          }
+          scheduleThinkingFlush();
         })
         .onEvent("tool_call_start", (data) => {
           refs().toolCallAccRef.current[data.index] = {
@@ -344,6 +366,8 @@ export default function useAgentStream({
             args: data.args,
             safetyBlock: data.safetyBlock ?? false,
             approvalReason: data.approvalReason,
+            safetyReason: data.safetyReason,
+            safetyImpact: data.safetyImpact,
             batch: data.batch,
           });
           setAgentState("waiting_consent");
@@ -354,15 +378,6 @@ export default function useAgentStream({
         .onEvent("iteration_limit", (data) => {
           flushAssistant();
           onIterationLimit?.(data);
-        })
-        .onEvent("manual_execution_required", (data) => {
-          flushAssistant();
-          setPendingManualExecution({
-            toolCallId: data.id,
-            toolName: data.name,
-            command: data.command,
-          });
-          setAgentState("waiting_manual_execution");
         })
         .onEvent("subagent_spawned", (data) => {
           setSubagents((prev) => [
@@ -409,7 +424,14 @@ export default function useAgentStream({
             prev.map((m) => {
               if (m.id !== `subagent_${data.subagentId}`) return m;
               if (data.type === "thinking") {
-                return { ...m, content: m.content + data.content };
+                const full = m.content + data.content;
+                return {
+                  ...m,
+                  content:
+                    full.length > MAX_SUBAGENT_LIVE_CHARS
+                      ? full.slice(-MAX_SUBAGENT_LIVE_CHARS)
+                      : full,
+                };
               }
               return m;
             }),
@@ -572,7 +594,7 @@ export default function useAgentStream({
           }
         });
     },
-    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete, onInstallSuggestion, onIterationLimit],
+    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, scheduleThinkingFlush, flushReasoningBuffer, onComplete, onInstallSuggestion, onIterationLimit],
   );
 
   const abort = useCallback(() => {
@@ -596,8 +618,6 @@ export default function useAgentStream({
     setAgentState,
     pendingConsent,
     setPendingConsent,
-    pendingManualExecution,
-    setPendingManualExecution,
     subagents,
     setSubagents,
     tokenUsage,

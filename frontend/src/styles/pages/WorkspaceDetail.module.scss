@@ -369,8 +369,7 @@
   background: var(--yellow-700);
 }
 
-.agentState_waiting_consent,
-.agentState_waiting_manual_execution {
+.agentState_waiting_consent {
   color: var(--orange);
   background: var(--orange-700);
 }
@@ -864,7 +863,6 @@
 }
 
 .agentState_waiting_consent,
-.agentState_waiting_manual_execution,
 .agentState_paused {
   color: var(--moon-warning);
   background: var(--moon-warning-bg);

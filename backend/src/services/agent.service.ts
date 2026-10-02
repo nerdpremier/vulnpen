@@ -438,6 +438,13 @@ export async function runAgentLoop(params: {
           for (const id of completedIds) {
             spawnedSubagentIds.splice(spawnedSubagentIds.indexOf(id), 1);
           }
+          // Subagents persist findings straight to Mongo, so the orchestrator's
+          // in-memory state is stale the moment they write. Re-hydrate the
+          // persisted fields before the next engagement_state block is built.
+          const fresh = await SessionsModel.findOne({ sessionId }).select("vulnerabilities");
+          if (fresh) {
+            engagementState.vulnerabilities = buildEngagementState(fresh).vulnerabilities;
+          }
         }
       }
 
@@ -609,7 +616,7 @@ export async function runAgentLoop(params: {
         onToolError(id, error) {
           sse.write("tool_error", { id, error });
         },
-        onConsentRequired(_id, _name, _args, _safetyBlock, _approvalReason) {
+        onConsentRequired(_id, _name, _args, _safetyBlock, _approvalReason, _safetyDetail) {
           // Emitted once as a complete batch below. Streaming individual
           // requests here could briefly hide siblings behind one approval.
         },
@@ -631,9 +638,8 @@ export async function runAgentLoop(params: {
           engagement: {
             name: session.name,
             description: session.description,
-            target: session.mcpContext?.target,
-            scope: session.mcpContext?.scope,
-            notes: session.mcpContext?.notes,
+            target: session.engagementContext?.target,
+            scope: session.engagementContext?.scope,
           },
           transcript: compactApprovalTranscript(messages),
         },
@@ -683,6 +689,9 @@ export async function runAgentLoop(params: {
           args: firstBatchItem.arguments,
           safetyBlock: firstBatchItem.safetyBlock,
           approvalReason: firstBatchItem.approvalReason,
+          safetyReason: firstBatchItem.safetyReason,
+          safetyImpact: firstBatchItem.safetyImpact,
+          safetyKind: firstBatchItem.safetyKind,
           batch: batch.length > 1 ? batch : undefined,
         });
 
@@ -700,8 +709,15 @@ export async function runAgentLoop(params: {
                 ).args,
                 safetyBlock: firstBatchItem.safetyBlock,
                 approvalReason: firstBatchItem.approvalReason,
+                safetyReason: firstBatchItem.safetyReason,
+                safetyImpact: firstBatchItem.safetyImpact,
+                safetyKind: firstBatchItem.safetyKind,
                 batch: batch.length > 1 ? batch : undefined,
               },
+            },
+            $inc: {
+              "consentStats.prompts": 1,
+              "consentStats.safetyBlocks": firstBatchItem.safetyBlock ? 1 : 0,
             },
           },
         );
@@ -710,6 +726,10 @@ export async function runAgentLoop(params: {
       }
 
       if (approvalCircuitOpen) {
+        await SessionsModel.updateOne(
+          { sessionId },
+          { $inc: { "consentStats.circuitOpens": 1 } },
+        );
         for (const tr of toolResults) {
           const toolMsg: AgentMessageDoc = {
             id: uuidv4(),
@@ -887,6 +907,16 @@ export async function initAndRun(params: {
  */
 export function buildEngagementState(session: any): EngagementState {
   const engagementState = new EngagementState("pentest");
+  // Declared engagement boundary. Only the Target arms the scope gate; the free
+  // text below is what the gate then parses into the host allowlist, so a stray
+  // domain in the Scope prose widens the boundary instead of redefining it.
+  engagementState.declaredTarget = session?.engagementContext?.target ?? "";
+  engagementState.scope = [
+    session?.engagementContext?.target,
+    session?.engagementContext?.scope,
+  ]
+    .filter(Boolean)
+    .join(" ");
   engagementState.vulnerabilities = (session?.vulnerabilities ?? []).map((vulnerability: any) => ({
     vulnerabilityId: vulnerability.vulnerabilityId,
     fingerprint: vulnerability.fingerprint,
@@ -895,8 +925,8 @@ export function buildEngagementState(session: any): EngagementState {
     endpoint: vulnerability.endpoint,
     title: vulnerability.title,
     severity: vulnerability.severity,
-    cvssScore: vulnerability.cvssScore,
-    cvssVector: vulnerability.cvssVector,
+    likelihood: vulnerability.likelihood,
+    impactRating: vulnerability.impactRating,
     cwe: vulnerability.cwe,
     evidence: vulnerability.evidence,
     stepsToReproduce: vulnerability.stepsToReproduce,
@@ -939,6 +969,15 @@ export async function handleConsent(params: {
 
   session.pendingConsent = undefined;
   await session.save();
+  await SessionsModel.updateOne(
+    { sessionId },
+    {
+      $inc: {
+        "consentStats.approvals": approved ? 1 : 0,
+        "consentStats.denials": approved ? 0 : 1,
+      },
+    },
+  );
 
   if (!approved) {
     const denialMessages: AgentMessageDoc[] = allPending.map((p) => ({
@@ -961,10 +1000,16 @@ export async function handleConsent(params: {
     try { await shellManager.connect(); } catch { /* handled below */ }
   }
 
+  const subagentManager = new SubagentManager(sessionId, shellManager);
+  subagentManager.envInfo = undefined;
+
   const ctx = buildExecutionContext({
     sessionId,
     agentId: "main",
+    agentRole: "main",
     shellManager,
+    subagentManager,
+    sse,
     userId,
     abortSignal,
     engagementState: buildEngagementState(session),
@@ -976,6 +1021,7 @@ export async function handleConsent(params: {
     onToolDone(id, result) { sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length, files: result.files }); },
     onToolError(id, error) { sse.write("tool_error", { id, error }); },
     onConsentRequired() {},
+    onInstallSuggestion(suggestion) { sse.write("install_suggestion", suggestion); },
   };
 
   const toolMessages: AgentMessageDoc[] = [];
@@ -1000,44 +1046,5 @@ export async function handleConsent(params: {
   }
 
   await appendMessages(sessionId, toolMessages);
-  await runAgentLoop({ sessionId, userId, sse, abortSignal });
-}
-
-// ─── Handle manual execution output submission ───────────────────────
-
-export async function handleManualOutput(params: {
-  sessionId: string;
-  userId: string;
-  output: string;
-  sse: SSEWriter;
-  abortSignal?: AbortSignal;
-}): Promise<void> {
-  const { sessionId, userId, output, sse, abortSignal } = params;
-
-  const session = await SessionsModel.findOne({ sessionId });
-  if (!session || !session.pendingManualExecution) {
-    sse.write("error", { message: "No pending manual execution" });
-    sse.end();
-    return;
-  }
-
-  const { toolCallId, toolName } = session.pendingManualExecution;
-
-  session.pendingManualExecution = undefined;
-  await session.save();
-
-  const toolMsg: AgentMessageDoc = {
-    id: uuidv4(),
-    role: "tool",
-    content: output || "(no output)",
-    toolCallId,
-    toolName,
-    timestamp: new Date(),
-    turnIndex: session.turnIndex,
-  };
-  await appendMessages(sessionId, [toolMsg]);
-
-  sse.write("tool_done", { id: toolCallId, exitCode: 0, outputLength: output.length });
-
   await runAgentLoop({ sessionId, userId, sse, abortSignal });
 }

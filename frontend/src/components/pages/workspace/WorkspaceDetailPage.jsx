@@ -34,7 +34,6 @@ const STATE_DOT = {
   idle: { color: "var(--moon-text-mute)", label: "Idle" },
   paused: { color: "var(--moon-warning)", label: "Paused" },
   waiting_consent: { color: "var(--moon-warning)", label: "Waiting" },
-  waiting_manual_execution: { color: "var(--moon-warning)", label: "Waiting" },
 };
 
 const WorkspaceDetailPage = ({ workspaceId }) => {
@@ -305,7 +304,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           newSessionForm.resetFields();
         }}
         destroyOnHidden
-        width={500}
+        width={560}
       >
         <div className={styles.formWrap}>
           <Form
@@ -320,6 +319,20 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
             >
               <Input placeholder="e.g. Target A - login and session handling" />
             </Form.Item>
+            <Form.Item
+              name="target"
+              label="Target"
+              rules={[{ required: true, message: "Enter the target under test" }]}
+            >
+              <Input placeholder="https://app.example.com" />
+            </Form.Item>
+            <Form.Item name="scope" label="Scope (optional)">
+              <Input placeholder="Storefront, REST API, admin" />
+            </Form.Item>
+            <p style={{ marginTop: -8, fontSize: 12, color: "#8b8b94" }}>
+              Target sets the testing boundary; Scope widens it. You can change both
+              later in &ldquo;Set up the test plan&rdquo;.
+            </p>
             <div className={styles.formActions}>
               <PrimaryButton
                 onClick={() => {

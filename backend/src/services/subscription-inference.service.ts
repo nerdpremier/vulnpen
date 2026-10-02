@@ -165,7 +165,7 @@ function runCommand(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
-      // Do not expose API keys, database credentials, MCP tokens, or other
+      // Do not expose API keys, database credentials, or other
       // backend secrets to a model-controlled CLI process. The official CLIs
       // retain their own login through HOME/CODEX_HOME/CLAUDE_CONFIG_DIR.
       env: subscriptionProcessEnv(),

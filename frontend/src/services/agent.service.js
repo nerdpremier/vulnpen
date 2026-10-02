@@ -70,11 +70,6 @@ export const respondToConsent = async ({ sessionId, approved }) => {
   return res.data;
 };
 
-export const submitManualOutput = async ({ sessionId, output }) => {
-  const res = await apiClient.post("/agent/manual-output", { sessionId, output });
-  return res.data;
-};
-
 export const installCapability = async ({ sessionId, capabilityName }) => {
   const res = await apiClient.post("/agent/install-capability", { sessionId, capabilityName });
   return res.data;
@@ -127,7 +122,7 @@ export function connectAgentStream({ sessionId, message, endpoint = "message" })
     const url = `${apiBaseURL}/agent/${endpoint}`;
 
     let bodyObj;
-    if (endpoint === "consent" || endpoint === "manual-output") {
+    if (endpoint === "consent") {
       try {
         bodyObj = { sessionId, ...JSON.parse(message) };
       } catch {

@@ -12,18 +12,6 @@ export interface ModelPresetDoc {
   isOrchestrator?: boolean;
 }
 
-export interface McpTokenDoc {
-  tokenId: string;
-  label: string;
-  /** SHA-256 of the presented token — the at-rest representation. */
-  tokenHash?: string;
-  /** Legacy plaintext. Only set on pre-hashing docs; cleared on first use. */
-  token?: string;
-  createdAt: Date;
-  lastUsedAt?: Date;
-  revokedAt?: Date | null;
-}
-
 export type ToolExecutionMode = "auto" | "auto_approve" | "requires_consent";
 
 export function resolveToolExecutionMode(configs?: {
@@ -65,7 +53,6 @@ export interface UserDoc extends mongoose.Document {
     disabledAgentTools?: string[];
     maxAgentIterations?: number;
     models?: ModelPresetDoc[];
-    mcpTokens?: McpTokenDoc[];
   };
   referredBy: mongoose.Types.ObjectId;
   workingIndustry: string;
@@ -178,20 +165,6 @@ const UserSchema = new Schema({
             default: "off",
           },
           isOrchestrator: { type: Boolean, default: false },
-        },
-      ],
-      default: [],
-    },
-    mcpTokens: {
-      type: [
-        {
-          tokenId: { type: String, required: true },
-          label: { type: String, required: true },
-          tokenHash: { type: String },
-          token: { type: String, required: false },
-          createdAt: { type: Date, default: Date.now },
-          lastUsedAt: { type: Date },
-          revokedAt: { type: Date, default: null },
         },
       ],
       default: [],

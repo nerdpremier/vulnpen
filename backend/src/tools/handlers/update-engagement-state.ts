@@ -9,6 +9,7 @@ import {
   normalizeVulnerability,
   upsertSessionVulnerability,
 } from "../../services/vulnerability.service";
+import { classifyWithLlm } from "../../services/web-security/owasp-llm-classifier";
 
 function str(v: any): string {
   return typeof v === "string" ? v.trim() : "";
@@ -30,7 +31,6 @@ const updateEngagementState: ToolDefinition = {
           "add_vulnerability",
           "remove_finding",
           "add_shell",
-          "set_phase",
           "add_key_discovery",
           "add_file",
           "log_approach",
@@ -41,13 +41,16 @@ const updateEngagementState: ToolDefinition = {
       data: {
         type: "object",
         description:
-          "The action-specific state data. For add_vulnerability include title, host/target, service or endpoint, severity, " +
-          "CVSS score/vector, evidence, stepsToReproduce, contextSummary, impact, remediation, and exploited status when known. " +
+          "The action-specific state data. For add_vulnerability include title, host/target, service or endpoint, " +
+          "likelihood and impactRating (risk matrix factors the severity is computed from), evidence, stepsToReproduce, contextSummary, impact, remediation, and exploited status when known. " +
+          "Never declare a severity word directly: rate the likelihood and impact factors honestly and the system derives the severity from the risk matrix. " +
           "CWE and owaspTop10 are optional: set wstgId to the WSTG v4.2 test case that produced the finding (e.g. WSTG-INPV-05) and set " +
           "owaspTop10/CWE only when you know they fit. A finding with no well-fitting category or CWE is accepted unmapped — never invent a mapping for completeness. " +
           "For add_key_discovery provide title and/or description (discovery/value are accepted for compatibility). " +
           'For remove_finding provide vulnerability_id of a finding that turned out not to be real (e.g. a placeholder or false positive); ' +
-          "it is deleted from the session and unlinked from any test case that references it.",
+          "it is deleted from the session and unlinked from any test case that references it. " +
+          "This is a proof-of-concept engagement: when the finding is a destructive capability you proved without carrying it out " +
+          "(for example a delete endpoint a low-privilege user can reach), record it with exploited set to false and state in the impact that the destructive step was deliberately not performed.",
         properties: {
           // Shared fields. Keeping these explicit prevents models from
           // guessing the shape of add_key_discovery calls while retaining the
@@ -60,9 +63,6 @@ const updateEngagementState: ToolDefinition = {
           target: { type: "string" },
           service: { type: "string" },
           endpoint: { type: "string" },
-          severity: { type: "string", enum: ["info", "low", "medium", "high", "critical"] },
-          cvssScore: { type: "number", minimum: 0, maximum: 10 },
-          cvssVector: { type: "string" },
           cwe: { type: "string" },
           cve: { type: "string" },
           evidence: { type: "string" },
@@ -70,7 +70,11 @@ const updateEngagementState: ToolDefinition = {
           contextSummary: { type: "string" },
           impact: { type: "string" },
           remediation: { type: "string" },
-          exploited: { type: "boolean" },
+          exploited: {
+            type: "boolean",
+            description:
+              "true only when the action was actually carried out under explicit operator authorisation. A vulnerability proven non-destructively stays false.",
+          },
           vulnerability_id: {
             type: "string",
             description: "Finding id to delete, for action remove_finding (vulnerabilityId or exact title).",
@@ -84,6 +88,18 @@ const updateEngagementState: ToolDefinition = {
             type: "string",
             description:
               "Explicit OWASP Top 10:2025 category (A01:2025 ... A10:2025). Omit it to classify from the WSTG test case, CWE and finding text.",
+          },
+          likelihood: {
+            type: "number",
+            enum: [1, 2, 3],
+            description:
+              "Risk matrix likelihood factor: 1 = low, 2 = medium, 3 = high. How likely this finding is to be exercised by the threat agents that apply here.",
+          },
+          impactRating: {
+            type: "number",
+            enum: [1, 2, 3],
+            description:
+              "Risk matrix impact factor: 1 = low, 2 = medium, 3 = high. Worst realistic damage to the business if exercised.",
           },
         },
         additionalProperties: true,
@@ -159,8 +175,33 @@ const updateEngagementState: ToolDefinition = {
           return { output: "add_vulnerability requires an active session", exitCode: 1 };
         }
         const normalized = normalizeVulnerability(data, {
-          source: `agent:${ctx.agentId ?? "orchestrator"}`,
+          source: `agent:${ctx.agentId ?? "main"}`,
         });
+        if (!normalized.owaspTop10) {
+          // Deterministic layers could not decide (no explicit/WSTG/single-CWE
+          // signal) — ask the LLM classifier before the finding is stored.
+          const llmMapping = await classifyWithLlm(
+            {
+              title: normalized.title,
+              description: normalized.description,
+              contextSummary: normalized.contextSummary,
+              evidence: normalized.evidence,
+              endpoint: normalized.endpoint,
+              cwe: normalized.cwe,
+              wstgId: normalized.wstgId,
+            },
+            { userId: ctx.userId, sessionId: ctx.sessionId },
+          );
+          if (llmMapping?.primary) {
+            normalized.owaspTop10 = llmMapping.primary;
+            normalized.owaspTop10Title = llmMapping.primaryTitle;
+            normalized.owaspRelated = llmMapping.related;
+            normalized.owaspConfidence = llmMapping.confidence;
+            normalized.owaspProvenance = llmMapping.provenance ?? "model";
+            normalized.owaspRationale = llmMapping.rationale;
+            normalized.owaspMappedAt = new Date();
+          }
+        }
         const persisted = await upsertSessionVulnerability(ctx.sessionId, normalized);
         const existingIndex = state.vulnerabilities.findIndex(
           (v) => v.vulnerabilityId === persisted.vulnerability.vulnerabilityId ||
@@ -259,10 +300,6 @@ const updateEngagementState: ToolDefinition = {
           exitCode: 0,
         };
       }
-
-      case "set_phase":
-        state.phase = data.phase ?? state.phase;
-        return { output: `Phase set to: ${state.phase}`, exitCode: 0 };
 
       case "add_key_discovery": {
         // Agents historically used `discovery`/`value`, while newer

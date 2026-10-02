@@ -50,7 +50,14 @@ function previewPlan(plan, catalog, selected) {
  * Saving rebuilds the case list from the catalogue, so cases that stay keep their results;
  * the page mounts this per open, so the form starts from the plan as it is now.
  */
-export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSaved }) {
+export default function PlanSetupModal({
+  sessionId,
+  plan,
+  catalog,
+  engagement,
+  onClose,
+  onSaved,
+}) {
   const { message } = App.useApp();
   const confirmPopUp = useConfirmPopUp();
   const [form] = Form.useForm();
@@ -123,7 +130,6 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
       action: "generate",
       target: values.target?.trim() ?? "",
       scope: values.scope?.trim() ?? "",
-      notes: values.notes?.trim() ?? "",
       categories,
       testIds,
     });
@@ -159,9 +165,10 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
         className={styles.darkControls}
         onFinish={handleFinish}
         initialValues={{
-          target: plan?.target ?? "",
-          scope: plan?.scope ?? "",
-          notes: plan?.notes ?? "",
+          // A plan saved from here always wins; on first open the values come
+          // from what was entered when the session was created.
+          target: plan?.target || engagement?.target || "",
+          scope: plan?.scope || engagement?.scope || "",
         }}
       >
         <div className={styles.settingsSection}>
@@ -174,14 +181,9 @@ export default function PlanSetupModal({ sessionId, plan, catalog, onClose, onSa
           >
             <Input placeholder="https://app.example.com" />
           </Form.Item>
-          <div className={styles.twoUp}>
-            <Form.Item label="Scope (optional)" name="scope">
-              <Input placeholder="Storefront, REST API, admin" />
-            </Form.Item>
-            <Form.Item label="Notes (optional)" name="notes">
-              <Input placeholder="Out of scope items, credentials, test windows" />
-            </Form.Item>
-          </div>
+          <Form.Item label="Scope (optional)" name="scope">
+            <Input placeholder="Storefront, REST API, admin" />
+          </Form.Item>
         </div>
 
         <div className={styles.settingsSection}>

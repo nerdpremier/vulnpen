@@ -1,5 +1,6 @@
 import { ToolDefinition, ToolResult } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
+import { browserActionSafetyDetail } from "../../utils/consentDetail";
 import { formatMagnitudeError } from "../../utils/magnitudeError";
 import { presetToProviderConfig } from "../../utils/llm/providers";
 import { getAssignedModels } from "../../utils/modelRegistryStore";
@@ -19,7 +20,10 @@ const magnitudeBrowser: ToolDefinition = {
     "Use this to interact with web applications during a penetration test — " +
     "e.g. filling forms, clicking buttons, navigating pages, extracting data. " +
     "The agent uses AI to interpret the page and carry out the goal autonomously. " +
-    "Requires Magnitude to be enabled in Settings.",
+    "Requires Magnitude to be enabled in Settings. " +
+    "The browser acts on the real application, so a goal that deletes, overwrites or " +
+    "disables something is gated: this engagement is proof of concept only - verify that a " +
+    "control is missing and stop, do not carry the destructive step out.",
   parameters: {
     type: "object",
     properties: {
@@ -49,6 +53,12 @@ const magnitudeBrowser: ToolDefinition = {
     required: ["url", "goal"],
   },
   requiresConsent: true,
+  shouldRequireConsent(args, ctx) {
+    return browserActionSafetyDetail(args, ctx) !== undefined;
+  },
+  describeSafety(args, ctx) {
+    return browserActionSafetyDetail(args, ctx);
+  },
   timeoutMs: 300_000,
   async execute(args, ctx): Promise<ToolResult> {
     const { url, goal, extract } = args;
