@@ -234,8 +234,9 @@ export async function executeToolCall(
   if (approval.denied && approval.source === "boundary") {
     const output =
       "Blocked at the proof-of-concept boundary: " + approval.reason +
-      "\nVulnPen is a security tester, not a system destroyer: a destructive action against the engagement target is never executed and can never be approved in this product. " +
-      "Prove the weakness without carrying it out - access what you should not be able to access, act on a test object you own, or show the endpoint is reachable - then record the finding and state that the destructive step was deliberately not performed.";
+      "\nVulnPen is a security tester, not a system destroyer: a destructive action against the engagement target is never executed and can never be approved. " +
+      "Prove the weakness without carrying it out - access what you should not be able to access, act on a test object you own, or show the endpoint is reachable - then record the finding and state that the destructive step was deliberately not performed. " +
+      "Note that this only gates altering or deleting data that already exists: creating and using your own resources on the target (registering your own account, filling your own basket, placing your own orders) is normal testing and is allowed.";
     callbacks.onToolError(toolCall.id, output);
     return {
       toolCallId: toolCall.id,

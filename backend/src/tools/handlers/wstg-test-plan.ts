@@ -9,6 +9,7 @@ import {
   addTestCase,
   updateTestCase,
   caseUpdateError,
+  blockedCaseError,
   findDuplicateCases,
   findPlanCase,
   removeCases,
@@ -132,7 +133,8 @@ const wstgTestPlan: ToolDefinition = {
         enum: TEST_STATUSES,
         description:
           "Result of the test for action \"update_case\": not_started, in_progress, passed, failed, blocked or skipped. " +
-          "Setting a case to failed requires vulnerability_id — the tool refuses a failed case with no linked finding.",
+          "Setting a case to failed requires vulnerability_id — the tool refuses a failed case with no linked finding. " +
+          "Setting a case to blocked requires a concrete missing-dependency note — and a browser-related reason requires that browser_action was called at least once this session.",
       },
       force: {
         type: "boolean",
@@ -359,6 +361,35 @@ const wstgTestPlan: ToolDefinition = {
         };
         const refusal = caseUpdateError(plan, testId, patch);
         if (refusal) return { output: refusal, exitCode: 1 };
+
+        // "blocked" claims a dependency is missing, so it must carry evidence:
+        // a concrete reason, and for browser-shaped reasons an actual browser
+        // tool call somewhere in the session. Without this, "needs a browser"
+        // becomes a free pass to skip work the tools could have done.
+        if (typeof args.status === "string" && args.status.trim().toLowerCase() === "blocked") {
+          const reason = [args.notes, args.observations]
+            .filter((v: any) => typeof v === "string")
+            .join(" ");
+          const session = /browser/i.test(reason)
+            ? await SessionsModel.findOne({ sessionId })
+                .select("messages.toolName messages.toolCalls.name")
+                .lean()
+            : undefined;
+          const browserUsed = ((session?.messages as any[] | undefined) ?? []).some(
+            (m) =>
+              m?.toolName === "browser_action" ||
+              m?.toolName === "magnitude_browser" ||
+              (Array.isArray(m?.toolCalls) &&
+                m.toolCalls.some(
+                  (t: any) => t?.name === "browser_action" || t?.name === "magnitude_browser",
+                )),
+          );
+          const blockedRefusal = blockedCaseError(reason, {
+            browserMentioned: /browser/i.test(reason),
+            browserUsed,
+          });
+          if (blockedRefusal) return { output: blockedRefusal, exitCode: 1 };
+        }
 
         const vulnerabilityId =
           typeof args.vulnerability_id === "string" ? args.vulnerability_id.trim() : "";

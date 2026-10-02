@@ -13,6 +13,7 @@ import {
   addTestCase,
   caseUpdateError,
   findPlanCase,
+  blockedCaseError,
   computeCoverage,
   createTestPlan,
   nextTestsToRun,
@@ -342,6 +343,41 @@ test("findPlanCase matches ids case-insensitively and rejects unknown ones", () 
   assert.equal(findPlanCase(plan, "  wstg-inpv-05  ")?.testId, "WSTG-INPV-05");
   assert.equal(findPlanCase(plan, "WSTG-NOPE-99"), undefined);
   assert.equal(findPlanCase(plan, ""), undefined);
+});
+
+test("a blocked case must carry evidence for its missing dependency", () => {
+  // no reason at all is refused
+  assert.match(blockedCaseError("")!, /requires a note/);
+  assert.match(blockedCaseError("   ")!, /requires a note/);
+
+  // a concrete non-browser reason is accepted
+  assert.equal(
+    blockedCaseError("No provisioning endpoint reachable via direct API probing"),
+    undefined,
+  );
+
+  // a browser-shaped reason is refused until the browser tool has been used
+  assert.match(
+    blockedCaseError("Requires an authenticated browser session", {
+      browserMentioned: true,
+      browserUsed: false,
+    })!,
+    /browser_action has never been called/,
+  );
+  assert.equal(
+    blockedCaseError("Requires an authenticated browser session", {
+      browserMentioned: true,
+      browserUsed: true,
+    }),
+    undefined,
+  );
+  assert.equal(
+    blockedCaseError("No GraphQL endpoint present; the API is REST-only", {
+      browserMentioned: false,
+      browserUsed: false,
+    }),
+    undefined,
+  );
 });
 
 test("coverage is reported per WSTG category without OWASP pre-mapping", () => {

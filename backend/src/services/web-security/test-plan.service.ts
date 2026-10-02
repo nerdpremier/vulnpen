@@ -564,6 +564,33 @@ export function findPlanCase(
   );
 }
 
+/** "blocked" claims a dependency is missing, so the claim must be evidenced:
+ *  a concrete reason at minimum, and a browser-shaped reason only counts once
+ *  the browser tool has actually been used this session. Returns the refusal
+ *  message for the update_case handler, or undefined when acceptable. */
+export function blockedCaseError(
+  reason: string,
+  options?: { browserMentioned?: boolean; browserUsed?: boolean },
+): string | undefined {
+  if (!reason.trim()) {
+    return (
+      `"update_case" refused: status "blocked" requires a note stating exactly what is ` +
+      `missing (the missing credential, the unavailable service, the absent endpoint). ` +
+      `If nothing is missing, run the case and record the real result.`
+    );
+  }
+  if (options?.browserMentioned && !options.browserUsed) {
+    return (
+      `"update_case" refused: the blocked reason claims this case needs a browser, but ` +
+      `browser_action has never been called in this session — that is an assumption, not ` +
+      `evidence. Call browser_action once for this case (a simple navigation counts); if ` +
+      `the browser tool itself fails, that error output is the evidence — retry this call ` +
+      `with the actual error in the note.`
+    );
+  }
+  return undefined;
+}
+
 export function computeCoverage(cases: SessionTestCaseDoc[]): TestPlanCoverage {
   const count = (status: WstgTestStatus) =>
     cases.filter((testCase) => testCase.status === status).length;
