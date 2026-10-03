@@ -98,7 +98,8 @@ XS
 
 # Burp keeps loaded extensions, listeners and its window layout in this file.
 # The heredoc body is intentionally flush left: the JSON must start at column 0.
-BURP_USER_CONFIG="/root/.BurpSuite/UserConfig.json"
+BURP_USER_CONFIG_DIR="/root/.BurpSuite"
+BURP_USER_CONFIG="$BURP_USER_CONFIG_DIR/UserConfig.json"
 ensure_burp_user_config() {
     [ -s "$BURP_USER_CONFIG" ] && return 0
     mkdir -p /root/.BurpSuite
@@ -151,6 +152,15 @@ PREFS
     echo "Seeded Burp prefs (terms accepted, Community edition)"
 }
 
+# /opt/burp-project-options.json is generated at image build time by
+# kali/burp-project-options.sh: it is the default project document shipped
+# inside burpsuite.jar with the proxy listener switched to all interfaces,
+# which is what makes the listener bind 0.0.0.0:8080 on start instead of
+# loopback. Two details matter. A hand-written minimal document nested under
+# "project_options" is ignored outright, and the listener really lives under
+# the TOP-LEVEL "proxy" key. It is passed via --config-file below.
+BURP_PROJECT_OPTIONS="/opt/burp-project-options.json"
+
 launch_burp_flow() {
     # Burp Community always shows its startup wizard and a temporary project
     # forgets the extension + listener bind between runs. Buttons are found by
@@ -197,10 +207,16 @@ CO
         ensure_burp_user_config
         ensure_burp_prefs
 
-        # Proxy listeners are project options, so a temporary project resets the
-        # bind to loopback on every boot; the rebind below re-applies it via the
-        # Settings UI.
-        setsid nohup burpsuite --user-config-file="$BURP_USER_CONFIG" >/tmp/burp.log 2>&1 </dev/null &
+        # Proxy listeners are project options, so a temporary project would reset
+        # the bind to loopback on every boot. --config-file applies the seeded
+        # all-interfaces listener when the project starts; the UI rebind below
+        # remains as a fallback for when that does not take effect.
+        BURP_CONFIG_ARGS=()
+        if [ -s "$BURP_PROJECT_OPTIONS" ]; then
+            BURP_CONFIG_ARGS=(--config-file="$BURP_PROJECT_OPTIONS")
+        fi
+        setsid nohup burpsuite --user-config-file="$BURP_USER_CONFIG" \
+            "${BURP_CONFIG_ARGS[@]}" >/tmp/burp.log 2>&1 </dev/null &
 
         # Wizard: Next (temporary project) then Start Burp — both orange, both
         # in the lower-right region. Stop once the proxy port is listening.
@@ -279,6 +295,10 @@ EOF
             if ss -tln 2>/dev/null | grep ":8080" | grep -q "127.0.0.1"; then
                 rebind_listener || true              # one retry pass
             fi
+        else
+            # --config-file already asks for an all-interfaces listener, so the
+            # fragile click-driven rebind is skipped when the bind is correct.
+            echo "Proxy listener already on all interfaces; skipping rebind clicks"
         fi
         # The rebind leaves Burp's Settings window covering the main UI, so the
         # desktop would open on a settings page instead of the proxy dashboard.

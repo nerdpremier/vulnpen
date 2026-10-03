@@ -110,6 +110,13 @@ RUN curl -fsSL --retry 3 --retry-delay 5 --max-time 900 -o /opt/burp-rpc.jar "$B
     && unzip -l /opt/burp-rpc.jar > /dev/null \
     && ls -l /opt/burp-rpc.jar
 
+# Bake the project-config document the autostart passes to `burpsuite
+# --config-file`, with the proxy listener already on all interfaces. Generating
+# it at build time keeps the structure in step with the installed Burp and
+# removes the need for the coordinate-click rebind at start.
+COPY burp-project-options.sh /usr/local/bin/burp-project-options
+RUN chmod +x /usr/local/bin/burp-project-options && burp-project-options
+
 # Entrypoint is copied last on purpose: it changes far more often than the
 # package layers above, and keeping it here means editing it rebuilds in
 # seconds instead of reinstalling Burp, the desktop and the browser stack.
