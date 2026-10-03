@@ -23,6 +23,7 @@ import { setupShellWebSocket } from "./services/shell.socket";
 import { sessionLifecycle } from "./services/session.lifecycle";
 import { migrateSessionsToWorkspaces } from "./migrations/001-create-workspaces";
 import { migrateToolExecutionMode } from "./migrations/002-migrate-tool-execution-mode";
+import { startBurpCaWatcher } from "./services/burp-ca.service";
 
 declare module "express-session" {
   export interface SessionData {
@@ -255,6 +256,12 @@ const initializeApp = async () => {
     httpServer.listen(port, () => {
       console.log(`Express is listening at http://localhost:${port}`);
     });
+
+    // Burp mints a new CA for every fresh project, and the bundled Kali
+    // autostart opens one on each container start, so the Browser Agent
+    // profile's trust would otherwise go stale until an operator clicked
+    // "Refresh CA trust". Keep it current in the background.
+    startBurpCaWatcher();
 
     process.on("SIGTERM", async () => {
       console.log("SIGTERM received. Shutting down gracefully...");

@@ -294,3 +294,74 @@ export async function configureBurpCaTrust(): Promise<BurpCaStatus> {
 
   return getBurpCaStatus();
 }
+
+const BURP_CA_WATCH_INTERVAL_MS = 30_000;
+
+/**
+ * Whether the Browser Agent profile should pick up Burp's current CA without
+ * being asked. Burp mints a new CA whenever it starts a fresh project, and the
+ * bundled Kali autostart opens one on every container start, so the trusted
+ * copy goes stale by itself. A stale trust is invisible until a request fails,
+ * which is why this runs on its own instead of waiting for the panel button.
+ *
+ * Only a genuinely actionable state qualifies: the proxy URL must be set, the
+ * certificate must have been fetched successfully, and the profile must not
+ * already trust it. needsRefresh is deliberately not required so the very
+ * first run installs the CA too.
+ */
+export function shouldAutoTrustBurpCa(status: BurpCaStatus): boolean {
+  return status.proxyConfigured && status.certificateAvailable && !status.trusted;
+}
+
+/**
+ * Poll Burp's CA and keep the Browser Agent profile in step. Returns a stop
+ * function; the interval is unref'd so it never holds the process open.
+ *
+ * Repeats of the same failure are reported once, so a Burp that is simply not
+ * running yet cannot flood the log every interval.
+ */
+export function startBurpCaWatcher(
+  intervalMs: number = BURP_CA_WATCH_INTERVAL_MS,
+): () => void {
+  let inFlight = false;
+  let lastReported = "";
+
+  const report = (detail: string): void => {
+    if (detail === lastReported) return;
+    lastReported = detail;
+    console.warn(`[burp-ca] ${detail}`);
+  };
+
+  const tick = async (): Promise<void> => {
+    if (inFlight) return;
+    inFlight = true;
+    try {
+      const status = await getBurpCaStatus();
+      if (!shouldAutoTrustBurpCa(status)) return;
+
+      const rotated = status.needsRefresh;
+      const next = await configureBurpCaTrust();
+      if (next.trusted) {
+        lastReported = "";
+        console.log(
+          `[burp-ca] ${rotated ? "Burp rotated its CA" : "Burp CA installed"}; ` +
+            `Chromium trust refreshed (${next.fingerprint})`,
+        );
+        return;
+      }
+      report(`auto-refresh incomplete: ${next.message}`);
+    } catch (error: any) {
+      report(`auto-refresh failed: ${error?.message || error}`);
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  const timer = setInterval(() => {
+    void tick();
+  }, intervalMs);
+  timer.unref();
+  void tick();
+
+  return () => clearInterval(timer);
+}

@@ -56,11 +56,25 @@ const BurpSettingsPage = () => {
     isLoading: caStatusLoading,
     refetch: refetchCaStatus,
   } = useQuery("burp-settings-ca-status", getBurpCaStatus, {
-    enabled: burpConnected,
+    // Enabled whenever Burp is configured, not only while it answers: the
+    // card has to be able to explain that Burp is not reachable yet.
+    enabled: !!data?.configured,
     refetchInterval: 30_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
+
+  // The card below used to render only while Burp was connected, which hid
+  // the feature exactly when an operator goes looking for it: no card, so
+  // apparently nothing to configure. Name the blocker instead and leave the
+  // retrying to the backend watcher.
+  const caBlockReason = !burpConnected
+    ? "Connect Burp Suite first - the CA is exported from its proxy listener."
+    : caStatus?.proxyConfigured === false
+      ? "Set the Browser Agent proxy URL to Burp's proxy listener first."
+      : null;
+  const caBlocked =
+    !burpConnected || (!caStatusLoading && !caStatus?.certificateAvailable);
 
   const configureCaMutation = useMutation(configureBurpCa, {
     onSuccess: (status) => {
@@ -173,7 +187,7 @@ const BurpSettingsPage = () => {
         </div>
       )}
 
-      {burpConnected && (
+      {configured && (
         <div className={styles.burpHttpsCard}>
           <div className={styles.burpHttpsIcon} data-ready={caStatus?.trusted || undefined}>
             {caStatus?.trusted ? <CheckCircleFilled /> : <SafetyCertificateOutlined />}
@@ -183,7 +197,7 @@ const BurpSettingsPage = () => {
               {caStatus?.trusted ? "HTTPS interception ready" : "Enable HTTPS interception"}
             </div>
             <div className={styles.burpHttpsDescription}>
-              {caStatus?.message || "Checking whether Chromium trusts Burp's CA…"}
+              {caBlockReason || caStatus?.message || "Checking whether Chromium trusts Burp's CA…"}
             </div>
             {caStatus?.fingerprint && (
               <code className={styles.burpHttpsFingerprint} title={caStatus.fingerprint}>
@@ -196,7 +210,7 @@ const BurpSettingsPage = () => {
             size="small"
             icon={<SafetyCertificateOutlined />}
             loading={caStatusLoading || configureCaMutation.isLoading}
-            disabled={!caStatusLoading && !caStatus?.certificateAvailable}
+            disabled={caBlocked}
             onClick={() => configureCaMutation.mutate()}
             className={styles.burpHttpsButton}
           >
