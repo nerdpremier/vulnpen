@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { useShallow } from "zustand/react/shallow";
 import { notification } from "antd";
+import { finalizeAbortedToolCalls } from "@/utils/finalizeAbortedToolCalls.mjs";
 
 const EMPTY_MESSAGES = [];
 
@@ -498,12 +499,26 @@ export default function useAgentStream({
     [sessionId, refs, setMessages, setAgentState, setPendingConsent, setTokenUsage, flushAssistant, flushToolOutputBuffer, scheduleThinkingFlush, flushReasoningBuffer, onComplete, onInstallSuggestion, onIterationLimit],
   );
 
+  // Stopping has to be more than tearing down the fetch. Tool messages that
+  // were streaming when Stop fired never receive tool_done / tool_error, so
+  // they would stay `streaming: true` forever - and ToolCallBlock reads that
+  // flag to decide whether to broadcast `browser-agent-idle`, which is what
+  // folds the Browser Agent panel. Without this the panel stayed unfolded
+  // after Stop until the page was reloaded.
   const abort = useCallback(() => {
     const r = refs();
+    if (r.toolOutputRafRef.current) {
+      cancelAnimationFrame(r.toolOutputRafRef.current);
+      r.toolOutputRafRef.current = null;
+    }
+    // Land buffered output first, so the marker is appended after it rather
+    // than being mixed into text that arrives after the run was stopped.
+    flushToolOutputBuffer();
     r.controllerRef.current?.abort();
     flushAssistant();
+    setMessages((prev) => finalizeAbortedToolCalls(prev));
     setAgentState("idle");
-  }, [refs, flushAssistant, setAgentState]);
+  }, [refs, flushToolOutputBuffer, flushAssistant, setMessages, setAgentState]);
 
   const loadHistory = useCallback(
     (historyMessages) => {
