@@ -197,6 +197,15 @@ export function execSSH(
       stream.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
       stream.on("close", (code: number | null) => finish(undefined, code ?? 0));
       stream.on("error", (streamError: Error) => finish(streamError));
+      // Settle on exit-status instead of waiting for the channel 'close':
+      // a backgrounded child (Xvnc, websockify, `sleep 60 &`) keeps the
+      // channel's session alive on some sshd setups, so 'close' never fires
+      // even though the command itself finished — the exec then hung until
+      // the timeout. Exit-status arrives as soon as the remote shell exits;
+      // a short grace window lets buffered stdout/stderr flush first.
+      stream.on("exit", (code: number | null) => {
+        setTimeout(() => finish(undefined, code ?? 0), 200);
+      });
       // Written after the listeners are attached so an EPIPE from a command
       // that exits before reading stdin is observed, not thrown.
       if (typeof input === "string" && input.length > 0) {

@@ -47,11 +47,36 @@ export function hasVncPassword(probeOutput: string): boolean {
 /**
  * Security arguments for a direct `Xvnc`/`Xtigervnc` start. Uses password auth
  * when a password file was written, otherwise no auth (SSH-tunnel-only access).
+ *
+ * `-rfbauth` is deliberately the only password flag used: TightVNC's Xvnc
+ * accepts it and TigerVNC documents it as an alias for `-PasswordFile`. The
+ * TigerVNC-only spellings are not portable — the stock Kali image ships
+ * TightVNC, whose Xvnc aborts with "Unrecognized option: -SecurityTypes" and
+ * leaves noVNC serving a page with no RFB server behind it. `-SecurityTypes
+ * None` stays for the no-password fallback, which TightVNC never reaches
+ * because its package installs `vncpasswd`.
  */
 export function xvncSecurityArgs(useVncAuth: boolean): string {
-  return useVncAuth
-    ? "-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd"
-    : "-SecurityTypes None";
+  return useVncAuth ? "-rfbauth ~/.vnc/passwd" : "-SecurityTypes None";
+}
+
+/**
+ * True when `host` is a Docker-internal alias rather than something the
+ * operator's browser can resolve. The noVNC iframe is loaded from the browser,
+ * so a name such as "kali" - which only resolves inside the Compose network -
+ * must be translated to the Docker host first. A localhost/loopback address, an
+ * IPv4 literal, or any dotted host name is left to the browser.
+ *
+ * Shared by the one-click setup and the connect flow so the stored `VNC_HOST`
+ * value and the URL returned to the UI can never disagree again.
+ */
+export function isDockerInternalHost(host: string): boolean {
+  return (
+    host !== "localhost" &&
+    host !== "127.0.0.1" &&
+    !/^\d+\.\d+\.\d+\.\d+$/.test(host) &&
+    !host.includes(".")
+  );
 }
 
 /**

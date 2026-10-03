@@ -7,6 +7,7 @@ import {
   writeVncPasswordCmd,
   hasVncPassword,
   xvncSecurityArgs,
+  isDockerInternalHost,
 } from "../utils/vncSetup";
 
 const FIND_VNC_BIN = [
@@ -103,44 +104,58 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
               useVncAuth = hasVncPassword(pwProbe);
             }
 
-            // Start VNC based on detected binary
+            // Start VNC based on detected binary. Backgrounded processes MUST
+            // also redirect stdin (< /dev/null): sshd keeps the exec channel
+            // open while the child holds any inherited fd, so a long-lived
+            // Xvnc/websockify without stdin redirection hangs the SSH exec
+            // until the 120s timeout even though the command itself succeeded.
             if (isXvncDirect) {
               await exec(
                 `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
                 `${xvncSecurityArgs(useVncAuth)} ` +
-                `-pn > /dev/null 2>&1 &`
+                `-pn > /dev/null 2>&1 < /dev/null &`
               );
               await new Promise((r) => setTimeout(r, 1500));
-              await exec(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
+              await exec(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup > /dev/null 2>&1 < /dev/null &`);
             } else if (isX11vnc) {
               await exec(
                 "command -v Xvfb >/dev/null 2>&1 || (export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
               );
-              await exec(`Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`);
+              await exec(`Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 < /dev/null &`);
               await new Promise((r) => setTimeout(r, 2000));
-              await exec(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
+              await exec(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup > /dev/null 2>&1 < /dev/null &`);
               await exec(
                 `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} ` +
                 (useVncAuth
                   ? "-rfbauth ~/.vnc/passwd "
                   : "") +
-                "-forever -shared -noxdamage > /dev/null 2>&1 &"
+                "-forever -shared -noxdamage > /dev/null 2>&1 < /dev/null &"
               );
               await new Promise((r) => setTimeout(r, 1500));
             } else {
               await exec(`${vncBin} -geometry 1280x800 -depth 24 ${VNC_DISPLAY}`);
             }
 
-            // Start websockify
-            await exec(`pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`);
+            // Start websockify. The bracket keeps pkill's own command line from
+            // matching the pattern — a plain 'websockify.*PORT' matches the
+            // shell executing this very command, kills it, and the SSH exec
+            // hangs until timeout.
+            await exec(`pkill -f '[w]ebsockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`);
             await exec(
-              `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`
+              `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 < /dev/null &`
             );
 
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
-            const runtimeHost = target.kind === "ssh" ? target.sshProfile?.host || savedHost : "localhost";
+            // The noVNC iframe is loaded by the OPERATOR'S BROWSER, so the URL
+            // must be resolvable from there. A saved host such as "kali" is a
+            // Docker-internal alias no browser can resolve, so it maps to
+            // localhost - where websockify is published in this deployment.
+            const runtimeHost = isDockerInternalHost(savedHost)
+              ? "localhost"
+              : savedHost;
             const vncURL = baseUrlOverride || `${runtimeHost}:${savedPort}`;
+            console.log(`[connect-vnc] session ${sessionId} -> ${vncURL}`);
             return res.status(200).json({
               vncURL,
               password: savedPassword,

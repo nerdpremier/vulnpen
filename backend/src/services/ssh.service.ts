@@ -49,6 +49,15 @@ export async function execSSHCommand(command: string, timeoutMs?: number): Promi
             ssh.end();
             finish(null, output);
           });
+
+          // Backgrounded children keep the channel open on some sshd setups,
+          // so 'close' never fires; settle on exit-status like execSSH does.
+          stream.on("exit", () => {
+            setTimeout(() => {
+              ssh.end();
+              finish(null, output);
+            }, 200);
+          });
         });
       })
       .on("keyboard-interactive", (_name, _instructions, _instructionsLang, prompts, finish_auth) => {

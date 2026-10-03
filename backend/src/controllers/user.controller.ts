@@ -610,6 +610,7 @@ import {
   writeVncPasswordCmd,
   hasVncPassword,
   xvncSecurityArgs,
+  isDockerInternalHost,
   APT_POLICY_GUARD_INSTALL,
   APT_POLICY_GUARD_REMOVE,
 } from "../utils/vncSetup";
@@ -1153,23 +1154,23 @@ export const autoSetupVNC = async (req: Request, res: Response) => {
             await execCmd(
               `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
                 `${xvncSecurityArgs(useVncAuth)} ` +
-                `-pn > /dev/null 2>&1 &`,
+                `-pn > /dev/null 2>&1 < /dev/null &`,
             );
             await new Promise((resolve) => setTimeout(resolve, 1500));
-            await execCmd(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
+            await execCmd(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup > /dev/null 2>&1 < /dev/null &`);
           } else if (isX11vnc) {
             await execCmd(
               "command -v Xvfb >/dev/null 2>&1 || " +
                 "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)",
             );
             await execCmd(
-              `Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`,
+              `Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 < /dev/null &`,
             );
             await new Promise((resolve) => setTimeout(resolve, 2000));
-            await execCmd(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
+            await execCmd(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup > /dev/null 2>&1 < /dev/null &`);
             await execCmd(
               `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escapedPw}' ` +
-                `-forever -shared -noxdamage > /dev/null 2>&1 &`,
+                `-forever -shared -noxdamage > /dev/null 2>&1 < /dev/null &`,
             );
             await new Promise((resolve) => setTimeout(resolve, 1500));
             // Verify x11vnc actually started
@@ -1194,12 +1195,13 @@ export const autoSetupVNC = async (req: Request, res: Response) => {
           );
           steps[3].done = true;
 
-          // Step 5: Start noVNC proxy
+          // Step 5: Start noVNC proxy. Bracketed pattern so pkill cannot match
+          // the shell running this command (self-kill hangs the SSH exec).
           await execCmd(
-            `pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`,
+            `pkill -f '[w]ebsockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`,
           );
           await execCmd(
-            `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`,
+            `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 < /dev/null &`,
           );
           await new Promise((resolve) => setTimeout(resolve, 1000));
           steps[4].done = true;
@@ -1207,12 +1209,9 @@ export const autoSetupVNC = async (req: Request, res: Response) => {
           const vncHost = target.kind === "ssh" ? target.sshProfile?.host || "localhost" : "localhost";
           const vncPort = "9020";
 
-          const isDockerInternal =
-            vncHost !== "localhost" &&
-            vncHost !== "127.0.0.1" &&
-            !/^\d+\.\d+\.\d+\.\d+$/.test(vncHost) &&
-            !vncHost.includes(".");
-          const baseUrl = isDockerInternal ? `http://localhost:${vncPort}` : "";
+          const baseUrl = isDockerInternalHost(vncHost)
+            ? `http://localhost:${vncPort}`
+            : "";
 
           // When Xvnc had no vncpasswd binary it starts without auth; surface an
           // empty password so the client doesn't prompt for an unused one.
@@ -1746,11 +1745,11 @@ export const repairVNC = async (req: Request, res: Response) => {
           await execSSHCommand(
             `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
               `${xvncSecurityArgs(useVncAuth)} ` +
-              `-pn > /dev/null 2>&1 &`,
+              `-pn > /dev/null 2>&1 < /dev/null &`,
           );
           await new Promise((r) => setTimeout(r, 1500));
           await execSSHCommand(
-            `export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`,
+            `export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup > /dev/null 2>&1 < /dev/null &`,
           );
           log.push(`Started Xvnc directly on ${VNC_DISPLAY}`);
           console.log(`[VNC Repair] Started Xvnc directly on ${VNC_DISPLAY}`);
@@ -1763,7 +1762,7 @@ export const repairVNC = async (req: Request, res: Response) => {
               "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)",
           );
           await execSSHCommand(
-            `Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`,
+            `Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 < /dev/null &`,
           );
           await new Promise((r) => setTimeout(r, 2000));
 
@@ -1777,11 +1776,11 @@ export const repairVNC = async (req: Request, res: Response) => {
           );
 
           await execSSHCommand(
-            `export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`,
+            `export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup > /dev/null 2>&1 < /dev/null &`,
           );
           const escaped = (savedPassword || "").replace(/'/g, "'\\''");
           await execSSHCommand(
-            `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escaped}' -forever -shared -noxdamage > /dev/null 2>&1 &`,
+            `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escaped}' -forever -shared -noxdamage > /dev/null 2>&1 < /dev/null &`,
           );
           await new Promise((r) => setTimeout(r, 1500));
 
@@ -1829,7 +1828,7 @@ export const repairVNC = async (req: Request, res: Response) => {
     if (fix === "all" || fix === "websockify") {
       try {
         await execSSHCommand(
-          `pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`,
+          `pkill -f '[w]ebsockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`,
         );
         log.push("Killed existing websockify");
         console.log("[VNC Repair] Killed existing websockify");
@@ -1840,7 +1839,7 @@ export const repairVNC = async (req: Request, res: Response) => {
 
       try {
         await execSSHCommand(
-          `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`,
+          `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 < /dev/null &`,
         );
         await new Promise((resolve) => setTimeout(resolve, 1500));
         log.push(`Started websockify on port ${WEBSOCKIFY_PORT}`);
