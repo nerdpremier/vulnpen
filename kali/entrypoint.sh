@@ -9,8 +9,15 @@ if [ -z "$KALI_ROOT_PASSWORD" ]; then
     exit 1
 fi
 echo "root:${KALI_ROOT_PASSWORD}" | chpasswd
-VNC_SEED_PASSWORD="$KALI_ROOT_PASSWORD"
-unset KALI_ROOT_PASSWORD
+
+# The backend hands the operator's browser VNC_PASSWORD from this same .env, so
+# that is the password the desktop must actually accept. Seeding the VNC passwd
+# file from KALI_ROOT_PASSWORD instead let the two drift apart whenever the
+# container was recreated, so every GUI login failed with "Authentication
+# failed" until the next auto-setup run rewrote the file.
+VNC_PASSWORD="$(sed -n '/^VNC_PASSWORD=/{s/^[^=]*=//; s/^"//; s/"$//; p;}' /run/vulnpen.env | tail -1)"
+VNC_SEED_PASSWORD="${VNC_PASSWORD:-$KALI_ROOT_PASSWORD}"
+unset KALI_ROOT_PASSWORD VNC_PASSWORD
 
 # Start SSH — use the daemon directly so we get a clean PID and proper error reporting
 /usr/sbin/sshd -D &
@@ -39,12 +46,26 @@ VNC_RFB_PORT="5989"
 VNC_NOVNC_PORT="9020"
 
 start_vnc_desktop() {
-    # VNC password: reuse the existing file, else seed it from the root password.
+    # Rewrite the VNC passwd file from VNC_SEED_PASSWORD on every boot. The file
+    # lives in the container layer, so a copy left behind by an earlier boot
+    # would keep accepting a password the backend no longer hands out.
+    # vncpasswd -f is the canonical writer and produces exactly what
+    # `Xvnc -rfbauth` reads back; x11vnc -storepasswd writes the same format
+    # when the image ships no vncpasswd.
     mkdir -p /root/.vnc
-    if [ ! -s /root/.vnc/passwd ]; then
-        echo "$VNC_SEED_PASSWORD" | x11vnc -storepasswd /root/.vnc/passwd >/dev/null 2>&1 || \
-            echo "$VNC_SEED_PASSWORD" | vncpasswd -f > /root/.vnc/passwd
-        chmod 600 /root/.vnc/passwd
+    if command -v vncpasswd >/dev/null 2>&1; then
+        printf '%s\n' "$VNC_SEED_PASSWORD" | vncpasswd -f > /root/.vnc/passwd 2>/dev/null || true
+    elif command -v x11vnc >/dev/null 2>&1; then
+        x11vnc -storepasswd "$VNC_SEED_PASSWORD" /root/.vnc/passwd >/dev/null 2>&1 || true
+    fi
+    chmod 600 /root/.vnc/passwd 2>/dev/null || true
+    # An empty passwd file makes Xvnc reject every client, so only pass
+    # -rfbauth when a password was actually written.
+    VNC_AUTH_ARGS=""
+    if [ -s /root/.vnc/passwd ]; then
+        VNC_AUTH_ARGS="-rfbauth /root/.vnc/passwd"
+    else
+        echo "WARN: no vncpasswd/x11vnc available; starting the desktop without VNC auth" >&2
     fi
 
     # Desktop session: prefer Xfce, fall back to xterm.
@@ -66,8 +87,9 @@ XS
     # them unconditionally.
     rm -f "/tmp/.X${VNC_DISPLAY#:}-lock" "/tmp/.X11-unix/X${VNC_DISPLAY#:}"
 
+    # shellcheck disable=SC2086  # VNC_AUTH_ARGS is intentionally word-split
     Xvnc "$VNC_DISPLAY" -geometry 1280x800 -depth 24 -rfbport "$VNC_RFB_PORT" \
-        -rfbauth /root/.vnc/passwd >/tmp/xvnc.log 2>&1 &
+        $VNC_AUTH_ARGS >/tmp/xvnc.log 2>&1 &
     sleep 3
     /root/.vnc/xstartup >/tmp/xstartup.log 2>&1 &
     websockify --web /usr/share/novnc/ "$VNC_NOVNC_PORT" "localhost:$VNC_RFB_PORT" >/dev/null 2>&1 &
@@ -101,6 +123,32 @@ ensure_burp_user_config() {
 }
 BURPCFG
     echo "Seeded a Burp user config that loads burp-rpc at startup"
+}
+
+# Burp shows its terms-and-conditions gate and its edition chooser BEFORE the
+# startup wizard, so on a fresh install the wizard never appears, every
+# orange-button scan misses ("no orange button found in 260x220+860+480") for a
+# full minute, and the desktop ends up with no Burp window in it. Both answers
+# persist in Java's user-prefs store rather than in UserConfig.json, so seed
+# that store before the first launch instead of clicking through dialogs whose
+# position and wording we do not control - note the edition chooser's only
+# orange button selects Professional, so a blind orange-click is wrong there.
+# These are the values this image's own Burp writes once accepted (EULA
+# revision 13, Community edition); delete the file to be prompted again, e.g.
+# if a future package raises the EULA revision.
+BURP_PREFS="/root/.java/.userPrefs/burp/prefs.xml"
+ensure_burp_prefs() {
+    [ -s "$BURP_PREFS" ] && return 0
+    mkdir -p "$(dirname "$BURP_PREFS")"
+    cat > "$BURP_PREFS" <<'PREFS'
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE map SYSTEM "http://java.sun.com/dtd/preferences.dtd">
+<map MAP_XML_VERSION="1.0">
+  <entry key="burp.eula" value="13"/>
+  <entry key="use_community_edition" value="true"/>
+</map>
+PREFS
+    echo "Seeded Burp prefs (terms accepted, Community edition)"
 }
 
 launch_burp_flow() {
@@ -147,6 +195,7 @@ CO
         # Discarding it is why the RPC bridge never came back after a restart, so
         # the saved config is loaded instead (and seeded above on a fresh install).
         ensure_burp_user_config
+        ensure_burp_prefs
 
         # Proxy listeners are project options, so a temporary project resets the
         # bind to loopback on every boot; the rebind below re-applies it via the
@@ -230,6 +279,14 @@ EOF
             if ss -tln 2>/dev/null | grep ":8080" | grep -q "127.0.0.1"; then
                 rebind_listener || true              # one retry pass
             fi
+        fi
+        # The rebind leaves Burp's Settings window covering the main UI, so the
+        # desktop would open on a settings page instead of the proxy dashboard.
+        # wmctrl posts the WM_DELETE_WINDOW message, which closes it whatever
+        # the dialog's geometry - the fragile alternative to clicking the close
+        # box - and does nothing when no Settings window is open.
+        if command -v wmctrl >/dev/null 2>&1; then
+            wmctrl -c "Settings" 2>/dev/null || true
         fi
         echo "Burp Suite started (wizard + burp-rpc + all-interfaces listener)"
     )

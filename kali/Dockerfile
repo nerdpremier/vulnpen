@@ -82,13 +82,41 @@ RUN apti \
 # WARNING: Adds ~500 extra packages and significant build time on top of core.
 # RUN apti kali-linux-default
 
-# Additional security tools (Go-based & Python-based - uncomment to pre-install)
+# -- Layer 6: Burp Suite + the desktop-automation deps its autostart needs --
+# entrypoint.sh opens Burp on the :89 desktop, drives its startup wizard with
+# synthetic X events, rebinds the proxy listener and loads the burp-rpc gRPC
+# bridge the backend's Burp tools talk to. That needs more than the desktop
+# layer provides:
+#   burpsuite   - the Community launcher + jar the autostart runs
+#   xautomation - xte, the synthetic pointer/keyboard driver for the clicks
+#   imagemagick - convert, the pixel scan that locates Burp's orange buttons
+#   x11-apps    - xwd, which dumps the root window for that scan
+#   procps      - pgrep, used by the Burp watchdog to notice Burp exiting
+#   wmctrl      - closes the leftover Settings window, by name, at startup
+# Without them the entrypoint's guard skips Burp entirely ("Burp autostart
+# skipped") and the GUI shows a desktop with no Burp window in it.
+RUN apti \
+      burpsuite xautomation imagemagick x11-apps procps x11-utils wmctrl
+
+# burp-rpc is the Burp extension that exposes Burp over gRPC on
+# 0.0.0.0:50051; the backend's burp_* tools and the BURP panel connect to
+# that port, so the container cannot do Burp work without it. entrypoint.sh
+# loads it from this exact path (BURP_USER_CONFIG ->
+# extender.extensions[0].extension_file), so the name and location are a
+# contract, not a preference. Pin the URL to a release tag to freeze the
+# version; the default tracks the latest published jar.
+ARG BURP_RPC_JAR_URL="https://github.com/shero4/burp-rpc/releases/latest/download/burp-rpc.jar"
+RUN curl -fsSL --retry 3 --retry-delay 5 --max-time 900 -o /opt/burp-rpc.jar "$BURP_RPC_JAR_URL" \
+    && unzip -l /opt/burp-rpc.jar > /dev/null \
+    && ls -l /opt/burp-rpc.jar
+
 # Entrypoint is copied last on purpose: it changes far more often than the
 # package layers above, and keeping it here means editing it rebuilds in
 # seconds instead of reinstalling Burp, the desktop and the browser stack.
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Additional security tools (Go-based & Python-based - uncomment to pre-install)
 COPY tools.sh /tools.sh
 RUN chmod +x /tools.sh
 # RUN /tools.sh

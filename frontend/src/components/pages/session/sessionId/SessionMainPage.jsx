@@ -6,8 +6,8 @@ import ChatView from "./ChatView";
 import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
 import BurpProxyPage from "@/components/pages/session/burp/BurpProxyPage";
 
-// Tabs shown at the top of the screen. "browser" is always present;
-// "burp" only appears once a panel is open, next to it.
+// The right rail: one strip split into two halves, BROWSER AGENT above and
+// BURP below. Each half toggles its own panel.
 const RAIL_TABS = [
   { key: "browser", label: "BROWSER AGENT" },
   { key: "burp", label: "BURP" },
@@ -32,9 +32,9 @@ const railTabStyle = (active) => ({
 const SessionMainPage = ({ session_id }) => {
   const [panelWidth, setPanelWidth] = useState(45);
   const [isDragging, setIsDragging] = useState(false);
-  // The rail starts as a single BROWSER AGENT strip; clicking it opens the
-  // panel and the rail expands to show the BURP tab next to it. Clicking the
-  // active tab again closes the panel back to the single strip.
+  // Clicking a rail tab opens that panel; clicking the active tab again
+  // closes it. The two tabs are independent, so a BURP click never opens
+  // the browser-agent view and vice versa.
   const [activePanel, setActivePanel] = useState(null);
 
   // Unfold the live browser view whenever the agent starts driving the
@@ -43,9 +43,9 @@ const SessionMainPage = ({ session_id }) => {
   // panel themselves (manualOpenRef keeps their choice until the agent's
   // next browser action supersedes it).
   const manualOpenRef = useRef(false);
-  const openPanelManually = useCallback(() => {
+  const openPanelManually = useCallback((key) => {
     manualOpenRef.current = true;
-    setActivePanel((prev) => (prev === "browser" ? null : "browser"));
+    setActivePanel((prev) => (prev === key ? null : key));
   }, []);
   useEffect(() => {
     const open = () => {
@@ -157,7 +157,7 @@ const SessionMainPage = ({ session_id }) => {
           </>
         )}
 
-        {/* Right strip: one column split into two halves â€”
+        {/* Right strip: one column split into two halves -
             BROWSER AGENT on top, BURP below */}
         <div
           style={{
@@ -173,7 +173,7 @@ const SessionMainPage = ({ session_id }) => {
             return (
               <button
                 key={tab.key}
-                onClick={openPanelManually}
+                onClick={() => openPanelManually(tab.key)}
                 title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
                 style={railTabStyle(active)}
               >
