@@ -23,7 +23,7 @@ import {
   buildPendingConsentBatch,
   ToolExecutionCallbacks,
 } from "./agent.tools";
-import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
+import { planCompaction, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
 import { OWASP_TOP10_2025, normalizeOwaspTop10Id } from "../knowledge";
 import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
@@ -369,11 +369,6 @@ export async function runAgentLoop(params: {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let iteration = 0;
   let lastPromptTokens: number | undefined;
-  // True right after a summarization pass. If the working set is still over
-  // budget on the next iteration (summary + recent window + system message
-  // simply do not fit), summarizing again cannot shrink it and would loop —
-  // degrade gracefully to a larger working set instead.
-  let summarizedLastIteration = false;
   const newMessages: AgentMessageDoc[] = [];
   let completedNormally = false;
   const approvalRejections = new ApprovalRejectionTracker();
@@ -433,18 +428,35 @@ export async function runAgentLoop(params: {
         break;
       }
 
-      if (summarizedLastIteration) {
-        summarizedLastIteration = false;
-      } else if (await shouldSummarize(messages, lastPromptTokens)) {
-        summarizedLastIteration = true;
-        sse.write("summarizing", { message: "Context approaching limit, summarizing..." });
+      // Compaction is planned EVERY iteration from the current message list.
+      // The previous implementation gated on a cached lastPromptTokens that was
+      // never reset after a summary, so once the prompt crossed the threshold
+      // every single tool-loop iteration re-summarized: compress, run one or
+      // two tools, compress again. planCompaction re-estimates from the
+      // post-compaction message list and additionally refuses to summarize when
+      // too few new messages have accumulated, or when the summary would not
+      // free meaningful space (an LLM call spent for nothing).
+      const compaction = await planCompaction(messages, lastPromptTokens);
+      if (compaction.shouldCompact) {
+        sse.write("summarizing", {
+          message: "Context approaching limit, summarizing...",
+          promptTokens: compaction.promptTokens,
+          budget: compaction.budget,
+          projectedPromptTokens: compaction.projectedPromptTokens,
+          reason: compaction.reason,
+        });
 
-        const { summaryMessage, preservedMessages } = await summarizeMessages(
-          messages,
-          { sessionId, userId },
-          engagementState,
-        );
+        const { summaryMessage, preservedMessages, projectedPromptTokens } =
+          await summarizeMessages(
+            messages,
+            { sessionId, userId },
+            engagementState,
+          );
         messages = preservedMessages;
+        // Reset the cached prompt size to the POST-compaction projection.
+        // Keeping the pre-summary number here is what caused the re-summary
+        // loop: the next iteration measured a prompt that no longer existed.
+        lastPromptTokens = projectedPromptTokens;
 
         await replaceMessages(sessionId, messages);
         newMessages.length = 0;
@@ -588,12 +600,16 @@ export async function runAgentLoop(params: {
 
       if (result.finishReason === "length") {
         sse.write("summarizing", { message: "Hit token limit, summarizing..." });
-        const { preservedMessages } = await summarizeMessages(
+        const { preservedMessages, projectedPromptTokens } = await summarizeMessages(
           messages,
           { sessionId, userId },
           engagementState,
         );
         messages = preservedMessages;
+        // Same reset as the proactive path: the completion was truncated at the
+        // token limit, so the cached prompt size is stale-high and would trigger
+        // another summary on the very next iteration.
+        lastPromptTokens = projectedPromptTokens;
         await replaceMessages(sessionId, messages);
         newMessages.length = 0;
         continue;

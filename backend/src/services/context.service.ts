@@ -5,26 +5,69 @@ import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 
-// Summarize well below half the context window, not 70%: prompt tokens are
-// paid every inference call, so a history that idles near the threshold is the
-// single biggest cost driver (a measured run idled at ~88k prompt tokens for
-// hundreds of turns).
+// ─── Budget model ──────────────────────────────────────────────────────────
+// The full prompt sent on EVERY tool-loop iteration is
+//     system prompt  +  core tool schemas  +  conversation history
+// and it is re-sent on every iteration, so it is both the biggest cost driver
+// and the thing compaction exists to bound. Two properties keep it cheap:
+//   1. the static prefix is prompt-cached by the provider, so the marginal
+//      cost is dominated by the fresh tail; and
+//   2. the history is summarized before it can idle large.
+//
+// The failure this file exists to prevent is SUMMARIZATION THRASHING: a long
+// (~97-case) run that summarized, ran one or two tools, and summarized again,
+// each rewrite throwing away detail the model had just paid to read. Three
+// defects caused it; each is now guarded:
+//   a. a fixed-overhead constant was added on top of an estimate that already
+//      contained the system prompt, double-counting ~4.6k tokens and firing the
+//      budget check far too early;
+//   b. the cached prompt size was never reset after a summary, so the next
+//      iteration measured the pre-summary prompt and summarized again;
+//   c. nothing guaranteed the post-summary prompt was actually BELOW the
+//      budget, so a summary that freed little re-triggered immediately.
 const SUMMARIZE_THRESHOLD = 0.40;
-// Cap the working set by absolute cost, not only by context window: on
-// million-token models the window threshold (40% = 400k) never fires, so the
-// history idled at ~45k prompt tokens and was re-sent on every one of hundreds
-// of tool-loop calls (an 8.1M-token session traced back to exactly this).
-// The budget is checked against the FULL prompt (lastPromptTokens), which
-// includes the system message (~4.7k tokens) and the core tool schemas (~4k).
-// 14k therefore leaves roughly 5k of history: summary + recent window fit
-// inside that (summary ~1k, recent tool results capped at 2.5k chars each), so
-// summarisation does not thrash. The stable prefix is prompt-cached on
-// Anthropic providers, so the marginal cost per call is dominated by the
-// fresh tail. Do not lower further without shrinking PRESERVE_RECENT_MESSAGES
-// and the tool-result caps to match, or summarisation will thrash.
-const WORKING_SET_TOKEN_BUDGET = 14_000;
+// Absolute ceiling on the full prompt. Measured fixed payload is ~7.7k tokens
+// (system prompt ~4.6k + nine core tool schemas ~3.2k); the preserved window is
+// capped at RECENT_WINDOW_TOKEN_BUDGET and the summary at ~SUMMARY_TOKEN_ESTIMATE,
+// so 18k leaves roughly 5k of headroom — several tool rounds — before the next
+// summary. Raising this is not "more cost": it trades a few cached-prefix
+// tokens for far fewer (expensive, lossy) summarizer calls.
+const WORKING_SET_TOKEN_BUDGET = 18_000;
+// Tool schemas are NOT part of `messages`; everything else is counted from the
+// message list itself (system prompt included). A single honest constant for
+// the schema cost is what removes the double-count above.
+const TOOL_SCHEMA_TOKEN_ESTIMATE = 3_200;
+
 const CHARS_PER_TOKEN_ESTIMATE = 3.5;
+
+// Recent history kept verbatim after a compaction. Doubles as the reasoning
+// replay window in messagesToOpenAI.
 const PRESERVE_RECENT_MESSAGES = 6;
+// ...but the verbatim window is bounded by TOKENS, not only a message count: a
+// fixed count is meaningless when one scan dump is 2.5k chars and five
+// follow-ups are one-liners. MIN guarantees immediate continuity; the token
+// budget bounds the rest; MAX stops a run of tiny messages from preserving
+// everything (and therefore summarizing nothing).
+const MIN_PRESERVE_MESSAGES = 4;
+const MAX_PRESERVE_MESSAGES = 12;
+const RECENT_WINDOW_TOKEN_BUDGET = 3_000;
+
+// Anti-thrash cooldown: after a summary, BOTH enough messages AND enough fresh
+// tokens must accumulate before another is allowed. The token arm matters
+// because the preserved window itself counts as "since the summary" and can
+// satisfy a pure message count while nothing meaningful has happened.
+const MIN_MESSAGES_BEFORE_RECOMPACT = 8;
+const MIN_NEW_TOKENS_BEFORE_RECOMPACT = 4_000;
+
+// Projected size of the generated summary, used to estimate the post-compaction
+// prompt (so a compaction that cannot actually free space is refused) and to
+// reset the caller's cached prompt size after a real compaction.
+const SUMMARY_TOKEN_ESTIMATE = 800;
+// A compaction must remove at least this fraction of the summarizable history,
+// otherwise the extra LLM call costs more than the tokens it saves and the
+// detail it destroys is not worth it.
+const MIN_COMPACTION_SAVINGS_RATIO = 0.15;
+
 // Tool results older than this many messages are collapsed to a stub: the
 // summary and the engagement state already carry what mattered, and re-sending
 // full scan output for hundreds of turns was pure token burn.
@@ -32,40 +75,200 @@ const RECENT_FULL_TOOL_RESULTS = 8;
 const STALE_TOOL_RESULT_CHARS = 250;
 // Old tool-call ARGUMENTS are stubbed too: re-sending a 5k-char nmap command
 // or a full add_vulnerability payload hundreds of turns later is pure burn.
-// The result stub and the summary carry the outcome.
 const STALE_TOOL_CALL_ARGS_CHARS = 200;
 // Even fresh (recent-window) tool results get a ceiling: one oversized scan
 // dump inside the recent window can blow the whole working-set budget on its
-// own. Past this size the head+tail keep the opening status and final summary;
-// the agent can re-run the tool with narrower output if the middle mattered.
+// own. Past this size the head+tail keep the opening status and final verdict.
 const RECENT_TOOL_RESULT_MAX_CHARS = 2_500;
+// Ceiling on the transcript handed to the summarizer. The engagement state
+// already carries hosts/ports/vulns/credentials, so the summarizer only needs
+// the narrative; a long 97-case run otherwise ships tens of thousands of chars
+// of tool output to buy a summary that fits in ~1k tokens.
+const MAX_SUMMARIZER_INPUT_CHARS = 24_000;
 
-function estimateTokens(text: string | null): number {
-  if (!text) return 0;
-  return Math.ceil(text.length / CHARS_PER_TOKEN_ESTIMATE);
+/**
+ * Estimated token cost of ONE message as it will actually be rendered into the
+ * prompt, i.e. AFTER the tool-result and tool-argument caps applied by
+ * messagesToOpenAI. Estimating on raw content instead made the budget check
+ * wildly pessimistic on scan-heavy sessions and triggered compaction while the
+ * real prompt was still small.
+ */
+function estimateMessageTokens(m: AgentMessageDoc, index: number, total: number): number {
+  const isStale = index < total - RECENT_FULL_TOOL_RESULTS;
+  let chars = m.content?.length ?? 0;
+  if (m.role === "tool") {
+    const cap = isStale ? STALE_TOOL_RESULT_CHARS : RECENT_TOOL_RESULT_MAX_CHARS;
+    chars = Math.min(chars, cap);
+  } else if (m.role === "assistant" && m.toolCalls?.length) {
+    for (const tc of m.toolCalls) {
+      chars += Math.min(tc.arguments.length, isStale ? STALE_TOOL_CALL_ARGS_CHARS : tc.arguments.length);
+    }
+  }
+  // +1 token per capped message approximates the elision marker text.
+  return 4 + Math.ceil(chars / CHARS_PER_TOKEN_ESTIMATE) + (chars > 0 ? 1 : 0);
 }
 
-function estimateMessagesTokens(messages: Array<{ role: string; content: string | null }>): number {
+export function estimatePromptTokens(messages: AgentMessageDoc[]): number {
   let total = 0;
-  for (const msg of messages) {
-    total += 4; // role + structural overhead
-    total += estimateTokens(msg.content);
+  for (let i = 0; i < messages.length; i++) {
+    total += estimateMessageTokens(messages[i], i, messages.length);
   }
   return total;
 }
 
-export async function shouldSummarize(
+/**
+ * Messages appended since the last summary, or the whole history when there is
+ * no summary yet. Drives the compaction cooldown.
+ */
+export function messagesSinceSummary(messages: AgentMessageDoc[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].isSummary) return messages.length - 1 - i;
+  }
+  return messages.length;
+}
+
+/** Estimated tokens appended since the last summary (token arm of the cooldown). */
+export function tokensSinceSummary(messages: AgentMessageDoc[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].isSummary) return estimatePromptTokens(messages.slice(i + 1));
+  }
+  return estimatePromptTokens(messages);
+}
+
+/**
+ * Split the summarizable history into what to fold into the summary and what to
+ * keep verbatim. The kept suffix is bounded by TOKENS (with a small message
+ * floor and ceiling) so the post-compaction prompt lands well below budget; the
+ * split is walked back so a tool result is never orphaned from the assistant
+ * message that produced it.
+ */
+export function selectPreservedWindow(nonSystemMessages: AgentMessageDoc[]): {
+  toSummarize: AgentMessageDoc[];
+  toPreserve: AgentMessageDoc[];
+} {
+  const total = nonSystemMessages.length;
+  let preserveCount = 0;
+  let preservedTokens = 0;
+  for (let i = total - 1; i >= 0; i--) {
+    if (preserveCount >= MAX_PRESERVE_MESSAGES) break;
+    const cost = estimateMessageTokens(nonSystemMessages[i], i, total);
+    if (preserveCount >= MIN_PRESERVE_MESSAGES && preservedTokens + cost > RECENT_WINDOW_TOKEN_BUDGET) {
+      break;
+    }
+    preserveCount++;
+    preservedTokens += cost;
+  }
+
+  let splitIndex = total - preserveCount;
+  while (splitIndex > 0 && nonSystemMessages[splitIndex]?.role === "tool") {
+    splitIndex--;
+  }
+
+  return {
+    toSummarize: nonSystemMessages.slice(0, splitIndex),
+    toPreserve: nonSystemMessages.slice(splitIndex),
+  };
+}
+
+export interface CompactionPlan {
+  shouldCompact: boolean;
+  reason: string;
+  promptTokens: number;
+  budget: number;
+  projectedPromptTokens: number;
+}
+
+function lastSummaryText(messages: AgentMessageDoc[]): string {
+  return messages
+    .filter((m) => m.isSummary && m.content)
+    .map((m) => m.content!)
+    .join("\n\n");
+}
+
+/**
+ * Decide whether the conversation must be compacted, and — crucially — whether
+ * compaction would actually help. Three guards, each of which exists because a
+ * measured run hit its failure mode:
+ *  1. budget:   the measured full prompt must exceed the working-set cap
+ *  2. cooldown: enough NEW messages AND new tokens must have accumulated since
+ *     the last summary, otherwise the fixed payload alone forces a re-summary
+ *     loop (compress -> one tool call -> compress)
+ *  3. savings:  the summary must free a meaningful share of the summarizable
+ *     history, so we never pay for a summary that frees nothing — and never one
+ *     that frees so little it re-triggers on the very next iteration
+ */
+export async function planCompaction(
   messages: AgentMessageDoc[],
   lastPromptTokens?: number,
-): Promise<boolean> {
+): Promise<CompactionPlan> {
   const config = await getProvider();
   const limit = getModelContextLimit(config.model);
-  const inputTokens = lastPromptTokens ?? estimateMessagesTokens(
-    messages.map((m) => ({ role: m.role, content: m.content })),
-  );
-  const threshold = Math.min(limit * SUMMARIZE_THRESHOLD, WORKING_SET_TOKEN_BUDGET);
-  return inputTokens > threshold;
+  const budget = Math.min(limit * SUMMARIZE_THRESHOLD, WORKING_SET_TOKEN_BUDGET);
+
+  const systemMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
+  const nonSystem = messages.filter((m) => !m.isSummary && m.role !== "system");
+
+  // Full prompt = measured messages (system prompt included) + the tool schemas
+  // that ride along on every call. The provider-reported number, when present,
+  // is the ground truth and wins.
+  const estimatedFullPrompt = estimatePromptTokens(messages) + TOOL_SCHEMA_TOKEN_ESTIMATE;
+  const promptTokens = Math.max(estimatedFullPrompt, lastPromptTokens ?? 0);
+
+  const { toPreserve } = selectPreservedWindow(nonSystem);
+  const preservedTokens = estimatePromptTokens(toPreserve);
+  const projectedPromptTokens =
+    estimatePromptTokens(systemMessages) +
+    SUMMARY_TOKEN_ESTIMATE +
+    preservedTokens +
+    TOOL_SCHEMA_TOKEN_ESTIMATE;
+
+  const base = { promptTokens, budget, projectedPromptTokens };
+
+  if (promptTokens <= budget) {
+    return { shouldCompact: false, reason: "within-budget", ...base };
+  }
+
+  // Cooldown first: the cheapest guard, and the one that stops the loop.
+  if (messages.some((m) => m.isSummary)) {
+    const newMessages = messagesSinceSummary(messages);
+    const newTokens = tokensSinceSummary(messages);
+    if (
+      newMessages < MIN_MESSAGES_BEFORE_RECOMPACT ||
+      newTokens < MIN_NEW_TOKENS_BEFORE_RECOMPACT
+    ) {
+      return { shouldCompact: false, reason: "cooldown", ...base };
+    }
+  }
+
+  const { toSummarize } = selectPreservedWindow(nonSystem);
+  if (toSummarize.length === 0) {
+    return { shouldCompact: false, reason: "nothing-to-summarize", ...base };
+  }
+
+  // Compare the projected history against the current history (not the full
+  // prompt): the system prompt and tool schemas survive compaction untouched,
+  // so measuring against the full prompt made a history that was already
+  // minimal look like a huge saving.
+  const currentHistoryTokens = estimatePromptTokens(nonSystem);
+  if (preservedTokens + SUMMARY_TOKEN_ESTIMATE > currentHistoryTokens * (1 - MIN_COMPACTION_SAVINGS_RATIO)) {
+    return { shouldCompact: false, reason: "insufficient-savings", ...base };
+  }
+
+  return { shouldCompact: true, reason: "over-budget", ...base };
 }
+
+export const COMPACTION_TUNING = {
+  WORKING_SET_TOKEN_BUDGET,
+  TOOL_SCHEMA_TOKEN_ESTIMATE,
+  PRESERVE_RECENT_MESSAGES,
+  MIN_PRESERVE_MESSAGES,
+  MAX_PRESERVE_MESSAGES,
+  RECENT_WINDOW_TOKEN_BUDGET,
+  MIN_MESSAGES_BEFORE_RECOMPACT,
+  MIN_NEW_TOKENS_BEFORE_RECOMPACT,
+  MIN_COMPACTION_SAVINGS_RATIO,
+  SUMMARY_TOKEN_ESTIMATE,
+} as const;
 
 const FALLBACK_SUMMARIZE_PROMPT = `You are a penetration test engagement summarizer. Your job is to compress a conversation history into a dense summary that preserves all important context for continuing the engagement.
 
@@ -101,42 +304,36 @@ Summarize only the reasoning and narrative context around these findings.`;
   return FALLBACK_SUMMARIZE_PROMPT;
 }
 
+export interface CompactionResult {
+  summaryMessage: AgentMessageDoc | null;
+  preservedMessages: AgentMessageDoc[];
+  /** Estimated prompt size after compaction, so the caller can reset its cache. */
+  projectedPromptTokens: number;
+}
+
 export async function summarizeMessages(
   messages: AgentMessageDoc[],
   traceContext?: { sessionId?: string; userId?: string },
   engagementState?: EngagementState,
-): Promise<{
-  summaryMessage: AgentMessageDoc;
-  preservedMessages: AgentMessageDoc[];
-}> {
-  const systemMsg = messages.find((m) => m.role === "system");
-  const nonSystemMessages = messages.filter((m) => m.role !== "system");
+): Promise<CompactionResult> {
+  const fixedMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
+  const nonSystemMessages = messages.filter((m) => !m.isSummary && m.role !== "system");
 
-  if (nonSystemMessages.length <= PRESERVE_RECENT_MESSAGES) {
+  const { toSummarize, toPreserve } = selectPreservedWindow(nonSystemMessages);
+
+  if (toSummarize.length === 0) {
     return {
-      summaryMessage: null as any,
+      summaryMessage: null,
       preservedMessages: messages,
+      projectedPromptTokens: estimatePromptTokens(messages) + TOOL_SCHEMA_TOKEN_ESTIMATE,
     };
   }
 
-  let splitIndex = nonSystemMessages.length - PRESERVE_RECENT_MESSAGES;
-
-  // Walk the split boundary backwards so we never orphan tool-result messages
-  // from their preceding assistant+tool_calls message. If the first preserved
-  // message is a tool result, pull the boundary back until the matching
-  // assistant message (and any sibling tool results) are also preserved.
-  while (splitIndex > 0 && nonSystemMessages[splitIndex]?.role === "tool") {
-    splitIndex--;
-  }
-
-  const toSummarize = nonSystemMessages.slice(0, splitIndex);
-  const toPreserve = nonSystemMessages.slice(splitIndex);
-
-  const conversationText = toSummarize
+  const transcript = toSummarize
     .map((m) => {
       if (m.role === "assistant" && m.toolCalls?.length) {
         const toolDesc = m.toolCalls
-          .map((tc) => `[Tool: ${tc.name}](${tc.arguments})`)
+          .map((tc) => `[Tool: ${tc.name}](${tc.arguments.slice(0, 300)})`)
           .join(", ");
         return `Assistant: ${m.content ?? ""} ${toolDesc}`;
       }
@@ -147,10 +344,26 @@ export async function summarizeMessages(
     })
     .join("\n\n");
 
+  // Carry the previous summary forward explicitly. It used to be dropped
+  // silently, so every re-summary lost everything summarized two rounds ago —
+  // the most damaging defect in a long 97-case run.
+  const previous = lastSummaryText(messages);
+  const transcriptWithHistory =
+    (previous
+      ? `Existing summary of the earlier conversation (carry it forward, do not lose detail):\n${previous}\n\n--- NEW EVENTS SINCE THAT SUMMARY ---\n`
+      : "") + transcript;
+
+  const boundedTranscript =
+    transcriptWithHistory.length <= MAX_SUMMARIZER_INPUT_CHARS
+      ? transcriptWithHistory
+      : transcriptWithHistory.slice(0, MAX_SUMMARIZER_INPUT_CHARS * 0.7) +
+        `\n... [middle of history elided from the summarizer input] ...\n` +
+        transcriptWithHistory.slice(-MAX_SUMMARIZER_INPUT_CHARS * 0.25);
+
   const summaryResult = await invoke_llm({
     messages: [
       { role: "system", content: buildSummarizePrompt(engagementState) },
-      { role: "user", content: conversationText },
+      { role: "user", content: boundedTranscript },
     ] as OpenAI.Chat.ChatCompletionMessageParam[],
     temperature: 0.3,
     sessionId: traceContext?.sessionId,
@@ -170,17 +383,18 @@ export async function summarizeMessages(
     isSummary: true,
   };
 
-  const result: AgentMessageDoc[] = [];
-  if (systemMsg) result.push(systemMsg);
-  result.push(summaryMessage);
-  result.push(...toPreserve);
+  const result: AgentMessageDoc[] = [...fixedMessages, summaryMessage, ...toPreserve];
 
   return {
     summaryMessage,
     preservedMessages: result,
+    projectedPromptTokens:
+      estimatePromptTokens(fixedMessages) +
+      SUMMARY_TOKEN_ESTIMATE +
+      estimatePromptTokens(toPreserve) +
+      TOOL_SCHEMA_TOKEN_ESTIMATE,
   };
 }
-
 export function messagesToOpenAI(
   messages: AgentMessageDoc[],
   includeReasoningContent = false,
