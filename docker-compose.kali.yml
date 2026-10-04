@@ -67,6 +67,21 @@ services:
       retries: 24
       start_period: 10s
 
+  frontend:
+    container_name: vulnpen-frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI:-http://localhost:8080}
+        NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-LOCAL}
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
   kali:
     container_name: vulnpen-kali

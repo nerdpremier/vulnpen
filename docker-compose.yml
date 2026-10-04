@@ -75,6 +75,19 @@ services:
       - "127.0.0.1:4000:3000"
     restart: unless-stopped
 
+  frontend:
+    container_name: vulnpen-frontend
+    build:
+      context: ./frontend
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   mongodb-data:
     driver: local
