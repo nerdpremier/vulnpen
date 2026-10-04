@@ -11,6 +11,14 @@ COPY package.json pnpm-lock.yaml* ./
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
+# Next.js inlines NEXT_PUBLIC_* at build time, so these must be present as build
+# args; passing them only through env_file at runtime does not reach the client
+# bundle. Defaults match a workstation install.
+ARG NEXT_PUBLIC_BACKEND_URI=http://localhost:8080
+ARG NEXT_PUBLIC_DEPLOYMENT=LOCAL
+ENV NEXT_PUBLIC_BACKEND_URI=$NEXT_PUBLIC_BACKEND_URI
+ENV NEXT_PUBLIC_DEPLOYMENT=$NEXT_PUBLIC_DEPLOYMENT
+
 COPY . .
 
 RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
