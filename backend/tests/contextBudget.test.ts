@@ -58,6 +58,7 @@ import {
   estimatePromptTokens,
   COMPACTION_TUNING,
   selectPreservedWindow,
+  estimateToolSchemaTokens,
 } from "../src/services/context.service";
 
 function turn(i: number, chars: number): AgentMessageDoc {
@@ -204,4 +205,30 @@ test("the recompaction cooldown also requires new tokens, not just new messages"
   const plan = await planCompaction(msgs);
   assert.equal(plan.shouldCompact, false);
   assert.equal(plan.reason, "cooldown");
+});
+test("estimateToolSchemaTokens scales with the tool set instead of guessing", () => {
+  const one = estimateToolSchemaTokens([
+    { type: "function", function: { name: "a", description: "x", parameters: { type: "object", properties: {} } } } as never,
+  ]);
+  const many = estimateToolSchemaTokens(
+    Array.from({ length: 9 }, (_, i) => ({
+      type: "function",
+      function: { name: "tool" + i, description: "d".repeat(200), parameters: { type: "object", properties: {} } },
+    })) as never,
+  );
+  assert.ok(one > 0);
+  assert.ok(many > one * 5, "more tools must cost more");
+});
+
+test("planCompaction prices the caller-supplied tool-schema cost", async () => {
+  const msgs: AgentMessageDoc[] = [
+    doc({ id: "sys", role: "system", content: "system " + "S".repeat(2_000) }),
+    ...Array.from({ length: 6 }, (_, i) => turn(i, 20)),
+  ];
+  const base = await planCompaction(msgs);
+  const heavy = await planCompaction(msgs, undefined, 50_000);
+  assert.ok(
+    heavy.promptTokens - base.promptTokens >= 40_000,
+    "the schema cost must move the full-prompt estimate",
+  );
 });

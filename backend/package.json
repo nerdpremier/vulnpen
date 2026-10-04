@@ -14,6 +14,7 @@
     "dev": "nodemon dist/server.js",
     "build": "tsc -p ./tsconfig.json",
     "test": "tsx --test tests/*.test.ts",
+    "check:context": "tsx scripts/context-live-check.ts",
     "migrate:db-name": "node scripts/migrate-database-name.mjs",
     "migrate:risk-matrix": "node scripts/migrate-risk-matrix.mjs",
     "lint": "eslint .",

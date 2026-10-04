@@ -117,6 +117,24 @@ export function estimatePromptTokens(messages: AgentMessageDoc[]): number {
 }
 
 /**
+ * Estimated token cost of the tool schemas sent alongside the messages. They are
+ * NOT part of the message list, so the compaction budget must add them
+ * separately. Computed from the schemas actually in play rather than a fixed
+ * constant: the agent can load deferred tools mid-run (load_tools), which grows
+ * the payload, and a stale constant would then under-count and let the prompt
+ * creep toward the model window. The JSON envelope plus per-tool framing are
+ * approximated by the same char/token ratio used everywhere else, which the
+ * live calibration lands slightly ABOVE the provider count (safe).
+ */
+export function estimateToolSchemaTokens(tools: OpenAI.Chat.ChatCompletionTool[]): number {
+  let chars = 0;
+  for (const tool of tools) {
+    chars += JSON.stringify(tool).length + 24; // per-tool envelope
+  }
+  return chars === 0 ? 0 : Math.ceil(chars / CHARS_PER_TOKEN_ESTIMATE);
+}
+
+/**
  * Messages appended since the last summary, or the whole history when there is
  * no summary yet. Drives the compaction cooldown.
  */
@@ -200,6 +218,7 @@ function lastSummaryText(messages: AgentMessageDoc[]): string {
 export async function planCompaction(
   messages: AgentMessageDoc[],
   lastPromptTokens?: number,
+  toolSchemaTokens: number = TOOL_SCHEMA_TOKEN_ESTIMATE,
 ): Promise<CompactionPlan> {
   const config = await getProvider();
   const limit = getModelContextLimit(config.model);
@@ -211,7 +230,7 @@ export async function planCompaction(
   // Full prompt = measured messages (system prompt included) + the tool schemas
   // that ride along on every call. The provider-reported number, when present,
   // is the ground truth and wins.
-  const estimatedFullPrompt = estimatePromptTokens(messages) + TOOL_SCHEMA_TOKEN_ESTIMATE;
+  const estimatedFullPrompt = estimatePromptTokens(messages) + toolSchemaTokens;
   const promptTokens = Math.max(estimatedFullPrompt, lastPromptTokens ?? 0);
 
   const { toPreserve } = selectPreservedWindow(nonSystem);
@@ -220,7 +239,7 @@ export async function planCompaction(
     estimatePromptTokens(systemMessages) +
     SUMMARY_TOKEN_ESTIMATE +
     preservedTokens +
-    TOOL_SCHEMA_TOKEN_ESTIMATE;
+    toolSchemaTokens;
 
   const base = { promptTokens, budget, projectedPromptTokens };
 
@@ -293,6 +312,7 @@ function buildSummarizePrompt(state?: EngagementState): string {
 - Context about WHY certain approaches were tried
 - Observations that don't fit structured categories
 - Current thinking direction and open questions
+- Unverified leads and the exact next action to close each one (keep these even when brief)
 - Active shells and their purposes
 
 Do NOT re-list hosts, ports, credentials, vulnerabilities, flag attempts, or file analyses — those are already tracked in the structured engagement state below:
@@ -315,6 +335,7 @@ export async function summarizeMessages(
   messages: AgentMessageDoc[],
   traceContext?: { sessionId?: string; userId?: string },
   engagementState?: EngagementState,
+  toolSchemaTokens: number = TOOL_SCHEMA_TOKEN_ESTIMATE,
 ): Promise<CompactionResult> {
   const fixedMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
   const nonSystemMessages = messages.filter((m) => !m.isSummary && m.role !== "system");
@@ -325,7 +346,7 @@ export async function summarizeMessages(
     return {
       summaryMessage: null,
       preservedMessages: messages,
-      projectedPromptTokens: estimatePromptTokens(messages) + TOOL_SCHEMA_TOKEN_ESTIMATE,
+      projectedPromptTokens: estimatePromptTokens(messages) + toolSchemaTokens,
     };
   }
 
@@ -392,7 +413,7 @@ export async function summarizeMessages(
       estimatePromptTokens(fixedMessages) +
       SUMMARY_TOKEN_ESTIMATE +
       estimatePromptTokens(toPreserve) +
-      TOOL_SCHEMA_TOKEN_ESTIMATE,
+      toolSchemaTokens,
   };
 }
 export function messagesToOpenAI(

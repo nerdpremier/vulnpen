@@ -23,7 +23,7 @@ import {
   buildPendingConsentBatch,
   ToolExecutionCallbacks,
 } from "./agent.tools";
-import { planCompaction, summarizeMessages, messagesToOpenAI } from "./context.service";
+import { planCompaction, summarizeMessages, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
 import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
 import { OWASP_TOP10_2025, normalizeOwaspTop10Id } from "../knowledge";
 import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
@@ -436,7 +436,18 @@ export async function runAgentLoop(params: {
       // post-compaction message list and additionally refuses to summarize when
       // too few new messages have accumulated, or when the summary would not
       // free meaningful space (an LLM call spent for nothing).
-      const compaction = await planCompaction(messages, lastPromptTokens);
+      // The tool schemas ride along on every call but are not part of the
+      // message list; cost them from the schemas actually in play (including
+      // deferred tools loaded mid-run) so the budget self-corrects.
+      const unconfiguredTools = getUnconfiguredToolNames();
+      const tools = toolRegistry.toOpenAISchemas({
+        agentRole: "main",
+        disabledTools: disabledAgentTools,
+        unconfiguredTools,
+        loadedTools: session.loadedTools ?? [],
+      });
+      const toolSchemaTokens = estimateToolSchemaTokens(tools);
+      const compaction = await planCompaction(messages, lastPromptTokens, toolSchemaTokens);
       if (compaction.shouldCompact) {
         sse.write("summarizing", {
           message: "Context approaching limit, summarizing...",
@@ -451,6 +462,7 @@ export async function runAgentLoop(params: {
             messages,
             { sessionId, userId },
             engagementState,
+            toolSchemaTokens,
           );
         messages = preservedMessages;
         // Reset the cached prompt size to the POST-compaction projection.
@@ -501,13 +513,6 @@ export async function runAgentLoop(params: {
       }
 
       const openaiMessages = messagesToOpenAI(messages, orchestratorConfig.provider === "kimi");
-      const unconfiguredTools = getUnconfiguredToolNames();
-      const tools = toolRegistry.toOpenAISchemas({
-        agentRole: "main",
-        disabledTools: disabledAgentTools,
-        unconfiguredTools,
-        loadedTools: session.loadedTools ?? [],
-      });
 
       let assistantContent = "";
       let assistantReasoning = "";
@@ -604,6 +609,7 @@ export async function runAgentLoop(params: {
           messages,
           { sessionId, userId },
           engagementState,
+          toolSchemaTokens,
         );
         messages = preservedMessages;
         // Same reset as the proactive path: the completion was truncated at the
