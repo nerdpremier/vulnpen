@@ -26,7 +26,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   ExportOutlined,
-  InfoCircleOutlined,
+
   PlusOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -45,18 +45,9 @@ import {
 } from "@/utils/magnitudeModels";
 
 const PROVIDER_OPTIONS = [
-  { value: "openai", label: "OpenAI" },
-  { value: "anthropic", label: "Anthropic (Claude)" },
-  { value: "anthropic-compatible", label: "Anthropic-Compatible" },
   { value: "openrouter", label: "OpenRouter" },
-  { value: "google", label: "Google" },
-  { value: "mistralai", label: "Mistral AI" },
   { value: "ollama", label: "Ollama (Local)" },
   { value: "openai-compatible", label: "OpenAI-Compatible" },
-  { value: "kimi", label: "Kimi (Moonshot AI)" },
-  { value: "bedrock", label: "AWS Bedrock" },
-  { value: "codex-subscription", label: "Codex Subscription (Local CLI)" },
-  { value: "claude-subscription", label: "Claude Subscription (Local CLI)" },
 ];
 
 const REASONING_OPTIONS = ["off", "low", "medium", "high", "xhigh", "max"].map(
@@ -64,72 +55,17 @@ const REASONING_OPTIONS = ["off", "low", "medium", "high", "xhigh", "max"].map(
 );
 
 const PROVIDER_META = {
-  openai: {
-    keyURL: "https://platform.openai.com/api-keys",
-    keyLabel: "Get OpenAI API Key",
-  },
-  anthropic: {
-    keyURL: "https://console.anthropic.com/settings/keys",
-    keyLabel: "Get Claude API Key",
-  },
-  "anthropic-compatible": {
-    keyURL:
-      "https://platform.minimax.io/user-center/basic-information/interface-key",
-    keyLabel: "Get MiniMax API Key",
-  },
   openrouter: {
     keyURL: "https://openrouter.ai/settings/keys",
     keyLabel: "Get OpenRouter API Key",
-  },
-  google: {
-    keyURL: "https://aistudio.google.com/apikey",
-    keyLabel: "Get Google AI API Key",
-  },
-  mistralai: {
-    keyURL: "https://console.mistral.ai/api-keys",
-    keyLabel: "Get Mistral API Key",
   },
   ollama: {
     keyURL: "https://ollama.com/library",
     keyLabel: "Browse Ollama models",
   },
-  kimi: {
-    keyURL: "https://platform.kimi.ai/",
-    keyLabel: "Get Kimi API Key",
-  },
-  bedrock: {
-    keyURL:
-      "https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html",
-    keyLabel: "Get Bedrock API Key",
-  },
 };
 
 const FALLBACK_MODELS = {
-  openai: [
-    "gpt-5.6-sol",
-    "gpt-5.6-terra",
-    "gpt-5.6-luna",
-    "gpt-5.5",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-4.1",
-  ],
-  anthropic: [
-    "claude-fable-5",
-    "claude-opus-5",
-    "claude-sonnet-5",
-    "claude-opus-4-8",
-    "claude-opus-4-7",
-    "claude-mythos-preview",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5",
-  ],
-  "anthropic-compatible": [
-    "MiniMax-M2.7",
-    "MiniMax-M2.7-highspeed",
-    "MiniMax-M2.5",
-    "MiniMax-M2",
-  ],
   openrouter: [
     "moonshotai/kimi-k3",
     "anthropic/claude-opus-5",
@@ -138,23 +74,12 @@ const FALLBACK_MODELS = {
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.5",
   ],
-  google: ["gemini-2.0-flash", "gemini-2.0-pro"],
-  mistralai: ["mistral-large-latest", "mistral-medium-latest"],
   ollama: ["llama3.3", "llama3.2", "qwen2.5-coder", "mistral"],
-  kimi: ["kimi-k3", "kimi-k2.7-code-highspeed", "kimi-k2.7-code", "kimi-k2.6"],
-  bedrock: [
-    "openai.gpt-oss-120b-1:0",
-    "qwen.qwen3-coder-next",
-    "moonshotai.kimi-k2.5",
-    "mistral.mistral-large-3-675b-instruct",
-  ],
-  "codex-subscription": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
-  "claude-subscription": ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"],
 };
 
 const EMPTY_MODEL = {
   label: "",
-  provider: "openai",
+  provider: "openrouter",
   model: "",
   apiKey: "",
   baseURL: "",
@@ -178,28 +103,11 @@ function createModelId(label) {
 }
 
 function needsBaseURL(provider) {
-  // Bedrock's endpoint is region-specific, so allow overriding the default
-  // us-east-1 host. Optional — blank falls back to the configured region.
-  return [
-    "anthropic-compatible",
-    "openai-compatible",
-    "ollama",
-    "bedrock",
-  ].includes(provider);
-}
-
-function isSubscriptionProvider(provider) {
-  return ["codex-subscription", "claude-subscription"].includes(provider);
+  return ["openai-compatible", "ollama"].includes(provider);
 }
 
 function baseURLPlaceholder(provider) {
   if (provider === "ollama") return "Docker host: http://host.docker.internal:11434/v1";
-  if (provider === "anthropic-compatible") {
-    return "https://api.minimax.io/anthropic";
-  }
-  if (provider === "bedrock") {
-    return "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1";
-  }
   return "https://api.groq.com/openai/v1";
 }
 
@@ -316,9 +224,7 @@ const ModelModal = ({
 
         <Row gutter={14}>
           <Col
-            span={
-              needsBaseURL(provider) ? 8 : isSubscriptionProvider(provider) ? 16 : 12
-            }
+            span={needsBaseURL(provider) ? 8 : 12}
           >
             <Form.Item label="Reasoning" name="reasoningMode">
               <Select
@@ -327,20 +233,18 @@ const ModelModal = ({
               />
             </Form.Item>
           </Col>
-          {!isSubscriptionProvider(provider) && (
-            <Col span={needsBaseURL(provider) ? 8 : 12}>
-              <Form.Item label="API Key" name="apiKey">
-                <Input.Password
-                  autoComplete="off"
-                  placeholder={
-                    provider === "ollama"
-                      ? "Optional for local Ollama"
-                      : "API key"
-                  }
-                />
-              </Form.Item>
-            </Col>
-          )}
+          <Col span={needsBaseURL(provider) ? 8 : 12}>
+            <Form.Item label="API Key" name="apiKey">
+              <Input.Password
+                autoComplete="off"
+                placeholder={
+                  provider === "ollama"
+                    ? "Optional for local Ollama"
+                    : "API key"
+                }
+              />
+            </Form.Item>
+          </Col>
           {needsBaseURL(provider) && (
             <Col span={8}>
               <Form.Item
@@ -348,9 +252,8 @@ const ModelModal = ({
                 name="baseURL"
                 rules={[
                   {
-                    // Optional for Ollama (local default) and Bedrock (falls
-                    // back to the configured AWS region's endpoint).
-                    required: !["ollama", "bedrock"].includes(provider),
+                    // Optional for Ollama (local default endpoint).
+                    required: provider !== "ollama",
                     message: "Base URL is required",
                   },
                 ]}
@@ -509,14 +412,6 @@ const ModelsPage = () => {
 
   return (
     <div className={styles.settingsContainer}>
-      <div className={styles.infoBox}>
-        <InfoCircleOutlined />
-        <span>
-          Configure model credentials once, then choose which model runs the
-          orchestrator and Browser Agent.
-        </span>
-      </div>
-
       <div className={styles.settingSectionHeader}>
         <div className={styles.settingSectionHeaderRow}>
           <div className={styles.heading}>Assignments</div>

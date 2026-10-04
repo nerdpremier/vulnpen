@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { App, Form, InputNumber } from "antd";
-import { InfoCircleOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import Loader from "@/components/common/loader/Loader";
 import PrimaryButton from "@/components/common/PrimaryButton";
@@ -51,15 +50,6 @@ export default function AgentBehaviorPage() {
 
   return (
     <div className={styles.settingsContainer}>
-      <div className={styles.infoBox}>
-        <InfoCircleOutlined />
-        <span>
-          This limit applies to each orchestrator run. When it is reached, the
-          session pauses cleanly and lets you continue for another block of
-          turns or stop there.
-        </span>
-      </div>
-
       <div className={styles.settingsPanel}>
         <div className={styles.settingsPanelHeader}>
           <div>

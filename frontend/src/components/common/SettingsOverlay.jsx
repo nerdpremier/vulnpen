@@ -176,11 +176,6 @@ const SettingsOverlay = ({ open, onClose, initialTab, sessionId }) => {
           <div className={styles.contentHeader}>
             <div>
               <div className={styles.contentTitle}>{currentTab.label}</div>
-              {currentTab.description && (
-                <div className={styles.contentDescription}>
-                  {currentTab.description}
-                </div>
-              )}
             </div>
             <button className={styles.closeButton} onClick={onClose}>
               <RiCloseLine />

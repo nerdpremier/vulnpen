@@ -48,6 +48,19 @@
     padding: 0 !important;
     min-height: unset;
     box-shadow: none !important;
+    /* The wrapper already paints the field background; the inner input must
+       stay transparent or its own translucent bg stacks and shows as a
+       lighter inset box. */
+    background: transparent !important;
+  }
+
+  /* Keep the browser-autofill paint flush with the field: the wrapper no
+     longer carries vertical padding, and the inner input stretches to fill
+     it (matching the app-wide affix-wrapper rule in globals.scss). */
+  :global(
+    .ant-form .ant-form-item .ant-form-item-control .ant-input-affix-wrapper
+  ) {
+    padding-block: 0;
   }
 
   :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-number) {
@@ -827,6 +840,16 @@
     border-color: var(--filled-purple-100) !important;
     background: var(--input-bg) !important;
     box-shadow: none !important;
+  }
+
+  /* The wrapper paints the field background; the inner input (also matched by
+     .ant-input above) must stay transparent or its translucent bg stacks and
+     shows as a lighter inset box. */
+  :global(.ant-input-affix-wrapper .ant-input) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    height: 100%;
   }
 
   :global(.ant-input),

@@ -721,6 +721,15 @@ configure_static_full() {
         set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI" "http://localhost:8080"
     fi
 
+    frontend_deployment=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT")
+    prompt_input "Frontend deployment mode [LOCAL/PRODUCTION] [${frontend_deployment:-LOCAL}]:"
+    read -r val
+    if [[ -n "$val" ]]; then
+        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "$val"
+    elif [[ -z "$frontend_deployment" ]]; then
+        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "LOCAL"
+    fi
+
     cur=$(get_toml_var "$CONFIG_TOML" "cors_origins")
     prompt_input "CORS origins [${frontend_url}]:"
     read -r val

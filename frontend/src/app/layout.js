@@ -14,11 +14,17 @@ import StoreProvider from "@/components/common/auth/StoreProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
+// The deployment mode is shared with the backend (config.toml -> DEPLOYMENT) and
+// baked into the frontend build via NEXT_PUBLIC_DEPLOYMENT. A production install
+// is a deliberate, public deployment and may be indexed; a local install is a
+// development box that must stay out of search results.
+const isProduction = process.env.NEXT_PUBLIC_DEPLOYMENT === "PRODUCTION";
+
 export const metadata = {
   title: "VulnPen",
   description:
     "VulnPen is an AI assistant for web application security testing: it plans and executes OWASP WSTG v4.2 test cases, analyses the results, maps findings to the OWASP Top 10:2025 and drafts the web application penetration testing report.",
-  robots: "noindex, nofollow",
+  ...(isProduction ? {} : { robots: "noindex, nofollow" }),
   metadataBase: new URL("http://localhost:3000"),
   icons: { icon: "/t-net-logo.png", apple: "/t-net-logo.png" },
 };

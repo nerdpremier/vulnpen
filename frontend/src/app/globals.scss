@@ -223,6 +223,32 @@ textarea::placeholder,
   color: var(--placeholder-color) !important;
 }
 
+/* Chrome paints its autofill background on the bare <input>, so inside antd's
+   affix wrappers (password fields) the fill only covers the short inner input
+   and looks like an inset band. Stretch the inner input to the wrapper's full
+   height so the autofill paint covers the whole field like plain inputs. */
+.ant-input-affix-wrapper {
+  padding-block: 0;
+
+  > .ant-input {
+    height: 100%;
+  }
+}
+
+/* Replace Chrome's default light-blue autofill paint with the app surface so
+   autofilled fields stay on-palette (dark bg, readable text). The inset
+   box-shadow is the standard way to override the autofill background. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--moon-text);
+  caret-color: var(--moon-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--moon-surface-2) inset;
+  border-radius: var(--moon-radius-sm);
+  transition: background-color 9999s ease-out;
+}
+
 /* Ensure password visibility toggle (eye icon) is visible app-wide */
 .ant-input-password .ant-input-suffix .anticon {
   color: var(--secondary-text);
