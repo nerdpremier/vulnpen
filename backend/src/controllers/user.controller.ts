@@ -23,7 +23,13 @@ import {
   isSubscriptionProvider,
 } from "../services/subscription-inference.service";
 import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
-import { getBurpBrowserHome } from "../services/burp-ca.service";
+import {
+  buildBrowserAgentConfig,
+  ensureBrowserAgent,
+  runBrowserAgentExclusive,
+  scheduleBrowserAgentIdleStop,
+  stopBrowserAgent,
+} from "../services/browser-agent.service";
 import { requireActiveSession } from "../services/session.helpers";
 import {
   getAssignedModels,
@@ -2121,6 +2127,11 @@ export const updateMagnitudeConfig = async (req: Request, res: Response) => {
     }
 
     updateEnvVars(updates);
+    // Rebuilding the shared browser is lazy, but release a live one when the
+    // agent is switched off so it is not left running in the background.
+    if (!enabled) {
+      void runBrowserAgentExclusive(stopBrowserAgent);
+    }
 
     if (browserModelId !== undefined) {
       const registry = readModelRegistry();
@@ -2140,21 +2151,9 @@ export const updateMagnitudeConfig = async (req: Request, res: Response) => {
   }
 };
 
-// The browser agent's Chromium is kept open between runs so the noVNC live
-// view (Browser Agent panel / /browser-agent page) always shows the browser's
-// latest state. Starting a new agent replaces — and stops — the previous one.
-let persistentBrowserAgent: any = null;
-
-const stopPersistentBrowserAgent = async () => {
-  if (!persistentBrowserAgent) return;
-  try {
-    await persistentBrowserAgent.stop();
-  } catch (stopError) {
-    console.warn("Failed to stop previous Browser Agent:", stopError);
-  }
-  persistentBrowserAgent = null;
-};
-
+// The browser agent is shared with the orchestrator browser_action tool, so a
+// run started here and one started from chat reuse the same warm Chromium
+// instead of each cold-starting their own (see browser-agent.service.ts).
 export const startMagnitudeAgent = async (req: Request, res: Response) => {
   try {
     const { goal, targetUrl } = req.body;
@@ -2182,12 +2181,13 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     if (!browserModel) {
       return res.status(400).json({
         message:
-          "No Browser Agent model selected. Assign one in Settings → Models.",
+          "No Browser Agent model selected. Assign one in Settings -> Models.",
       });
     }
     if (!browserModel.verifiedAt) {
       return res.status(400).json({
-        message: "The Browser Agent model is unverified. Test and save it in Settings → Models.",
+        message:
+          "The Browser Agent model is unverified. Test and save it in Settings -> Models.",
       });
     }
 
@@ -2205,64 +2205,56 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     const { apiKey } = providerConfig;
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
-    const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
+    const display = env.MAGNITUDE_DISPLAY || getBrowserAgentDisplay();
     const normalizedDisplay = display.startsWith(":") ? display : `:${display}`;
 
     if (!apiKey) {
       return res.status(400).json({
         message:
-          "The selected Browser Agent model has no API key. Configure it in Settings → Models.",
+          "The selected Browser Agent model has no API key. Configure it in Settings -> Models.",
       });
     }
 
     // Always ensure DISPLAY is set for the process
     process.env.DISPLAY = normalizedDisplay;
 
-    const { startBrowserAgent } = await import("magnitude-core");
-    const llm = await resolveMagnitudeLlmConfig(providerConfig, browserModel.reasoningMode);
-
-    const browserEnv = { ...process.env, HOME: getBurpBrowserHome() };
-    const launchOptions: any = { headless, env: browserEnv };
-    if (proxyUrl) {
-      launchOptions.proxy = { server: proxyUrl };
-    }
-    if (!headless) {
-      launchOptions.env = { ...browserEnv, DISPLAY: normalizedDisplay };
-    }
-
-    const agentConfig: any = {
-      url: targetUrl,
-      narrate: false,
-      browser: {
-        launchOptions,
-        contextOptions: { ignoreHTTPSErrors: true },
-      },
-      llm: {
-        provider: llm.provider,
-        options: llm.options,
-      },
-    };
-
-    const agent = await startBrowserAgent(agentConfig);
-    await stopPersistentBrowserAgent();
-    persistentBrowserAgent = agent;
+    const llm = await resolveMagnitudeLlmConfig(
+      providerConfig,
+      browserModel.reasoningMode,
+    );
+    const { fingerprint, agentConfig } = buildBrowserAgentConfig({
+      llm,
+      headless,
+      proxyUrl,
+      display: normalizedDisplay,
+      screen: process.env.BROWSER_AGENT_SCREEN || "1280x800x24",
+    });
 
     try {
-      await agent.act(goal);
-      // Kept open on purpose — the live view shows the browser's final state
-      // until the next agent run replaces it.
-      return res.status(200).json({
-        message: "Browser agent completed the goal successfully",
-        goal,
-        targetUrl,
+      await runBrowserAgentExclusive(async () => {
+        const agent = await ensureBrowserAgent(fingerprint, agentConfig);
+        await agent.nav(targetUrl);
+        await agent.act(goal);
       });
     } catch (agentError: any) {
+      // A failed run can leave the browser in a bad state; drop it so the next
+      // run starts from a clean context instead of inheriting the wreckage.
+      await runBrowserAgentExclusive(stopBrowserAgent);
       return res.status(500).json({
         message: `Browser agent failed: ${formatMagnitudeError(agentError)}`,
         goal,
         targetUrl,
       });
     }
+
+    // Kept open on purpose - the live view shows the final browser state until
+    // the next run reuses it (or the idle timeout releases it).
+    scheduleBrowserAgentIdleStop();
+    return res.status(200).json({
+      message: "Browser agent completed the goal successfully",
+      goal,
+      targetUrl,
+    });
   } catch (error: any) {
     console.log(error);
     return res.status(500).json({
