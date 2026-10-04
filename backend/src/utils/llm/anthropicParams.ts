@@ -58,6 +58,11 @@ export interface AnthropicRequestInput {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   tools?: OpenAI.Chat.ChatCompletionTool[];
   reasoningMode?: "off" | "low" | "medium" | "high" | "xhigh" | "max";
+  // Mark the stable prompt prefix (system + tool schemas + the conversation
+  // so far) with ephemeral cache_control breakpoints: the agent loop re-sends
+  // ~16k tokens of system+tools on every tool-call iteration, and cached
+  // prefix reads bill at a fraction of the uncached rate.
+  enablePromptCache?: boolean;
 }
 
 function usesAdaptiveThinking(model: string): boolean {
@@ -89,13 +94,26 @@ function adaptiveControls(input: AnthropicRequestInput): Record<string, any> {
 
 export function openaiToAnthropicMessages(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
-): { system: string; messages: Anthropic.MessageParam[] } {
+): { system: string; volatileSystem: string; messages: Anthropic.MessageParam[] } {
   let system = "";
+  // The agent loop appends a <volatile_system> tail (run clock + engagement
+  // state) to the system message that changes between turns and tool-loop
+  // iterations. Splitting it off here keeps everything above it cacheable up
+  // to the static block's breakpoint; the tail sits after the breakpoint and
+  // is re-read uncached instead of invalidating the whole system cache.
+  let volatileSystem = "";
   const out: Anthropic.MessageParam[] = [];
 
   for (const m of messages) {
     if (m.role === "system") {
-      system += (typeof m.content === "string" ? m.content : "") + "\n";
+      const text = typeof m.content === "string" ? m.content : "";
+      const marker = text.indexOf("<volatile_system>");
+      if (marker !== -1) {
+        system += text.slice(0, marker);
+        volatileSystem += text.slice(marker);
+      } else {
+        system += text + "\n";
+      }
       continue;
     }
     if (m.role === "user") {
@@ -153,7 +171,7 @@ export function openaiToAnthropicMessages(
     }
   }
 
-  return { system: system.trim(), messages: out };
+  return { system: system.trim(), volatileSystem: volatileSystem.trim(), messages: out };
 }
 
 export function openaiToAnthropicTools(
@@ -170,11 +188,79 @@ export function openaiToAnthropicTools(
   }));
 }
 
+function cacheMarker(): { type: "ephemeral" } {
+  return { type: "ephemeral" };
+}
+
+function systemParam(
+  system: string,
+  volatileSystem: string,
+  enablePromptCache: boolean | undefined,
+): Anthropic.MessageCreateParamsNonStreaming["system"] {
+  if (!system && !volatileSystem) return undefined;
+  if (!enablePromptCache) {
+    return [system, volatileSystem].filter(Boolean).join("\n");
+  }
+  // Breakpoint at the end of the static block; the volatile tail after it is
+  // re-read uncached each call rather than invalidating the cached prefix.
+  const blocks: Anthropic.TextBlockParam[] = [];
+  if (system) {
+    blocks.push({ type: "text", text: system, cache_control: cacheMarker() });
+  }
+  if (volatileSystem) {
+    blocks.push({ type: "text", text: volatileSystem });
+  }
+  return blocks;
+}
+
+function toolsParam(
+  tools: Anthropic.Tool[] | undefined,
+  enablePromptCache: boolean | undefined,
+): Anthropic.Tool[] | undefined {
+  if (!tools?.length) return undefined;
+  if (!enablePromptCache) return tools;
+  // The API caches the prefix up to each breakpoint; marking the LAST tool
+  // caches every tool definition in one breakpoint.
+  return tools.map((tool, i) =>
+    i === tools.length - 1
+      ? { ...tool, cache_control: cacheMarker() }
+      : tool,
+  );
+}
+
+function withLastMessageBreakpoint(
+  messages: Anthropic.MessageParam[],
+  enablePromptCache: boolean | undefined,
+): Anthropic.MessageParam[] {
+  if (!enablePromptCache || messages.length === 0) return messages;
+  const out = [...messages];
+  const last = out[out.length - 1];
+  const blocks = Array.isArray(last.content) ? [...last.content] : [{ type: "text" as const, text: String(last.content) }];
+  // Thinking blocks cannot carry cache_control; walk back to the nearest
+  // cacheable block (text, image, tool_result, tool_use).
+  let idx = blocks.length - 1;
+  while (idx >= 0) {
+    const t = (blocks[idx] as { type?: string }).type;
+    if (t === "text" || t === "image" || t === "tool_result" || t === "tool_use") break;
+    idx--;
+  }
+  if (idx < 0) return messages;
+  const target = blocks[idx] as Anthropic.ContentBlockParam & {
+    cache_control?: { type: "ephemeral" };
+  };
+  blocks[idx] = { ...target, cache_control: cacheMarker() } as Anthropic.ContentBlockParam;
+  out[out.length - 1] = { ...last, content: blocks };
+  return out;
+}
+
 export function buildAnthropicMessageParams(
   input: AnthropicRequestInput,
 ): Anthropic.MessageCreateParamsNonStreaming {
-  const { system, messages } = openaiToAnthropicMessages(input.messages);
-  const tools = openaiToAnthropicTools(input.tools);
+  const { system, volatileSystem, messages } = openaiToAnthropicMessages(input.messages);
+  const tools = toolsParam(
+    openaiToAnthropicTools(input.tools),
+    input.enablePromptCache,
+  );
 
   return {
     model: input.model,
@@ -182,9 +268,11 @@ export function buildAnthropicMessageParams(
       input.reasoningMode === "xhigh" || input.reasoningMode === "max"
         ? 64000
         : DEFAULT_MAX_TOKENS,
-    messages,
+    messages: withLastMessageBreakpoint(messages, input.enablePromptCache),
     ...adaptiveControls(input),
-    ...(system ? { system } : {}),
+    ...(system || volatileSystem
+      ? { system: systemParam(system, volatileSystem, input.enablePromptCache) }
+      : {}),
     ...(tools ? { tools, tool_choice: { type: "auto" } } : {}),
   };
 }
@@ -193,8 +281,11 @@ export function buildAnthropicStreamParams(
   input: AnthropicRequestInput,
   budgetTokens: number | null,
 ): Anthropic.MessageCreateParamsStreaming {
-  const { system, messages } = openaiToAnthropicMessages(input.messages);
-  const tools = openaiToAnthropicTools(input.tools);
+  const { system, volatileSystem, messages } = openaiToAnthropicMessages(input.messages);
+  const tools = toolsParam(
+    openaiToAnthropicTools(input.tools),
+    input.enablePromptCache,
+  );
 
   return {
     model: input.model,
@@ -202,8 +293,10 @@ export function buildAnthropicStreamParams(
       ? Math.min(64000, Math.max(16384, budgetTokens + 4096))
       : DEFAULT_MAX_TOKENS,
     stream: true,
-    messages,
-    ...(system ? { system } : {}),
+    messages: withLastMessageBreakpoint(messages, input.enablePromptCache),
+    ...(system || volatileSystem
+      ? { system: systemParam(system, volatileSystem, input.enablePromptCache) }
+      : {}),
     ...(usesAdaptiveThinking(input.model)
       ? adaptiveControls(input)
       : budgetTokens

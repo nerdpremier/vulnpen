@@ -64,12 +64,11 @@ function caseLine(plan: WebAppTestPlanDoc, testId: string, verbose: boolean): st
 const wstgTestPlan: ToolDefinition = {
   name: "wstg_test_plan",
   description:
-    `Plan and track OWASP WSTG v${WSTG_VERSION} test cases. Actions: "generate" (build/refresh the plan; ` +
-    'full catalogue by default, narrow with categories or test_ids), "list", "get" (one case in full), ' +
-    '"update_case" (record a result or edit case text), "add_case" (custom case; duplicates rejected — read ' +
-    'the existing case instead of re-testing), "delete_case", "coverage" (progress). The plan is injected into ' +
-    'the system prompt, so keep it current: mark a case in_progress before starting it, set passed/failed as ' +
-    "soon as the result is known.",
+    `Plan and track WSTG v${WSTG_VERSION} test cases. Actions: "generate" (build/refresh; full catalogue ` +
+    'by default, narrow with categories or test_ids), "list", "get" (one case), "update_case" (record a ' +
+    'result or edit text), "add_case" (custom; duplicates rejected — read the existing case instead), ' +
+    '"delete_case", "coverage". The plan lives in the system prompt: mark in_progress before starting, ' +
+    "set passed/failed as soon as known.",
   parameters: {
     type: "object",
     properties: {
@@ -80,76 +79,74 @@ const wstgTestPlan: ToolDefinition = {
       },
       target: {
         type: "string",
-        description: "Primary target under test (URL or host). Used when generating a plan.",
+        description: "Target under test (URL or host), for generate.",
       },
       scope: {
         type: "string",
         description:
-          "Scope statement for the plan: in-scope hosts, applications, API surface and any exclusions.",
+          "In-scope hosts, apps, API surface and exclusions.",
       },
       categories: {
         type: "array",
         items: { type: "string" },
         description:
-          "Optional WSTG category codes to restrict the plan to (INFO, CONF, IDNT, ATHN, ATHZ, SESS, INPV, ERRH, CRYP, BUSL, CLNT, APIT).",
+          "WSTG category codes to restrict to (INFO, CONF, IDNT, ATHN, ATHZ, SESS, INPV, ERRH, CRYP, BUSL, CLNT, APIT).",
       },
       test_ids: {
         type: "array",
         items: { type: "string" },
         description:
-          'Explicit list of WSTG test ids: for "generate" to plan instead of the full catalogue, e.g. ["WSTG-INPV-05"]; for "delete_case" the custom or catalogue cases to drop.',
+          'Test ids, e.g. ["WSTG-INPV-05"]: plan these instead of the full catalogue (generate), or the cases to drop (delete_case).',
       },
       test_id: {
         type: "string",
         description:
-          'Test id for action "get" or "update_case", e.g. WSTG-INPV-05 or a custom id like CUSTOM-01.',
+          'Test id for "get"/"update_case", e.g. WSTG-INPV-05 or CUSTOM-01.',
       },
       title: {
         type: "string",
         description:
-          'Title of the case. Required for action "add_case"; optional for "update_case" to rename a case.',
+          'Case title. Required for add_case; optional rename for update_case.',
       },
       objective: {
         type: "string",
         description:
-          'What the case is trying to establish. Optional for "add_case" and "update_case".',
+          'What the case tries to establish (add_case, update_case).',
       },
       how_to_test: {
         type: "string",
         description:
-          'How to execute the case: steps, payloads, tooling. Optional for "add_case" and "update_case".',
+          'Steps, payloads, tooling (add_case, update_case).',
       },
       category_code: {
         type: "string",
         description:
-          'Category for action "add_case": a WSTG category code (e.g. INPV) or free text. Optional.',
+          'Category for add_case: WSTG code (e.g. INPV) or free text.',
       },
       status: {
         type: "string",
         enum: TEST_STATUSES,
         description:
-          "Result for update_case. failed requires vulnerability_id (the tool refuses without one); blocked requires a concrete missing-dependency note.",
+          "Result for update_case. failed requires vulnerability_id; blocked requires a concrete missing-dependency note.",
       },
       force: {
         type: "boolean",
         description:
-          'For action "add_case": set true to add the case even though the plan already holds one that looks ' +
-          "like the same test. Only do this when the existing case genuinely tests something different.",
+          'add_case: add even though a similar case exists — only when it genuinely tests something different.',
       },
       observations: {
         type: "string",
         description:
-          "What the test actually showed: payloads used, responses observed, why it passed or failed. This feeds the report.",
+          "What the test showed: payloads, responses, why it passed/failed. Feeds the report.",
       },
       notes: {
         type: "string",
-        description: "Short note for the case, e.g. why it is blocked or what is still missing.",
+        description: "Short note, e.g. why blocked or what is missing.",
       },
       vulnerability_id: {
         type: "string",
         description:
-          "Finding id to link when the test produced a vulnerability. Required when status is failed; " +
-          "a finding with no wstgId is re-tagged to this case automatically, a contradicting link is refused.",
+          "Finding id to link. Required when status is failed; a finding with no wstgId is re-tagged automatically, a contradicting link refused.",
       },
       limit: {
         type: "number",

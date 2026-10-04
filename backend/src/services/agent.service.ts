@@ -24,7 +24,7 @@ import {
   ToolExecutionCallbacks,
 } from "./agent.tools";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
-import { buildSystemPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
+import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
 import { OWASP_TOP10_2025, normalizeOwaspTop10Id } from "../knowledge";
 import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
@@ -238,14 +238,17 @@ async function buildSystemMessage(
   sessionId: string,
   userId: string,
   envInfo?: BoxEnvInfo,
-): Promise<AgentMessageDoc> {
+): Promise<{ sysMsg: AgentMessageDoc; volatileWebApp: string }> {
   const promptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
   return {
-    id: `sys_${sessionId}`,
-    role: "system",
-    content: buildSystemPrompt(promptConfig),
-    timestamp: new Date(),
-    turnIndex: 0,
+    sysMsg: {
+      id: `sys_${sessionId}`,
+      role: "system",
+      content: buildSystemPrompt(promptConfig),
+      timestamp: new Date(),
+      turnIndex: 0,
+    },
+    volatileWebApp: buildVolatileWebAppPrompt(promptConfig),
   };
 }
 
@@ -350,15 +353,27 @@ export async function runAgentLoop(params: {
   let messages = [...session.messages];
 
   // Refresh the system message on every turn so model assignments changed
-  // in Settings are immediately visible to the orchestrator.
+  // in Settings are immediately visible to the orchestrator. The volatile
+  // web-app part (plan render + risk posture) is captured alongside: it
+  // changes with plan/finding mutations and is re-injected inside the
+  // <volatile_system> tail below instead of the static prompt, keeping the
+  // prompt-cached static prefix warm.
+  let volatileWebApp = "";
   if (messages.length > 0 && messages[0].role === "system") {
-    const updatedSysMsg = await buildSystemMessage(sessionId, userId, envInfo);
-    messages[0] = updatedSysMsg;
+    const { sysMsg, volatileWebApp: webAppPart } = await buildSystemMessage(sessionId, userId, envInfo);
+    messages[0] = sysMsg;
+    volatileWebApp = webAppPart;
   }
 
   const turnIndex = session.turnIndex;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let iteration = 0;
   let lastPromptTokens: number | undefined;
+  // True right after a summarization pass. If the working set is still over
+  // budget on the next iteration (summary + recent window + system message
+  // simply do not fit), summarizing again cannot shrink it and would loop —
+  // degrade gracefully to a larger working set instead.
+  let summarizedLastIteration = false;
   const newMessages: AgentMessageDoc[] = [];
   let completedNormally = false;
   const approvalRejections = new ApprovalRejectionTracker();
@@ -418,7 +433,10 @@ export async function runAgentLoop(params: {
         break;
       }
 
-      if (await shouldSummarize(messages, lastPromptTokens)) {
+      if (summarizedLastIteration) {
+        summarizedLastIteration = false;
+      } else if (await shouldSummarize(messages, lastPromptTokens)) {
+        summarizedLastIteration = true;
         sse.write("summarizing", { message: "Context approaching limit, summarizing..." });
 
         const { summaryMessage, preservedMessages } = await summarizeMessages(
@@ -442,20 +460,32 @@ export async function runAgentLoop(params: {
         }
       }
 
-      // Inject structured engagement state into the system message
-      if (!engagementState.isEmpty() && messages.length > 0 && messages[0].role === "system") {
-        const stateBlock = engagementState.toPromptBlock();
+      // Inject the volatile system tail — current time plus the structured
+      // engagement state — after the static prompt. anthropicParams splits
+      // requests at the <volatile_system> marker, so this tail can change
+      // between turns and tool-loop iterations without invalidating the
+      // prompt-cached static prefix (~4.5k tokens) on Anthropic providers.
+      if (messages.length > 0 && messages[0].role === "system") {
+        const stateBlock = engagementState.isEmpty()
+          ? ""
+          : "\n" + engagementState.toPromptBlock();
+        const now = new Date();
+        const time = now.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+        const volatileBlock =
+          `<volatile_system>\n<run_clock>Current time: ${time} ${tz}</run_clock>${stateBlock}\n${volatileWebApp}\n</volatile_system>`;
         const sysContent = messages[0].content ?? "";
-        const markerStart = sysContent.indexOf("<engagement_state");
-        const markerEnd = sysContent.indexOf("</engagement_state>");
-        if (markerStart !== -1 && markerEnd !== -1) {
-          const end = markerEnd + "</engagement_state>".length;
-          messages[0] = { ...messages[0], content: sysContent.slice(0, markerStart) + stateBlock + sysContent.slice(end) };
-        } else {
-          // No (complete) existing block — append instead of splicing, a
-          // partial marker pair would otherwise truncate the system prompt.
-          messages[0] = { ...messages[0], content: sysContent + "\n\n" + stateBlock };
-        }
+        const markerStart = sysContent.indexOf("<volatile_system>");
+        messages[0] = {
+          ...messages[0],
+          content:
+            markerStart !== -1
+              ? sysContent.slice(0, markerStart) + volatileBlock
+              : sysContent + "\n\n" + volatileBlock,
+        };
       }
 
       const openaiMessages = messagesToOpenAI(messages, orchestratorConfig.provider === "kimi");
@@ -464,6 +494,7 @@ export async function runAgentLoop(params: {
         agentRole: "main",
         disabledTools: disabledAgentTools,
         unconfiguredTools,
+        loadedTools: session.loadedTools ?? [],
       });
 
       let assistantContent = "";
@@ -732,6 +763,19 @@ export async function runAgentLoop(params: {
         newMessages.push(toolMsg);
       }
 
+      // The load_tools handler persists to the session document; mirror the
+      // change here so the schemas are present from the next iteration on
+      // without re-reading the document.
+      for (const tc of assistantToolCalls) {
+        if (tc.name !== "load_tools") continue;
+        const requested = parseToolArguments(tc.arguments).args?.tools;
+        if (Array.isArray(requested)) {
+          session.loadedTools = [
+            ...new Set([...(session.loadedTools ?? []), ...requested.filter((t: unknown) => typeof t === "string")]),
+          ];
+        }
+      }
+
       const askedUser = toolResults.find((r) => r.toolName === "ask_user");
       if (askedUser) {
         completedNormally = true;
@@ -804,7 +848,7 @@ export async function initAndRun(params: {
   }
 
   if (session.messages.length === 0) {
-    const sysMsg = await buildSystemMessage(sessionId, userId);
+    const { sysMsg } = await buildSystemMessage(sessionId, userId);
     session.messages.push(sysMsg);
   }
 

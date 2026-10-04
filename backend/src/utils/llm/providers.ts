@@ -620,6 +620,7 @@ async function runAnthropicMessage(
       messages: opts.messages,
       tools: opts.tools,
       reasoningMode: opts.reasoningMode,
+      enablePromptCache: true,
     }),
   );
 
@@ -808,6 +809,7 @@ async function runAnthropicThinkingStream(
       messages: opts.messages,
       tools: opts.tools,
       reasoningMode: opts.reasoningMode,
+      enablePromptCache: true,
     },
     budgetTokens,
   );

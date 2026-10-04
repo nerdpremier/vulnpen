@@ -10,17 +10,35 @@ import { getModelContextLimit } from "../utils/modelMetadata";
 // single biggest cost driver (a measured run idled at ~88k prompt tokens for
 // hundreds of turns).
 const SUMMARIZE_THRESHOLD = 0.40;
+// Cap the working set by absolute cost, not only by context window: on
+// million-token models the window threshold (40% = 400k) never fires, so the
+// history idled at ~45k prompt tokens and was re-sent on every one of hundreds
+// of tool-loop calls (an 8.1M-token session traced back to exactly this).
+// The budget is checked against the FULL prompt (lastPromptTokens), which
+// includes the system message (~4.7k tokens) and the core tool schemas (~4k).
+// 14k therefore leaves roughly 5k of history: summary + recent window fit
+// inside that (summary ~1k, recent tool results capped at 2.5k chars each), so
+// summarisation does not thrash. The stable prefix is prompt-cached on
+// Anthropic providers, so the marginal cost per call is dominated by the
+// fresh tail. Do not lower further without shrinking PRESERVE_RECENT_MESSAGES
+// and the tool-result caps to match, or summarisation will thrash.
+const WORKING_SET_TOKEN_BUDGET = 14_000;
 const CHARS_PER_TOKEN_ESTIMATE = 3.5;
 const PRESERVE_RECENT_MESSAGES = 6;
 // Tool results older than this many messages are collapsed to a stub: the
 // summary and the engagement state already carry what mattered, and re-sending
 // full scan output for hundreds of turns was pure token burn.
-const RECENT_FULL_TOOL_RESULTS = 20;
-const STALE_TOOL_RESULT_CHARS = 1_500;
+const RECENT_FULL_TOOL_RESULTS = 8;
+const STALE_TOOL_RESULT_CHARS = 250;
 // Old tool-call ARGUMENTS are stubbed too: re-sending a 5k-char nmap command
 // or a full add_vulnerability payload hundreds of turns later is pure burn.
 // The result stub and the summary carry the outcome.
-const STALE_TOOL_CALL_ARGS_CHARS = 500;
+const STALE_TOOL_CALL_ARGS_CHARS = 200;
+// Even fresh (recent-window) tool results get a ceiling: one oversized scan
+// dump inside the recent window can blow the whole working-set budget on its
+// own. Past this size the head+tail keep the opening status and final summary;
+// the agent can re-run the tool with narrower output if the middle mattered.
+const RECENT_TOOL_RESULT_MAX_CHARS = 2_500;
 
 function estimateTokens(text: string | null): number {
   if (!text) return 0;
@@ -45,7 +63,8 @@ export async function shouldSummarize(
   const inputTokens = lastPromptTokens ?? estimateMessagesTokens(
     messages.map((m) => ({ role: m.role, content: m.content })),
   );
-  return inputTokens > limit * SUMMARIZE_THRESHOLD;
+  const threshold = Math.min(limit * SUMMARIZE_THRESHOLD, WORKING_SET_TOKEN_BUDGET);
+  return inputTokens > threshold;
 }
 
 const FALLBACK_SUMMARIZE_PROMPT = `You are a penetration test engagement summarizer. Your job is to compress a conversation history into a dense summary that preserves all important context for continuing the engagement.
@@ -181,6 +200,13 @@ export function messagesToOpenAI(
     }
   }
 
+  // Reasoning replay (Kimi interleaved thinking): only the recent window's
+  // assistant messages keep their reasoning_content. Reasoning is routinely
+  // 2-5x the visible text and older reasoning is dead weight — replaying it
+  // for the whole history on every tool-loop iteration was 1-5k tokens of
+  // pure burn per call.
+  const reasoningWindowStart = messages.length - PRESERVE_RECENT_MESSAGES;
+
   return messages.flatMap((m, index) => {
     if (m.role === "assistant" && m.toolCalls?.length) {
       const validToolCalls = m.toolCalls.filter((tc) => toolResponseIds.has(tc.id));
@@ -192,7 +218,7 @@ export function messagesToOpenAI(
           role: "assistant" as const,
           content: m.content ?? "",
         };
-        if (includeReasoningContent && m.reasoning) {
+        if (includeReasoningContent && m.reasoning && index >= reasoningWindowStart) {
           assistantMessage.reasoning_content = m.reasoning;
         }
         return assistantMessage;
@@ -218,7 +244,7 @@ export function messagesToOpenAI(
           },
         })),
       };
-      if (includeReasoningContent && m.reasoning) {
+      if (includeReasoningContent && m.reasoning && index >= reasoningWindowStart) {
         assistantMessage.reasoning_content = m.reasoning;
       }
       return assistantMessage;
@@ -245,6 +271,13 @@ export function messagesToOpenAI(
           content.slice(0, head) +
           `\n... [${content.length - STALE_TOOL_RESULT_CHARS} chars of this older tool output elided from context] ...\n` +
           content.slice(-tail);
+      } else if (content.length > RECENT_TOOL_RESULT_MAX_CHARS) {
+        const head = Math.floor(RECENT_TOOL_RESULT_MAX_CHARS * 0.5);
+        const tail = RECENT_TOOL_RESULT_MAX_CHARS - head;
+        content =
+          content.slice(0, head) +
+          `\n... [${content.length - RECENT_TOOL_RESULT_MAX_CHARS} chars of this tool output elided from context] ...\n` +
+          content.slice(-tail);
       }
       return {
         role: "tool" as const,
@@ -257,7 +290,7 @@ export function messagesToOpenAI(
       role: m.role as "system" | "user" | "assistant",
       content: m.content ?? "",
     };
-    if (includeReasoningContent && m.role === "assistant" && m.reasoning) {
+    if (includeReasoningContent && m.role === "assistant" && m.reasoning && index >= reasoningWindowStart) {
       return { ...message, reasoning_content: m.reasoning };
     }
     return message;

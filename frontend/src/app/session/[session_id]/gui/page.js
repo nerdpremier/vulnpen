@@ -51,6 +51,7 @@ const GUIpage = ({ params }) => {
     () => connectToVNC({ session_id: sessionId }),
     {
       enabled: !!vncConfig?.configured,
+      staleTime: 5 * 60 * 1000,
       retry: 1,
       onSuccess: (data) => {
         dispatch(

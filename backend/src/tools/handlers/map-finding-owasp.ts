@@ -11,7 +11,12 @@ import {
   getOwaspCategory,
   getWstgTest,
   normalizeOwaspTop10Id,
+  OWASP_TOP10_2025,
 } from "../../knowledge";
+
+const VALID_CATEGORIES = OWASP_TOP10_2025.map(
+  (category) => `${category.id} ${category.title}`,
+).join("; ");
 
 const mapFindingOwasp: ToolDefinition = {
   name: "map_finding_owasp",
@@ -19,7 +24,7 @@ const mapFindingOwasp: ToolDefinition = {
     "Classify a finding against the OWASP Top 10:2025 and persist the classification. " +
     "Pass vulnerability_id to classify an existing finding (apply=true to store), or title/cwe/wstg_id for one still being investigated; " +
     "apply_to_all=true maps every unmapped finding in the session. The cascade (your category → WSTG case → CWE → LLM) runs automatically. " +
-    "Valid categories are listed in the system prompt's OWASP risk vocabulary.",
+    `Valid categories: ${VALID_CATEGORIES}.`,
   parameters: {
     type: "object",
     properties: {

@@ -65,3 +65,31 @@ test("update_engagement_state schema documents key discovery fields", () => {
   assert.equal(properties.discovery.type, "string");
   assert.equal(properties.value.type, "string");
 });
+
+test("toPromptBlock caps high-volume sections and reports the omission", () => {
+  const state = new EngagementState("pentest");
+  for (let i = 1; i <= 40; i++) {
+    state.hosts.push({ ip: `10.0.0.${i}`, status: "up" });
+    state.approachesTried.push({
+      technique: `technique-${i}`,
+      target: "10.0.0.1",
+      result: "failed",
+      detail: "",
+    });
+  }
+  state.vulnerabilities.push({
+    vulnerabilityId: "VULN-1",
+    title: "SQL injection",
+    host: "10.0.0.1",
+    severity: "high",
+  } as any);
+
+  const block = state.toPromptBlock();
+  // caps apply to high-volume sections, keeping the most recent entries
+  assert.match(block, /\(\+15 earlier entries omitted from context\)/);
+  assert.match(block, /10\.0\.0\.40/);
+  assert.doesNotMatch(block, /10\.0\.0\.1 \[/);
+  assert.match(block, /technique-40/);
+  // high-value sections are never capped
+  assert.match(block, /SQL injection/);
+});

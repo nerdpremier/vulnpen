@@ -35,8 +35,7 @@ const sendToBurp: ToolDefinition = {
     "Each request is sent individually through Burp's HTTP engine which handles TLS, HTTP/2, " +
     "and connection management. Provide a complete raw HTTP request (request line + headers + body). " +
     "The tool automatically normalizes line endings and recalculates Content-Length. " +
-    "Proving that a control is missing is the finding - do not carry a deletion or " +
-    "any other destructive step out against the target: this engagement is proof of concept only.",
+    "Proof-of-concept engagement: destructive steps are refused outright (see <rules_of_engagement>) — proving that a control is missing is the finding.",
   parameters: {
     type: "object",
     properties: {
@@ -56,6 +55,7 @@ const sendToBurp: ToolDefinition = {
         type: "string",
         description:
           "Full raw HTTP request including request line, headers, and body. " +
+          "Keep original headers (Host, Cookie, Authorization) unless intentionally dropping them. " +
           "Example: 'GET /api/users HTTP/1.1\\r\\nHost: example.com\\r\\n\\r\\n'",
       },
     },

@@ -221,6 +221,8 @@ export interface SessionDoc extends mongoose.Document {
   subagents: SubagentDoc[];
   connectionState: ConnectionStateDoc;
   disabledAgentTools?: string[];
+  /** Deferred tools loaded via the `load_tools` meta tool this session. */
+  loadedTools?: string[];
   /** Engagement scope handed to the tool-approval evaluator. */
   engagementContext?: EngagementContextDoc;
   vulnerabilities?: SessionVulnerabilityDoc[];
@@ -514,6 +516,12 @@ const SessionSchema = new Schema({
     default: { sshConnected: false, hostConnected: false },
   },
   disabledAgentTools: {
+    type: [{ type: String }],
+    default: [],
+  },
+  // Deferred tools the agent pulled in with `load_tools`; they persist for the
+  // session so the tool set stays stable across turns.
+  loadedTools: {
     type: [{ type: String }],
     default: [],
   },

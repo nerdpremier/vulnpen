@@ -16,38 +16,29 @@ import path from "path";
 const magnitudeBrowser: ToolDefinition = {
   name: "browser_action",
   description:
-    "Perform an agentic browser action using the Magnitude browser agent. " +
-    "Use this to interact with web applications during a penetration test — " +
-    "e.g. filling forms, clicking buttons, navigating pages, extracting data. " +
-    "The agent uses AI to interpret the page and carry out the goal autonomously. " +
-    "Requires Magnitude to be enabled in Settings. " +
-    "The browser acts on the real application, so a goal that deletes, overwrites or " +
-    "disables something is gated: this engagement is proof of concept only - verify that a " +
-    "control is missing and stop, do not carry the destructive step out.",
+    "Agentic browser action via the Magnitude browser agent: fill forms, click, navigate, extract data — " +
+    "the agent interprets the page and carries out the goal autonomously. Requires Magnitude in Settings. " +
+    "It acts on the real application: destructive goals (delete, overwrite, disable) are refused outright (proof of concept only — see <rules_of_engagement>; verify the control is missing and stop).",
   parameters: {
     type: "object",
     properties: {
       url: {
         type: "string",
-        description:
-          "The target URL to navigate to before performing the action",
+        description: "URL to navigate to before the action.",
       },
       goal: {
         type: "string",
         description:
-          "A natural-language description of what to do in the browser " +
-          "(e.g. 'Log in with admin/admin and navigate to the user management page')",
+          "What to do in the browser, e.g. 'Log in with admin/admin and open the user management page'.",
       },
       extract: {
         type: "string",
         description:
-          "Optional. A description of what data to extract from the page after performing the action " +
-          "(e.g. 'Extract all usernames and email addresses from the table')",
+          "Data to extract from the page after the action, e.g. 'all usernames and emails from the table'.",
       },
       screenshot: {
         type: "boolean",
-        description:
-          "Capture a PNG screenshot of the page after the action and show it to the user in the chat (default true).",
+        description: "Capture a PNG to show in chat after the action (default true).",
       },
     },
     required: ["url", "goal"],

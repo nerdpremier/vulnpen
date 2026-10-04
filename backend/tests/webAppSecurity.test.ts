@@ -26,7 +26,8 @@ import { mapFindingToOwaspTop10 } from "../src/services/web-security/owasp-mappi
 import { buildWebAppPentestReport } from "../src/services/web-security/report.service";
 import { normalizeVulnerability } from "../src/services/vulnerability.service";
 import { toolRegistry } from "../src/tools/registry";
-import { buildSystemPrompt } from "../src/utils/assistant/prompts";
+import { toolRegistry } from "../src/tools/registry";
+import { buildSystemPrompt, buildVolatileWebAppPrompt } from "../src/utils/assistant/prompts";
 
 test("the WSTG v4.2 catalogue covers every published test case", () => {
   assert.equal(WSTG_TESTS.length, 97);
@@ -514,13 +515,29 @@ test("a finding is accepted without OWASP or CWE and stays unmapped", () => {
 });
 
 test("the assistant exposes the web application security tools", () => {
-  for (const name of ["wstg_test_plan", "map_finding_owasp", "generate_pentest_report"]) {
+  // wstg_test_plan is core (the whole testing loop hangs off it).
+  assert.ok(toolRegistry.has("wstg_test_plan"));
+  assert.ok(
+    toolRegistry.toOpenAISchemas({ agentRole: "main" }).some(
+      (schema) => schema.type === "function" && schema.function.name === "wstg_test_plan",
+    ),
+    `wstg_test_plan is not offered to the main agent`,
+  );
+  // map_finding_owasp and generate_pentest_report are deferred: absent from
+  // the default set, offered once the agent pulls them in with load_tools.
+  for (const name of ["map_finding_owasp", "generate_pentest_report"]) {
     assert.ok(toolRegistry.has(name), `${name} is not registered`);
     assert.ok(
-      toolRegistry.toOpenAISchemas({ agentRole: "main" }).some(
+      !toolRegistry.toOpenAISchemas({ agentRole: "main" }).some(
         (schema) => schema.type === "function" && schema.function.name === name,
       ),
-      `${name} is not offered to the main agent`,
+      `${name} should be deferred, not offered by default`,
+    );
+    assert.ok(
+      toolRegistry.toOpenAISchemas({ agentRole: "main", loadedTools: [name] }).some(
+        (schema) => schema.type === "function" && schema.function.name === name,
+      ),
+      `${name} is not offered after load_tools`,
     );
   }
 
@@ -529,10 +546,12 @@ test("the assistant exposes the web application security tools", () => {
   assert.equal(properties.data.properties.owaspTop10.type, "string");
 });
 test("the assistant proposes a WSTG plan as soon as the user names a target", () => {
-  const prompt = buildSystemPrompt({
+  const config = {
     sessionId: "sess-chat",
     webAppSecurity: { testPlan: null },
-  });
+  };
+  const prompt =
+    buildSystemPrompt(config as any) + "\n" + buildVolatileWebAppPrompt(config as any);
 
   assert.match(prompt, /Web Application Security Testing Assistant inside VulnPen/);
   assert.match(prompt, /Plan — and show the plan before you test/);
@@ -543,16 +562,28 @@ test("the assistant proposes a WSTG plan as soon as the user names a target", ()
     /Never fire payloads at a target the user has not confirmed is in scope/,
   );
   assert.match(prompt, /OWASP Top 10:2025 — the risk vocabulary/);
-  assert.match(prompt, /A10:2025 Mishandling of Exceptional Conditions/);
-  assert.match(prompt, /Current WSTG v4\.2 test plan/);
+  // The full roster moved into the deferred map_finding_owasp schema — only
+  // the pointer stays in the system prompt.
+  assert.doesNotMatch(prompt, /A10:2025 Mishandling of Exceptional Conditions/);
+  const owaspTool = toolRegistry
+    .toOpenAISchemas({ agentRole: "main", loadedTools: ["map_finding_owasp"] })
+    .find((t) => t.function.name === "map_finding_owasp");
+  assert.ok(owaspTool);
+  assert.match(
+    String(owaspTool.function.description),
+    /A10:2025 Mishandling of Exceptional Conditions/,
+  );
+  assert.match(prompt, /Current plan and risk posture/);
 });
 
 test("the declared target from session creation is injected into the prompt", () => {
-  const prompt = buildSystemPrompt({
+  const config = {
     sessionId: "sess-chat",
     engagement: { target: "http://juice-shop:3000", scope: "Storefront, REST API" },
     webAppSecurity: { testPlan: null },
-  });
+  };
+  const prompt =
+    buildSystemPrompt(config as any) + "\n" + buildVolatileWebAppPrompt(config as any);
 
   assert.match(prompt, /declared target of this engagement is \*\*http:\/\/juice-shop:3000\*\*/);
   assert.match(prompt, /scope: Storefront, REST API/);
@@ -571,7 +602,7 @@ test("an existing plan is re-injected with coverage, results and next cases", ()
   })!.plan;
   const executed = updateTestCase(failed, "WSTG-INFO-01", { status: "passed" })!.plan;
 
-  const prompt = buildSystemPrompt({
+  const config = {
     sessionId: "sess-chat",
     webAppSecurity: {
       testPlan: executed,
@@ -579,20 +610,26 @@ test("an existing plan is re-injected with coverage, results and next cases", ()
       unmappedFindingCount: 1,
       owaspBreakdown: [{ id: "A05:2025", title: "Injection", findings: 2 }],
     },
-  });
+  };
+  // Plan render + posture moved to the volatile part — the static prompt must
+  // NOT carry them, so mutations don't invalidate the cached prefix.
+  const prompt = buildSystemPrompt(config as any);
+  const volatile = buildVolatileWebAppPrompt(config as any);
+  assert.match(prompt, /Current plan and risk posture/);
+  assert.doesNotMatch(prompt, /<wstg_test_plan /);
 
   assert.match(
-    prompt,
+    volatile,
     /<wstg_test_plan source="OWASP WSTG v4\.2" target="https:\/\/abc\.example\.com">/,
   );
-  assert.match(prompt, /Coverage: 2\/97 executed \(2\.1%\)/);
-  assert.match(prompt, /\[x\] WSTG-INPV-05 \(4\.7\.5\) Testing for SQL Injection/);
-  assert.match(prompt, /Tests that produced findings \(link every finding to its test\)/);
-  assert.match(prompt, /Next tests \(plan order\):/);
-  assert.match(prompt, /Tracked findings: 3, of which 1 are not mapped/);
-  assert.match(prompt, /Current risk spread: A05:2025 Injection \(2\)/);
-  assert.match(prompt, /action "update_case" \(test_id \+ status\)/);
-  assert.match(prompt, /action "add_case"/);
+  assert.match(volatile, /Coverage: 2\/97 executed \(2\.1%\)/);
+  assert.match(volatile, /\[x\] WSTG-INPV-05 \(4\.7\.5\) Testing for SQL Injection/);
+  assert.match(volatile, /Tests that produced findings \(link every finding to its test\)/);
+  assert.match(volatile, /Next tests \(plan order\):/);
+  assert.match(volatile, /Tracked findings: 3, of which 1 are not mapped/);
+  assert.match(volatile, /Current risk spread: A05:2025 Injection \(2\)/);
+  assert.match(volatile, /"update_case" \(test_id \+ status\)/);
+  assert.match(volatile, /"add_case" for custom cases/);
 });
 
 test("catalogue cases can be added to a narrowed plan without losing results", () => {

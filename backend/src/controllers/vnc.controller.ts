@@ -82,6 +82,37 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
               `mkdir -p ~/.vnc && printf '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $HOME/.Xresources ] && xrdb $HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi\\n' > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup`
             );
 
+            // Reuse a live desktop: probing the RFB port first keeps the
+            // running session (and its apps) intact when the GUI page
+            // remounts and re-calls this endpoint.
+            const portProbe = (port: number) =>
+              execWithOutput(
+                `(ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ":${port} " && echo UP || echo DOWN`
+              );
+            const rfbState = (await portProbe(VNC_RFBPORT)).trim();
+
+            if (rfbState === "UP") {
+              const wsState = (await portProbe(WEBSOCKIFY_PORT)).trim();
+              if (wsState !== "UP") {
+                await exec(
+                  `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 < /dev/null &`
+                );
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              }
+              const runtimeHost = isDockerInternalHost(savedHost)
+                ? "localhost"
+                : savedHost;
+              const vncURL = baseUrlOverride || `${runtimeHost}:${savedPort}`;
+              console.log(
+                `[connect-vnc] session ${sessionId} -> ${vncURL} (reused live desktop)`
+              );
+              return res.status(200).json({
+                vncURL,
+                password: savedPassword,
+                workHost: target.kind,
+              });
+            }
+
             // Kill all existing VNC/Xvfb for a clean start
             await exec(
               `vncserver -kill "${VNC_DISPLAY}" 2>/dev/null || true; ` +

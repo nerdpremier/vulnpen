@@ -8,10 +8,8 @@ import { buildPrivilegeAwareInstallCommand } from "../../utils/installCommand";
 const runInstallTool: ToolDefinition = {
   name: "run_install_tool",
   description:
-    "Install a capability on the attack box by name. " +
-    "Pass the tool/package name exactly as listed in the capabilities section (e.g. 'nmap', 'pwntools', 'ghidra'). " +
-    "The system resolves the correct install command automatically (brew on macOS, apt on Linux). " +
-    "This tool requires user consent before execution.",
+    "Install a capability on the attack box by name (as listed in the capabilities section, e.g. 'nmap'). " +
+    "The system resolves the correct install command automatically; this tool requires user consent.",
   parameters: {
     type: "object",
     properties: {

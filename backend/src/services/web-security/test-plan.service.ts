@@ -744,7 +744,7 @@ export function renderTestPlanPrompt(
 
   lines.push(
     "",
-    'Update progress with the `wstg_test_plan` tool: action "update_case" (test_id + status) after every test, action "add_case" for custom cases that are not in the catalogue, action "get" when you need the full method for a case, and action "coverage" to re-check where you are.',
+    'Update progress after every test with `wstg_test_plan` "update_case" (test_id + status); "add_case" for custom cases; "get" shows a case\'s full method; "coverage" re-checks where you are.',
     "</wstg_test_plan>",
   );
 

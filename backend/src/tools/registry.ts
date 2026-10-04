@@ -20,6 +20,8 @@ import updateEngagementState from "./handlers/update-engagement-state";
 import wstgTestPlan from "./handlers/wstg-test-plan";
 import mapFindingOwasp from "./handlers/map-finding-owasp";
 import generatePentestReport from "./handlers/generate-pentest-report";
+import loadTools from "./handlers/load-tools";
+import { DEFERRED_TOOLS } from "./deferred";
 
 class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -48,6 +50,8 @@ class ToolRegistry {
     agentRole?: AgentRole;
     disabledTools?: string[];
     unconfiguredTools?: string[];
+    /** Deferred tools explicitly loaded for this session via `load_tools`. */
+    loadedTools?: string[];
   }): OpenAI.Chat.ChatCompletionTool[] {
     let tools = this.getAll();
     if (opts?.agentRole) {
@@ -61,6 +65,8 @@ class ToolRegistry {
       const unconf = new Set(opts.unconfiguredTools);
       tools = tools.filter((t) => !unconf.has(t.name));
     }
+    const loaded = new Set(opts?.loadedTools ?? []);
+    tools = tools.filter((t) => !DEFERRED_TOOLS.has(t.name) || loaded.has(t.name));
     return tools.map(toolToOpenAISchema);
   }
 }
@@ -86,3 +92,4 @@ toolRegistry.register(updateEngagementState);
 toolRegistry.register(wstgTestPlan);
 toolRegistry.register(mapFindingOwasp);
 toolRegistry.register(generatePentestReport);
+toolRegistry.register(loadTools);

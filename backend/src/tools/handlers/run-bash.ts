@@ -8,10 +8,9 @@ const runBash: ToolDefinition = {
     "Execute a bash command on the Kali Linux attack box and return its full output. " +
     "Uses a one-shot exec channel — the command runs to completion (or timeout) and " +
     "stdout+stderr are returned. Use this for all CLI tools (nmap, gobuster, sqlmap, " +
-    "ffuf, curl, etc.). For long-running or interactive tasks, use spawn_shell + " +
-    "write_to_shell + read_shell instead. " +
-    "The engagement is a proof of concept: never run a command that deletes, overwrites " +
-    "or disables data, accounts or configuration on the target.",
+    "ffuf, curl, etc.). For long-running or interactive tasks, load the deferred shell tools " +
+    "(spawn_shell + write_to_shell + read_shell) via load_tools and use those instead. " +
+    "Proof-of-concept engagement: destructive commands against the target are refused outright (see <rules_of_engagement>).",
   parameters: {
     type: "object",
     properties: {

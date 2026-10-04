@@ -24,7 +24,7 @@ function str(v: any): string {
 const updateEngagementState: ToolDefinition = {
   name: "update_engagement_state",
   description:
-    "Record a structured finding to the persistent engagement state. This state is always visible in the system prompt and survives context summarization. Call after every significant discovery.",
+    "Record a structured finding to the persistent engagement state (always visible in the system prompt, survives summarization). Call after every significant discovery.",
   parameters: {
     type: "object",
     properties: {
@@ -47,12 +47,11 @@ const updateEngagementState: ToolDefinition = {
       data: {
         type: "object",
         description:
-          "Action-specific data. add_vulnerability: title, host/target, service or endpoint, likelihood + " +
-          "impactRating (1-3 — the system derives severity; never declare a severity word), evidence, " +
-          "stepsToReproduce, impact, remediation, exploited; set wstgId to the producing test case and omit " +
-          "owaspTop10/CWE unless confident. For proof-of-concept findings, a destructive capability proved " +
-          "without carrying it out is exploited=false with the omission stated in impact. " +
-          "add_key_discovery: title and/or description. remove_finding: vulnerability_id.",
+          "Action-specific data. add_vulnerability: title, host/target, endpoint, likelihood + impactRating " +
+          "(1-3 — the system derives severity), evidence, stepsToReproduce, " +
+          "impact, remediation, exploited; wstgId = producing test case; omit owaspTop10/CWE unless " +
+          "confident. A destructive capability proved without carrying it out is exploited=false, stated " +
+          "in impact. add_key_discovery: title and/or description. remove_finding: vulnerability_id.",
         properties: {
           // Shared fields. Keeping these explicit prevents models from
           // guessing the shape of add_key_discovery calls while retaining the
@@ -83,17 +82,17 @@ const updateEngagementState: ToolDefinition = {
           wstgId: {
             type: "string",
             description:
-              "WSTG case that produced this finding (e.g. WSTG-INPV-05); must exist in the plan — linked as failed automatically.",
+              "WSTG case that produced this finding (e.g. WSTG-INPV-05); must exist in the plan — auto-linked as failed.",
           },
           owaspTop10: {
             type: "string",
-            description: "Explicit category (A01:2025 ... A10:2025); omit to classify automatically.",
+            description: "Category (A01:2025 ... A10:2025); omit to classify automatically.",
           },
           screenshots: {
             type: "array",
             items: { type: "string" },
             description:
-              "Screenshot filenames from browser_action's \"Screenshot captured: <name>.png\" line — attach only when the page itself is the evidence.",
+              "Screenshot filenames exactly as browser_action reported them — attach only when the page itself is the evidence.",
           },
           likelihood: {
             type: "number",

@@ -140,37 +140,46 @@ export class EngagementState {
       `<engagement_state type="pentest">`,
     ];
 
+    // Per-category render caps: this block is the volatile tail of the system
+    // prompt and is re-sent uncached on every tool-loop iteration, so a
+    // session that accumulates hundreds of services or attempted approaches
+    // would otherwise grow the per-call token cost without bound. High-value,
+    // low-volume sections (vulnerabilities, shells, implants, next steps) are
+    // never capped; high-volume ones keep their most recent entries and state
+    // how many were omitted.
     if (this.hosts.length) {
       sections.push("## Hosts");
-      for (const h of this.hosts) {
-        const hostname = h.hostname ? ` (${h.hostname})` : "";
-        const os = h.os ? ` — ${h.os}` : "";
-        sections.push(`- ${h.ip}${hostname} [${h.status}]${os}`);
-      }
+      sections.push(
+        ...this.capped(this.hosts, 25, (h) => {
+          const hostname = h.hostname ? ` (${h.hostname})` : "";
+          const os = h.os ? ` — ${h.os}` : "";
+          return `- ${h.ip}${hostname} [${h.status}]${os}`;
+        }),
+      );
     }
 
     if (this.services.length) {
       sections.push("## Services");
-      for (const s of this.services) {
-        const ver = s.version ? ` ${s.version}` : "";
-        const notes = s.notes ? ` (${s.notes})` : "";
-        sections.push(
-          `- ${s.host}:${s.port}/${s.protocol} — ${s.service}${ver}${notes}`,
-        );
-      }
+      sections.push(
+        ...this.capped(this.services, 25, (s) => {
+          const ver = s.version ? ` ${s.version}` : "";
+          const notes = s.notes ? ` (${s.notes})` : "";
+          return `- ${s.host}:${s.port}/${s.protocol} — ${s.service}${ver}${notes}`;
+        }),
+      );
     }
 
     if (this.credentials.length) {
       sections.push("## Credentials");
-      for (const c of this.credentials) {
-        const valid =
-          c.validOn.length > 0
-            ? `, valid on: ${c.validOn.join(", ")}`
-            : "";
-        sections.push(
-          `- ${c.username}:${c.secret} (${c.secretType}) — from: ${c.source}${valid}`,
-        );
-      }
+      sections.push(
+        ...this.capped(this.credentials, 20, (c) => {
+          const valid =
+            c.validOn.length > 0
+              ? `, valid on: ${c.validOn.join(", ")}`
+              : "";
+          return `- ${c.username}:${c.secret} (${c.secretType}) — from: ${c.source}${valid}`;
+        }),
+      );
     }
 
     if (this.vulnerabilities.length) {
@@ -188,7 +197,16 @@ export class EngagementState {
         sections.push(
           `- [${v.severity.toUpperCase()}] ${v.title} on ${v.host}${svc} — ${exploited}${cve}${scoring ? ` — ${scoring}` : ""}`,
         );
-        if (v.contextSummary) sections.push(`  Context: ${v.contextSummary}`);
+        // contextSummary can be a paragraph per finding; the volatile tail is
+        // re-sent uncached on every iteration, so keep the prompt copy short.
+        // The full text persists in the session document and the report.
+        if (v.contextSummary) {
+          const summary =
+            v.contextSummary.length > 200
+              ? `${v.contextSummary.slice(0, 200).trimEnd()} …`
+              : v.contextSummary;
+          sections.push(`  Context: ${summary}`);
+        }
       }
     }
 
@@ -217,9 +235,9 @@ export class EngagementState {
 
     if (this.keyDiscoveries.length) {
       sections.push("## Key Discoveries");
-      for (const kd of this.keyDiscoveries) {
-        sections.push(`- ${kd}`);
-      }
+      sections.push(
+        ...this.capped(this.keyDiscoveries, 20, (kd) => `- ${kd}`),
+      );
     }
 
     this.renderShared(sections);
@@ -239,21 +257,33 @@ export class EngagementState {
     this.implants.push(implant);
   }
 
+  private capped<T>(
+    items: T[],
+    cap: number,
+    render: (item: T) => string,
+  ): string[] {
+    if (items.length <= cap) return items.map(render);
+    return [
+      `(+${items.length - cap} earlier entries omitted from context)`,
+      ...items.slice(items.length - cap).map(render),
+    ];
+  }
+
   private renderShared(sections: string[]): void {
     if (this.files.length) {
       sections.push("## Files Created");
-      for (const f of this.files) {
-        sections.push(`- ${f.path}: ${f.description}`);
-      }
+      sections.push(
+        ...this.capped(this.files, 15, (f) => `- ${f.path}: ${f.description}`),
+      );
     }
 
     if (this.approachesTried.length) {
       sections.push("## Approaches Tried");
-      for (const a of this.approachesTried) {
-        sections.push(
-          `- [${a.result.toUpperCase()}] ${a.technique} → ${a.target}: ${a.detail}`,
-        );
-      }
+      sections.push(
+        ...this.capped(this.approachesTried, 20, (a) => {
+          return `- [${a.result.toUpperCase()}] ${a.technique} → ${a.target}: ${a.detail}`;
+        }),
+      );
     }
 
     if (this.nextSteps.length) {
