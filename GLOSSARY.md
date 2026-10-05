@@ -41,10 +41,28 @@ touches it. Owned by `services/session-transcript.ts`: the message
 constructors for every role (`userMessage`, `assistantMessage`,
 `toolResultMessage`, `systemNoteMessage` — id, timestamp, turnIndex are
 stamped in one place), the write verbs (`appendMessages`, `replaceMessages`,
-`trackTokens`), and the run-state reset invariant (`resetAgentRun`:
+`trackTokens`), the turn opener (`beginTurn` — the user message and the
+turnIndex advance as one save), the tool-evidence check
+(`sessionUsedTool`), and the run-state reset invariant (`resetAgentRun`:
 agentState and pendingConsent go back to idle together). Never hand-build an
-`AgentMessageDoc` literal or write a `SessionsModel.updateOne` on
-`messages`/`agentState` at a call site.
+`AgentMessageDoc` literal, write a `SessionsModel.updateOne` on
+`messages`/`agentState` at a call site, or re-derive a "did the session use
+tool X" projection.
+
+**Run buffer** — the agent run's unflushed tail, in `session-transcript.ts`
+(`createRunBuffer`). Owns the dual-push discipline (`add` writes the working
+transcript AND the tail in one call) and the flush protocol: `flush` at every
+turn-ending exit, `flushIfLive` at iteration boundaries and on the error
+path — skipped while the run is aborting, because clearContext wipes the
+document and stale pre-clear messages must not be re-appended into the
+cleared session; `replaceTranscript` swaps the post-compaction transcript and
+discards the tail. The loop never keeps a parallel `newMessages` array.
+
+**Slash reply** — the slash-command reply protocol, owned by
+`services/slash-reply.ts` (`createSlashReply`): every command terminates with
+`slash_command_result` → `done` → `end()`, command name stamped once.
+Handlers take a `SlashReply` (`ok`/`fail`/`sessionMissing`/`ack`/`stream`),
+never a raw `SSEWriter` — forget one `end()` and the HTTP stream hangs open.
 
 **Context budget** — the per-run compaction state machine in
 `services/context.service.ts` (`ContextBudget`): the cached prompt size, the
@@ -68,16 +86,20 @@ re-derive readiness from env reads elsewhere.
 stops a turn (`pendingConsent` on the session document, `consentStats` for the
 counters). Owned by `services/consent-batch.ts`: the batch shape
 (`buildPendingConsentBatch`), the batch-vs-single persistence rule
-(`persistPendingConsent`), the `consent_required` SSE payload, and the
-resume-side unpack (`loadPendingConsent`). Never hand-build the pendingConsent
-document shape or re-derive `arguments` with parseToolArguments at a call site.
+(`persistPendingConsent`), the `consent_required` SSE payload, the resume-side
+unpack (`loadPendingConsent`), and the counters (`recordConsentOutcome`,
+`recordCircuitOpen`). Never hand-build the pendingConsent document shape,
+re-derive `arguments` with parseToolArguments at a call site, or `$inc` a
+`consentStats` counter outside the module.
 
 **Context window rules** — the elision policy for what reaches the model:
 staleness window (`isStaleMessage`), tool-result/args caps
-(`toolResultCap`, `elideToolResult`, `elideToolCallArgs`), and the reasoning
-replay window, all in `services/context.service.ts`. The token estimator and
-`messagesToOpenAI` both consume these helpers — never write the caps or the
-window arithmetic a second time.
+(`toolResultCap`, `elideToolResult`, `elideToolCallArgs`), the reasoning
+replay window, and the conversation input bounding for LLM calls that receive
+the whole history (`boundedConversationText`), all in
+`services/context.service.ts`. The token estimator, `messagesToOpenAI`, and
+the /summarize and /export commands all consume these helpers — never write
+the caps or the window arithmetic a second time.
 
 **Finding store** — the finding lifecycle in
 `services/vulnerability.service.ts`: `recordSessionFinding` (resolve plan case
