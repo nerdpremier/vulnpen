@@ -1,4 +1,8 @@
-import SessionsModel from "../models/Sessions/Sessions.model";
+import SessionsModel, {
+  SessionDoc,
+  SessionVulnerabilityDoc,
+  WebAppTestPlanDoc,
+} from "../models/Sessions/Sessions.model";
 import type { SSEWriter } from "../utils/sse";
 import { createSlashReply, SlashReply } from "./slash-reply";
 import { invoke_llm, invoke_llm_streaming } from "../utils/llm/providers";
@@ -6,10 +10,6 @@ import { sessionLifecycle } from "./session.lifecycle";
 import { resetSessionContext } from "./session.helpers";
 import { resetAgentRun } from "./session-transcript";
 import { getOwaspCategory } from "../knowledge";
-import type {
-  SessionVulnerabilityDoc,
-  WebAppTestPlanDoc,
-} from "../models/Sessions/Sessions.model";
 import {
   computeCoverage,
   createTestPlan,
@@ -125,7 +125,20 @@ export async function executeSlashCommand(params: {
   }
 
   try {
-    await handler({ sessionId, userId, args, reply });
+    await handler({
+      sessionId,
+      userId,
+      args,
+      reply,
+      loadSession: async () => {
+        const session = await SessionsModel.findOne({ sessionId });
+        if (!session) {
+          reply.sessionMissing();
+          return null;
+        }
+        return session;
+      },
+    });
   } catch (err: any) {
     console.error(`[slash-command] /${command} error:`, err);
     reply.fail(`Error executing \`/${command}\`: ${err.message ?? "Unknown error"}`);
@@ -137,6 +150,13 @@ type CommandHandler = (ctx: {
   userId: string;
   args: string;
   reply: SlashReply;
+  /**
+   * The session lookup the transcript-reading handlers share: replies
+   * sessionMissing and returns null when the session does not exist, so the
+   * handler only early-returns. Handlers with narrow projections (/map,
+   * /report) keep their own select() — but the same missing-session guard.
+   */
+  loadSession: () => Promise<SessionDoc | null>;
 }) => Promise<void>;
 
 const commandHandlers: Record<string, CommandHandler> = {
@@ -147,12 +167,8 @@ const commandHandlers: Record<string, CommandHandler> = {
     reply.ok(`### Available Commands\n\n${lines.join("\n\n")}`);
   },
 
-  clear: async ({ sessionId, reply }) => {
-    const session = await SessionsModel.findOne({ sessionId });
-    if (!session) {
-      reply.sessionMissing();
-      return;
-    }
+  clear: async ({ sessionId, reply, loadSession }) => {
+    if (!(await loadSession())) return;
 
     await resetSessionContext(sessionId);
 
@@ -169,12 +185,9 @@ const commandHandlers: Record<string, CommandHandler> = {
     });
   },
 
-  summarize: async ({ sessionId, userId, reply }) => {
-    const session = await SessionsModel.findOne({ sessionId });
-    if (!session) {
-      reply.sessionMissing();
-      return;
-    }
+  summarize: async ({ sessionId, userId, reply, loadSession }) => {
+    const session = await loadSession();
+    if (!session) return;
 
     const nonSystemMessages = session.messages.filter(
       (m: any) => m.role !== "system",
@@ -223,12 +236,9 @@ const commandHandlers: Record<string, CommandHandler> = {
     );
   },
 
-  status: async ({ sessionId, reply }) => {
-    const session = await SessionsModel.findOne({ sessionId });
-    if (!session) {
-      reply.sessionMissing();
-      return;
-    }
+  status: async ({ sessionId, reply, loadSession }) => {
+    const session = await loadSession();
+    if (!session) return;
 
     const lines: string[] = [];
 
@@ -243,12 +253,9 @@ const commandHandlers: Record<string, CommandHandler> = {
     reply.ok(lines.join("\n"));
   },
 
-  targets: async ({ sessionId, reply }) => {
-    const session = await SessionsModel.findOne({ sessionId });
-    if (!session) {
-      reply.sessionMissing();
-      return;
-    }
+  targets: async ({ sessionId, reply, loadSession }) => {
+    const session = await loadSession();
+    if (!session) return;
 
     const allContent = session.messages
       .map((m: any) => m.content ?? "")
@@ -294,12 +301,9 @@ const commandHandlers: Record<string, CommandHandler> = {
     reply.ok(lines.join("\n"));
   },
 
-  export: async ({ sessionId, userId, reply }) => {
-    const session = await SessionsModel.findOne({ sessionId });
-    if (!session) {
-      reply.sessionMissing();
-      return;
-    }
+  export: async ({ sessionId, userId, reply, loadSession }) => {
+    const session = await loadSession();
+    if (!session) return;
 
     const nonSystemMessages = session.messages.filter(
       (m: any) => m.role !== "system",
@@ -414,147 +418,140 @@ Use markdown formatting. Be thorough but concise.`,
   },
 
   wstg: async ({ sessionId, args, reply }) => {
-    try {
-      const existing = await loadSessionPlan(sessionId);
-      const tokens = args.trim().split(/\s+/).filter(Boolean);
-      const target = tokens.join(" ").trim();
+    const existing = await loadSessionPlan(sessionId);
+    const tokens = args.trim().split(/\s+/).filter(Boolean);
+    const target = tokens.join(" ").trim();
 
-      if (!target && existing?.cases?.length) {
-        const coverage = computeCoverage(existing.cases);
-        const lines = [
-          `### WSTG v${existing.version} test plan`,
-          "",
-          existing.target ? `**Target:** ${existing.target}` : "**Target:** not set — run `/wstg <target>` to set it",
-          existing.scope ? `**Scope:** ${existing.scope}` : "",
-          `**Coverage:** ${coverage.executed}/${coverage.total} executed (${coverage.percentExecuted}%) — ${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ${coverage.notStarted} not started`,
-          "",
-          "**By category:** " +
-            coverage.byCategory.map((row) => `${row.key} ${row.executed}/${row.total}`).join(", "),
-          "",
-          "**Next tests:**",
-          ...nextTestsToRun(existing, 10).map(
-            (testCase) => `- \`${testCase.testId}\` ${testCase.title}`,
-          ),
-          "",
-          "Refresh or re-scope with `/wstg <target>`.",
-        ];
-        reply.ok(lines.filter(Boolean).join("\n"));
-        return;
-      }
-
-      if (!target && !existing?.cases?.length) {
-        reply.fail(
-          "Usage: `/wstg <target>` — for example `/wstg https://app.example.com`. Plans the full OWASP WSTG catalogue; ask the assistant to restrict categories or add custom cases.",
-        );
-        return;
-      }
-
-      const result = createTestPlan({
-        target: target || undefined,
-        existing,
-      });
-      await saveSessionPlan(sessionId, result.plan);
-
-      const coverage = result.coverage;
+    if (!target && existing?.cases?.length) {
+      const coverage = computeCoverage(existing.cases);
       const lines = [
-        `### WSTG v${result.plan.version} test plan ${existing ? "updated" : "created"}`,
+        `### WSTG v${existing.version} test plan`,
         "",
-        `**Target:** ${result.plan.target || "not set"}`,
-        `**Cases:** ${result.plan.cases.length} test cases (${result.added} added, ${result.kept} kept with their previous status)`,
+        existing.target ? `**Target:** ${existing.target}` : "**Target:** not set — run `/wstg <target>` to set it",
+        existing.scope ? `**Scope:** ${existing.scope}` : "",
+        `**Coverage:** ${coverage.executed}/${coverage.total} executed (${coverage.percentExecuted}%) — ${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ${coverage.notStarted} not started`,
         "",
-        "**Start with:**",
-        ...nextTestsToRun(result.plan, 10).map(
-          (testCase) => `- \`${testCase.testId}\` (${testCase.section}) ${testCase.title}`,
+        "**By category:** " +
+          coverage.byCategory.map((row) => `${row.key} ${row.executed}/${row.total}`).join(", "),
+        "",
+        "**Next tests:**",
+        ...nextTestsToRun(existing, 10).map(
+          (testCase) => `- \`${testCase.testId}\` ${testCase.title}`,
         ),
         "",
-        "Ask the assistant to work through the plan; it records each result with `wstg_test_plan` action `update_case`.",
-        `Not started: ${coverage.notStarted} of ${coverage.total}.`,
+        "Refresh or re-scope with `/wstg <target>`.",
       ];
-      reply.ok(lines.join("\n"));
-    } catch (err: any) {
-      reply.fail(`Error building the WSTG test plan: ${err?.message ?? err}`);
+      reply.ok(lines.filter(Boolean).join("\n"));
+      return;
     }
+
+    if (!target && !existing?.cases?.length) {
+      reply.fail(
+        "Usage: `/wstg <target>` — for example `/wstg https://app.example.com`. Plans the full OWASP WSTG catalogue; ask the assistant to restrict categories or add custom cases.",
+      );
+      return;
+    }
+
+    const result = createTestPlan({
+      target: target || undefined,
+      existing,
+    });
+    await saveSessionPlan(sessionId, result.plan);
+
+    const coverage = result.coverage;
+    const lines = [
+      `### WSTG v${result.plan.version} test plan ${existing ? "updated" : "created"}`,
+      "",
+      `**Target:** ${result.plan.target || "not set"}`,
+      `**Cases:** ${result.plan.cases.length} test cases (${result.added} added, ${result.kept} kept with their previous status)`,
+      "",
+      "**Start with:**",
+      ...nextTestsToRun(result.plan, 10).map(
+        (testCase) => `- \`${testCase.testId}\` (${testCase.section}) ${testCase.title}`,
+      ),
+      "",
+      "Ask the assistant to work through the plan; it records each result with `wstg_test_plan` action `update_case`.",
+      `Not started: ${coverage.notStarted} of ${coverage.total}.`,
+    ];
+    reply.ok(lines.join("\n"));
   },
 
   map: async ({ sessionId, reply }) => {
-    try {
-      const session = await SessionsModel.findOne({ sessionId })
-        .select("vulnerabilities")
-        .lean();
-      const vulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-      if (!vulnerabilities.length) {
-        reply.ok("No findings are tracked in this session yet, so there is nothing to map.");
-        return;
-      }
-
-      const mapped = await mapUnclassifiedVulnerabilities(sessionId, vulnerabilities);
-      const refreshed = await SessionsModel.findOne({ sessionId })
-        .select("vulnerabilities")
-        .lean();
-      const rows = (refreshed?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-
-      const lines: string[] = ["### OWASP Top 10:2025 mapping", ""];
-      if (mapped > 0) lines.push(`${mapped} finding(s) were classified just now.`, "");
-
-      const counts = new Map<string, number>();
-      for (const row of rows) {
-        const key = row.owaspTop10 || "unmapped";
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-      lines.push("| Category | Findings |", "| --- | --- |");
-      for (const [key, count] of Array.from(counts.entries()).sort()) {
-        const category = key === "unmapped" ? undefined : getOwaspCategory(key);
-        lines.push(
-          `| ${category ? `${category.id} ${category.title}` : "Unmapped"} | ${count} |`,
-        );
-      }
-      lines.push("", "**Findings**", "");
-      for (const row of rows) {
-        const category = row.owaspTop10 ? getOwaspCategory(row.owaspTop10) : undefined;
-        lines.push(
-          `- ${row.severity.toUpperCase()} ${row.title} (${row.host}) — ${category ? `${category.id} ${category.title}` : "unmapped"}${row.wstgId ? ` — \`${row.wstgId}\`` : ""}${row.owaspConfidence ? ` — ${row.owaspConfidence} confidence` : ""}`,
-        );
-      }
-
-      const unmapped = rows.filter((row) => !row.owaspTop10);
-      if (unmapped.length) {
-        lines.push(
-          "",
-          `${unmapped.length} finding(s) still have no mapping. Ask the assistant to classify them with \`map_finding_owasp\`, adding a WSTG test id or CWE for the ones the classifier could not place.`,
-        );
-      }
-      reply.ok(lines.join("\n"));
-    } catch (err: any) {
-      reply.fail(`Error mapping findings: ${err?.message ?? err}`);
+    const session = await SessionsModel.findOne({ sessionId })
+      .select("vulnerabilities")
+      .lean();
+    if (!session) {
+      reply.sessionMissing();
+      return;
     }
+    const vulnerabilities = (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
+    if (!vulnerabilities.length) {
+      reply.ok("No findings are tracked in this session yet, so there is nothing to map.");
+      return;
+    }
+
+    const mapped = await mapUnclassifiedVulnerabilities(sessionId, vulnerabilities);
+    const refreshed = await SessionsModel.findOne({ sessionId })
+      .select("vulnerabilities")
+      .lean();
+    const rows = (refreshed?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
+
+    const lines: string[] = ["### OWASP Top 10:2025 mapping", ""];
+    if (mapped > 0) lines.push(`${mapped} finding(s) were classified just now.`, "");
+
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const key = row.owaspTop10 || "unmapped";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    lines.push("| Category | Findings |", "| --- | --- |");
+    for (const [key, count] of Array.from(counts.entries()).sort()) {
+      const category = key === "unmapped" ? undefined : getOwaspCategory(key);
+      lines.push(
+        `| ${category ? `${category.id} ${category.title}` : "Unmapped"} | ${count} |`,
+      );
+    }
+    lines.push("", "**Findings**", "");
+    for (const row of rows) {
+      const category = row.owaspTop10 ? getOwaspCategory(row.owaspTop10) : undefined;
+      lines.push(
+        `- ${row.severity.toUpperCase()} ${row.title} (${row.host}) — ${category ? `${category.id} ${category.title}` : "unmapped"}${row.wstgId ? ` — \`${row.wstgId}\`` : ""}${row.owaspConfidence ? ` — ${row.owaspConfidence} confidence` : ""}`,
+      );
+    }
+
+    const unmapped = rows.filter((row) => !row.owaspTop10);
+    if (unmapped.length) {
+      lines.push(
+        "",
+        `${unmapped.length} finding(s) still have no mapping. Ask the assistant to classify them with \`map_finding_owasp\`, adding a WSTG test id or CWE for the ones the classifier could not place.`,
+      );
+    }
+    reply.ok(lines.join("\n"));
   },
 
   report: async ({ sessionId, reply }) => {
-    try {
-      const session = await SessionsModel.findOne({ sessionId })
-        .select("name description createdAt vulnerabilities webAppTestPlan")
-        .lean();
-      if (!session) {
-        reply.fail("Session not found.");
-        return;
-      }
-
-      const report = buildWebAppPentestReport({
-        session: {
-          sessionId,
-          name: session.name ?? "Engagement",
-          description: session.description ?? "",
-          createdAt: session.createdAt as unknown as Date,
-        },
-        vulnerabilities: (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[],
-        testPlan: (session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
-      });
-
-      reply.ok(
-        [`*File name for this draft: \`${report.fileName}\`*`, "", report.markdown].join("\n"),
-      );
-    } catch (err: any) {
-      reply.fail(`Error generating the report draft: ${err?.message ?? err}`);
+    const session = await SessionsModel.findOne({ sessionId })
+      .select("name description createdAt vulnerabilities webAppTestPlan")
+      .lean();
+    if (!session) {
+      reply.sessionMissing();
+      return;
     }
-  },};
+
+    const report = buildWebAppPentestReport({
+      session: {
+        sessionId,
+        name: session.name ?? "Engagement",
+        description: session.description ?? "",
+        createdAt: session.createdAt as unknown as Date,
+      },
+      vulnerabilities: (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[],
+      testPlan: (session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
+    });
+
+    reply.ok(
+      [`*File name for this draft: \`${report.fileName}\`*`, "", report.markdown].join("\n"),
+    );
+  },
+};
 
