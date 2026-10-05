@@ -196,10 +196,7 @@ router.post("/:sessionId/spawn", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "label is required" });
     }
 
-    const mgr = await sessionLifecycle.getShellManager(sessionId);
-    if (!mgr.isConnected) {
-      await mgr.connect();
-    }
+    const mgr = await sessionLifecycle.ensureShellManager(sessionId, { required: true });
 
     const shellId = await mgr.spawnShell({ label, type: "pty", createdBy: "user" });
     return res.status(200).json({ shellId, label });

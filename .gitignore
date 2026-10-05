@@ -36,3 +36,8 @@ ssh-keys/
 
 # Academic paper build - never publish to the repository
 paper-build/
+
+# ── Local agent/tooling state ──
+/.agents/
+/.zcode/
+skills-lock.json

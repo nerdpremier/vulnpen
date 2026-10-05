@@ -81,6 +81,32 @@ class SessionLifecycleManager {
     return this.shellManagers.has(sessionId);
   }
 
+  /**
+   * getShellManager plus the connect-on-first-use protocol every consumer
+   * used to hand-roll. With required=true a connect failure throws; with
+   * required=false it logs a warning and returns the still-disconnected
+   * manager, so callers that can proceed without a shell keep working.
+   */
+  async ensureShellManager(
+    sessionId: string,
+    opts: { required?: boolean } = {}
+  ): Promise<ShellManager> {
+    const mgr = await this.getShellManager(sessionId);
+    if (mgr.isConnected) return mgr;
+
+    try {
+      await mgr.connect();
+    } catch (err: any) {
+      if (opts.required) {
+        throw new Error(`Cannot connect to attack box: ${err?.message ?? err}`);
+      }
+      console.warn(
+        `[SessionLifecycle] Shell connect failed for ${sessionId}: ${err?.message ?? err}. Running without shell support.`
+      );
+    }
+    return mgr;
+  }
+
   scheduleDestroy(sessionId: string): void {
     this.cancelDestroyTimer(sessionId);
     const timer = setTimeout(() => {

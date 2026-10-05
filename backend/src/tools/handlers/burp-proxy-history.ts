@@ -1,5 +1,5 @@
 import { ToolDefinition } from "../types";
-import { readEnvFile } from "../../utils/envWriter";
+import { burpFailureToToolOutput, decodeBurpBody, withBurpClient } from "../../services/burp-client.service";
 
 const MAX_ENTRIES_RETURNED = 25;
 
@@ -54,115 +54,92 @@ const burpProxyHistory: ToolDefinition = {
   async execute(args, _ctx) {
     const { action } = args;
 
-    const env = readEnvFile();
-    const connHost = env.BURP_RPC_HOST;
-    const connPort = parseInt(env.BURP_RPC_PORT || "50051", 10);
-
-    if (!connHost) {
-      return {
-        output: "Error: Burp RPC is not configured. Set BURP_RPC_HOST and BURP_RPC_PORT in Settings.",
-        exitCode: 1,
-      };
+    if (action === "get" && args.entry_id == null) {
+      return { output: 'Error: entry_id is required for "get" action.', exitCode: 1 };
     }
 
-    try {
-      const { BurpClient, decodeBase64Body } = await import("burp-rpc");
-      const burp = new BurpClient({ host: connHost, port: connPort });
+    const result = await withBurpClient(async (burp) => {
+      if (action === "search") {
+        const filter: any = {};
+        if (args.search) filter.search = args.search;
+        if (args.methods) filter.methods = args.methods.split(",").map((m: string) => m.trim()).filter(Boolean);
+        if (args.status_min) filter.statusMin = args.status_min;
+        if (args.status_max) filter.statusMax = args.status_max;
+        if (args.hide_assets) filter.hideAssets = true;
 
-      try {
-        if (action === "search") {
-          const filter: any = {};
-          if (args.search) filter.search = args.search;
-          if (args.methods) filter.methods = args.methods.split(",").map((m: string) => m.trim()).filter(Boolean);
-          if (args.status_min) filter.statusMin = args.status_min;
-          if (args.status_max) filter.statusMax = args.status_max;
-          if (args.hide_assets) filter.hideAssets = true;
+        const entries = await burp.proxy.getHistorySummary(filter);
+        const total = entries.length;
 
-          const entries = await burp.proxy.getHistorySummary(filter);
-          const total = entries.length;
+        const reversed = [...entries].reverse();
+        const slice = reversed.slice(0, MAX_ENTRIES_RETURNED);
 
-          const reversed = [...entries].reverse();
-          const slice = reversed.slice(0, MAX_ENTRIES_RETURNED);
+        const lines = slice.map((e: any, idx: number) => {
+          const id = e.id ?? (total - idx);
+          const status = e.statusCode ? `${e.statusCode}` : "---";
+          const size = e.responseLength ? `${e.responseLength}B` : "-";
+          const ct = e.contentType || "";
+          return `[${id}] ${(e.method || "?").padEnd(6)} ${status.padEnd(4)} ${e.host || ""}${e.path || "/"} ${ct} ${size}`;
+        });
 
-          const lines = slice.map((e: any, idx: number) => {
-            const id = e.id ?? (total - idx);
-            const status = e.statusCode ? `${e.statusCode}` : "---";
-            const size = e.responseLength ? `${e.responseLength}B` : "-";
-            const ct = e.contentType || "";
-            return `[${id}] ${(e.method || "?").padEnd(6)} ${status.padEnd(4)} ${e.host || ""}${e.path || "/"} ${ct} ${size}`;
-          });
+        let output = `Found ${total} entries`;
+        if (total > MAX_ENTRIES_RETURNED) {
+          output += ` (showing latest ${MAX_ENTRIES_RETURNED})`;
+        }
+        output += `:\n\n${lines.join("\n")}`;
 
-          let output = `Found ${total} entries`;
-          if (total > MAX_ENTRIES_RETURNED) {
-            output += ` (showing latest ${MAX_ENTRIES_RETURNED})`;
-          }
-          output += `:\n\n${lines.join("\n")}`;
-
-          if (total > MAX_ENTRIES_RETURNED) {
-            output += `\n\n... and ${total - MAX_ENTRIES_RETURNED} more. Refine your search filters to narrow results.`;
-          }
-
-          output += `\n\nUse action "get" with entry_id to see the full request/response for any entry.`;
-
-          return { output, exitCode: 0 };
+        if (total > MAX_ENTRIES_RETURNED) {
+          output += `\n\n... and ${total - MAX_ENTRIES_RETURNED} more. Refine your search filters to narrow results.`;
         }
 
-        if (action === "get") {
-          if (args.entry_id == null) {
-            return { output: 'Error: entry_id is required for "get" action.', exitCode: 1 };
-          }
+        output += `\n\nUse action "get" with entry_id to see the full request/response for any entry.`;
 
-          const entry = await burp.proxy.getEntry(args.entry_id);
+        return { output, exitCode: 0 as const };
+      }
 
-          if (!entry) {
-            return { output: `No proxy entry found with ID ${args.entry_id}.`, exitCode: 1 };
-          }
+      // action === "get" (validated above)
+      const entry = await burp.proxy.getEntry(args.entry_id);
 
-          const host = entry.request?.httpService?.host || "unknown";
-          const port = entry.request?.httpService?.port || "?";
-          const secure = entry.request?.httpService?.secure ?? false;
+      if (!entry) {
+        return { output: `No proxy entry found with ID ${args.entry_id}.`, exitCode: 1 as const };
+      }
 
-          let output = `=== Proxy Entry #${args.entry_id} ===\n`;
-          output += `Host: ${host}:${port} (${secure ? "HTTPS" : "HTTP"})\n\n`;
+      const host = entry.request?.httpService?.host || "unknown";
+      const port = entry.request?.httpService?.port || "?";
+      const secure = entry.request?.httpService?.secure ?? false;
 
-          output += `--- REQUEST ---\n`;
-          if (entry.request?.rawBytesBase64) {
-            let reqText = decodeBase64Body(entry.request.rawBytesBase64);
-            if (reqText.length > 4000) {
-              reqText = reqText.substring(0, 4000) + "\n... [truncated]";
-            }
-            output += reqText;
-          } else {
-            output += "(no request data)";
-          }
+      let output = `=== Proxy Entry #${args.entry_id} ===\n`;
+      output += `Host: ${host}:${port} (${secure ? "HTTPS" : "HTTP"})\n\n`;
 
-          output += `\n\n--- RESPONSE ---\n`;
-          if (entry.response?.rawBytesBase64) {
-            let respText = decodeBase64Body(entry.response.rawBytesBase64);
-            if (respText.length > 6000) {
-              respText = respText.substring(0, 6000) + "\n... [truncated]";
-            }
-            output += respText;
-          } else {
-            output += "(no response data)";
-          }
-
-          return { output, exitCode: 0 };
+      output += `--- REQUEST ---\n`;
+      if (entry.request?.rawBytesBase64) {
+        let reqText = await decodeBurpBody(entry.request.rawBytesBase64);
+        if (reqText.length > 4000) {
+          reqText = reqText.substring(0, 4000) + "\n... [truncated]";
         }
+        output += reqText;
+      } else {
+        output += "(no request data)";
+      }
 
-        return { output: `Error: Unknown action "${action}". Use "search" or "get".`, exitCode: 1 };
-      } finally {
-        burp.close();
+      output += `\n\n--- RESPONSE ---\n`;
+      if (entry.response?.rawBytesBase64) {
+        let respText = await decodeBurpBody(entry.response.rawBytesBase64);
+        if (respText.length > 6000) {
+          respText = respText.substring(0, 6000) + "\n... [truncated]";
+        }
+        output += respText;
+      } else {
+        output += "(no response data)";
       }
-    } catch (err: any) {
-      if (err?.code === 14) {
-        return {
-          output: `Error: Could not connect to Burp Suite at ${connHost}:${connPort}.`,
-          exitCode: 1,
-        };
-      }
-      return { output: `Error fetching proxy history: ${err.message}`, exitCode: 1 };
+
+      return { output, exitCode: 0 as const };
+    });
+
+    if (!result.ok) {
+      return { output: burpFailureToToolOutput(result, "fetching proxy history"), exitCode: 1 };
     }
+
+    return result.value;
   },
 };
 

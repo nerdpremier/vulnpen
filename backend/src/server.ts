@@ -24,6 +24,7 @@ import { sessionLifecycle } from "./services/session.lifecycle";
 import { migrateSessionsToWorkspaces } from "./migrations/001-create-workspaces";
 import { migrateToolExecutionMode } from "./migrations/002-migrate-tool-execution-mode";
 import { startBurpCaWatcher } from "./services/burp-ca.service";
+import { setAgentStateStore } from "./services/agent-state.service";
 
 declare module "express-session" {
   export interface SessionData {
@@ -44,6 +45,7 @@ const initializeApp = async () => {
     const MONGO_URI = await getSecrets("MONGO_URI");
     const REDIS_URL = await getSecrets("REDIS_URL");
     redisClient = createClient({ url: REDIS_URL });
+    setAgentStateStore(redisClient);
 
     const SESS_SECRET = await getSecrets("SESS_SECRET");
     const SESS_LIFETIME = await getSecrets("SESS_LIFETIME");
@@ -297,5 +299,3 @@ const initializeApp = async () => {
 initializeApp().catch((error) => {
   console.error("Failed to initialize server:", error);
 });
-
-export { redisClient };

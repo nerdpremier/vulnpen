@@ -5,19 +5,32 @@ import { getModelContextLimit } from "../utils/modelMetadata";
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
-import { requireActiveSession } from "../services/session.helpers";
+import { requireActiveSession, resetSessionContext } from "../services/session.helpers";
 import {
   createSSEWriter,
   initAndRun,
   handleConsent,
   runAgentLoop,
-  setPaused,
+} from "../services/agent.service";
+import { setPaused } from "../services/agent-state.service";
+import {
   reserveAbortController,
   releaseAbortController,
   abortSession,
   hasActiveController,
-} from "../services/agent.service";
+} from "../services/agent-controller-registry";
 import { parseSlashCommand, executeSlashCommand, SLASH_COMMANDS } from "../services/slash-commands";
+import { toolRegistry } from "../tools/registry";
+import { getUnconfiguredToolNames } from "../utils/toolAvailability";
+import { getProvider } from "../utils/llm/providers";
+import { sessionLifecycle } from "../services/session.lifecycle";
+import type { SSEWriter } from "../services/agent.service";
+import {
+  getCapabilityByName,
+  getInstallCommandForOS,
+} from "../capabilities/registry";
+import WorkspaceModel from "../models/Workspace/Workspace.model";
+import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
 
 // Every agent run exit path goes through this: release the controller slot and
 // arm the idle timer so ShellManagers (SSH connections, local shells) are torn
@@ -28,16 +41,56 @@ function releaseAfterRun(sessionId: string, abortCtrl: AbortController): void {
     sessionLifecycle.scheduleDestroy(sessionId);
   }
 }
-import { toolRegistry } from "../tools/registry";
-import { getUnconfiguredToolNames } from "../utils/toolAvailability";
-import { getProvider } from "../utils/llm/providers";
-import { sessionLifecycle } from "../services/session.lifecycle";
-import {
-  getCapabilityByName,
-  getInstallCommandForOS,
-} from "../capabilities/registry";
-import WorkspaceModel from "../models/Workspace/Workspace.model";
-import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
+
+/**
+ * Recovers a session left in "running" with no live process (e.g. a server
+ * restart mid-run). Returns false after writing the 409 when a run genuinely
+ * is active.
+ */
+async function resetStuckRunState(
+  session: any,
+  sessionId: string,
+  res: Response
+): Promise<boolean> {
+  if (session.agentState !== "running") return true;
+  if (hasActiveController(sessionId)) {
+    res.status(409).json({ message: "Agent is already running" });
+    return false;
+  }
+  console.warn(`[agent] Session ${sessionId} was stuck in "running" state with no active process. Resetting.`);
+  await SessionsModel.updateOne({ sessionId }, { $set: { agentState: "idle" } });
+  return true;
+}
+
+/**
+ * Owns the concurrency protocol every agent-run entry point shares: reserve
+ * an abort controller slot (409 on conflict), open the SSE stream, abort+pause
+ * when the client disconnects, and release the slot when the run settles.
+ * Entry points only choose which run to start.
+ */
+async function withAgentRun(
+  req: Request,
+  res: Response,
+  sessionId: string,
+  run: (sse: SSEWriter, abortCtrl: AbortController) => Promise<void>
+): Promise<Response | undefined> {
+  const abortCtrl = reserveAbortController(sessionId);
+  if (!abortCtrl) {
+    return res.status(409).json({ message: "Agent is already running" });
+  }
+  const sse = createSSEWriter(res);
+
+  req.on("close", () => {
+    abortSession(sessionId);
+    setPaused(sessionId, true).catch(() => {});
+  });
+
+  try {
+    await run(sse, abortCtrl);
+  } finally {
+    releaseAfterRun(sessionId, abortCtrl);
+  }
+}
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -100,32 +153,17 @@ export const sendMessage = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    if (session.agentState === "running") {
-      if (hasActiveController(sessionId)) {
-        return res.status(409).json({ message: "Agent is already running" });
-      }
-      console.warn(`[agent] Session ${sessionId} was stuck in "running" state with no active process. Resetting.`);
-      await SessionsModel.updateOne({ sessionId }, { $set: { agentState: "idle" } });
-    }
+    if (!(await resetStuckRunState(session, sessionId, res))) return;
 
-    const abortCtrl = reserveAbortController(sessionId);
-    if (!abortCtrl) {
-      return res.status(409).json({ message: "Agent is already running" });
-    }
-    const sse = createSSEWriter(res);
-
-    req.on("close", () => {
-      abortSession(sessionId);
-      setPaused(sessionId, true).catch(() => {});
-    });
-
-    await initAndRun({
-      sessionId,
-      userId,
-      userMessage: message,
-      sse,
-      abortSignal: abortCtrl.signal,
-    }).finally(() => releaseAfterRun(sessionId, abortCtrl));
+    return await withAgentRun(req, res, sessionId, (sse, abortCtrl) =>
+      initAndRun({
+        sessionId,
+        userId,
+        userMessage: message,
+        sse,
+        abortSignal: abortCtrl.signal,
+      })
+    );
   } catch (err: any) {
     console.error("[agent] sendMessage error:", err);
     if (!res.headersSent) {
@@ -168,31 +206,17 @@ export const resumeAgent = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    if (session.agentState === "running") {
-      if (hasActiveController(sessionId)) {
-        return res.status(409).json({ message: "Agent is already running" });
+    if (!(await resetStuckRunState(session, sessionId, res))) return;
+
+    return await withAgentRun(req, res, sessionId, async (sse, abortCtrl) => {
+      await setPaused(sessionId, false);
+
+      if (message) {
+        await initAndRun({ sessionId, userId, userMessage: message, sse, abortSignal: abortCtrl.signal });
+      } else {
+        await runAgentLoop({ sessionId, userId, sse, abortSignal: abortCtrl.signal });
       }
-      console.warn(`[agent] Session ${sessionId} was stuck in "running" state with no active process. Resetting.`);
-      await SessionsModel.updateOne({ sessionId }, { $set: { agentState: "idle" } });
-    }
-
-    const abortCtrl = reserveAbortController(sessionId);
-    if (!abortCtrl) {
-      return res.status(409).json({ message: "Agent is already running" });
-    }
-    const sse = createSSEWriter(res);
-
-    req.on("close", () => {
-      abortSession(sessionId);
-      setPaused(sessionId, true).catch(() => {});
     });
-
-    await setPaused(sessionId, false);
-
-    const run = message
-      ? initAndRun({ sessionId, userId, userMessage: message, sse, abortSignal: abortCtrl.signal })
-      : runAgentLoop({ sessionId, userId, sse, abortSignal: abortCtrl.signal });
-    await run.finally(() => releaseAfterRun(sessionId, abortCtrl));
   } catch (err: any) {
     console.error("[agent] resumeAgent error:", err);
     if (!res.headersSent) {
@@ -217,19 +241,9 @@ export const respondToConsent = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "No pending consent request" });
     }
 
-    const abortCtrl = reserveAbortController(sessionId);
-    if (!abortCtrl) {
-      return res.status(409).json({ message: "Agent is already running" });
-    }
-    const sse = createSSEWriter(res);
-
-    req.on("close", () => {
-      abortSession(sessionId);
-      setPaused(sessionId, true).catch(() => {});
-    });
-
-    await handleConsent({ sessionId, userId, approved, sse, abortSignal: abortCtrl.signal })
-      .finally(() => releaseAfterRun(sessionId, abortCtrl));
+    return await withAgentRun(req, res, sessionId, (sse, abortCtrl) =>
+      handleConsent({ sessionId, userId, approved, sse, abortSignal: abortCtrl.signal })
+    );
   } catch (err: any) {
     console.error("[agent] respondToConsent error:", err);
     if (!res.headersSent) {
@@ -348,22 +362,7 @@ export const clearContext = async (req: Request, res: Response) => {
 
     abortSession(sessionId);
 
-    const systemMsg = session.messages?.find((m: any) => m.role === "system" && !m.isSummary);
-
-    await SessionsModel.updateOne(
-      { sessionId },
-      {
-        $set: {
-          messages: systemMsg ? [systemMsg] : [],
-          subagents: [],
-          agentState: "idle",
-          pendingConsent: null,
-          turnIndex: 0,
-          totalTokens: 0,
-          tokenHistory: [],
-        },
-      },
-    );
+    await resetSessionContext(sessionId);
 
     return res.status(200).json({ message: "Context cleared" });
   } catch (err: any) {
@@ -500,12 +499,9 @@ export const installCapability = async (req: Request, res: Response) => {
       return res.status(400).json({ message: `Unknown capability: "${capabilityName}"` });
     }
 
-    const shellManager = await sessionLifecycle.getShellManager(sessionId);
-    if (!shellManager.isConnected) {
-      try { await shellManager.connect(); } catch {
-        return res.status(500).json({ message: "Cannot connect to attack box" });
-      }
-    }
+    const shellManager = await sessionLifecycle.ensureShellManager(sessionId, {
+      required: true,
+    });
 
     const { output: unameOutput } = await shellManager.execInShell(
       "uname -s",

@@ -10,108 +10,18 @@ import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import styles from "@/styles/components/Chat.module.scss";
 import { apiBaseURL } from "@/utils/axios.config";
 import {
+  TOOL_LABELS,
+  parseArgs,
+  formatArgsPreview,
+  getCodePreview,
+  isBrowserTool,
+} from "@/utils/toolCatalog";
+import {
   CaretRightOutlined,
   LoadingOutlined,
   CopyOutlined,
   CheckOutlined,
 } from "@ant-design/icons";
-
-const TOOL_LABELS = {
-  run_bash: "Bash",
-  run_python_script: "Python Script",
-  run_install_tool: "Install Tool",
-  ask_user: "Question",
-  spawn_shell: "Spawn Shell",
-  write_to_shell: "Write to Shell",
-  read_shell: "Read Shell",
-  list_shells: "List Shells",
-  close_shell: "Close Shell",
-  view_image: "View Image",
-  send_to_burp: "Burp Request",
-  send_to_burp_repeater: "Burp Repeater",
-  send_to_burp_intruder: "Burp Intruder",
-  search_burp_proxy_history: "Burp Proxy History",
-  burp_collaborator: "Burp Collaborator",
-  browser_action: "Browser Action",
-  magnitude_browser: "Browser Agent",
-  update_engagement_state: "Engagement State",
-  wstg_test_plan: "WSTG Test Plan",
-  map_finding_owasp: "OWASP Mapping",
-  generate_pentest_report: "Pentest Report",
-};
-
-function parseArgs(args) {
-  if (!args) return {};
-  if (typeof args === "string") {
-    try {
-      return JSON.parse(args);
-    } catch {
-      return {};
-    }
-  }
-  return args;
-}
-
-function formatArgsPreview(toolName, parsed) {
-  if (toolName === "run_bash") return parsed.command ?? "";
-  if (toolName === "run_python_script")
-    return parsed.file_name ?? "inline script";
-  if (toolName === "run_install_tool") return parsed.tool_name ?? "";
-  if (toolName === "ask_user") return parsed.question ?? "";
-  if (toolName === "spawn_shell") return parsed.label ?? "";
-  if (toolName === "write_to_shell")
-    return `[${parsed.shell_id}] ${(parsed.input ?? "").slice(0, 60)}`;
-  if (toolName === "read_shell") return `[${parsed.shell_id}]`;
-  if (toolName === "close_shell") return `[${parsed.shell_id}]`;
-  if (toolName === "view_image") return parsed.image_path ?? "";
-  if (toolName === "send_to_burp_repeater" || toolName === "send_to_burp_intruder") {
-    const req = parsed.raw_request ?? "";
-    const firstLine = req.split(/\r?\n/)[0] || "";
-    return parsed.host ?? firstLine.split(" ")[1] ?? "";
-  }
-  if (toolName === "search_burp_proxy_history")
-    return `${parsed.query ?? ""} ${parsed.host ?? ""}`.trim();
-  if (toolName === "burp_collaborator") return parsed.action ?? "";
-  if (toolName === "browser_action")
-    return `${parsed.url ?? ""} ${(parsed.goal ?? "").slice(0, 60)}`.trim();
-  if (toolName === "magnitude_browser")
-    return `${parsed.url ?? ""} ${(parsed.task ?? parsed.goal ?? "").slice(0, 50)}`.trim();
-  if (toolName === "update_engagement_state")
-    return `${parsed.action ?? ""} ${parsed.title ?? parsed.host ?? parsed.port ?? ""}`.trim();
-  if (toolName === "send_to_burp") {
-    const req = parsed.raw_request ?? "";
-    const firstLine = req.split(/\r?\n/)[0] || "";
-    const method = firstLine.split(" ")[0] || "";
-    const path = firstLine.split(" ")[1] || "";
-    return `${method} ${parsed.host ?? ""}${path ? `:${parsed.port ?? 443}${path}` : ""}`;
-  }
-  if (toolName === "wstg_test_plan")
-    return `${parsed.action ?? ""} ${parsed.test_id ?? parsed.depth ?? parsed.target ?? ""}`.trim();
-  if (toolName === "map_finding_owasp")
-    return `${parsed.vulnerability_id ?? parsed.title ?? parsed.wstg_id ?? ""}`.trim();
-  if (toolName === "generate_pentest_report")
-    return `${parsed.path ?? parsed.target ?? "draft report"}`.trim();
-  return JSON.stringify(parsed);
-}
-
-function getCodePreview(toolName, parsed) {
-  if (toolName === "run_bash") {
-    return { code: parsed.command ?? "", language: "bash" };
-  }
-  if (toolName === "run_install_tool") {
-    return null;
-  }
-  if (toolName === "run_python_script") {
-    return { code: parsed.script ?? "", language: "python" };
-  }
-  if (toolName === "send_to_burp") {
-    return { code: parsed.raw_request ?? "", language: "http" };
-  }
-  if (toolName === "shell_exec") {
-    return { code: parsed.command ?? "", language: "bash" };
-  }
-  return null;
-}
 
 // Above this size an output block starts folded: long scan logs are rarely
 // read inline and cost the most to lay out.
@@ -162,8 +72,8 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
   // and folds back to the rail once that call finishes.
   const wasBrowserStreamingRef = useRef(false);
   useEffect(() => {
-    const isBrowserTool = /browser/i.test(toolName);
-    if (isBrowserTool && streaming) {
+    const browserTool = isBrowserTool(toolName);
+    if (browserTool && streaming) {
       wasBrowserStreamingRef.current = true;
       window.dispatchEvent(new CustomEvent("browser-agent-active"));
     } else if (wasBrowserStreamingRef.current && !streaming) {

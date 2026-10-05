@@ -1,9 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { Response } from "express";
-import { redisClient } from "../server";
 import SessionsModel, {
   AgentMessageDoc,
-  AgentState,
 } from "../models/Sessions/Sessions.model";
 import {
   invoke_llm_streaming,
@@ -40,11 +38,13 @@ import {
   createAiToolSafetyEvaluator,
 } from "./tool-approval.service";
 
-const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
+// ─── Agent run state (pause flag, persisted run state) ───────────────
+
+import { isPaused, setAgentState, setPaused } from "./agent-state.service";
 
 // ─── Abort controller registry (for immediate pause) ───────────────────
 
-export {
+import {
   abortSession,
   hasActiveController,
   releaseAbortController,
@@ -104,28 +104,7 @@ export function createDetachedSSEWriter(label: string): SSEWriter {
   };
 }
 
-// ─── State helpers ───────────────────────────────────────────────────
-
-async function isPaused(sessionId: string): Promise<boolean> {
-  try {
-    const val = await redisClient.GET(PAUSE_CHECK_KEY(sessionId));
-    return val === "1";
-  } catch {
-    return false;
-  }
-}
-
-export async function setPaused(sessionId: string, paused: boolean): Promise<void> {
-  if (paused) {
-    await redisClient.SET(PAUSE_CHECK_KEY(sessionId), "1");
-  } else {
-    await redisClient.DEL(PAUSE_CHECK_KEY(sessionId));
-  }
-}
-
-async function setAgentState(sessionId: string, state: AgentState): Promise<void> {
-  await SessionsModel.updateOne({ sessionId }, { $set: { agentState: state } });
-}
+// ─── Message persistence ─────────────────────────────────────────────
 
 async function appendMessages(sessionId: string, messages: AgentMessageDoc[]): Promise<void> {
   if (!messages.length) return;
@@ -368,14 +347,7 @@ export async function runAgentLoop(params: {
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
 
-  const shellManager = await sessionLifecycle.getShellManager(sessionId);
-  if (!shellManager.isConnected) {
-    try {
-      await shellManager.connect();
-    } catch (err: any) {
-      console.warn(`[agent] SSH connection failed: ${err.message}. Running without shell support.`);
-    }
-  }
+  const shellManager = await sessionLifecycle.ensureShellManager(sessionId);
 
   // Detect attack box environment and rebuild system message with real info
   let envInfo: BoxEnvInfo | undefined;
@@ -984,10 +956,7 @@ export async function handleConsent(params: {
     return;
   }
 
-  const shellManager = await sessionLifecycle.getShellManager(sessionId);
-  if (!shellManager.isConnected) {
-    try { await shellManager.connect(); } catch { /* handled below */ }
-  }
+  const shellManager = await sessionLifecycle.ensureShellManager(sessionId);
 
   const ctx = buildExecutionContext({
     sessionId,

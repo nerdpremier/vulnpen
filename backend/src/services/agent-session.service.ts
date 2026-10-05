@@ -34,5 +34,3 @@ export interface AgentSessionData {
   mainSessionId?: string;
   [key: string]: any;
 }
-
-export { runCommandOnKali } from "./ssh.service";

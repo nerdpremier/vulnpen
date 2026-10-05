@@ -1,116 +1,64 @@
 import { Request, Response } from "express";
-import { readEnvFile } from "../utils/envWriter";
+import {
+  BURP_DISCONNECTED_MSG,
+  BURP_PING_TIMEOUT_MS,
+  BurpCallFailure,
+  decodeBurpBody,
+  decodeBurpReply,
+  encodeBurpBody,
+  isBurpUnreachable,
+  normalizeHttpRequest,
+  sendRawHttpRequest,
+  withBurpClient,
+} from "../services/burp-client.service";
 import { configureBurpCaTrust, getBurpCaStatus } from "../services/burp-ca.service";
 
-// Burp may be on a remote host; the 500 ms library default for ping() is
-// too tight for anything past a LAN round trip.
-const BURP_PING_TIMEOUT_MS = 5000;
-
-const BURP_DISCONNECTED_MSG =
-  "Burp Suite appears to be disconnected. " +
-  "Please verify the Burp RPC extension is loaded and running, " +
-  "and check your host/port configuration in Settings.";
-
-function getBurpConnection() {
-  const env = readEnvFile();
-  const host = env.BURP_RPC_HOST;
-  const port = parseInt(env.BURP_RPC_PORT || "50051", 10);
-  return { host, port };
-}
-
-async function createBurpClient(host: string, port: number) {
-  const { BurpClient } = await import("burp-rpc");
-  return new BurpClient({ host, port });
-}
-
-function isBurpUnreachable(err: any): boolean {
-  return err?.code === 14 || err?.code === 4;
+/**
+ * Maps a withBurpClient failure to the HTTP response shape shared by every
+ * endpoint: not-configured → 400, unreachable → 502, anything else → 500.
+ */
+function respondBurpFailure(
+  res: Response,
+  failure: BurpCallFailure,
+  logLabel: string,
+  errorMessage: string,
+  extra: Record<string, unknown> = {}
+) {
+  if (failure.reason === "not-configured") {
+    return res.status(400).json({ message: failure.message, ...extra });
+  }
+  if (failure.reason === "unreachable") {
+    return res.status(502).json({ message: failure.message });
+  }
+  console.error(logLabel, (failure.error as any)?.message || failure.error);
+  return res.status(500).json({ message: errorMessage });
 }
 
 /**
  * Lightweight health check for Burp connectivity.
- * No auth required — useful for monitoring and dashboards.
  * Uses the dedicated Ping RPC to verify the gRPC channel is alive.
  */
-export const getBurpHealth = async (_req: Request, res: Response) => {
-  try {
-    const { host, port } = getBurpConnection();
+async function burpConnectionStatus(_req: Request, res: Response) {
+  const result = await withBurpClient((burp) => burp.ping(BURP_PING_TIMEOUT_MS));
 
-    if (!host || !String(host).trim()) {
-      return res.status(200).json({
-        configured: false,
-        connected: false,
-        message: "Burp RPC is not configured.",
-      });
-    }
-
-    const burp = await createBurpClient(host, port);
-
-    try {
-      const ping = await burp.ping(BURP_PING_TIMEOUT_MS);
-      return res.status(200).json({
-        configured: true,
-        connected: true,
-        burpVersion: ping.burpVersion,
-        extensionVersion: ping.extensionVersion,
-      });
-    } catch {
-      return res.status(200).json({
-        configured: true,
-        connected: false,
-        message: BURP_DISCONNECTED_MSG,
-      });
-    } finally {
-      burp.close();
-    }
-  } catch {
+  if (!result.ok) {
     return res.status(200).json({
-      configured: true,
+      configured: result.reason !== "not-configured",
       connected: false,
-      message: BURP_DISCONNECTED_MSG,
+      message: result.reason === "error" ? BURP_DISCONNECTED_MSG : result.message,
     });
   }
-};
 
-export const getBurpConnectionStatus = async (_req: Request, res: Response) => {
-  try {
-    const { host, port } = getBurpConnection();
+  const ping = result.value;
+  return res.status(200).json({
+    configured: true,
+    connected: true,
+    burpVersion: ping.burpVersion,
+    extensionVersion: ping.extensionVersion,
+  });
+}
 
-    if (!host || !String(host).trim()) {
-      return res.status(200).json({
-        configured: false,
-        connected: false,
-        message: "Burp RPC is not configured. Set the host and port in Settings.",
-      });
-    }
-
-    const burp = await createBurpClient(host, port);
-
-    try {
-      const ping = await burp.ping(BURP_PING_TIMEOUT_MS);
-      return res.status(200).json({
-        configured: true,
-        connected: true,
-        burpVersion: ping.burpVersion,
-        extensionVersion: ping.extensionVersion,
-      });
-    } catch {
-      return res.status(200).json({
-        configured: true,
-        connected: false,
-        message: BURP_DISCONNECTED_MSG,
-      });
-    } finally {
-      burp.close();
-    }
-  } catch {
-    return res.status(200).json({
-      configured: true,
-      connected: false,
-      message: BURP_DISCONNECTED_MSG,
-    });
-  }
-};
+export const getBurpHealth = burpConnectionStatus;
 
 export const getBurpCertificateStatus = async (_req: Request, res: Response) => {
   try {
@@ -123,16 +71,16 @@ export const getBurpCertificateStatus = async (_req: Request, res: Response) => 
 
 export const configureBurpCertificate = async (_req: Request, res: Response) => {
   try {
-    const { host, port } = getBurpConnection();
-    if (!host || !String(host).trim()) {
-      return res.status(400).json({ message: "Connect Burp RPC before configuring HTTPS interception." });
-    }
-
-    const burp = await createBurpClient(host, port);
-    try {
-      await burp.ping(BURP_PING_TIMEOUT_MS);
-    } finally {
-      burp.close();
+    const ping = await withBurpClient((burp) => burp.ping(BURP_PING_TIMEOUT_MS));
+    if (!ping.ok) {
+      if (ping.reason === "not-configured") {
+        return res.status(400).json({ message: "Connect Burp RPC before configuring HTTPS interception." });
+      }
+      if (ping.reason === "unreachable") {
+        return res.status(502).json({ message: ping.message });
+      }
+      console.error("[burp] CA configuration error:", (ping.error as any)?.message || ping.error);
+      return res.status(400).json({ message: ping.message });
     }
 
     return res.status(200).json(await configureBurpCaTrust());
@@ -146,436 +94,227 @@ export const configureBurpCertificate = async (_req: Request, res: Response) => 
 };
 
 export const getBurpProxyHistory = async (req: Request, res: Response) => {
-  try {
-    const { host, port } = getBurpConnection();
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string, 10) || 20));
 
-    if (!host || !String(host).trim()) {
-      return res.status(400).json({
-        message: "Burp RPC is not configured. Set the host and port in Settings.",
-        notConfigured: true,
-      });
-    }
+  const filter: any = {};
+  if (req.query.search) filter.search = req.query.search as string;
+  if (req.query.method) filter.methods = (req.query.method as string).split(",").filter(Boolean);
+  if (req.query.statusMin) filter.statusMin = parseInt(req.query.statusMin as string, 10) || 0;
+  if (req.query.statusMax) filter.statusMax = parseInt(req.query.statusMax as string, 10) || 0;
+  if (req.query.hideAssets === "true") filter.hideAssets = true;
 
-    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string, 10) || 20));
+  const result = await withBurpClient(async (burp) => {
+    const allEntries = await burp.proxy.getHistorySummary(filter);
+    const total = allEntries.length;
 
-    const filter: any = {};
-    if (req.query.search) filter.search = req.query.search as string;
-    if (req.query.method) filter.methods = (req.query.method as string).split(",").filter(Boolean);
-    if (req.query.statusMin) filter.statusMin = parseInt(req.query.statusMin as string, 10) || 0;
-    if (req.query.statusMax) filter.statusMax = parseInt(req.query.statusMax as string, 10) || 0;
-    if (req.query.hideAssets === "true") filter.hideAssets = true;
+    const reversed = [...allEntries].reverse();
+    const start = (page - 1) * pageSize;
+    const slice = reversed.slice(start, start + pageSize);
 
-    const burp = await createBurpClient(host, port);
+    const entries = slice.map((entry: any, idx: number) => ({
+      ...entry,
+      index: total - start - idx,
+    }));
 
-    try {
-      const allEntries = await burp.proxy.getHistorySummary(filter);
-      const total = allEntries.length;
+    return { entries, total, page, pageSize };
+  });
 
-      const reversed = [...allEntries].reverse();
-      const start = (page - 1) * pageSize;
-      const slice = reversed.slice(start, start + pageSize);
-
-      const entries = slice.map((entry: any, idx: number) => ({
-        ...entry,
-        index: total - start - idx,
-      }));
-
-      return res.status(200).json({ entries, total, page, pageSize });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Proxy history error:", error.message);
-
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-
-    return res.status(500).json({ message: "Failed to fetch proxy history" });
+  if (!result.ok) {
+    return respondBurpFailure(
+      res,
+      result,
+      "[burp] Proxy history error:",
+      "Failed to fetch proxy history",
+      result.reason === "not-configured" ? { notConfigured: true } : {}
+    );
   }
+
+  return res.status(200).json(result.value);
 };
 
 export const getBurpProxyEntry = async (req: Request, res: Response) => {
-  try {
-    const { host, port } = getBurpConnection();
-
-    if (!host) {
-      return res.status(400).json({
-        message: "Burp RPC is not configured.",
-        notConfigured: true,
-      });
-    }
-
-    const entryId = parseInt(req.params.id, 10);
-    if (isNaN(entryId)) {
-      return res.status(400).json({ message: "Invalid entry ID" });
-    }
-
-    const { decodeBase64Body } = await import("burp-rpc");
-    const burp = await createBurpClient(host, port);
-
-    try {
-      const entry = await burp.proxy.getEntry(entryId);
-
-      const result: any = {
-        id: entry.id,
-        host: entry.request?.httpService?.host || "",
-        port: entry.request?.httpService?.port || 0,
-        secure: entry.request?.httpService?.secure || false,
-        rawRequest: "",
-        rawResponse: "",
-      };
-
-      if (entry.request?.rawBytesBase64) {
-        result.rawRequest = decodeBase64Body(entry.request.rawBytesBase64);
-      }
-
-      if (entry.response?.rawBytesBase64) {
-        result.rawResponse = decodeBase64Body(entry.response.rawBytesBase64);
-      }
-
-      return res.status(200).json(result);
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Proxy entry error:", error.message);
-
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-
-    return res.status(500).json({ message: "Failed to fetch proxy entry" });
+  const entryId = parseInt(req.params.id, 10);
+  if (isNaN(entryId)) {
+    return res.status(400).json({ message: "Invalid entry ID" });
   }
+
+  const result = await withBurpClient(async (burp) => {
+    const entry = await burp.proxy.getEntry(entryId);
+
+    const entryResult: any = {
+      id: entry.id,
+      host: entry.request?.httpService?.host || "",
+      port: entry.request?.httpService?.port || 0,
+      secure: entry.request?.httpService?.secure || false,
+      rawRequest: "",
+      rawResponse: "",
+    };
+
+    if (entry.request?.rawBytesBase64) {
+      entryResult.rawRequest = await decodeBurpBody(entry.request.rawBytesBase64);
+    }
+
+    if (entry.response?.rawBytesBase64) {
+      entryResult.rawResponse = await decodeBurpBody(entry.response.rawBytesBase64);
+    }
+
+    return entryResult;
+  });
+
+  if (!result.ok) {
+    return respondBurpFailure(
+      res,
+      result,
+      "[burp] Proxy entry error:",
+      "Failed to fetch proxy entry",
+      result.reason === "not-configured" ? { notConfigured: true } : {}
+    );
+  }
+
+  return res.status(200).json(result.value);
 };
 
 export const sendBurpRequest = async (req: Request, res: Response) => {
-  try {
-    const { host: connHost, port: connPort } = getBurpConnection();
-
-    if (!connHost) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
-
-    const { host, port, secure, rawRequest } = req.body;
-
-    if (!host || !rawRequest) {
-      return res.status(400).json({ message: "host and rawRequest are required" });
-    }
-
-    // Textareas normalize \r\n to \n; HTTP requires \r\n
-    let normalizedRequest = rawRequest.replace(/\r?\n/g, "\r\n");
-
-    // Recalculate Content-Length to match the actual body after normalization
-    const headerBodySplit = normalizedRequest.indexOf("\r\n\r\n");
-    if (headerBodySplit !== -1) {
-      const headersPart = normalizedRequest.substring(0, headerBodySplit);
-      const bodyPart = normalizedRequest.substring(headerBodySplit + 4);
-      const bodyLength = Buffer.byteLength(bodyPart, "utf-8");
-
-      normalizedRequest =
-        headersPart.replace(
-          /Content-Length:\s*\d+/i,
-          `Content-Length: ${bodyLength}`
-        ) +
-        "\r\n\r\n" +
-        bodyPart;
-    }
-
-    const { decodeBase64Body } = await import("burp-rpc");
-    const burp = await createBurpClient(connHost, connPort);
-
-    try {
-      const result = await burp.http.sendRawRequest(
-        host,
-        port || 443,
-        secure ?? true,
-        normalizedRequest
-      );
-
-      let rawResponse = "";
-      if (result.response?.rawBytesBase64) {
-        rawResponse = decodeBase64Body(result.response.rawBytesBase64);
-      }
-
-      return res.status(200).json({
-        hasResponse: result.hasResponse ?? !!rawResponse,
-        rawResponse,
-      });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Send request error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to send request" });
+  const { host, port, secure, rawRequest } = req.body;
+  if (!host || !rawRequest) {
+    return res.status(400).json({ message: "host and rawRequest are required" });
   }
+
+  const result = await withBurpClient((burp) =>
+    sendRawHttpRequest(burp, { host, port, secure, rawRequest })
+  );
+
+  if (!result.ok) {
+    return respondBurpFailure(res, result, "[burp] Send request error:", "Failed to send request");
+  }
+
+  return res.status(200).json(result.value);
 };
 
 export const sendToRepeater = async (req: Request, res: Response) => {
-  try {
-    const { host: connHost, port: connPort } = getBurpConnection();
-
-    if (!connHost) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
-
-    const { host, port, secure, rawRequest, tabName } = req.body;
-
-    if (!host || !rawRequest) {
-      return res.status(400).json({ message: "host and rawRequest are required" });
-    }
-
-    let normalizedRequest = rawRequest.replace(/\r?\n/g, "\r\n");
-
-    const headerBodySplit = normalizedRequest.indexOf("\r\n\r\n");
-    if (headerBodySplit !== -1) {
-      const headersPart = normalizedRequest.substring(0, headerBodySplit);
-      const bodyPart = normalizedRequest.substring(headerBodySplit + 4);
-      const bodyLength = Buffer.byteLength(bodyPart, "utf-8");
-
-      normalizedRequest =
-        headersPart.replace(
-          /Content-Length:\s*\d+/i,
-          `Content-Length: ${bodyLength}`
-        ) +
-        "\r\n\r\n" +
-        bodyPart;
-    }
-
-    const { encodeBase64Body } = await import("burp-rpc");
-    const burp = await createBurpClient(connHost, connPort);
-
-    try {
-      const b64 = encodeBase64Body(normalizedRequest);
-      await burp.repeater.sendToRepeater(
-        {
-          httpService: { host, port: port || 443, secure: secure ?? true },
-          rawBytesBase64: b64,
-        },
-        tabName || ""
-      );
-
-      return res.status(200).json({ message: "Sent to Repeater" });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Send to repeater error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to send to Repeater" });
+  const { host, port, secure, rawRequest, tabName } = req.body;
+  if (!host || !rawRequest) {
+    return res.status(400).json({ message: "host and rawRequest are required" });
   }
+
+  const result = await withBurpClient(async (burp) => {
+    const b64 = await encodeBurpBody(normalizeHttpRequest(rawRequest));
+    await burp.repeater.sendToRepeater(
+      {
+        httpService: { host, port: port || 443, secure: secure ?? true },
+        rawBytesBase64: b64,
+      },
+      tabName || ""
+    );
+    return { message: "Sent to Repeater" };
+  });
+
+  if (!result.ok) {
+    return respondBurpFailure(res, result, "[burp] Send to repeater error:", "Failed to send to Repeater");
+  }
+
+  return res.status(200).json(result.value);
 };
 
-function normalizeHttpRequest(rawRequest: string): string {
-  let normalizedRequest = rawRequest.replace(/\r?\n/g, "\r\n");
-  const headerBodySplit = normalizedRequest.indexOf("\r\n\r\n");
-  if (headerBodySplit !== -1) {
-    const headersPart = normalizedRequest.substring(0, headerBodySplit);
-    const bodyPart = normalizedRequest.substring(headerBodySplit + 4);
-    const bodyLength = Buffer.byteLength(bodyPart, "utf-8");
-    normalizedRequest =
-      headersPart.replace(/Content-Length:\s*\d+/i, `Content-Length: ${bodyLength}`) +
-      "\r\n\r\n" +
-      bodyPart;
-  }
-  return normalizedRequest;
-}
-
 export const sendToIntruder = async (req: Request, res: Response) => {
-  try {
-    const { host: connHost, port: connPort } = getBurpConnection();
-    if (!connHost) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
-
-    const { host, port, secure, rawRequest, tabName, insertionPoints } = req.body;
-    if (!host || !rawRequest) {
-      return res.status(400).json({ message: "host and rawRequest are required" });
-    }
-
-    const { encodeBase64Body } = await import("burp-rpc");
-    const normalized = normalizeHttpRequest(rawRequest);
-    const burp = await createBurpClient(connHost, connPort);
-
-    try {
-      const b64 = encodeBase64Body(normalized);
-      await burp.intruder.sendToIntruder(
-        host,
-        port || 443,
-        secure ?? true,
-        b64,
-        tabName || "",
-        insertionPoints || []
-      );
-
-      return res.status(200).json({ message: "Sent to Intruder" });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Send to intruder error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to send to Intruder" });
+  const { host, port, secure, rawRequest, tabName, insertionPoints } = req.body;
+  if (!host || !rawRequest) {
+    return res.status(400).json({ message: "host and rawRequest are required" });
   }
+
+  const result = await withBurpClient(async (burp) => {
+    const b64 = await encodeBurpBody(normalizeHttpRequest(rawRequest));
+    await burp.intruder.sendToIntruder(
+      host,
+      port || 443,
+      secure ?? true,
+      b64,
+      tabName || "",
+      insertionPoints || []
+    );
+    return { message: "Sent to Intruder" };
+  });
+
+  if (!result.ok) {
+    return respondBurpFailure(res, result, "[burp] Send to intruder error:", "Failed to send to Intruder");
+  }
+
+  return res.status(200).json(result.value);
 };
 
 export const sendAndReceiveRepeater = async (req: Request, res: Response) => {
-  try {
-    const { host: connHost, port: connPort } = getBurpConnection();
-    if (!connHost) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
-
-    const { host, port, secure, rawRequest } = req.body;
-    if (!host || !rawRequest) {
-      return res.status(400).json({ message: "host and rawRequest are required" });
-    }
-
-    const { encodeBase64Body, decodeBase64Body } = await import("burp-rpc");
-    const normalized = normalizeHttpRequest(rawRequest);
-    const burp = await createBurpClient(connHost, connPort);
-
-    try {
-      const b64 = encodeBase64Body(normalized);
-      const result = await burp.repeater.sendAndReceive(
-        host,
-        port || 443,
-        secure ?? true,
-        b64
-      );
-
-      let rawResponse = "";
-      if (result.response?.rawBytesBase64) {
-        rawResponse = decodeBase64Body(result.response.rawBytesBase64);
-      }
-
-      return res.status(200).json({
-        hasResponse: result.hasResponse ?? !!rawResponse,
-        rawResponse,
-      });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Repeater send error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to send via Repeater" });
+  const { host, port, secure, rawRequest } = req.body;
+  if (!host || !rawRequest) {
+    return res.status(400).json({ message: "host and rawRequest are required" });
   }
+
+  const result = await withBurpClient(async (burp) => {
+    const b64 = await encodeBurpBody(normalizeHttpRequest(rawRequest));
+    const sendResult = await burp.repeater.sendAndReceive(host, port || 443, secure ?? true, b64);
+    return decodeBurpReply(sendResult);
+  });
+
+  if (!result.ok) {
+    return respondBurpFailure(res, result, "[burp] Repeater send error:", "Failed to send via Repeater");
+  }
+
+  return res.status(200).json(result.value);
 };
 
 export const generateCollaboratorPayload = async (req: Request, res: Response) => {
-  try {
-    const { host: connHost, port: connPort } = getBurpConnection();
-    if (!connHost) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
+  const { customData } = req.body || {};
 
-    const { customData } = req.body || {};
-    const burp = await createBurpClient(connHost, connPort);
+  const result = await withBurpClient((burp) => burp.collaborator.generatePayload(customData || ""));
 
-    try {
-      const result = await burp.collaborator.generatePayload(customData || "");
-      return res.status(200).json(result);
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Collaborator generate error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to generate Collaborator payload" });
+  if (!result.ok) {
+    return respondBurpFailure(
+      res,
+      result,
+      "[burp] Collaborator generate error:",
+      "Failed to generate Collaborator payload"
+    );
   }
+
+  return res.status(200).json(result.value);
 };
 
 export const pollCollaborator = async (req: Request, res: Response) => {
-  try {
-    const { host: connHost, port: connPort } = getBurpConnection();
-    if (!connHost) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
-
-    const { secretKey } = req.body;
-    if (!secretKey) {
-      return res.status(400).json({ message: "secretKey is required" });
-    }
-
-    const burp = await createBurpClient(connHost, connPort);
-
-    try {
-      const interactions = await burp.collaborator.poll(secretKey);
-      return res.status(200).json({ interactions });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Collaborator poll error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to poll Collaborator" });
+  const { secretKey } = req.body;
+  if (!secretKey) {
+    return res.status(400).json({ message: "secretKey is required" });
   }
+
+  const result = await withBurpClient((burp) => burp.collaborator.poll(secretKey));
+
+  if (!result.ok) {
+    return respondBurpFailure(res, result, "[burp] Collaborator poll error:", "Failed to poll Collaborator");
+  }
+
+  return res.status(200).json({ interactions: result.value });
 };
 
-export const getProxyInterceptStatus = async (req: Request, res: Response) => {
-  try {
-    const { host, port } = getBurpConnection();
-    if (!host) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
+export const getProxyInterceptStatus = async (_req: Request, res: Response) => {
+  const result = await withBurpClient((burp) => burp.proxy.isInterceptEnabled());
 
-    const burp = await createBurpClient(host, port);
-
-    try {
-      const enabled = await burp.proxy.isInterceptEnabled();
-      return res.status(200).json({ enabled });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Intercept status error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to get intercept status" });
+  if (!result.ok) {
+    return respondBurpFailure(res, result, "[burp] Intercept status error:", "Failed to get intercept status");
   }
+
+  return res.status(200).json({ enabled: result.value });
 };
 
 export const setProxyIntercept = async (req: Request, res: Response) => {
-  try {
-    const { host, port } = getBurpConnection();
-    if (!host) {
-      return res.status(400).json({ message: "Burp RPC is not configured." });
-    }
-
-    const { enabled } = req.body;
-    if (typeof enabled !== "boolean") {
-      return res.status(400).json({ message: "enabled (boolean) is required" });
-    }
-
-    const burp = await createBurpClient(host, port);
-
-    try {
-      await burp.proxy.setIntercept(enabled);
-      return res.status(200).json({ enabled });
-    } finally {
-      burp.close();
-    }
-  } catch (error: any) {
-    console.error("[burp] Set intercept error:", error.message);
-    if (isBurpUnreachable(error)) {
-      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
-    }
-    return res.status(500).json({ message: "Failed to set intercept" });
+  const { enabled } = req.body;
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({ message: "enabled (boolean) is required" });
   }
+
+  const result = await withBurpClient((burp) => burp.proxy.setIntercept(enabled).then(() => ({ enabled })));
+
+  if (!result.ok) {
+    return respondBurpFailure(res, result, "[burp] Set intercept error:", "Failed to set intercept");
+  }
+
+  return res.status(200).json(result.value);
 };

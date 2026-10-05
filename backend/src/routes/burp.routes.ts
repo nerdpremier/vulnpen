@@ -2,7 +2,6 @@ import express from "express";
 import { verifySess } from "../middlewares/VerifySession.middleware";
 import {
   getBurpHealth,
-  getBurpConnectionStatus,
   getBurpCertificateStatus,
   configureBurpCertificate,
   getBurpProxyHistory,
@@ -20,7 +19,7 @@ import {
 const router = express.Router();
 
 router.get("/health", [verifySess], getBurpHealth);
-router.get("/connection-status", [verifySess], getBurpConnectionStatus);
+router.get("/connection-status", [verifySess], getBurpHealth);
 router.get("/ca/status", [verifySess], getBurpCertificateStatus);
 router.post("/ca/configure", [verifySess], configureBurpCertificate);
 router.get("/proxy-history", [verifySess], getBurpProxyHistory);

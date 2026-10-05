@@ -1,5 +1,10 @@
 import { ToolDefinition } from "../types";
-import { readEnvFile } from "../../utils/envWriter";
+import {
+  burpFailureToToolOutput,
+  encodeBurpBody,
+  normalizeHttpRequest,
+  withBurpClient,
+} from "../../services/burp-client.service";
 import { rawRequestSafetyDetail } from "../../utils/consentDetail";
 
 const burpIntruder: ToolDefinition = {
@@ -70,51 +75,29 @@ const burpIntruder: ToolDefinition = {
     if (!host) return { output: "Error: host is required", exitCode: 1 };
     if (!raw_request) return { output: "Error: raw_request is required", exitCode: 1 };
 
-    const env = readEnvFile();
-    const connHost = env.BURP_RPC_HOST;
-    const connPort = parseInt(env.BURP_RPC_PORT || "50051", 10);
+    const result = await withBurpClient(async (burp) => {
+      const b64 = await encodeBurpBody(normalizeHttpRequest(raw_request));
 
-    if (!connHost) {
-      return {
-        output: "Error: Burp RPC is not configured. Set BURP_RPC_HOST and BURP_RPC_PORT in Settings.",
-        exitCode: 1,
-      };
+      await burp.intruder.sendToIntruder(
+        host,
+        port,
+        secure,
+        b64,
+        tab_name || "",
+        insertionPoints
+      );
+
+      return (
+        `Request sent to Burp Intruder for ${host}:${port}${tab_name ? ` (tab: "${tab_name}")` : ""}. ` +
+        `${insertionPoints.length} insertion point(s) configured.`
+      );
+    });
+
+    if (!result.ok) {
+      return { output: burpFailureToToolOutput(result, "sending to Intruder"), exitCode: 1 };
     }
 
-    try {
-      const { BurpClient, encodeBase64Body } = await import("burp-rpc");
-      const burp = new BurpClient({ host: connHost, port: connPort });
-
-      try {
-        const normalized = raw_request.replace(/\r?\n/g, "\r\n");
-        const b64 = encodeBase64Body(normalized);
-
-        await burp.intruder.sendToIntruder(
-          host,
-          port,
-          secure,
-          b64,
-          tab_name || "",
-          insertionPoints
-        );
-
-        return {
-          output: `Request sent to Burp Intruder for ${host}:${port}${tab_name ? ` (tab: "${tab_name}")` : ""}. ` +
-            `${insertionPoints.length} insertion point(s) configured.`,
-          exitCode: 0,
-        };
-      } finally {
-        burp.close();
-      }
-    } catch (err: any) {
-      if (err?.code === 14) {
-        return {
-          output: `Error: Could not connect to Burp Suite at ${connHost}:${connPort}.`,
-          exitCode: 1,
-        };
-      }
-      return { output: `Error sending to Intruder: ${err.message}`, exitCode: 1 };
-    }
+    return { output: result.value, exitCode: 0 };
   },
 };
 

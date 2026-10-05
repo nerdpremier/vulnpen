@@ -1,29 +1,12 @@
 import { ToolDefinition } from "../types";
-import { readEnvFile } from "../../utils/envWriter";
+import {
+  burpFailureToToolOutput,
+  sendRawHttpRequest,
+  withBurpClient,
+} from "../../services/burp-client.service";
 import { rawRequestSafetyDetail } from "../../utils/consentDetail";
 
 const MAX_RESPONSE_LENGTH = 8000;
-
-function normalizeHttpRequest(raw: string): string {
-  let normalized = raw.replace(/\r?\n/g, "\r\n");
-
-  const headerBodySplit = normalized.indexOf("\r\n\r\n");
-  if (headerBodySplit !== -1) {
-    const headersPart = normalized.substring(0, headerBodySplit);
-    const bodyPart = normalized.substring(headerBodySplit + 4);
-    const bodyLength = Buffer.byteLength(bodyPart, "utf-8");
-
-    normalized =
-      headersPart.replace(
-        /Content-Length:\s*\d+/i,
-        `Content-Length: ${bodyLength}`
-      ) +
-      "\r\n\r\n" +
-      bodyPart;
-  }
-
-  return normalized;
-}
 
 const sendToBurp: ToolDefinition = {
   name: "send_to_burp_repeater",
@@ -76,64 +59,29 @@ const sendToBurp: ToolDefinition = {
     if (!host) return { output: "Error: host is required", exitCode: 1 };
     if (!raw_request) return { output: "Error: raw_request is required", exitCode: 1 };
 
-    const env = readEnvFile();
-    const connHost = env.BURP_RPC_HOST;
-    const connPort = parseInt(env.BURP_RPC_PORT || "50051", 10);
+    const result = await withBurpClient((burp) =>
+      sendRawHttpRequest(burp, { host, port, secure, rawRequest: raw_request })
+    );
 
-    if (!connHost) {
+    if (!result.ok) {
+      return { output: burpFailureToToolOutput(result, "sending request through Burp"), exitCode: 1 };
+    }
+
+    if (!result.value.rawResponse) {
       return {
-        output:
-          "Error: Burp RPC is not configured. " +
-          "Set BURP_RPC_HOST and BURP_RPC_PORT in Settings > Burp Suite.",
+        output: "No response received from target. The server may have closed the connection.",
         exitCode: 1,
       };
     }
 
-    try {
-      const normalizedRequest = normalizeHttpRequest(raw_request);
-
-      const { BurpClient, decodeBase64Body } = await import("burp-rpc");
-      const burp = new BurpClient({ host: connHost, port: connPort });
-
-      try {
-        const result = await burp.http.sendRawRequest(
-          host,
-          port,
-          secure,
-          normalizedRequest,
-        );
-
-        if (!result.response?.rawBytesBase64) {
-          return {
-            output: "No response received from target. The server may have closed the connection.",
-            exitCode: 1,
-          };
-        }
-
-        let rawResponse = decodeBase64Body(result.response.rawBytesBase64);
-
-        if (rawResponse.length > MAX_RESPONSE_LENGTH) {
-          rawResponse =
-            rawResponse.substring(0, MAX_RESPONSE_LENGTH) +
-            `\n\n... [response truncated — ${rawResponse.length} bytes total]`;
-        }
-
-        return { output: rawResponse, exitCode: 0 };
-      } finally {
-        burp.close();
-      }
-    } catch (err: any) {
-      if (err?.code === 14) {
-        return {
-          output:
-            "Error: Could not connect to Burp Suite. " +
-            "Make sure the Burp RPC extension is loaded and running on " +
-            `${connHost}:${connPort}.`,
-          exitCode: 1,
-        };
-      }
-      return { output: `Error sending request through Burp: ${err.message}`, exitCode: 1 };
+    let rawResponse = result.value.rawResponse;
+    if (rawResponse.length > MAX_RESPONSE_LENGTH) {
+      rawResponse =
+        rawResponse.substring(0, MAX_RESPONSE_LENGTH) +
+        `\n\n... [response truncated — ${rawResponse.length} bytes total]`;
     }
+
+    return { output: rawResponse, exitCode: 0 };
   },
 };
 

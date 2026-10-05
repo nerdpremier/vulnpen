@@ -1,8 +1,9 @@
 import SessionsModel from "../models/Sessions/Sessions.model";
-import { SSEWriter } from "./agent.service";
+import type { SSEWriter } from "./agent.service";
 import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { sessionLifecycle } from "./session.lifecycle";
+import { resetSessionContext } from "./session.helpers";
 import { getOwaspCategory } from "../knowledge";
 import type {
   SessionVulnerabilityDoc,
@@ -207,22 +208,7 @@ const commandHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    const systemMsg = session.messages?.find((m: any) => m.role === "system" && !m.isSummary);
-
-    await SessionsModel.updateOne(
-      { sessionId },
-      {
-        $set: {
-          messages: systemMsg ? [systemMsg] : [],
-          subagents: [],
-          agentState: "idle",
-          pendingConsent: null,
-          turnIndex: 0,
-          totalTokens: 0,
-          tokenHistory: [],
-        },
-      },
-    );
+    await resetSessionContext(sessionId);
 
     sse.write("slash_command_result", {
       command: "clear",
