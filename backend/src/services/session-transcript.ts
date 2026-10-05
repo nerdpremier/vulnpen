@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel, { AgentMessageDoc, SessionDoc } from "../models/Sessions/Sessions.model";
-import type { ToolCallData } from "../utils/llm/providers";
+import type { ToolCallData } from "../utils/llm/types";
 
 // ─── Transcript ──────────────────────────────────────────────────────────
 // One owner for the session document's transcript: how a message of each

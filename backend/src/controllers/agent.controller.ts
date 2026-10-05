@@ -21,7 +21,7 @@ import { parseSlashCommand, executeSlashCommand, SLASH_COMMANDS } from "../servi
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { resolveSessionFile } from "../services/artifacts.service";
-import { resolveOrchestrator } from "../utils/llm/providers";
+import { resolveOrchestrator } from "../utils/llm/orchestrator";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import type { SSEWriter } from "../utils/sse";
 import {

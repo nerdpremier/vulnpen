@@ -1,4 +1,4 @@
-import type { FinishReason, StreamDelta, ToolCallData } from "./providers";
+import type { FinishReason, StreamDelta, ToolCallData } from "./types";
 
 // ─── Stream collector ────────────────────────────────────────────────────
 // One owner for the state every provider stream accumulates: text and

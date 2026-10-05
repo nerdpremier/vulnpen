@@ -1,7 +1,7 @@
 import type { ToolExecutionMode } from "../models/User/User.model";
 import type { ExecutionContext, SafetyDetail, ToolDefinition } from "../tools/types";
-import type { ProviderConfig } from "../utils/llm/providers";
-import { invoke_llm_streaming } from "../utils/llm/providers";
+import type { ProviderConfig } from "../utils/llm/types";
+import { invoke_llm_streaming } from "../utils/llm/streaming";
 
 export interface ToolApprovalDecision {
   requireConsent: boolean;

@@ -2,14 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
-import type { StreamDelta } from "../src/utils/llm/providers";
+import type { StreamDelta } from "../src/utils/llm/types";
 import {
   runAnthropicThinkingStream,
   runChatCompletionsStream,
   runOpenAIResponsesStream,
-  type ProviderConfig,
-  type StreamingInvokeOptions,
-} from "../src/utils/llm/providers";
+} from "../src/utils/llm/streaming";
+import type { ProviderConfig, StreamingInvokeOptions } from "../src/utils/llm/types";
 import { createStreamCollector } from "../src/utils/llm/streamCollector";
 
 /** Collect every delta a pipeline emits, in order — the delta sequence IS the contract. */

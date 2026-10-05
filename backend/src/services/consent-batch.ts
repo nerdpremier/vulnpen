@@ -1,6 +1,6 @@
 import SessionsModel, { PendingConsentDoc } from "../models/Sessions/Sessions.model";
 import { parseToolArguments } from "../utils/toolArguments";
-import type { ToolCallData } from "../utils/llm/providers";
+import type { ToolCallData } from "../utils/llm/types";
 import type { SafetyKind } from "../tools/types";
 import type { ToolExecutionResult } from "./agent.tools";
 

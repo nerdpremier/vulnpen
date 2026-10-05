@@ -4,11 +4,8 @@ import {
   createRequireHostOwner,
   isHostOwner,
 } from "../src/services/host-owner.service";
-import {
-  type ProviderConfig,
-  resolveInvocationProvider,
-  restrictHostSubscriptionModels,
-} from "../src/utils/llm/providers";
+import type { ProviderConfig } from "../src/utils/llm/types";
+import { resolveInvocationProvider, restrictHostSubscriptionModels } from "../src/utils/llm/orchestrator";
 
 test("the installation owner can use host-global resources", async () => {
   assert.equal(await isHostOwner("owner-id", async () => "owner-id"), true);

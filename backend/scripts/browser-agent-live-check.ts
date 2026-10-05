@@ -13,7 +13,7 @@
 import { loadConfig } from "../src/utils/loadConfig";
 import { readEnvFile } from "../src/utils/envWriter";
 import { getAssignedModels } from "../src/utils/modelRegistryStore";
-import { presetToProviderConfig } from "../src/utils/llm/providers";
+import { presetToProviderConfig } from "../src/utils/llm/orchestrator";
 import { resolveMagnitudeLlmConfig } from "../src/utils/magnitudeLlm";
 import {
   buildBrowserAgentConfig,

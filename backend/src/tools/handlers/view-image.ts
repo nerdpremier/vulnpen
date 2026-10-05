@@ -1,5 +1,5 @@
 import { ToolDefinition } from "../types";
-import { invoke_llm } from "../../utils/llm/providers";
+import { invoke_llm } from "../../utils/llm/invoke";
 
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 

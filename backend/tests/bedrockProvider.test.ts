@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bedrockBaseURL, DEFAULT_BEDROCK_REGION } from "../src/utils/llm/providers";
+import { bedrockBaseURL, DEFAULT_BEDROCK_REGION } from "../src/utils/llm/provider-config";
 import { CURATED_PROVIDERS } from "../src/services/models-catalog.service";
 
 test("an explicit base URL always wins and is trimmed", () => {

@@ -1,6 +1,6 @@
 import { toolRegistry } from "../tools/registry";
 import { ToolDefinition, ExecutionContext, ToolResult, SafetyKind } from "../tools/types";
-import { ToolCallData } from "../utils/llm/providers";
+import { ToolCallData } from "../utils/llm/types";
 import { ShellManager, ShellPurpose } from "./shell.manager";
 import { EngagementState } from "./engagement-state";
 import { parseToolArguments } from "../utils/toolArguments";

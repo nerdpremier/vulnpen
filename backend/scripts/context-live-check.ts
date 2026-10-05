@@ -21,7 +21,7 @@ import {
   estimateToolSchemaTokens,
 } from "../src/services/context.service";
 import { toolRegistry } from "../src/tools/registry";
-import { invoke_llm } from "../src/utils/llm/providers";
+import { invoke_llm } from "../src/utils/llm/invoke";
 import { getModelContextLimit } from "../src/utils/modelMetadata";
 import { EngagementState } from "../src/services/engagement-state";
 import type { AgentMessageDoc } from "../src/models/Sessions/Sessions.model";

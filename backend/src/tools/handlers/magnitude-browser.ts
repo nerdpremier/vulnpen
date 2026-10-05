@@ -6,7 +6,7 @@ import {
   isTransientBrowserLlmFailure,
   browserLlmErrorHint,
 } from "../../utils/magnitudeError";
-import { presetToProviderConfig } from "../../utils/llm/providers";
+import { presetToProviderConfig } from "../../utils/llm/orchestrator";
 import { getAssignedModels } from "../../utils/modelRegistryStore";
 import { isSubscriptionProvider } from "../../services/subscription-inference.service";
 import { isHostOwner } from "../../services/host-owner.service";

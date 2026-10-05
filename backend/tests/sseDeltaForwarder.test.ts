@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { forwardStreamDelta } from "../src/utils/sse";
 import type { SSEWriter, SseEventMap } from "../src/utils/sse";
-import type { StreamDelta } from "../src/utils/llm/providers";
+import type { StreamDelta } from "../src/utils/llm/types";
 
 function recordingWriter(): { sse: SSEWriter; events: [string, unknown][] } {
   const events: [string, unknown][] = [];

@@ -5,7 +5,8 @@ import SessionsModel, {
 } from "../models/Sessions/Sessions.model";
 import type { SSEWriter } from "../utils/sse";
 import { createSlashReply, SlashReply } from "./slash-reply";
-import { invoke_llm, invoke_llm_streaming } from "../utils/llm/providers";
+import { invoke_llm } from "../utils/llm/invoke";
+import { invoke_llm_streaming } from "../utils/llm/streaming";
 import { sessionLifecycle } from "./session.lifecycle";
 import { resetSessionContext } from "./session.helpers";
 import { resetAgentRun } from "./session-transcript";

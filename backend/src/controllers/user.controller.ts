@@ -9,11 +9,8 @@ import {
 } from "../config/constants";
 import { isPortListening } from "../utils/tcpProbe";
 import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
-import {
-  clearProviderCache,
-  invoke_llm,
-  presetToProviderConfig,
-} from "../utils/llm/providers";
+import { clearProviderCache, presetToProviderConfig } from "../utils/llm/orchestrator";
+import { invoke_llm } from "../utils/llm/invoke";
 import {
   getSubscriptionProviderStatuses,
   invokeSubscriptionInference,
@@ -870,7 +867,7 @@ export const exchangeAnthropicOAuth = async (req: Request, res: Response) => {
       ),
     });
 
-    const { clearProviderCache } = await import("../utils/llm/providers");
+    const { clearProviderCache } = await import("../utils/llm/orchestrator");
     clearProviderCache();
 
     return res
@@ -895,7 +892,7 @@ export const disconnectAnthropicOAuth = async (
       ANTHROPIC_OAUTH_EXPIRES_AT: "",
     });
 
-    const { clearProviderCache } = await import("../utils/llm/providers");
+    const { clearProviderCache } = await import("../utils/llm/orchestrator");
     clearProviderCache();
 
     return res.status(200).json({ message: "Claude OAuth disconnected" });

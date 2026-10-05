@@ -6,7 +6,7 @@ import {
   loadPendingConsent,
 } from "../src/services/consent-batch";
 import type { ToolExecutionResult } from "../src/services/agent.tools";
-import type { ToolCallData } from "../src/utils/llm/providers";
+import type { ToolCallData } from "../src/utils/llm/types";
 
 function consentResult(id: string, name: string): ToolExecutionResult {
   return {

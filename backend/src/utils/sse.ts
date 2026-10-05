@@ -63,7 +63,7 @@ export function createDetachedSSEWriter(label: string): SSEWriter {
 
 // ─── Stream delta forwarding ───────────────────────────────────────────
 
-import type { StreamDelta } from "./llm/providers";
+import type { StreamDelta } from "./llm/types";
 
 /**
  * The standard translation from provider stream deltas to SSE events —

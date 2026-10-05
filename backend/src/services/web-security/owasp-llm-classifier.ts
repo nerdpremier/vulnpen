@@ -6,7 +6,8 @@
  * Every LLM verdict must carry a rationale and is stored for audit.
  */
 
-import { invoke_llm, resolveOrchestrator } from "../../utils/llm/providers";
+import { invoke_llm } from "../../utils/llm/invoke";
+import { resolveOrchestrator } from "../../utils/llm/orchestrator";
 import {
   OWASP_TOP10_2025,
   getOwaspCategory,

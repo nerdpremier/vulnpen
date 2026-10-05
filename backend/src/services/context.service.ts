@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { invoke_llm } from "../utils/llm/providers";
-import { getProvider } from "../utils/llm/providers";
+import { invoke_llm } from "../utils/llm/invoke";
+import { getProvider } from "../utils/llm/orchestrator";
 import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";

@@ -1,10 +1,8 @@
 import SessionsModel, {
   AgentMessageDoc,
 } from "../models/Sessions/Sessions.model";
-import {
-  invoke_llm_streaming,
-  resolveOrchestrator,
-} from "../utils/llm/providers";
+import { invoke_llm_streaming } from "../utils/llm/streaming";
+import { resolveOrchestrator } from "../utils/llm/orchestrator";
 
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { toolRegistry } from "../tools/registry";
