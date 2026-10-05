@@ -60,7 +60,7 @@ import {
 
 // ─── SSE helpers ─────────────────────────────────────────────────────
 
-import type { SSEWriter } from "../utils/sse";
+import type { SSEWriter, SseEventMap } from "../utils/sse";
 
 // ─── Message persistence ─────────────────────────────────────────────
 // The transcript seam: message constructors, append/replace, token
@@ -340,7 +340,7 @@ export async function runAgentLoop(params: {
   // cached-prompt reset lives inside ContextBudget.compact — that invariant is
   // what once caused the re-summary loop.
   const compactMessages = async (
-    summarizingEvent: Record<string, unknown>,
+    summarizingEvent: SseEventMap["summarizing"],
     toolSchemaTokens: number,
     opts: { emitSummaryDone?: boolean } = {},
   ): Promise<void> => {
@@ -357,7 +357,7 @@ export async function runAgentLoop(params: {
     await replaceMessages(sessionId, messages);
     newMessages.length = 0;
     if (summaryMessage && opts.emitSummaryDone) {
-      sse.write("summary_done", { summary: summaryMessage.content });
+      sse.write("summary_done", { summary: summaryMessage.content ?? "" });
     }
   };
 

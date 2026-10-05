@@ -1,12 +1,17 @@
 import { Response } from "express";
+import type { SseEventMap, SseEventName } from "./sse-events";
+
+export type { SseEventMap, SseEventName };
 
 /**
  * The one SSE interface every streaming surface speaks (agent loop,
  * slash commands, controllers). Kept out of agent.service.ts so callers
- * depend on a two-method interface, not on the 995-line agent module.
+ * depend on a two-method interface, not on the 900-line agent module. The
+ * event vocabulary is typed: `write` only accepts names and payloads from
+ * the SseEventMap catalog in sse-events.ts.
  */
 export interface SSEWriter {
-  write: (event: string, data: any) => void;
+  write: <E extends SseEventName>(event: E, data: SseEventMap[E]) => void;
   end: () => void;
 }
 
@@ -19,7 +24,7 @@ export function createSSEWriter(res: Response): SSEWriter {
   });
 
   return {
-    write(event: string, data: any) {
+    write(event: SseEventName, data: unknown) {
       try {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       } catch {
@@ -47,9 +52,9 @@ export function createSSEWriter(res: Response): SSEWriter {
  */
 export function createDetachedSSEWriter(label: string): SSEWriter {
   return {
-    write(event: string, data: any) {
+    write(event: SseEventName, data: SseEventMap[SseEventName]) {
       if (event === "error") {
-        console.error(`[agent:detached:${label}] ${data?.message ?? JSON.stringify(data)}`);
+        console.error(`[agent:detached:${label}] ${(data as { message?: string })?.message ?? JSON.stringify(data)}`);
       }
     },
     end() {},
