@@ -111,3 +111,30 @@ export function loadPendingConsent(
     ? pending.batch
     : [{ toolCallId: pending.toolCallId, toolName: pending.toolName, arguments: pending.arguments }];
 }
+
+/**
+ * The consent counters' one home — the run loop and the consent resume never
+ * $inc them by hand: `approvals`/`denials` feed from the user's response,
+ * `circuitOpens` from the approval-rejection streak tripping.
+ */
+export async function recordConsentOutcome(
+  sessionId: string,
+  approved: boolean,
+): Promise<void> {
+  await SessionsModel.updateOne(
+    { sessionId },
+    {
+      $inc: {
+        "consentStats.approvals": approved ? 1 : 0,
+        "consentStats.denials": approved ? 0 : 1,
+      },
+    },
+  );
+}
+
+export async function recordCircuitOpen(sessionId: string): Promise<void> {
+  await SessionsModel.updateOne(
+    { sessionId },
+    { $inc: { "consentStats.circuitOpens": 1 } },
+  );
+}

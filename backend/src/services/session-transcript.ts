@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import SessionsModel, { AgentMessageDoc } from "../models/Sessions/Sessions.model";
+import SessionsModel, { AgentMessageDoc, SessionDoc } from "../models/Sessions/Sessions.model";
 import type { ToolCallData } from "../utils/llm/providers";
 
 // ─── Transcript ──────────────────────────────────────────────────────────
@@ -116,6 +116,49 @@ export async function trackTokens(
         },
       },
     },
+  );
+}
+
+/**
+ * Open a turn: the user's message enters the transcript and turnIndex
+ * advances as one save — the counter and the message list always agree.
+ * `ensureSystemMessage` seeds a fresh session with its system prompt in the
+ * same write.
+ */
+export async function beginTurn(
+  session: SessionDoc,
+  text: string,
+  opts: { ensureSystemMessage?: () => Promise<AgentMessageDoc> } = {},
+): Promise<AgentMessageDoc> {
+  if (session.messages.length === 0 && opts.ensureSystemMessage) {
+    session.messages.push(await opts.ensureSystemMessage());
+  }
+  const userMsg = userMessage(text, session.turnIndex);
+  session.messages.push(userMsg);
+  session.turnIndex += 1;
+  await session.save();
+  return userMsg;
+}
+
+/**
+ * Whether the session's transcript records a call to any of these tools.
+ * The projection and the two message shapes (toolName on tool results,
+ * toolCalls on assistant messages) live here, so an evidence check never
+ * re-invents the transcript query.
+ */
+export async function sessionUsedTool(
+  sessionId: string,
+  toolNames: readonly string[],
+): Promise<boolean> {
+  const session = await SessionsModel.findOne({ sessionId })
+    .select("messages.toolName messages.toolCalls.name")
+    .lean();
+  const messages = (session?.messages ?? []) as any[];
+  return messages.some(
+    (m) =>
+      toolNames.includes(m?.toolName) ||
+      (Array.isArray(m?.toolCalls) &&
+        m.toolCalls.some((t: any) => toolNames.includes(t?.name))),
   );
 }
 

@@ -1,7 +1,7 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
 import { BROWSER_TOOL_NAMES } from "../names";
-import SessionsModel from "../../models/Sessions/Sessions.model";
 import type { WebAppTestPlanDoc } from "../../models/Sessions/Sessions.model";
+import { sessionUsedTool } from "../../services/session-transcript";
 import {
   loadSessionPlan,
   saveSessionPlan,
@@ -343,27 +343,20 @@ const wstgTestPlan: ToolDefinition = {
         const refusal = caseUpdateError(plan, testId, patch);
         if (refusal) return { output: refusal, exitCode: 1 };
 
-        // "blocked" claims a dependency is missing, so it must carry evidence:
-        // a concrete reason, and for browser-shaped reasons an actual browser
-        // tool call somewhere in the session. Without this, "needs a browser"
-        // becomes a free pass to skip work the tools could have done.
         if (typeof args.status === "string" && args.status.trim().toLowerCase() === "blocked") {
           const reason = [args.notes, args.observations]
             .filter((v: any) => typeof v === "string")
             .join(" ");
-          const session = /browser/i.test(reason)
-            ? await SessionsModel.findOne({ sessionId })
-                .select("messages.toolName messages.toolCalls.name")
-                .lean()
-            : undefined;
-          const browserUsed = ((session?.messages as any[] | undefined) ?? []).some(
-            (m) =>
-              BROWSER_TOOL_NAMES.includes(m?.toolName) ||
-              (Array.isArray(m?.toolCalls) &&
-                m.toolCalls.some((t: any) => BROWSER_TOOL_NAMES.includes(t?.name))),
-          );
+          // "blocked" claims a dependency is missing, so it must carry evidence:
+          // a concrete reason, and for browser-shaped reasons an actual browser
+          // tool call somewhere in the session. Without this, "needs a browser"
+          // becomes a free pass to skip work the tools could have done.
+          const browserMentioned = /browser/i.test(reason);
+          const browserUsed = browserMentioned
+            ? await sessionUsedTool(sessionId, BROWSER_TOOL_NAMES)
+            : false;
           const blockedRefusal = blockedCaseError(reason, {
-            browserMentioned: /browser/i.test(reason),
+            browserMentioned,
             browserUsed,
           });
           if (blockedRefusal) return { output: blockedRefusal, exitCode: 1 };

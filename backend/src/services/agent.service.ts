@@ -27,6 +27,8 @@ import {
   consentRequiredEvent,
   persistPendingConsent,
   loadPendingConsent,
+  recordConsentOutcome,
+  recordCircuitOpen,
 } from "./consent-batch";
 import { ContextBudget, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
 import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
@@ -71,11 +73,11 @@ import {
   appendMessages,
   replaceMessages,
   trackTokens,
-  userMessage,
   assistantMessage,
   toolResultMessage,
   systemNoteMessage,
   createRunBuffer,
+  beginTurn,
   RunBuffer,
 } from "./session-transcript";
 
@@ -636,10 +638,7 @@ export async function runAgentLoop(params: {
       }
 
       if (approvalCircuitOpen) {
-        await SessionsModel.updateOne(
-          { sessionId },
-          { $inc: { "consentStats.circuitOpens": 1 } },
-        );
+        await recordCircuitOpen(sessionId);
         pushToolResultMessages(toolResults, runBuffer, turnIndex);
         await runBuffer.flush();
         await setAgentState(sessionId, "idle");
@@ -730,14 +729,9 @@ export async function initAndRun(params: {
     return;
   }
 
-  if (session.messages.length === 0) {
-    session.messages.push(await buildSystemMessage(sessionId, userId));
-  }
-
-  const userMsg = userMessage(userMessageText, session.turnIndex);
-  session.messages.push(userMsg);
-  session.turnIndex += 1;
-  await session.save();
+  const userMsg = await beginTurn(session, userMessageText, {
+    ensureSystemMessage: () => buildSystemMessage(sessionId, userId),
+  });
 
   sse.write("user_message_ack", { id: userMsg.id });
 
@@ -768,15 +762,7 @@ export async function handleConsent(params: {
 
   session.pendingConsent = undefined;
   await session.save();
-  await SessionsModel.updateOne(
-    { sessionId },
-    {
-      $inc: {
-        "consentStats.approvals": approved ? 1 : 0,
-        "consentStats.denials": approved ? 0 : 1,
-      },
-    },
-  );
+  await recordConsentOutcome(sessionId, approved);
 
   if (!approved) {
     const denialMessages: AgentMessageDoc[] = allPending.map((p) =>
