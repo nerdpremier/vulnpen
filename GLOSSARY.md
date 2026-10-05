@@ -92,8 +92,9 @@ tail. The loop never keeps a parallel `newMessages` array.
 parts, the tool-call lifecycle keyed by the provider's own id (start →
 argument chunks → `tool_call_done` in start order), the "tool calls imply
 finishReason=tool_calls" promotion, and the `join("") || null` result
-assembly. The three streaming pipelines in `providers.ts` (Anthropic native,
-OpenAI Responses, chat completions) are event pumps over it and own only what
+assembly. The three streaming pipelines in `utils/llm/streaming.ts`
+(Anthropic native, OpenAI Responses, chat completions) are event pumps over
+it and own only what
 genuinely differs per provider (Anthropic's usage merge, Responses' item ids
 and `arguments.done`, chunk-level usage/model). Never add a fourth pipeline
 that re-derives the lifecycle.
@@ -128,12 +129,15 @@ filter, the run path and the prompt builder all consume that one seam — never
 re-derive readiness from env reads elsewhere.
 
 **Orchestrator resolution** — "which model orchestrates for this user", one
-verb in `utils/llm/providers.ts` (`resolveOrchestrator`): the assigned
+verb in `utils/llm/orchestrator.ts` (`resolveOrchestrator`): the assigned
 orchestrator (verified, host-owner-restricted) or the env default, returned
 as a ready `ProviderConfig` plus its reasoning mode, fresh on every call.
-The per-user invocation path never re-derives the fallback chain, the
-verification check, or the reasoning-mode cast; `getProvider` remains only
-for the global env default (budget math without a user context).
+The module also owns the per-invocation resolution
+(`resolveInvocationProvider`: override wins, subscriptions refuse
+non-owners) and the 30s cache behind the env default (`getProvider` —
+budget math without a user context). The per-user invocation path never
+re-derives the fallback chain, the verification check, or the
+reasoning-mode cast.
 
 **Consent batch** — the group of tool calls parked when the approval gate
 stops a turn (`pendingConsent` on the session document, `consentStats` for the
