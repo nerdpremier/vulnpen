@@ -36,6 +36,29 @@ must re-read the document rather than trust an in-memory snapshot.
 assembly, LLM call, tool dispatch, persistence. Should stay thin; the
 behaviour lives in the modules below.
 
+**Box env probe** — the one-time attack-box detection (user, home, OS,
+workspace path) at the start of every agent run, owned by
+`services/box-env.ts` (`probeBoxEnv`): the shell round-trip, the `|||`
+parse, and the `~`→home workspace resolution. Returns undefined when the
+shell is not connected or the probe fails — the prompt then renders
+without an env section. The agent loop calls the verb and passes the
+result through to the prompt builder.
+
+**Prompt facts** — everything the prompt renders from the session
+document: the declared engagement boundary, the WSTG plan + OWASP risk
+posture, the user's capability lists, and the run-date facts. Owned by
+`services/prompt-facts.ts` (`buildSystemMessage`,
+`buildVolatileWebAppForSession`, with `promptFactsFromSession` as the
+pure projection). Every call re-reads the document on purpose — tools
+mutate the plan and findings mid-run, so never cache the facts or
+re-derive the projection at a call site.
+
+**Stream fan-out** — the translation from provider stream deltas to SSE
+events, owned by `forwardStreamDelta` in `utils/sse.ts`, next to the
+writer and the event catalog. The agent loop's `onDelta` is exactly this
+verb; the final text/reasoning come from the invoke result, not from
+re-accumulating deltas at the call site.
+
 **Transcript** — the session document's message list and everything that
 touches it. Owned by `services/session-transcript.ts`: the message
 constructors for every role (`userMessage`, `assistantMessage`,
@@ -76,6 +99,11 @@ that re-derives the lifecycle.
 `slash_command_result` → `done` → `end()`, command name stamped once.
 Handlers take a `SlashReply` (`ok`/`fail`/`sessionMissing`/`ack`/`stream`),
 never a raw `SSEWriter` — forget one `end()` and the HTTP stream hangs open.
+The session lookup shares that shape: handlers that read the session go
+through the handler ctx's `loadSession` (lookup + `sessionMissing` guard in
+one place, errors left to `executeSlashCommand`'s catch); only `/map` and
+`/report` keep their own `select()` projections, with the same
+missing-session guard.
 
 **Context budget** — the per-run compaction state machine in
 `services/context.service.ts` (`ContextBudget`): the cached prompt size, the
