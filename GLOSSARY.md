@@ -57,7 +57,11 @@ re-derive the projection at a call site.
 events, owned by `forwardStreamDelta` in `utils/sse.ts`, next to the
 writer and the event catalog. The agent loop's `onDelta` is exactly this
 verb; the final text/reasoning come from the invoke result, not from
-re-accumulating deltas at the call site.
+re-accumulating deltas at the call site. The backend↔frontend half of
+the contract (every catalog event consumed by `useAgentStream.js`, no
+unknown registrations) is pinned by `backend/tests/sseContract.test.ts` —
+the frontend is untyped JS, so that test is the only compile check this
+seam gets.
 
 **Transcript** — the session document's message list and everything that
 touches it. Owned by `services/session-transcript.ts`: the message
