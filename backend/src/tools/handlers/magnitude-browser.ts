@@ -75,9 +75,6 @@ const magnitudeBrowser: ToolDefinition = {
     return undefined;
   },
   requiresConsent: true,
-  shouldRequireConsent(args, ctx) {
-    return browserActionSafetyDetail(args, ctx) !== undefined;
-  },
   describeSafety(args, ctx) {
     return browserActionSafetyDetail(args, ctx);
   },

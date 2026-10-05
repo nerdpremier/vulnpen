@@ -1,5 +1,5 @@
 import { ToolDefinition } from "../types";
-import { findCapabilityForCommand } from "../../capabilities/registry";
+import { detectMissingCapability } from "../../capabilities/detect-missing";
 import { shellSafetyDetail } from "../../utils/consentDetail";
 
 const runBash: ToolDefinition = {
@@ -26,9 +26,6 @@ const runBash: ToolDefinition = {
     required: ["command"],
   },
   timeoutMs: 300_000,
-  shouldRequireConsent(args, ctx) {
-    return shellSafetyDetail(args.command ?? "", ctx) !== undefined;
-  },
   describeSafety(args, ctx) {
     return shellSafetyDetail(args.command ?? "", ctx);
   },
@@ -65,52 +62,5 @@ const runBash: ToolDefinition = {
     return result;
   },
 };
-
-const NOT_FOUND_PATTERNS = [
-  /(\S+): (?:command )?not found/i,
-  /bash: (\S+): No such file or directory/i,
-  /No module named ['"]*(\S+?)['"]*\s*$/im,
-  /ModuleNotFoundError: No module named ['"]*(\S+?)['"]*$/im,
-  /ImportError: No module named ['"]*(\S+?)['"]*$/im,
-];
-
-async function detectMissingCapability(
-  output: string,
-  command: string,
-  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
-): Promise<{ name: string; label: string; installCommand: string; size: string } | null> {
-  for (const pattern of NOT_FOUND_PATTERNS) {
-    const match = output.match(pattern);
-    if (match) {
-      const missingName = match[1];
-      const cap = findCapabilityForCommand(missingName);
-      if (cap && (await isGenuinelyMissing(cap, runCommand))) {
-        return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
-      }
-    }
-  }
-
-  const firstWord = command.trim().split(/\s+/)[0];
-  if (firstWord && output.includes("not found")) {
-    const cap = findCapabilityForCommand(firstWord);
-    // The patterns only read the output text — a `curl --fail` against a 404
-    // page looks exactly like a missing tool. Confirm the tool is genuinely
-    // absent with its own check before offering an install.
-    if (cap && (await isGenuinelyMissing(cap, runCommand))) {
-      return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
-    }
-  }
-
-  return null;
-}
-
-async function isGenuinelyMissing(
-  cap: { name: string; checkCommand?: string },
-  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
-): Promise<boolean> {
-  if (!cap.checkCommand) return true;
-  const probe = await runCommand(`{ ${cap.checkCommand}; } >/dev/null 2>&1`, 10_000);
-  return probe.exitCode !== 0;
-}
 
 export default runBash;

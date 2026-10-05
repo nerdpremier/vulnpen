@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 import type { WstgTestStatus } from "../../knowledge/types";
+import type { EngagementStateSnapshot } from "../../services/engagement-state";
 
 const Schema = mongoose.Schema;
 
@@ -228,6 +229,10 @@ export interface SessionDoc extends mongoose.Document {
   vulnerabilities?: SessionVulnerabilityDoc[];
   vulnerabilityBackfillVersion?: number;
   webAppTestPlan?: WebAppTestPlanDoc;
+  /** Snapshot of the engagement state module (hosts, services, credentials,
+   *  shells, implants, key discoveries, files, approaches, next steps) — how
+   *  those categories survive across runs. Written only by EngagementState. */
+  engagementState?: EngagementStateSnapshot;
 }
 
 const ToolCallSchema = new Schema(
@@ -536,6 +541,12 @@ const SessionSchema = new Schema({
   vulnerabilityBackfillVersion: { type: Number, default: 0 },
   webAppTestPlan: {
     type: WebAppTestPlanSchema,
+    default: undefined,
+  },
+  // Engagement state snapshot — owned and written by the EngagementState
+  // module (services/engagement-state.ts); no other code touches this field.
+  engagementState: {
+    type: Schema.Types.Mixed,
     default: undefined,
   },
 });

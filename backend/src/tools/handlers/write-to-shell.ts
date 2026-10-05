@@ -49,9 +49,6 @@ const writeToShell: ToolDefinition = {
     required: ["shell_id", "input"],
   },
   timeoutMs: 30_000,
-  shouldRequireConsent(args, ctx) {
-    return shellBoundary(args, ctx) !== undefined;
-  },
   describeSafety(args, ctx) {
     return shellBoundary(args, ctx);
   },

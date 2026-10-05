@@ -280,8 +280,8 @@ export async function executeToolCall(
     };
   }
 
-  const safetyTriggered = !disableSafetyProtections && (toolDef.shouldRequireConsent?.(args, ctx) ?? false);
-  const safetyDetail = safetyTriggered ? toolDef.describeSafety?.(args, ctx) : undefined;
+  const safetyDetail = !disableSafetyProtections ? toolDef.describeSafety?.(args, ctx) : undefined;
+  const safetyTriggered = safetyDetail !== undefined;
   const mode: ToolExecutionMode = toolExecutionMode ?? "auto";
   const approval = await decideToolConsent({
     mode,

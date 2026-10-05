@@ -1,3 +1,5 @@
+import SessionsModel from "../models/Sessions/Sessions.model";
+
 export type EngagementMode = "pentest";
 
 // ─── Shared types ───────────────────────────────────────────────────
@@ -91,8 +93,34 @@ export interface ActiveImplant {
 
 // ─── EngagementState class ──────────────────────────────────────────
 
+/**
+ * The part of the state that lives only here, persisted to the session
+ * document by the persister adapter so it survives across agent runs, consent
+ * resumes and restarts. Vulnerabilities are absent — they persist through
+ * `session.vulnerabilities` (see upsertSessionVulnerability); declaredTarget
+ * and scope come from `session.engagementContext`.
+ */
+export interface EngagementStateSnapshot {
+  hosts: DiscoveredHost[];
+  services: DiscoveredService[];
+  credentials: DiscoveredCredential[];
+  shells: ActiveShell[];
+  implants: ActiveImplant[];
+  keyDiscoveries: string[];
+  files: CreatedFile[];
+  approachesTried: AttemptedApproach[];
+  nextSteps: string[];
+}
+
+/** Writes the snapshot somewhere durable. Wired to the session document by
+ *  engagementStateFromSession; tests construct the state without one. */
+export type EngagementStatePersister = (snapshot: EngagementStateSnapshot) => Promise<void>;
+
 export class EngagementState {
   mode: EngagementMode;
+
+  private persister?: EngagementStatePersister;
+  private dirty = false;
 
   // Pentest fields
   /** The Target entered for the engagement - the only field that arms the
@@ -112,8 +140,9 @@ export class EngagementState {
   approachesTried: AttemptedApproach[] = [];
   nextSteps: string[] = [];
 
-  constructor(mode: EngagementMode = "pentest") {
+  constructor(mode: EngagementMode = "pentest", persister?: EngagementStatePersister) {
     this.mode = mode;
+    this.persister = persister;
   }
 
   toPromptBlock(): string {
@@ -245,6 +274,53 @@ export class EngagementState {
     return sections.join("\n");
   }
 
+  // ─── Mutations ────────────────────────────────────────────────────
+  // The only ways tools change the recordable categories. Each marks the
+  // state dirty; callers flush once per tool call, which is what keeps a
+  // successful update_engagement_state on the session document. Vulnerability
+  // mutations never dirty the state — that category persists through
+  // session.vulnerabilities, not the snapshot.
+
+  addHost(host: DiscoveredHost): void {
+    this.hosts.push(host);
+    this.dirty = true;
+  }
+
+  addService(service: DiscoveredService): void {
+    this.services.push(service);
+    this.dirty = true;
+  }
+
+  addCredential(credential: DiscoveredCredential): void {
+    this.credentials.push(credential);
+    this.dirty = true;
+  }
+
+  addShell(shell: ActiveShell): void {
+    this.shells.push(shell);
+    this.dirty = true;
+  }
+
+  addKeyDiscovery(discovery: string): void {
+    this.keyDiscoveries.push(discovery);
+    this.dirty = true;
+  }
+
+  addFile(file: CreatedFile): void {
+    this.files.push(file);
+    this.dirty = true;
+  }
+
+  logApproach(approach: AttemptedApproach): void {
+    this.approachesTried.push(approach);
+    this.dirty = true;
+  }
+
+  setNextSteps(steps: string[]): void {
+    this.nextSteps = steps;
+    this.dirty = true;
+  }
+
   /** Insert-or-merge an implant by callback display id. */
   upsertImplant(implant: ActiveImplant): void {
     const existing = this.implants.find(
@@ -252,9 +328,63 @@ export class EngagementState {
     );
     if (existing) {
       Object.assign(existing, implant);
+    } else {
+      this.implants.push(implant);
+    }
+    this.dirty = true;
+  }
+
+  /** Insert-or-merge a vulnerability by id or fingerprint — the same dedup
+   *  upsertSessionVulnerability applies to the document, so the in-memory
+   *  copy can never drift from what was persisted. */
+  upsertVulnerability(vulnerability: Vulnerability): void {
+    const existingIndex = this.vulnerabilities.findIndex(
+      (v) =>
+        v.vulnerabilityId === vulnerability.vulnerabilityId ||
+        (v.fingerprint && v.fingerprint === vulnerability.fingerprint),
+    );
+    if (existingIndex >= 0) this.vulnerabilities[existingIndex] = vulnerability;
+    else this.vulnerabilities.push(vulnerability);
+  }
+
+  removeVulnerability(vulnerabilityId: string): void {
+    this.vulnerabilities = this.vulnerabilities.filter(
+      (v) => v.vulnerabilityId !== vulnerabilityId,
+    );
+  }
+
+  // ─── Persistence ──────────────────────────────────────────────────
+
+  toSnapshot(): EngagementStateSnapshot | undefined {
+    if (this.isEmpty()) return undefined;
+    return {
+      hosts: this.hosts,
+      services: this.services,
+      credentials: this.credentials,
+      shells: this.shells,
+      implants: this.implants,
+      keyDiscoveries: this.keyDiscoveries,
+      files: this.files,
+      approachesTried: this.approachesTried,
+      nextSteps: this.nextSteps,
+    };
+  }
+
+  /**
+   * Write the snapshot through the persister when a mutation is pending.
+   * Without a persister (tests, ad-hoc states) this is a no-op. The dirty
+   * flag is cleared only after the write resolves, so a failed write is
+   * retried by the next flush rather than silently lost.
+   */
+  async flush(): Promise<void> {
+    if (!this.dirty || !this.persister) return;
+    const snapshot = this.toSnapshot();
+    if (!snapshot) {
+      this.dirty = false;
       return;
     }
-    this.implants.push(implant);
+    await this.persister(snapshot);
+    this.dirty = false;
   }
 
   private capped<T>(
@@ -298,12 +428,33 @@ export class EngagementState {
 // ─── Session bootstrap ──────────────────────────────────────────────
 
 /**
- * Rebuild the in-memory engagement state from the persisted session document.
- * Shared by the main agent loop and the consent path so every
- * execution context can record state via update_engagement_state.
+ * Rebuild the in-memory engagement state from the persisted session document:
+ * the declared boundary from engagementContext, the findings from
+ * session.vulnerabilities, and everything the state itself owns from the
+ * `engagementState` snapshot — hosts, services, credentials, shells,
+ * implants, key discoveries, files, approaches, next steps. The returned
+ * state carries the session-document persister, so flushing after a
+ * successful update_engagement_state keeps the snapshot current for the next
+ * run, consent resume or restart. Shared by the main agent loop and the
+ * consent path so every execution context records state through this module.
+ * Tests pass their own `persister` to capture the snapshot.
  */
-export function engagementStateFromSession(session: any): EngagementState {
-  const engagementState = new EngagementState("pentest");
+export function engagementStateFromSession(
+  session: any,
+  persister?: EngagementStatePersister,
+): EngagementState {
+  const sessionId = session?.sessionId;
+  const resolvedPersister =
+    persister ??
+    (sessionId
+      ? async (snapshot: EngagementStateSnapshot) => {
+          await SessionsModel.updateOne(
+            { sessionId },
+            { $set: { engagementState: snapshot } },
+          );
+        }
+      : undefined);
+  const engagementState = new EngagementState("pentest", resolvedPersister);
   // Declared engagement boundary. Only the Target arms the scope gate; the free
   // text below is what the gate then parses into the host allowlist, so a stray
   // domain in the Scope prose widens the boundary instead of redefining it.
@@ -339,5 +490,18 @@ export function engagementStateFromSession(session: any): EngagementState {
       updatedAt: vulnerability.updatedAt,
     }),
   );
+  const snapshot = session?.engagementState;
+  if (snapshot && typeof snapshot === "object") {
+    const list = (value: any): any[] => (Array.isArray(value) ? value : []);
+    engagementState.hosts = list(snapshot.hosts);
+    engagementState.services = list(snapshot.services);
+    engagementState.credentials = list(snapshot.credentials);
+    engagementState.shells = list(snapshot.shells);
+    engagementState.implants = list(snapshot.implants);
+    engagementState.keyDiscoveries = list(snapshot.keyDiscoveries);
+    engagementState.files = list(snapshot.files);
+    engagementState.approachesTried = list(snapshot.approachesTried);
+    engagementState.nextSteps = list(snapshot.nextSteps);
+  }
   return engagementState;
 }

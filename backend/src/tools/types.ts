@@ -48,8 +48,12 @@ export interface ToolDefinition {
    * versa. Configuration only: per-user authorization stays in execute.
    */
   checkReady?: () => string | undefined | Promise<string | undefined>;
-  shouldRequireConsent?: (args: Record<string, any>, ctx: ExecutionContext) => boolean;
-  /** Thai reason/impact for the consent dialog when the boundary is crossed. */
+  /**
+   * The consent boundary, evaluated in one place. A tool crosses a boundary
+   * exactly when this returns a detail — there is no separate boolean; the
+   * run path derives `safetyTriggered` from it, so the two can never disagree
+   * and the boundary is never computed twice per call.
+   */
   describeSafety?: (args: Record<string, any>, ctx: ExecutionContext) => SafetyDetail | undefined;
   execute: (args: Record<string, any>, ctx: ExecutionContext) => Promise<ToolResult>;
 }

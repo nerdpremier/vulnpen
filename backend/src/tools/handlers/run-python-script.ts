@@ -1,40 +1,7 @@
 import { ToolDefinition } from "../types";
-import { findCapabilityForCommand } from "../../capabilities/registry";
+import { detectMissingCapability, MODULE_NOT_FOUND_PATTERNS } from "../../capabilities/detect-missing";
 import { shellSafetyDetail } from "../../utils/consentDetail";
 import crypto from "crypto";
-
-const MODULE_NOT_FOUND_PATTERNS = [
-  /No module named ['"]*(\S+?)['"]*\s*$/im,
-  /ModuleNotFoundError: No module named ['"]*(\S+?)['"]*$/im,
-  /ImportError: No module named ['"]*(\S+?)['"]*$/im,
-];
-
-async function detectMissingModule(
-  output: string,
-  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
-) {
-  for (const pattern of MODULE_NOT_FOUND_PATTERNS) {
-    const match = output.match(pattern);
-    if (match) {
-      const cap = findCapabilityForCommand(match[1]);
-      // The pattern only reads the output text, so confirm the module is
-      // genuinely absent before offering an install.
-      if (cap && (await isGenuinelyMissing(cap, runCommand))) {
-        return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
-      }
-    }
-  }
-  return null;
-}
-
-async function isGenuinelyMissing(
-  cap: { name: string; checkCommand?: string },
-  runCommand: (cmd: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>,
-): Promise<boolean> {
-  if (!cap.checkCommand) return true;
-  const probe = await runCommand(`{ ${cap.checkCommand}; } >/dev/null 2>&1`, 10_000);
-  return probe.exitCode !== 0;
-}
 
 const runPythonScript: ToolDefinition = {
   name: "run_python_script",
@@ -59,9 +26,6 @@ const runPythonScript: ToolDefinition = {
     required: ["script"],
   },
   timeoutMs: 300_000,
-  shouldRequireConsent(args, ctx) {
-    return shellSafetyDetail(args.script ?? "", ctx) !== undefined;
-  },
   describeSafety(args, ctx) {
     const scope = shellSafetyDetail(args.script ?? "", ctx);
     if (scope) {
@@ -102,7 +66,9 @@ const runPythonScript: ToolDefinition = {
       `python3 << '${delimiter}'\n${script}\n${delimiter}`,
       this.timeoutMs,
     );
-    const suggestion = exitCode !== 0 ? await detectMissingModule(output, ctx.runCommand) : null;
+    const suggestion = exitCode !== 0
+      ? await detectMissingCapability(output, undefined, ctx.runCommand, MODULE_NOT_FOUND_PATTERNS)
+      : null;
     return { output, exitCode, ...(files.length ? { files } : {}), ...(suggestion ? { installSuggestion: suggestion } : {}) };
   },
 };

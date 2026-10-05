@@ -47,9 +47,6 @@ const sendToBurp: ToolDefinition = {
   },
   checkReady: burpNotReady,
   timeoutMs: 60_000,
-  shouldRequireConsent(args, ctx) {
-    return rawRequestSafetyDetail(args, ctx) !== undefined;
-  },
   describeSafety(args, ctx) {
     return rawRequestSafetyDetail(args, ctx);
   },

@@ -5,6 +5,7 @@ import { useAgentStreamStore } from "@/store/agentStream.store";
 import { useShallow } from "zustand/react/shallow";
 import { notification } from "antd";
 import { finalizeAbortedToolCalls } from "@/utils/finalizeAbortedToolCalls.mjs";
+import { isBrowserTool } from "@/utils/toolCatalog";
 
 const EMPTY_MESSAGES = [];
 
@@ -311,7 +312,7 @@ export default function useAgentStream({
           }
 
           const toolName = r2.toolNameMapRef.current[data.id];
-          if (toolName === "browser_action") {
+          if (isBrowserTool(toolName)) {
             delete r2.toolNameMapRef.current[data.id];
           }
 
@@ -338,7 +339,7 @@ export default function useAgentStream({
           }
 
           const toolName = r2.toolNameMapRef.current[data.id];
-          if (toolName === "browser_action") {
+          if (isBrowserTool(toolName)) {
             delete r2.toolNameMapRef.current[data.id];
           }
 
@@ -360,6 +361,7 @@ export default function useAgentStream({
             approvalReason: data.approvalReason,
             safetyReason: data.safetyReason,
             safetyImpact: data.safetyImpact,
+            safetyKind: data.safetyKind,
             batch: data.batch,
           });
           setAgentState("waiting_consent");

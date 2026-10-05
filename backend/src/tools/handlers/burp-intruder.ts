@@ -59,9 +59,6 @@ const burpIntruder: ToolDefinition = {
   },
   checkReady: burpNotReady,
   timeoutMs: 30_000,
-  shouldRequireConsent(args, ctx) {
-    return rawRequestSafetyDetail(args, ctx) !== undefined;
-  },
   describeSafety(args, ctx) {
     return rawRequestSafetyDetail(args, ctx);
   },

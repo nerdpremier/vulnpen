@@ -14,11 +14,14 @@ below, and add a term here when a refactor gives a concept a module of its own.
 
 **Engagement state** — the structured, in-memory record of what the agent has
 learned (hosts, services, credentials, vulnerabilities, shells, files,
-approaches, next steps). Lives in `backend/src/services/engagement-state.ts`;
-bootstrapped from the session document by `engagementStateFromSession`,
-mutated by tools via `update_engagement_state`, rendered into prompts with
-`toPromptBlock()`. It survives context summarization by design — never fold
-state fields into a summary.
+approaches, next steps). Lives in `backend/src/services/engagement-state.ts`,
+which owns the whole lifetime: `engagementStateFromSession` restores it from
+the session document (declared boundary, vulnerabilities, and the persisted
+`engagementState` snapshot) and wires the Mongo persister; tools mutate it
+only through its methods (`addHost`, `addKeyDiscovery`, …), which mark it
+dirty; `update_engagement_state` flushes once per successful call. It
+survives context summarization and restarts by design — never fold state
+fields into a summary.
 
 **WSTG test plan** — the session's OWASP Web Security Testing Guide case list,
 persisted on the session document (`webAppTestPlan`) through
