@@ -185,14 +185,13 @@ export interface RunBuffer {
    * were folded into the summary and are gone from the transcript.
    */
   replaceTranscript(messages: AgentMessageDoc[]): void;
-  /** Append the tail to Mongo and clear it. No-op when the tail is empty. */
-  flush(): Promise<void>;
   /**
-   * flush(), but skipped while the run is aborting: clearContext wipes the
-   * session document, and stale pre-clear messages must not be re-appended
-   * into the cleared session. Used at iteration boundaries and on the error
-   * path; turn-ending exits (consent park, circuit open, normal end) flush
-   * unconditionally with flush().
+   * Append the tail to Mongo and clear it — unless `isLive()` says the tail's
+   * destination is gone. Agent runs pass "the session was not cleared
+   * mid-run": clearContext wipes the document and stale pre-clear messages
+   * must not be re-appended into the cleared session. A pause or stop is NOT
+   * a clear — those runs still flush. Every exit path goes through this:
+   * iteration boundaries, turn endings, and the error path.
    */
   flushIfLive(): Promise<void>;
 }
@@ -222,7 +221,6 @@ export function createRunBuffer(
       transcript = messages;
       tail = [];
     },
-    flush,
     async flushIfLive() {
       if (tail.length > 0 && isLive()) await flush();
     },

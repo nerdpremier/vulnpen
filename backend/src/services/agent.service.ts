@@ -37,6 +37,7 @@ import { computeOwaspCoverage } from "../knowledge";
 import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
+import { wasSessionClearedSince } from "./session.helpers";
 import { engagementStateFromSession } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
@@ -267,6 +268,11 @@ export async function runAgentLoop(params: {
 }): Promise<void> {
   const { sessionId, userId, sse } = params;
 
+  // The tail must not reach a document that was wiped mid-run — a clear (not
+  // a pause or stop) is what suppresses flushing. Captured once: anything
+  // cleared after this instant invalidates the tail this run accumulates.
+  const runStartedAt = Date.now();
+
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
     sse.write("error", { message: "Session not found" });
@@ -321,7 +327,7 @@ export async function runAgentLoop(params: {
   const runBuffer = createRunBuffer(
     sessionId,
     [...session.messages],
-    () => !params.abortSignal?.aborted,
+    () => !wasSessionClearedSince(sessionId, runStartedAt),
   );
 
   // Refresh the system message on every turn so model assignments changed
@@ -404,7 +410,8 @@ export async function runAgentLoop(params: {
       //
       // Sits at the top of the loop so it also covers iterations that ended via
       // `continue`; the final iteration is still flushed by the exit paths.
-      // flushIfLive skips after abort/clear — see the run buffer.
+      // flushIfLive skips when the session was cleared mid-run — the only
+      // thing that suppresses flushing; pause and stop still persist.
       await runBuffer.flushIfLive();
 
       if (await isPaused(sessionId)) {
@@ -631,7 +638,7 @@ export async function runAgentLoop(params: {
         // the consent-batch module; the loop only parks and streams it.
         const batch = buildPendingConsentBatch(consentResults, assistantToolCalls);
         sse.write("consent_required", consentRequiredEvent(batch));
-        await runBuffer.flush();
+        await runBuffer.flushIfLive();
         await persistPendingConsent(sessionId, batch);
         sse.end();
         return;
@@ -640,7 +647,7 @@ export async function runAgentLoop(params: {
       if (approvalCircuitOpen) {
         await recordCircuitOpen(sessionId);
         pushToolResultMessages(toolResults, runBuffer, turnIndex);
-        await runBuffer.flush();
+        await runBuffer.flushIfLive();
         await setAgentState(sessionId, "idle");
         sse.write("error", {
           message:
@@ -672,7 +679,9 @@ export async function runAgentLoop(params: {
       !completedNormally &&
       !params.abortSignal?.aborted;
 
-    await runBuffer.flush();
+    // Unconditional in spirit — but a clear that raced in mid-run must not
+    // re-pollute the wiped document with pre-clear messages.
+    await runBuffer.flushIfLive();
 
     if (params.abortSignal?.aborted) {
       await setAgentState(sessionId, "paused");
@@ -696,9 +705,9 @@ export async function runAgentLoop(params: {
     sse.end();
   } catch (err: any) {
     console.error("[agent] Loop error:", err);
-    // flushIfLive skips the flush on abort/clear — the session document may
-    // have just been wiped by clearContext and must not be re-polluted with
-    // stale messages.
+    // flushIfLive skips the flush when the session was cleared mid-run — the
+    // document may have just been wiped and must not be re-polluted with
+    // stale messages. A pause or stop still flushes.
     await runBuffer.flushIfLive();
     const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
     await setAgentState(sessionId, isAbort ? "paused" : "idle");

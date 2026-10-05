@@ -64,7 +64,7 @@ test("assistantMessage normalizes empty fields to the persisted shape", () => {
   assert.equal(speaking.toolCalls?.length, 1);
 });
 
-test("add() feeds the transcript and the tail together; flush() appends exactly the tail", async () => {
+test("add() feeds the transcript and the tail together; flushIfLive() appends exactly the tail", async () => {
   const { writes } = captureWrites();
   const buffer = createRunBuffer("s1", [{ id: "sys", role: "system" } as never], () => true);
 
@@ -75,17 +75,17 @@ test("add() feeds the transcript and the tail together; flush() appends exactly 
   assert.equal(buffer.transcript.length, 3);
   assert.equal(buffer.transcript[1], assistant, "the transcript sees the same message object");
 
-  await buffer.flush();
+  await buffer.flushIfLive();
   assert.equal(writes.length, 1);
   const pushed = (writes[0].update as { $push: { messages: { $each: unknown[] } } }).$push.messages.$each;
   assert.deepEqual(pushed, [assistant, tool], "the tail carries every added message, in order");
 
   writes.length = 0;
-  await buffer.flush();
+  await buffer.flushIfLive();
   assert.equal(writes.length, 0, "flush clears the tail — a second flush is a no-op");
 });
 
-test("flushIfLive() skips while the run is aborting so a cleared session is never re-polluted", async () => {
+test("flushIfLive() skips when isLive() says the tail's destination is gone — a cleared session is never re-polluted", async () => {
   const { writes } = captureWrites();
   let live = true;
   const buffer = createRunBuffer("s1", [], () => live);
@@ -93,7 +93,7 @@ test("flushIfLive() skips while the run is aborting so a cleared session is neve
 
   live = false;
   await buffer.flushIfLive();
-  assert.equal(writes.length, 0, "aborting runs must not append");
+  assert.equal(writes.length, 0, "a run whose session was cleared must not append");
 
   live = true;
   await buffer.flushIfLive();
@@ -110,6 +110,6 @@ test("replaceTranscript() swaps the working transcript and discards the tail", a
   assert.equal(buffer.transcript.length, 1);
   assert.equal(buffer.transcript[0].id, "summary");
 
-  await buffer.flush();
+  await buffer.flushIfLive();
   assert.equal(writes.length, 0, "folded-into-summary messages must not be re-appended");
 });
