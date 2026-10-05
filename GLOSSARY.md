@@ -29,6 +29,25 @@ persisted on the session document (`webAppTestPlan`) through
 Mongo: handlers persist there, so anything rendering the plan for the model
 must re-read the document rather than trust an in-memory snapshot.
 
+## Settings
+
+**Model settings** — every mutation of the model registry, owned by
+`services/model-settings.service.ts`: the Settings → Models save
+(`saveModels`), the legacy orchestrator upsert
+(`assignOrchestratorPreset`), the assignment verbs
+(`clearOrchestratorAssignment`, `setBrowserModel`), the subscription
+connect (`connectSubscriptionPreset`), and the verification stamp
+(`markPresetVerified`). Each verb restores masked api keys (`•` → the
+saved secret), applies the verify-on-change rule (a preset whose
+credentials moved, or an assigned one that was never verified, is
+re-verified before it is saved; an unchanged preset keeps its stamp), and
+commits through one place that writes the registry AND clears the
+orchestrator's provider cache. Never call `writeModelRegistry` from a
+handler, follow it with a hand-rolled `clearProviderCache()`, or re-derive
+the masked-key restore at a call site. The persistence layer stays
+`utils/modelRegistryStore.ts` (file shape, normalization, legacy
+migration); the service owns the mutation protocol.
+
 ## Agent run
 
 **Agent loop** — the per-user-message orchestration in

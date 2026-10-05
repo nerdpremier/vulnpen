@@ -10,12 +10,19 @@ import {
 import { isPortListening } from "../utils/tcpProbe";
 import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
 import { clearProviderCache, presetToProviderConfig } from "../utils/llm/orchestrator";
-import { invoke_llm } from "../utils/llm/invoke";
 import {
   getSubscriptionProviderStatuses,
   invokeSubscriptionInference,
   isSubscriptionProvider,
 } from "../services/subscription-inference.service";
+import {
+  assignOrchestratorPreset,
+  clearOrchestratorAssignment,
+  connectSubscriptionPreset,
+  markPresetVerified,
+  saveModels,
+  setBrowserModel,
+} from "../services/model-settings.service";
 import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
 import {
   buildBrowserAgentConfig,
@@ -35,9 +42,7 @@ import {
 } from "../services/vnc-provisioning.service";
 import {
   getAssignedModels,
-  normalizeModelRegistryInput,
   readModelRegistry,
-  writeModelRegistry,
 } from "../utils/modelRegistryStore";
 import { isHostOwner } from "../services/host-owner.service";
 import { resolveToolExecutionMode } from "../models/User/User.model";
@@ -251,48 +256,6 @@ function modelForClient(model: any) {
   };
 }
 
-async function verifyModelPreset(model: any): Promise<string> {
-  if (isSubscriptionProvider(model.provider)) {
-    await invokeSubscriptionInference({
-      provider: model.provider,
-      model: model.model,
-      reasoningMode: "off",
-      messages: [{ role: "user", content: "Reply with exactly: connected" }],
-      format: "text",
-    });
-    return new Date().toISOString();
-  }
-
-  if (
-    process.env.VULNPEN_DOCKER === "1" &&
-    model.baseURL &&
-    ["localhost", "127.0.0.1", "::1"].includes(new URL(model.baseURL).hostname)
-  ) {
-    throw new Error(
-      "A model running on the Docker host must use host.docker.internal instead of localhost",
-    );
-  }
-
-  const config = await presetToProviderConfig(model);
-  if (!config.apiKey && config.authMethod !== "oauth" && config.provider !== "ollama") {
-    throw new Error("API key is required");
-  }
-
-  await Promise.race([
-    invoke_llm({
-      messages: [{ role: "user", content: "Reply with exactly: connected" }],
-      temperature: 0,
-      reasoningMode: "off",
-      providerOverride: config,
-      generationName: "model-setup-test",
-    }),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Model inference test timed out after 45 seconds")), 45_000),
-    ),
-  ]);
-  return new Date().toISOString();
-}
-
 export const getSwarmModels = async (req: Request, res: Response) => {
   try {
     const registry = readModelRegistry();
@@ -314,67 +277,7 @@ export const updateSwarmModels = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "models must be an array" });
     }
 
-    // Duplicate ids would make the sanitizer rename one of them, so the
-    // masked-key restore and verification would then look up (and re-verify)
-    // under the wrong saved preset. Reject the request instead.
-    const requestedIds = new Set<string>();
-    for (const model of models) {
-      const id = typeof model?.id === "string" ? model.id.trim() : "";
-      if (!id) {
-        return res.status(400).json({ message: "Each model must have an id" });
-      }
-      if (requestedIds.has(id)) {
-        return res.status(400).json({ message: `Duplicate model id "${id}"` });
-      }
-      requestedIds.add(id);
-    }
-
-    const normalized = normalizeModelRegistryInput(models, assignments || {});
-    if (models.length > 0 && normalized.models.length !== models.length) {
-      return res.status(400).json({
-        message:
-          "Each model must have id, label, valid provider, and model fields",
-      });
-    }
-
-    const existing = readModelRegistry();
-    const existingById = new Map(existing.models.map((model) => [model.id, model]));
-    const modelsWithPreservedSecrets = models.map((model: any) => {
-      const saved = existingById.get(model.id);
-      if (typeof model.apiKey === "string" && model.apiKey.includes("•")) {
-        return { ...model, apiKey: saved?.apiKey };
-      }
-      return model;
-    });
-
-    const normalizedWithSecrets = normalizeModelRegistryInput(
-      modelsWithPreservedSecrets,
-      assignments || {},
-    );
-    const assignedIds = new Set([
-      normalizedWithSecrets.assignments.orchestratorModelId,
-      normalizedWithSecrets.assignments.browserModelId,
-    ].filter(Boolean));
-    const verifiedModels = [];
-    for (const model of normalizedWithSecrets.models) {
-      const saved = existingById.get(model.id);
-      const changed = !saved ||
-        saved.provider !== model.provider ||
-        saved.model !== model.model ||
-        (saved.apiKey || "") !== (model.apiKey || "") ||
-        (saved.baseURL || "") !== (model.baseURL || "");
-      const mustVerify = changed || (assignedIds.has(model.id) && !saved?.verifiedAt);
-      verifiedModels.push({
-        ...model,
-        verifiedAt: mustVerify ? await verifyModelPreset(model) : saved?.verifiedAt,
-      });
-    }
-
-    const registry = writeModelRegistry(
-      verifiedModels,
-      assignments || {},
-    );
-    clearProviderCache();
+    const registry = await saveModels(models, assignments || {});
 
     return res.status(200).json({
       message: "Models updated",
@@ -429,41 +332,18 @@ export const connectSubscriptionProvider = async (
       });
     }
 
-    const registry = readModelRegistry();
-    const existing = registry.models.find(
-      (entry) => entry.provider === provider && entry.model === model,
-    );
-    const id = existing?.id || `${provider}-${model}`;
-    const label =
-      String(req.body?.label || "") ||
-      (provider === "codex-subscription"
-        ? `Codex · ${model}`
-        : `Claude Code · ${model}`);
-    const preset = {
-      id,
-      label,
+    const { registry, presetId } = connectSubscriptionPreset({
       provider,
       model,
-      reasoningMode: req.body?.reasoningMode || "high",
-    };
-    const models = existing
-      ? registry.models.map((entry) => (entry.id === id ? preset : entry))
-      : [...registry.models, preset];
-    const assignments = {
-      ...registry.assignments,
-      orchestratorModelId:
-        req.body?.assignOrchestrator === true ||
-        !registry.assignments.orchestratorModelId
-          ? id
-          : registry.assignments.orchestratorModelId,
-    };
-    const updated = writeModelRegistry(models, assignments);
-    clearProviderCache();
+      label: req.body?.label,
+      reasoningMode: req.body?.reasoningMode,
+      assignOrchestrator: req.body?.assignOrchestrator === true,
+    });
 
     return res.status(200).json({
       message: `${provider === "codex-subscription" ? "Codex" : "Claude Code"} subscription connected`,
-      model: updated.models.find((entry) => entry.id === id),
-      assignments: updated.assignments,
+      model: registry.models.find((entry) => entry.id === presetId),
+      assignments: registry.assignments,
       status,
     });
   } catch (error: any) {
@@ -497,17 +377,10 @@ export const testSubscriptionProvider = async (
       messages: [{ role: "user", content: "Reply with exactly: connected" }],
       format: "text",
     });
-    const registry = readModelRegistry();
-    const verifiedAt = new Date().toISOString();
-    writeModelRegistry(
-      registry.models.map((entry) =>
-        entry.provider === provider && entry.model === model
-          ? { ...entry, verifiedAt }
-          : entry,
-      ),
-      registry.assignments,
-    );
-    clearProviderCache();
+    const registry = markPresetVerified(provider, model);
+    const verifiedAt = registry.models.find(
+      (entry) => entry.provider === provider && entry.model === model,
+    )?.verifiedAt;
     return res.status(200).json({
       ok: result.content?.trim().toLowerCase().includes("connected") ?? false,
       model: result.model,
@@ -659,95 +532,20 @@ export const getModelConfig = async (_req: Request, res: Response) => {
 
 export const updateModelConfig = async (req: Request, res: Response) => {
   try {
-    const { label, provider, model, apiKey, baseURL, reasoningMode } = req.body;
-
-    if (!provider || !model) {
-      return res
-        .status(400)
-        .json({ message: "Provider and model are required" });
-    }
-
-    const env = readEnvFile();
-    const hasOAuth = !!env.ANTHROPIC_OAUTH_ACCESS_TOKEN;
-    if (
-      !apiKey &&
-      !(provider === "anthropic" && hasOAuth) &&
-      provider !== "ollama" &&
-      !isSubscriptionProvider(provider)
-    ) {
-      return res.status(400).json({ message: "API key is required" });
-    }
-
-    const validProviders = [
-      "openai",
-      "anthropic",
-      "anthropic-compatible",
-      "openrouter",
-      "google",
-      "mistralai",
-      "ollama",
-      "openai-compatible",
-      "kimi",
-      "bedrock",
-      "codex-subscription",
-      "claude-subscription",
-    ];
-    if (!validProviders.includes(provider)) {
-      return res.status(400).json({
-        message: `Invalid provider. Must be one of: ${validProviders.join(", ")}`,
-      });
-    }
-
-    if (
-      reasoningMode &&
-      !["off", "low", "medium", "high", "xhigh", "max"].includes(reasoningMode)
-    ) {
-      return res.status(400).json({
-        message:
-          "Invalid reasoning mode. Must be one of: off, low, medium, high, xhigh, max",
-      });
-    }
-
-    const registry = readModelRegistry();
-    const existingId =
-      registry.assignments.orchestratorModelId ||
-      `${provider}-${model}`.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
-    const existing = registry.models.find((entry) => entry.id === existingId);
-    const isApiKeyMasked = apiKey?.includes("•");
-    const entry = {
-      id: existingId,
-      label: label || existing?.label || "Orchestrator",
-      provider,
-      model,
-      apiKey: isApiKeyMasked ? existing?.apiKey : apiKey || "",
-      baseURL: baseURL || "",
-      reasoningMode: reasoningMode || "off",
-    };
-    const models = existing
-      ? registry.models.map((item) => (item.id === existingId ? entry : item))
-      : [...registry.models, entry];
-
-    writeModelRegistry(models, {
-      ...registry.assignments,
-      orchestratorModelId: existingId,
-    });
-    clearProviderCache();
+    await assignOrchestratorPreset(req.body);
 
     return res.status(200).json({ message: "Model config updated" });
-  } catch (error) {
+  } catch (error: any) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to update model config" });
+    return res.status(400).json({
+      message: error?.message || "Failed to update model config",
+    });
   }
 };
 
-export const deleteModelConfig = async (req: Request, res: Response) => {
+export const deleteModelConfig = async (_req: Request, res: Response) => {
   try {
-    const registry = readModelRegistry();
-    writeModelRegistry(registry.models, {
-      ...registry.assignments,
-      orchestratorModelId: undefined,
-    });
-    clearProviderCache();
+    clearOrchestratorAssignment();
 
     return res.status(200).json({ message: "Model config reset to defaults" });
   } catch (error) {
@@ -867,7 +665,6 @@ export const exchangeAnthropicOAuth = async (req: Request, res: Response) => {
       ),
     });
 
-    const { clearProviderCache } = await import("../utils/llm/orchestrator");
     clearProviderCache();
 
     return res
@@ -892,7 +689,6 @@ export const disconnectAnthropicOAuth = async (
       ANTHROPIC_OAUTH_EXPIRES_AT: "",
     });
 
-    const { clearProviderCache } = await import("../utils/llm/orchestrator");
     clearProviderCache();
 
     return res.status(200).json({ message: "Claude OAuth disconnected" });
@@ -1250,12 +1046,7 @@ export const updateMagnitudeConfig = async (req: Request, res: Response) => {
     }
 
     if (browserModelId !== undefined) {
-      const registry = readModelRegistry();
-      writeModelRegistry(registry.models, {
-        ...registry.assignments,
-        browserModelId: browserModelId || undefined,
-      });
-      clearProviderCache();
+      setBrowserModel(browserModelId);
     }
 
     return res.status(200).json({ message: "Magnitude configuration updated" });

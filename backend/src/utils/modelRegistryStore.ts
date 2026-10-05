@@ -47,7 +47,7 @@ const LEGACY_MODEL_KEYS = [
   ]),
 ];
 
-const VALID_PROVIDERS = new Set([
+export const VALID_PROVIDERS = new Set([
   "openai",
   "anthropic",
   "anthropic-compatible",
@@ -63,7 +63,7 @@ const VALID_PROVIDERS = new Set([
   "claude-subscription",
 ]);
 
-const VALID_REASONING = new Set([
+export const VALID_REASONING = new Set([
   "off",
   "low",
   "medium",
@@ -110,7 +110,7 @@ function parseJson<T>(value: string | undefined, fallback: T): T {
   return fallback;
 }
 
-function slugify(value: string): string {
+export function slugify(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
