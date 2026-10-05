@@ -36,6 +36,16 @@ must re-read the document rather than trust an in-memory snapshot.
 assembly, LLM call, tool dispatch, persistence. Should stay thin; the
 behaviour lives in the modules below.
 
+**Transcript** — the session document's message list and everything that
+touches it. Owned by `services/session-transcript.ts`: the message
+constructors for every role (`userMessage`, `assistantMessage`,
+`toolResultMessage`, `systemNoteMessage` — id, timestamp, turnIndex are
+stamped in one place), the write verbs (`appendMessages`, `replaceMessages`,
+`trackTokens`), and the run-state reset invariant (`resetAgentRun`:
+agentState and pendingConsent go back to idle together). Never hand-build an
+`AgentMessageDoc` literal or write a `SessionsModel.updateOne` on
+`messages`/`agentState` at a call site.
+
 **Context budget** — the per-run compaction state machine in
 `services/context.service.ts` (`ContextBudget`): the cached prompt size, the
 plan decision, and the invariant that a compaction resets the cached size to

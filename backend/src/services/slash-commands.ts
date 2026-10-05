@@ -4,6 +4,7 @@ import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/prov
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { sessionLifecycle } from "./session.lifecycle";
 import { resetSessionContext } from "./session.helpers";
+import { resetAgentRun } from "./session-transcript";
 import { getOwaspCategory } from "../knowledge";
 import type {
   SessionVulnerabilityDoc,
@@ -225,15 +226,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   },
 
   reset: async ({ sessionId, sse }) => {
-    await SessionsModel.updateOne(
-      { sessionId },
-      {
-        $set: {
-          agentState: "idle",
-          pendingConsent: null,
-        },
-      },
-    );
+    await resetAgentRun(sessionId);
 
     sse.write("slash_command_result", {
       command: "reset",

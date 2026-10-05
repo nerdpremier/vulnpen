@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import SessionsModel, {
   AgentMessageDoc,
 } from "../models/Sessions/Sessions.model";
@@ -64,43 +63,19 @@ import {
 import type { SSEWriter } from "../utils/sse";
 
 // ─── Message persistence ─────────────────────────────────────────────
+// The transcript seam: message constructors, append/replace, token
+// bookkeeping and the run-state reset invariant all live in
+// session-transcript.ts — the loop only orchestrates.
 
-async function appendMessages(sessionId: string, messages: AgentMessageDoc[]): Promise<void> {
-  if (!messages.length) return;
-  await SessionsModel.updateOne(
-    { sessionId },
-    { $push: { messages: { $each: messages } } },
-  );
-}
-
-async function replaceMessages(sessionId: string, messages: AgentMessageDoc[]): Promise<void> {
-  await SessionsModel.updateOne(
-    { sessionId },
-    { $set: { messages } },
-  );
-}
-
-async function trackTokens(
-  sessionId: string,
-  promptTokens: number,
-  completionTokens: number,
-  totalTokens: number,
-): Promise<void> {
-  await SessionsModel.updateOne(
-    { sessionId },
-    {
-      $inc: { totalTokens },
-      $push: {
-        tokenHistory: {
-          promptTokens,
-          completionTokens,
-          totalTokens,
-          timestamp: new Date(),
-        },
-      },
-    },
-  );
-}
+import {
+  appendMessages,
+  replaceMessages,
+  trackTokens,
+  userMessage,
+  assistantMessage,
+  toolResultMessage,
+  systemNoteMessage,
+} from "./session-transcript";
 
 // ─── Build shell status context (injected after summarization) ──────
 
@@ -118,14 +93,7 @@ function buildShellStatusMessage(shellManager: ShellManager, turnIndex: number):
 
   const content = `[Shell Status - ${active.length} active, ${shells.length - active.length} closed]\n${lines.join("\n")}\n\nUse these shell_id values with write_to_shell and read_shell. Use run_bash (without shell_id) for new one-off commands.`;
 
-  return {
-    id: `shell_status_${Date.now()}`,
-    role: "system",
-    content,
-    timestamp: new Date(),
-    turnIndex,
-    isSummary: false,
-  };
+  return systemNoteMessage(`shell_status_${Date.now()}`, content, turnIndex);
 }
 
 // ─── Build system message for a session ──────────────────────────────
@@ -196,13 +164,7 @@ async function buildSystemMessage(
   envInfo?: BoxEnvInfo,
 ): Promise<AgentMessageDoc> {
   const promptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
-  return {
-    id: `sys_${sessionId}`,
-    role: "system",
-    content: buildSystemPrompt(promptConfig),
-    timestamp: new Date(),
-    turnIndex: 0,
-  };
+  return systemNoteMessage(`sys_${sessionId}`, buildSystemPrompt(promptConfig), 0);
 }
 
 // ─── Build dynamic trace tags from preceding tool results ───────────
@@ -269,16 +231,15 @@ function createSseToolCallbacks(
 }
 
 function toolResultToMessage(tr: ToolOutcomeWithResult, turnIndex: number): AgentMessageDoc {
-  return {
-    id: uuidv4(),
-    role: "tool",
-    content: tr.result.output,
-    toolCallId: tr.toolCallId,
-    toolName: tr.toolName,
-    files: tr.result.files,
-    timestamp: new Date(),
+  return toolResultMessage(
+    {
+      toolCallId: tr.toolCallId,
+      toolName: tr.toolName,
+      output: tr.result.output,
+      files: tr.result.files,
+    },
     turnIndex,
-  };
+  );
 }
 
 function pushToolResultMessages(
@@ -599,15 +560,14 @@ export async function runAgentLoop(params: {
         });
       }
 
-      const assistantMsg: AgentMessageDoc = {
-        id: uuidv4(),
-        role: "assistant",
-        content: assistantContent || null,
-        reasoning: assistantReasoning || undefined,
-        toolCalls: assistantToolCalls.length ? assistantToolCalls : undefined,
-        timestamp: new Date(),
+      const assistantMsg = assistantMessage(
+        {
+          content: assistantContent,
+          reasoning: assistantReasoning,
+          toolCalls: assistantToolCalls,
+        },
         turnIndex,
-      };
+      );
       messages.push(assistantMsg);
       newMessages.push(assistantMsg);
 
@@ -775,7 +735,7 @@ export async function initAndRun(params: {
   sse: SSEWriter;
   abortSignal?: AbortSignal;
 }): Promise<void> {
-  const { sessionId, userId, userMessage, sse, abortSignal } = params;
+  const { sessionId, userId, userMessage: userMessageText, sse, abortSignal } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
@@ -788,13 +748,7 @@ export async function initAndRun(params: {
     session.messages.push(await buildSystemMessage(sessionId, userId));
   }
 
-  const userMsg: AgentMessageDoc = {
-    id: uuidv4(),
-    role: "user",
-    content: userMessage,
-    timestamp: new Date(),
-    turnIndex: session.turnIndex,
-  };
+  const userMsg = userMessage(userMessageText, session.turnIndex);
   session.messages.push(userMsg);
   session.turnIndex += 1;
   await session.save();
@@ -839,15 +793,16 @@ export async function handleConsent(params: {
   );
 
   if (!approved) {
-    const denialMessages: AgentMessageDoc[] = allPending.map((p) => ({
-      id: uuidv4(),
-      role: "tool" as const,
-      content: "User denied permission to run this tool.",
-      toolCallId: p.toolCallId,
-      toolName: p.toolName,
-      timestamp: new Date(),
-      turnIndex: session.turnIndex,
-    }));
+    const denialMessages: AgentMessageDoc[] = allPending.map((p) =>
+      toolResultMessage(
+        {
+          toolCallId: p.toolCallId,
+          toolName: p.toolName,
+          output: "User denied permission to run this tool.",
+        },
+        session.turnIndex,
+      ),
+    );
     await appendMessages(sessionId, denialMessages);
     await setAgentState(sessionId, "idle");
     await runAgentLoop({ sessionId, userId, sse, abortSignal });
@@ -877,15 +832,16 @@ export async function handleConsent(params: {
       callbacks,
       ctx,
     );
-    toolMessages.push({
-      id: uuidv4(),
-      role: "tool",
-      content: result.output,
-      toolCallId: pending.toolCallId,
-      toolName: pending.toolName,
-      timestamp: new Date(),
-      turnIndex: session.turnIndex,
-    });
+    toolMessages.push(
+      toolResultMessage(
+        {
+          toolCallId: pending.toolCallId,
+          toolName: pending.toolName,
+          output: result.output,
+        },
+        session.turnIndex,
+      ),
+    );
   }
 
   await appendMessages(sessionId, toolMessages);
