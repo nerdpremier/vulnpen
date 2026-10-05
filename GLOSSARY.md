@@ -56,4 +56,23 @@ re-derive readiness from env reads elsewhere.
 
 **Consent batch** — the group of tool calls parked when the approval gate
 stops a turn (`pendingConsent` on the session document, `consentStats` for the
-counters). Resumed by `handleConsent`.
+counters). Owned by `services/consent-batch.ts`: the batch shape
+(`buildPendingConsentBatch`), the batch-vs-single persistence rule
+(`persistPendingConsent`), the `consent_required` SSE payload, and the
+resume-side unpack (`loadPendingConsent`). Never hand-build the pendingConsent
+document shape or re-derive `arguments` with parseToolArguments at a call site.
+
+**Context window rules** — the elision policy for what reaches the model:
+staleness window (`isStaleMessage`), tool-result/args caps
+(`toolResultCap`, `elideToolResult`, `elideToolCallArgs`), and the reasoning
+replay window, all in `services/context.service.ts`. The token estimator and
+`messagesToOpenAI` both consume these helpers — never write the caps or the
+window arithmetic a second time.
+
+**Finding store** — the finding lifecycle in
+`services/vulnerability.service.ts`: `recordSessionFinding` (resolve plan case
+→ normalize → filter screenshots → classify → upsert → link, in that order —
+recording a finding against a WSTG case IS the failed result) and
+`removeSessionFinding` (unlink cases BEFORE pulling the document). Tools and
+report paths call these two verbs; they never touch the vulnerabilities array
+shape or re-order the chain.

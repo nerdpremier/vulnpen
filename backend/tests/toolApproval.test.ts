@@ -11,10 +11,8 @@ import {
   decideToolConsent,
   parseToolSafetyAssessment,
 } from "../src/services/tool-approval.service";
-import {
-  buildPendingConsentBatch,
-  executeToolCall,
-} from "../src/services/agent.tools";
+import { executeToolCall } from "../src/services/agent.tools";
+import { buildPendingConsentBatch } from "../src/services/consent-batch";
 
 const tool: ToolDefinition = {
   name: "run_bash",

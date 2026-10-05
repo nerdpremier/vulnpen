@@ -13,14 +13,20 @@ import {
 
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { toolRegistry } from "../tools/registry";
+import { filterDeferredToolNames } from "../tools/deferred";
 import {
   executeToolCalls,
   executeConsentedTool,
   buildExecutionContext,
-  buildPendingConsentBatch,
   ToolExecutionCallbacks,
   ToolExecutionResult,
 } from "./agent.tools";
+import {
+  buildPendingConsentBatch,
+  consentRequiredEvent,
+  persistPendingConsent,
+  loadPendingConsent,
+} from "./consent-batch";
 import { ContextBudget, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
 import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
 import { buildVolatileTail, injectVolatileTail } from "../utils/assistant/volatileContext";
@@ -363,7 +369,6 @@ export async function runAgentLoop(params: {
   const newMessages: AgentMessageDoc[] = [];
   let completedNormally = false;
   const approvalRejections = new ApprovalRejectionTracker();
-  const contextBudget = new ContextBudget();
 
   // Shared by the proactive path and the finishReason === "length" path. The
   // cached-prompt reset lives inside ContextBudget.compact — that invariant is
@@ -395,6 +400,11 @@ export async function runAgentLoop(params: {
   const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
   const orchestratorReasoningMode: ReasoningMode =
     (userModels.orchestrator.reasoningMode as ReasoningMode) || "off";
+
+  // The loop knows the orchestrator's model here, so it injects the context
+  // limit instead of letting the budget re-derive it from the provider config
+  // on every plan call.
+  const contextBudget = new ContextBudget(getModelContextLimit(orchestratorConfig.model));
   const toolSafetyEvaluator = toolExecutionMode === "auto_approve"
     ? createAiToolSafetyEvaluator({
         provider: orchestratorConfig,
@@ -651,48 +661,12 @@ export async function runAgentLoop(params: {
           turnIndex,
         );
 
-        const firstConsent = consentResults[0];
+        // The batch shape, its SSE payload, and its persistence are owned by
+        // the consent-batch module; the loop only parks and streams it.
         const batch = buildPendingConsentBatch(consentResults, assistantToolCalls);
-        const firstBatchItem = batch[0];
-
-        sse.write("consent_required", {
-          id: firstBatchItem.toolCallId,
-          name: firstBatchItem.toolName,
-          args: firstBatchItem.arguments,
-          safetyBlock: firstBatchItem.safetyBlock,
-          approvalReason: firstBatchItem.approvalReason,
-          safetyReason: firstBatchItem.safetyReason,
-          safetyImpact: firstBatchItem.safetyImpact,
-          safetyKind: firstBatchItem.safetyKind,
-          batch: batch.length > 1 ? batch : undefined,
-        });
-
+        sse.write("consent_required", consentRequiredEvent(batch));
         await appendMessages(sessionId, newMessages);
-        await SessionsModel.updateOne(
-          { sessionId },
-          {
-            $set: {
-              agentState: "waiting_consent",
-              pendingConsent: {
-                toolCallId: firstConsent.toolCallId,
-                toolName: firstConsent.toolName,
-                arguments: parseToolArguments(
-                  assistantToolCalls.find((tc) => tc.id === firstConsent.toolCallId)?.arguments ?? "{}",
-                ).args,
-                safetyBlock: firstBatchItem.safetyBlock,
-                approvalReason: firstBatchItem.approvalReason,
-                safetyReason: firstBatchItem.safetyReason,
-                safetyImpact: firstBatchItem.safetyImpact,
-                safetyKind: firstBatchItem.safetyKind,
-                batch: batch.length > 1 ? batch : undefined,
-              },
-            },
-            $inc: {
-              "consentStats.prompts": 1,
-              "consentStats.safetyBlocks": firstBatchItem.safetyBlock ? 1 : 0,
-            },
-          },
-        );
+        await persistPendingConsent(sessionId, batch);
         sse.end();
         return;
       }
@@ -718,14 +692,14 @@ export async function runAgentLoop(params: {
 
       // The load_tools handler persists to the session document; mirror the
       // change here so the schemas are present from the next iteration on
-      // without re-reading the document.
+      // without re-reading the document. filterDeferredToolNames is the same
+      // filter the handler applies, so the mirror can never admit a name the
+      // document would have rejected.
       for (const tc of assistantToolCalls) {
         if (tc.name !== "load_tools") continue;
-        const requested = parseToolArguments(tc.arguments).args?.tools;
-        if (Array.isArray(requested)) {
-          session.loadedTools = [
-            ...new Set([...(session.loadedTools ?? []), ...requested.filter((t: unknown) => typeof t === "string")]),
-          ];
+        const { valid } = filterDeferredToolNames(parseToolArguments(tc.arguments).args?.tools);
+        if (valid.length > 0) {
+          session.loadedTools = [...new Set([...(session.loadedTools ?? []), ...valid])];
         }
       }
 
@@ -838,11 +812,9 @@ export async function handleConsent(params: {
     return;
   }
 
-  const { toolCallId, toolName, arguments: toolArgs, batch } = session.pendingConsent;
-
-  const allPending = batch && batch.length > 1
-    ? batch
-    : [{ toolCallId, toolName, arguments: toolArgs }];
+  // The resume-side unpack of the batch-vs-single rule lives in the
+  // consent-batch module, next to the persist side.
+  const allPending = loadPendingConsent(session.pendingConsent);
 
   session.pendingConsent = undefined;
   await session.save();

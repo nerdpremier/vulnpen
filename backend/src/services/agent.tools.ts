@@ -88,37 +88,6 @@ export interface ToolExecutionResult {
   approvalDenied?: boolean;
 }
 
-export interface PendingConsentBatchItem {
-  toolCallId: string;
-  toolName: string;
-  arguments: Record<string, any>;
-  safetyBlock: boolean;
-  approvalReason?: string;
-  safetyReason?: string;
-  safetyImpact?: string;
-  safetyKind?: SafetyKind;
-}
-
-/** Build the exact set presented to the user and later executed on approval. */
-export function buildPendingConsentBatch(
-  results: ToolExecutionResult[],
-  toolCalls: ToolCallData[],
-): PendingConsentBatchItem[] {
-  const callsById = new Map(toolCalls.map((call) => [call.id, call]));
-  return results
-    .filter((result) => result.needsConsent)
-    .map((result) => ({
-      toolCallId: result.toolCallId,
-      toolName: result.toolName,
-      arguments: parseToolArguments(callsById.get(result.toolCallId)?.arguments ?? "{}").args,
-      safetyBlock: result.safetyBlock ?? false,
-      approvalReason: result.approvalReason,
-      safetyReason: result.safetyReason,
-      safetyImpact: result.safetyImpact,
-      safetyKind: result.safetyKind,
-    }));
-}
-
 function truncateOutput(output: string): string {
   let cleaned = output.replace(ANSI_REGEX, "");
   // Progress bars and redraws leave runs of blank/whitespace-only lines that

@@ -1,5 +1,5 @@
 import { ToolDefinition } from "../types";
-import { DEFERRED_TOOLS } from "../deferred";
+import { DEFERRED_TOOLS, filterDeferredToolNames } from "../deferred";
 import SessionsModel from "../../models/Sessions/Sessions.model";
 
 const loadTools: ToolDefinition = {
@@ -23,9 +23,7 @@ const loadTools: ToolDefinition = {
   },
   timeoutMs: 10_000,
   async execute(args, ctx) {
-    const requested: string[] = Array.isArray(args.tools) ? args.tools : [];
-    const unknown = requested.filter((name) => !DEFERRED_TOOLS.has(name));
-    const valid = requested.filter((name) => DEFERRED_TOOLS.has(name));
+    const { valid, unknown } = filterDeferredToolNames(args.tools);
 
     if (valid.length > 0) {
       await SessionsModel.updateOne(

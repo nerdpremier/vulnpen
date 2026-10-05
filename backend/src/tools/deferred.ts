@@ -10,3 +10,20 @@ import { DEFERRED_TOOL_NAMES } from "./names";
 // it, and a handler importing the registry would be a circular import.
 // The names themselves live in tools/names.ts.
 export const DEFERRED_TOOLS = new Set(DEFERRED_TOOL_NAMES);
+
+/**
+ * Split a requested tool-name list into deferred names to load and unknown
+ * names to report back. The one filter both the load_tools handler and the
+ * agent loop's in-memory mirror consume, so the two can never disagree about
+ * what counts as a loadable tool.
+ */
+export function filterDeferredToolNames(requested: unknown): {
+  valid: string[];
+  unknown: string[];
+} {
+  const names = Array.isArray(requested) ? requested : [];
+  return {
+    valid: names.filter((name): name is string => typeof name === "string" && DEFERRED_TOOLS.has(name)),
+    unknown: names.filter((name) => !(typeof name === "string" && DEFERRED_TOOLS.has(name))),
+  };
+}

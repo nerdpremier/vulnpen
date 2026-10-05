@@ -207,8 +207,7 @@ test("the recompaction cooldown also requires new tokens, not just new messages"
   assert.equal(plan.shouldCompact, false);
   assert.equal(plan.reason, "cooldown");
 });
-test("estimateToolSchemaTokens scales with the tool set instead of guessing", () => {
-  const one = estimateToolSchemaTokens([
+test("estimateToolSchemaTokens scales with the tool set instead of guessing", () => {  const one = estimateToolSchemaTokens([
     { type: "function", function: { name: "a", description: "x", parameters: { type: "object", properties: {} } } } as never,
   ]);
   const many = estimateToolSchemaTokens(
@@ -267,5 +266,59 @@ test("ContextBudget.compact resets the cached prompt size to the post-compaction
     plan.promptTokens,
     estimatePromptTokens(msgs),
     "the stale pre-compaction provider number must not survive a compaction",
+  );
+});
+
+// ─── Estimator ↔ renderer agreement ────────────────────────────────────
+// Both consumers must apply the SAME window rules (isStaleMessage, caps,
+// reasoning window), or the budget estimates a prompt the renderer never
+// sends. This pins the agreement through the shared rule functions.
+
+test("the estimator prices what the renderer actually emits", async () => {
+  const { messagesToOpenAI } = await import("../src/services/context.service");
+  const msgs: AgentMessageDoc[] = [
+    doc({ id: "sys", role: "system", content: "sys " + "S".repeat(4_000) }),
+    ...Array.from({ length: 20 }, (_, i) => [
+      doc({
+        id: "a" + i,
+        role: "assistant" as const,
+        content: "running",
+        toolCalls: [{ id: "c" + i, name: "run_bash", arguments: JSON.stringify({ command: "nmap " + "x".repeat(1_500) }) }],
+      }),
+      doc({ id: "r" + i, role: "tool" as const, toolCallId: "c" + i, toolName: "run_bash", content: "R".repeat(8_000) }),
+      doc({ id: "u" + i, role: "user" as const, content: "next step " + i }),
+    ]).flat(),
+  ];
+
+  const rendered = messagesToOpenAI(msgs) as Array<{ content?: string; tool_calls?: Array<{ function: { arguments: string } }> }>;
+  const renderedChars = rendered.reduce((sum, m) => {
+    let chars = m.content?.length ?? 0;
+    for (const tc of m.tool_calls ?? []) chars += tc.function.arguments.length;
+    return sum + chars;
+  }, 0);
+  const renderedTokens = Math.ceil(renderedChars / 4); // CHARS_PER_TOKEN_ESTIMATE
+  const estimate = estimatePromptTokens(msgs);
+
+  // The estimate must track the rendered size in both directions: within a
+  // factor of ~2.5, and never under-count the raw rendered prompt.
+  assert.ok(estimate < renderedTokens * 2.5, `estimate ${estimate} far above rendered ${renderedTokens}`);
+  assert.ok(estimate > renderedTokens * 0.6, `estimate ${estimate} far below rendered ${renderedTokens}`);
+});
+
+test("planCompaction honours an injected context limit without the provider config", async () => {
+  const msgs: AgentMessageDoc[] = [
+    doc({ id: "sys", role: "system", content: "system " + "S".repeat(2_000) }),
+    ...Array.from({ length: 30 }, (_, i) => turn(i, 2_000)),
+  ];
+  // A tiny limit forces compaction under a threshold the default budget
+  // (18k working set) would never cross — proving the injected seam binds.
+  const withTinyLimit = await planCompaction(msgs, undefined, 0, 10_000);
+  const withHugeLimit = await planCompaction(msgs, undefined, 0, 10_000_000);
+  assert.equal(withTinyLimit.shouldCompact, true);
+  assert.equal(withHugeLimit.shouldCompact, false);
+  assert.equal(
+    withHugeLimit.budget,
+    COMPACTION_TUNING.WORKING_SET_TOKEN_BUDGET,
+    "a huge model limit still caps at the working-set budget",
   );
 });

@@ -1,17 +1,18 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
 import { EngagementState } from "../../services/engagement-state";
-import SessionsModel from "../../models/Sessions/Sessions.model";
-import type { SessionVulnerabilityDoc } from "../../models/Sessions/Sessions.model";
-import { filterKnownScreenshots } from "../../services/artifacts.service";
-import { resolvePlanCase, linkFindingToCase, unlinkFindingFromCases } from "../../services/web-security/session-plan-store";
 import {
-  normalizeVulnerability,
-  upsertSessionVulnerability,
+  recordSessionFinding,
+  removeSessionFinding,
+  FindingOutcome,
 } from "../../services/vulnerability.service";
-import { classifyWithLlm } from "../../services/web-security/owasp-llm-classifier";
 
 function str(v: any): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+/** Map a finding-store outcome onto the tool result the model receives. */
+function findingOutcome({ ok, output }: FindingOutcome): ToolResult {
+  return { output, exitCode: ok ? 0 : 1 };
 }
 
 const updateEngagementState: ToolDefinition = {
@@ -179,100 +180,24 @@ async function applyUpdate(
     }
 
     case "add_vulnerability": {
-      if (!str(data.title)) {
-        return { output: "add_vulnerability requires data.title", exitCode: 1 };
-      }
       if (!ctx.sessionId) {
         return { output: "add_vulnerability requires an active session", exitCode: 1 };
       }
-
-      // A finding tagged with a WSTG id must point at a real plan case: the
-      // report traces every finding back through it, and a made-up or
-      // mistyped id silently breaks that chain.
-      const wstgId = str(data.wstgId).toUpperCase();
-      let resolvedTestId: string | undefined;
-      if (wstgId) {
-        const resolved = await resolvePlanCase(ctx.sessionId, wstgId);
-        if (!resolved.ok) {
-          return {
-            output: `"add_vulnerability" refused: ${resolved.refusal}`,
-            exitCode: 1,
-          };
-        }
-        resolvedTestId = resolved.testId;
-      }
-
-      const normalized = normalizeVulnerability(data, {
-        source: `agent:${ctx.agentId ?? "main"}`,
-      });
-      if (resolvedTestId) normalized.wstgId = resolvedTestId;
-      // Screenshot evidence must point at captures this session actually
-      // produced — a made-up filename would render as a broken image.
-      let screenshotNote = "";
-      if (normalized.screenshots.length) {
-        const { kept, dropped } = filterKnownScreenshots(ctx.sessionId, normalized.screenshots);
-        normalized.screenshots = kept;
-        if (kept.length) {
-          screenshotNote = `\nAttached screenshot evidence: ${kept.join(", ")}.`;
-        }
-        if (dropped.length) {
-          screenshotNote += `\nDropped unknown screenshot filename(s): ${dropped.join(", ")}. ` +
-            "Attach only names exactly as browser_action reported them in its \"Screenshot captured:\" line.";
-        }
-      }
-      if (!normalized.owaspTop10) {
-        // Deterministic layers could not decide (no explicit/WSTG/single-CWE
-        // signal) — ask the LLM classifier before the finding is stored.
-        const llmMapping = await classifyWithLlm(
+      // The whole record chain (plan-case resolution, normalization, screenshot
+      // filtering, OWASP classification, upsert, case linking) and its refusal
+      // texts live behind recordSessionFinding — the finding lifecycle has one
+      // owner and this switch only dispatches.
+      return findingOutcome(
+        await recordSessionFinding(
           {
-            title: normalized.title,
-            description: normalized.description,
-            contextSummary: normalized.contextSummary,
-            evidence: normalized.evidence,
-            endpoint: normalized.endpoint,
-            cwe: normalized.cwe,
-            wstgId: normalized.wstgId,
+            sessionId: ctx.sessionId,
+            userId: ctx.userId,
+            agentId: ctx.agentId,
+            state,
           },
-          { userId: ctx.userId, sessionId: ctx.sessionId },
-        );
-        if (llmMapping?.primary) {
-          normalized.owaspTop10 = llmMapping.primary;
-          normalized.owaspTop10Title = llmMapping.primaryTitle;
-          normalized.owaspRelated = llmMapping.related;
-          normalized.owaspConfidence = llmMapping.confidence;
-          normalized.owaspProvenance = llmMapping.provenance ?? "model";
-          normalized.owaspRationale = llmMapping.rationale;
-          normalized.owaspMappedAt = new Date();
-        }
-      }
-      const persisted = await upsertSessionVulnerability(ctx.sessionId, normalized);
-      // Same dedup on both sides: the state module keeps its in-memory copy
-      // consistent with the document upsertSessionVulnerability just wrote.
-      state.upsertVulnerability(persisted.vulnerability);
-
-      // Recording a finding against a WSTG case IS the failed result for that
-      // case: link it here so wstgId and the plan can never drift apart (the
-      // old two-step add_vulnerability → update_case path let them disagree).
-      let linkedCaseId: string | undefined;
-      if (resolvedTestId) {
-        linkedCaseId = await linkFindingToCase(
-          ctx.sessionId,
-          persisted.vulnerability.vulnerabilityId,
-          resolvedTestId,
-        );
-      }
-
-      return {
-        output:
-          `Vulnerability "${persisted.vulnerability.title}" [${persisted.vulnerability.severity}] ` +
-          `${persisted.created ? "added" : "updated"}.\n` +
-          `vulnerability_id: ${persisted.vulnerability.vulnerabilityId}` +
-          (linkedCaseId
-            ? `\ncase ${linkedCaseId} → failed (finding linked automatically).`
-            : "\nNo data.wstgId given — the finding is not linked to any test case. If a WSTG case produced it, record the finding with data.wstgId set to that case's id.") +
-          screenshotNote,
-        exitCode: 0,
-      };
+          data,
+        ),
+      );
     }
 
     case "remove_finding": {
@@ -280,46 +205,7 @@ async function applyUpdate(
         return { output: "remove_finding requires an active session", exitCode: 1 };
       }
       const wanted = str(data.vulnerability_id) || str(data.vulnerabilityId) || str(data.id);
-      if (!wanted) {
-        return {
-          output: 'remove_finding requires data.vulnerability_id (the id add_vulnerability returned).',
-          exitCode: 1,
-        };
-      }
-      const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
-        .select("vulnerabilities");
-      if (!session) return { output: "Session not found.", exitCode: 1 };
-
-      const vulns = (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-      const upper = wanted.toUpperCase();
-      const target = vulns.find(
-        (v) =>
-          v.vulnerabilityId === wanted ||
-          v.vulnerabilityId?.toUpperCase() === upper ||
-          v.title === wanted,
-      );
-      if (!target) {
-        const known = vulns.map((v) => `${v.vulnerabilityId} ${v.title}`).join("; ");
-        return {
-          output: `No finding matches "${wanted}". Known findings: ${known || "(none)"}.`,
-          exitCode: 1,
-        };
-      }
-
-      await SessionsModel.updateOne(
-        { sessionId: ctx.sessionId },
-        { $pull: { vulnerabilities: { vulnerabilityId: target.vulnerabilityId } } },
-      );
-
-      await unlinkFindingFromCases(ctx.sessionId, target.vulnerabilityId);
-
-      state.removeVulnerability(target.vulnerabilityId);
-      return {
-        output:
-          `Removed finding ${target.vulnerabilityId} "${target.title}". ` +
-          "If its test case still applies, re-run it rather than re-adding a placeholder.",
-        exitCode: 0,
-      };
+      return findingOutcome(await removeSessionFinding({ sessionId: ctx.sessionId, state }, wanted));
     }
 
     case "add_shell": {

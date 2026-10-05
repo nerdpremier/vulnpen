@@ -89,19 +89,66 @@ const RECENT_TOOL_RESULT_MAX_CHARS = 2_500;
 // of tool output to buy a summary that fits in ~1k tokens.
 const MAX_SUMMARIZER_INPUT_CHARS = 24_000;
 
+// ─── Context window rules ─────────────────────────────────────────────────
+// One owner for the elision policy: the token estimator and the prompt
+// renderer both consume these helpers, so the estimate can never drift from
+// what messagesToOpenAI actually sends. Before this seam the four rules below
+// (staleness window, tool-result caps, tool-args cap, reasoning replay window)
+// were written twice — once per consumer — and only comments kept them in step.
+
+/** Messages older than this many from the end are "stale": their tool output
+ *  and arguments collapse to stubs. */
+export function isStaleMessage(index: number, total: number): boolean {
+  return index < total - RECENT_FULL_TOOL_RESULTS;
+}
+
+/** The character ceiling a tool result renders at, staleness-dependent. */
+export function toolResultCap(isStale: boolean): number {
+  return isStale ? STALE_TOOL_RESULT_CHARS : RECENT_TOOL_RESULT_MAX_CHARS;
+}
+
+/** Render a tool result under the staleness-dependent cap (head+tail stub). */
+export function elideToolResult(content: string, isStale: boolean): string {
+  const cap = toolResultCap(isStale);
+  const label = isStale ? "older tool output" : "tool output";
+  return elideMiddle(
+    content,
+    cap,
+    `\n... [${content.length - cap} chars of this ${label} elided from context] ...\n`,
+  );
+}
+
+/** Render tool-call arguments: stale ones collapse to a head+tail stub. */
+export function elideToolCallArgs(args: string, isStale: boolean): string {
+  if (!isStale || args.length <= STALE_TOOL_CALL_ARGS_CHARS) return args;
+  return (
+    args.slice(0, Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2)) +
+    ` ... [older tool-call arguments elided from context] ` +
+    args.slice(-Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2))
+  );
+}
+
+/** Assistant messages from this index on may replay their reasoning_content. */
+export function reasoningReplayWindowStart(total: number): number {
+  return total - PRESERVE_RECENT_MESSAGES;
+}
+
 /**
  * Estimated token cost of ONE message as it will actually be rendered into the
  * prompt, i.e. AFTER the tool-result and tool-argument caps applied by
  * messagesToOpenAI. Estimating on raw content instead made the budget check
  * wildly pessimistic on scan-heavy sessions and triggered compaction while the
  * real prompt was still small.
+ *
+ * Deliberately NOT counted: reasoning_content. The renderer replays it only
+ * for kimi providers (includeReasoningContent), which the estimator cannot
+ * know — counting it unconditionally would over-compact every other provider.
  */
 function estimateMessageTokens(m: AgentMessageDoc, index: number, total: number): number {
-  const isStale = index < total - RECENT_FULL_TOOL_RESULTS;
+  const isStale = isStaleMessage(index, total);
   let chars = m.content?.length ?? 0;
   if (m.role === "tool") {
-    const cap = isStale ? STALE_TOOL_RESULT_CHARS : RECENT_TOOL_RESULT_MAX_CHARS;
-    chars = Math.min(chars, cap);
+    chars = Math.min(chars, toolResultCap(isStale));
   } else if (m.role === "assistant" && m.toolCalls?.length) {
     for (const tc of m.toolCalls) {
       chars += Math.min(tc.arguments.length, isStale ? STALE_TOOL_CALL_ARGS_CHARS : tc.arguments.length);
@@ -222,9 +269,11 @@ export async function planCompaction(
   messages: AgentMessageDoc[],
   lastPromptTokens?: number,
   toolSchemaTokens: number = TOOL_SCHEMA_TOKEN_ESTIMATE,
+  contextLimit?: number,
 ): Promise<CompactionPlan> {
-  const config = await getProvider();
-  const limit = getModelContextLimit(config.model);
+  // The caller who already knows the orchestrator's model injects the limit;
+  // the global provider read is only the fallback for direct callers (tests).
+  const limit = contextLimit ?? getModelContextLimit((await getProvider()).model);
   const budget = Math.min(limit * SUMMARIZE_THRESHOLD, WORKING_SET_TOKEN_BUDGET);
 
   const systemMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
@@ -303,6 +352,13 @@ export const COMPACTION_TUNING = {
 export class ContextBudget {
   private lastPromptTokens?: number;
 
+  /**
+   * The orchestrator's model context limit, when the caller knows it. Passing
+   * it keeps the budget seam free of the global provider config; omit it and
+   * planCompaction falls back to reading the configured provider.
+   */
+  constructor(private readonly contextLimit?: number) {}
+
   /** Ground-truth prompt size reported by the provider after each call. */
   observe(promptTokens: number): void {
     this.lastPromptTokens = promptTokens;
@@ -313,7 +369,7 @@ export class ContextBudget {
     messages: AgentMessageDoc[],
     toolSchemaTokens: number,
   ): Promise<CompactionPlan> {
-    return planCompaction(messages, this.lastPromptTokens, toolSchemaTokens);
+    return planCompaction(messages, this.lastPromptTokens, toolSchemaTokens, this.contextLimit);
   }
 
   /**
@@ -479,7 +535,7 @@ export function messagesToOpenAI(
   // 2-5x the visible text and older reasoning is dead weight — replaying it
   // for the whole history on every tool-loop iteration was 1-5k tokens of
   // pure burn per call.
-  const reasoningWindowStart = messages.length - PRESERVE_RECENT_MESSAGES;
+  const reasoningWindowStart = reasoningReplayWindowStart(messages.length);
 
   return messages.flatMap((m, index) => {
     if (m.role === "assistant" && m.toolCalls?.length) {
@@ -508,13 +564,10 @@ export function messagesToOpenAI(
           type: "function" as const,
           function: {
             name: tc.name,
-            arguments:
-              tc.arguments.length > STALE_TOOL_CALL_ARGS_CHARS &&
-              index < messages.length - RECENT_FULL_TOOL_RESULTS
-                ? tc.arguments.slice(0, Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2)) +
-                  ` ... [older tool-call arguments elided from context] ... ` +
-                  tc.arguments.slice(-Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2))
-                : tc.arguments,
+            arguments: elideToolCallArgs(
+              tc.arguments,
+              isStaleMessage(index, messages.length),
+            ),
           },
         })),
       };
@@ -534,22 +587,11 @@ export function messagesToOpenAI(
       let content = m.content ?? "";
       // Stale results collapse to head+tail stubs: fresh ones (inside the
       // recent window) go to the model whole so an in-flight scan stays
-      // readable while it is still being acted on.
-      if (
-        content.length > STALE_TOOL_RESULT_CHARS &&
-        index < messages.length - RECENT_FULL_TOOL_RESULTS
-      ) {
-        content = elideMiddle(
-          content,
-          STALE_TOOL_RESULT_CHARS,
-          `\n... [${content.length - STALE_TOOL_RESULT_CHARS} chars of this older tool output elided from context] ...\n`,
-        );
-      } else if (content.length > RECENT_TOOL_RESULT_MAX_CHARS) {
-        content = elideMiddle(
-          content,
-          RECENT_TOOL_RESULT_MAX_CHARS,
-          `\n... [${content.length - RECENT_TOOL_RESULT_MAX_CHARS} chars of this tool output elided from context] ...\n`,
-        );
+      // readable while it is still being acted on. Same rule object the
+      // estimator consumes.
+      const isStale = isStaleMessage(index, messages.length);
+      if (content.length > toolResultCap(isStale)) {
+        content = elideToolResult(content, isStale);
       }
       return {
         role: "tool" as const,
