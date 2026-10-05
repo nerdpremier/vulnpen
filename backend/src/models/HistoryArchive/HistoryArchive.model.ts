@@ -1,14 +1,18 @@
 import mongoose from "mongoose";
-import { HistoryData } from "../../services/agent-session.service";
 const Schema = mongoose.Schema;
+
+/** One archived transcript row, as stored when a session is archived. */
+interface ArchiveHistoryData {
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  isContextual?: boolean;
+  loopStep?: number;
+  loop: number;
+}
 
 export interface SessionDoc extends mongoose.Document {
   sessionId: string;
   history: ArchiveHistoryData[];
-}
-
-interface ArchiveHistoryData extends HistoryData {
-  loop: number;
 }
 
 const HistoryArchiveSchema = new Schema({
