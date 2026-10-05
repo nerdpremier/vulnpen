@@ -226,13 +226,7 @@ async function runToolDefinition(
   }
 }
 
-/**
- * The run-path half of the readiness seam: a tool whose external dependency is
- * not configured refuses here instead of executing, and — critically — before
- * the consent decision, so an unconfigured tool never collects an approval it
- * could not honour. checkReady and the schema filter share the same source of
- * truth, so a refusal here means the tool should never have been offered.
- */
+/** The raw checkReady outcome as a refusal string, or undefined when ready. */
 async function readinessRefusal(toolDef: ToolDefinition): Promise<string | undefined> {
   if (!toolDef.checkReady) return undefined;
   try {
