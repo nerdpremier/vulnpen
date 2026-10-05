@@ -10,7 +10,7 @@ import {
   handleConsent,
   runAgentLoop,
 } from "../services/agent.service";
-import { setPaused } from "../services/agent-state.service";
+import { setAgentState, setPaused } from "../services/agent-state.service";
 import {
   reserveAbortController,
   releaseAbortController,
@@ -57,7 +57,7 @@ async function resetStuckRunState(
     return false;
   }
   console.warn(`[agent] Session ${sessionId} was stuck in "running" state with no active process. Resetting.`);
-  await SessionsModel.updateOne({ sessionId }, { $set: { agentState: "idle" } });
+  await setAgentState(sessionId, "idle");
   return true;
 }
 
