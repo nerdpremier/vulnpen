@@ -7,6 +7,7 @@ import { getModelContextLimit } from "../utils/modelMetadata";
 import {
   CHARS_PER_TOKEN_ESTIMATE,
   elideMiddle,
+  estimateTokens,
   formatMessageForTranscript,
 } from "../utils/transcript";
 
@@ -435,6 +436,50 @@ export interface CompactionResult {
   preservedMessages: AgentMessageDoc[];
   /** Estimated prompt size after compaction, so the caller can reset its cache. */
   projectedPromptTokens: number;
+}
+
+// ─── Conversation input bounding ───────────────────────────────────────────
+// The window arithmetic for LLM calls that receive the whole conversation —
+// /summarize and /export — lives here with the other window rules, not at the
+// call sites. Keep the latest messages when the full history would exceed the
+// model's input budget: 60% of the context limit, minus a fixed allowance for
+// the caller's system prompt, with a small per-entry fudge for the joiner.
+const CONVERSATION_INPUT_BUDGET_SHARE = 0.6;
+const CONVERSATION_PROMPT_OVERHEAD_TOKENS = 500;
+
+async function conversationInputTokenBudget(): Promise<number> {
+  const config = await getProvider();
+  const limit = getModelContextLimit(config.model);
+  return Math.floor(limit * CONVERSATION_INPUT_BUDGET_SHARE) - CONVERSATION_PROMPT_OVERHEAD_TOKENS;
+}
+
+/**
+ * The conversation history formatted for the transcript and bounded to the
+ * model's input budget: the full text when it fits, otherwise the latest
+ * messages that do.
+ */
+export async function boundedConversationText(messages: any[]): Promise<string> {
+  const maxTokens = await conversationInputTokenBudget();
+
+  const formatted = messages.map((m) => formatMessageForTranscript(m));
+
+  const fullText = formatted.join("\n\n");
+  if (estimateTokens(fullText) <= maxTokens) {
+    return fullText;
+  }
+
+  const kept: string[] = [];
+  let tokenBudget = maxTokens;
+
+  for (let i = formatted.length - 1; i >= 0; i--) {
+    const entry = formatted[i];
+    const entryTokens = estimateTokens(entry) + 2;
+    if (tokenBudget - entryTokens < 0) break;
+    kept.unshift(entry);
+    tokenBudget -= entryTokens;
+  }
+
+  return kept.join("\n\n");
 }
 
 export async function summarizeMessages(

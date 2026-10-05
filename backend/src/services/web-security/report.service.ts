@@ -209,6 +209,36 @@ export function buildReportFindings(
   });
 }
 
+/**
+ * The finding document as structured JSON for a report-writing model
+ * (/export): the report-relevant fields, projected next to the other finding
+ * projections so a new field is added here, not re-listed at a call site.
+ */
+export function serializeFindingsForReport(
+  vulnerabilities: SessionVulnerabilityDoc[],
+): Record<string, unknown>[] {
+  return vulnerabilities.map((v) => ({
+    id: v.vulnerabilityId,
+    title: v.title,
+    severity: v.severity,
+    likelihood: v.likelihood,
+    impactRating: v.impactRating,
+    cwe: v.cwe,
+    cve: v.cve,
+    host: v.host,
+    service: v.service,
+    endpoint: v.endpoint,
+    description: v.description,
+    contextSummary: v.contextSummary,
+    evidence: v.evidence,
+    stepsToReproduce: v.stepsToReproduce,
+    impact: v.impact,
+    remediation: v.remediation,
+    exploited: v.exploited,
+    status: v.status,
+  }));
+}
+
 export function computeReportStats(
   findings: ReportFindingsRow[],
   testPlan?: WebAppTestPlanDoc | null,

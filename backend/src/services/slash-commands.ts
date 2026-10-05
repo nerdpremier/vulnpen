@@ -1,8 +1,7 @@
 import SessionsModel from "../models/Sessions/Sessions.model";
 import type { SSEWriter } from "../utils/sse";
 import { createSlashReply, SlashReply } from "./slash-reply";
-import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
-import { getModelContextLimit } from "../utils/modelMetadata";
+import { invoke_llm, invoke_llm_streaming } from "../utils/llm/providers";
 import { sessionLifecycle } from "./session.lifecycle";
 import { resetSessionContext } from "./session.helpers";
 import { resetAgentRun } from "./session-transcript";
@@ -20,12 +19,9 @@ import {
   loadSessionPlan,
   saveSessionPlan,
 } from "./web-security/session-plan-store";
-import { buildWebAppPentestReport } from "./web-security/report.service";
+import { buildWebAppPentestReport, serializeFindingsForReport } from "./web-security/report.service";
 import { mapUnclassifiedVulnerabilities } from "./vulnerability.service";
-import {
-  estimateTokens,
-  formatMessageForTranscript,
-} from "../utils/transcript";
+import { boundedConversationText } from "./context.service";
 
 export interface SlashCommandDef {
   name: string;
@@ -143,43 +139,6 @@ type CommandHandler = (ctx: {
   reply: SlashReply;
 }) => Promise<void>;
 
-const SUMMARIZE_PROMPT_OVERHEAD_TOKENS = 500;
-
-async function getMaxInputTokens(): Promise<number> {
-  const config = await getProvider();
-  const limit = getModelContextLimit(config.model);
-  return Math.floor(limit * 0.6) - SUMMARIZE_PROMPT_OVERHEAD_TOKENS;
-}
-
-/**
- * Builds conversation text for LLM-backed commands (/summarize, /export),
- * keeping the latest messages when the full history would exceed the model's
- * input token budget.
- */
-async function buildConversationText(messages: any[]): Promise<string> {
-  const maxTokens = await getMaxInputTokens();
-
-  const formatted = messages.map((m) => formatMessageForTranscript(m));
-
-  const fullText = formatted.join("\n\n");
-  if (estimateTokens(fullText) <= maxTokens) {
-    return fullText;
-  }
-
-  const kept: string[] = [];
-  let tokenBudget = maxTokens;
-
-  for (let i = formatted.length - 1; i >= 0; i--) {
-    const entry = formatted[i];
-    const entryTokens = estimateTokens(entry) + 2;
-    if (tokenBudget - entryTokens < 0) break;
-    kept.unshift(entry);
-    tokenBudget -= entryTokens;
-  }
-
-  return kept.join("\n\n");
-}
-
 const commandHandlers: Record<string, CommandHandler> = {
   help: async ({ reply }) => {
     const lines = SLASH_COMMANDS.map(
@@ -226,7 +185,7 @@ const commandHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    const conversationText = await buildConversationText(nonSystemMessages);
+    const conversationText = await boundedConversationText(nonSystemMessages);
 
     const stream = reply.stream("Generating summary...");
 
@@ -351,28 +310,9 @@ const commandHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    const structuredFindings = (session.vulnerabilities ?? []).map((v) => ({
-      id: v.vulnerabilityId,
-      title: v.title,
-      severity: v.severity,
-      likelihood: v.likelihood,
-      impactRating: v.impactRating,
-      cwe: v.cwe,
-      cve: v.cve,
-      host: v.host,
-      service: v.service,
-      endpoint: v.endpoint,
-      description: v.description,
-      contextSummary: v.contextSummary,
-      evidence: v.evidence,
-      stepsToReproduce: v.stepsToReproduce,
-      impact: v.impact,
-      remediation: v.remediation,
-      exploited: v.exploited,
-      status: v.status,
-    }));
+    const structuredFindings = serializeFindingsForReport(session.vulnerabilities ?? []);
 
-    const conversationText = await buildConversationText(
+    const conversationText = await boundedConversationText(
       nonSystemMessages,
     );
 
