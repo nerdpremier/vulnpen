@@ -3,7 +3,6 @@ import SessionsModel, {
 } from "../models/Sessions/Sessions.model";
 import {
   invoke_llm_streaming,
-  ToolCallData,
   resolveOrchestrator,
 } from "../utils/llm/providers";
 
@@ -28,16 +27,12 @@ import {
   recordCircuitOpen,
 } from "./consent-batch";
 import { ContextBudget, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
-import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
 import { buildVolatileTail, injectVolatileTail } from "../utils/assistant/volatileContext";
-import { computeOwaspCoverage } from "../knowledge";
-import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { wasSessionClearedSince } from "./session.helpers";
 import { engagementStateFromSession } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
-import { parseToolArguments } from "../utils/toolArguments";
 import { normalizeMaxAgentIterations } from "../utils/agentConfig";
 import {
   ApprovalRejectionTracker,
@@ -60,7 +55,11 @@ import {
 
 // ─── SSE helpers ─────────────────────────────────────────────────────
 
-import type { SSEWriter, SseEventMap } from "../utils/sse";
+import {
+  forwardStreamDelta,
+  type SSEWriter,
+  type SseEventMap,
+} from "../utils/sse";
 
 // ─── Message persistence ─────────────────────────────────────────────
 // The transcript seam: message constructors, append/replace, token
@@ -79,6 +78,19 @@ import {
   RunBuffer,
 } from "./session-transcript";
 
+// ─── Attack-box environment probe (user, home, OS, workspace path) ───
+
+import { probeBoxEnv } from "./box-env";
+
+// ─── Session prompt facts (system message, volatile web-app block) ───
+// Everything the prompt renders from the session document lives in
+// prompt-facts.ts; the loop only asks for the rendered blocks.
+
+import {
+  buildSystemMessage,
+  buildVolatileWebAppForSession,
+} from "./prompt-facts";
+
 // ─── Build shell status context (injected after summarization) ──────
 
 import { ShellManager } from "./shell.manager";
@@ -96,77 +108,6 @@ function buildShellStatusMessage(shellManager: ShellManager, turnIndex: number):
   const content = `[Shell Status - ${active.length} active, ${shells.length - active.length} closed]\n${lines.join("\n")}\n\nUse these shell_id values with write_to_shell and read_shell. Use run_bash (without shell_id) for new one-off commands.`;
 
   return systemNoteMessage(`shell_status_${Date.now()}`, content, turnIndex);
-}
-
-// ─── Build system message for a session ──────────────────────────────
-
-async function loadSessionPromptFacts(sessionId: string): Promise<{
-  engagement: { target: string; scope: string };
-  webAppSecurity: NonNullable<AgentPromptConfig["webAppSecurity"]>;
-}> {
-  const session = await SessionsModel.findOne({ sessionId })
-    .select("workspaceId engagementContext webAppTestPlan vulnerabilities")
-    .lean();
-  const storedVulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-  const owaspCoverage = computeOwaspCoverage(storedVulnerabilities);
-  return {
-    engagement: {
-      target: session?.engagementContext?.target ?? "",
-      scope: session?.engagementContext?.scope ?? "",
-    },
-    webAppSecurity: {
-      testPlan: (session?.webAppTestPlan as any) ?? null,
-      findingCount: owaspCoverage.total,
-      unmappedFindingCount: owaspCoverage.unmapped,
-      owaspBreakdown: owaspCoverage.byOwasp.filter((row) => row.findings > 0),
-    },
-  };
-}
-
-async function buildAgentPromptConfig(
-  sessionId: string,
-  userId: string,
-  envInfo?: BoxEnvInfo,
-): Promise<AgentPromptConfig> {
-  const user = await UserModel.findById(userId);
-  const now = new Date();
-  const { engagement, webAppSecurity } = await loadSessionPromptFacts(sessionId);
-  return {
-    sessionId,
-    installedCapabilities: user?.configs?.installedCapabilities ?? [],
-    selectedCapabilities: user?.configs?.capabilities ?? [],
-    currentDate: now.toISOString().split("T")[0],
-    currentDay: now.toLocaleDateString("en-US", { weekday: "long" }),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    envInfo,
-    // Same readiness seam the schema filter uses, so the prompt can never
-    // advertise a tool the model is not actually offered.
-    unconfiguredToolNames: await getUnconfiguredToolNames(),
-    engagement,
-    webAppSecurity,
-  };
-}
-
-/**
- * Re-render the volatile web-app part (WSTG plan + OWASP risk posture) from
- * the session document. Called EVERY tool-loop iteration: update_case and
- * add_vulnerability persist through session-plan-store and the vulnerability
- * tools, so the session snapshot the loop holds in memory goes stale the
- * moment a tool mutates the plan — rendering from the document keeps the
- * model's plan view in step with what the tools report.
- */
-async function buildVolatileWebAppForSession(sessionId: string): Promise<string> {
-  const { engagement, webAppSecurity } = await loadSessionPromptFacts(sessionId);
-  return buildVolatileWebAppPrompt({ sessionId, engagement, webAppSecurity });
-}
-
-async function buildSystemMessage(
-  sessionId: string,
-  userId: string,
-  envInfo?: BoxEnvInfo,
-): Promise<AgentMessageDoc> {
-  const promptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
-  return systemNoteMessage(`sys_${sessionId}`, buildSystemPrompt(promptConfig), 0);
 }
 
 // ─── Build dynamic trace tags from preceding tool results ───────────
@@ -297,29 +238,10 @@ export async function runAgentLoop(params: {
 
   const shellManager = await sessionLifecycle.ensureShellManager(sessionId);
 
-  // Detect attack box environment and rebuild system message with real info
-  let envInfo: BoxEnvInfo | undefined;
-  if (shellManager.isConnected) {
-    try {
-      const { output: envOut } = await shellManager.execInShell(
-        `echo "$USER|||$HOME|||$(uname -s)|||$(uname -m)"`,
-        10_000,
-      );
-      const parts = envOut.trim().split("|||");
-      if (parts.length >= 4) {
-        const home = parts[1];
-        const resolvedWs = shellManager.remoteWorkspaceDir.replace(/^~/, home);
-        envInfo = {
-          user: parts[0],
-          home,
-          os: `${parts[2]} (${parts[3]})`,
-          workspacePath: resolvedWs,
-        };
-      }
-    } catch (err: any) {
-      console.warn(`[agent] Failed to detect box environment: ${err.message}`);
-    }
-  }
+  // Attack-box facts for the prompt's env section — one probe, owned by
+  // box-env.ts. Undefined when the shell is not connected or the probe
+  // fails, and the prompt then renders without an env section.
+  const envInfo = await probeBoxEnv(shellManager);
 
   const runBuffer = createRunBuffer(
     sessionId,
@@ -482,10 +404,6 @@ export async function runAgentLoop(params: {
 
       const openaiMessages = messagesToOpenAI(runBuffer.transcript, orchestratorConfig.provider === "kimi");
 
-      let assistantContent = "";
-      let assistantReasoning = "";
-      let assistantToolCalls: ToolCallData[] = [];
-
       const { tags: traceTags, phase } = buildTraceTags("agent", runBuffer.transcript, [
         `session_id:${sessionId}`,
         `workspace_id:${session.workspaceId ?? "unknown"}`,
@@ -503,40 +421,13 @@ export async function runAgentLoop(params: {
         tags: traceTags,
         generationName: `agent-${phase}-step-${iteration}`,
         abortSignal: params.abortSignal,
-        onDelta(delta) {
-          if (delta.type === "reasoning" && delta.content) {
-            assistantReasoning += delta.content;
-            sse.write("reasoning", { content: delta.content });
-          }
-          if (delta.type === "text" && delta.content) {
-            assistantContent += delta.content;
-            sse.write("thinking", { content: delta.content });
-          }
-          if (delta.type === "tool_call_start" && delta.toolCall) {
-            sse.write("tool_call_start", {
-              index: delta.toolCall.index,
-              id: delta.toolCall.id,
-              name: delta.toolCall.name,
-            });
-          }
-          if (delta.type === "tool_call_delta" && delta.content) {
-            sse.write("tool_call_args", {
-              index: delta.toolCall?.index,
-              content: delta.content,
-            });
-          }
-          if (delta.type === "tool_call_done" && delta.toolCall) {
-            sse.write("tool_call_ready", {
-              index: delta.toolCall.index,
-              id: delta.toolCall.id,
-              name: delta.toolCall.name,
-              arguments: delta.toolCall.arguments,
-            });
-          }
-        },
+        // Pure SSE forwarding — the delta→event translation lives with the
+        // catalog in sse.ts. The final text/reasoning come from the invoke
+        // result (the stream collector joined the same parts).
+        onDelta: (delta) => forwardStreamDelta(sse, delta),
       });
 
-      assistantToolCalls = result.toolCalls;
+      const assistantToolCalls = result.toolCalls;
 
       if (result.usage) {
         const promptTokens = result.usage.prompt_tokens ?? 0;
@@ -562,8 +453,8 @@ export async function runAgentLoop(params: {
 
       const assistantMsg = assistantMessage(
         {
-          content: assistantContent,
-          reasoning: assistantReasoning,
+          content: result.content ?? "",
+          reasoning: result.reasoning ?? "",
           toolCalls: assistantToolCalls,
         },
         turnIndex,

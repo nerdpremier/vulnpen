@@ -60,3 +60,43 @@ export function createDetachedSSEWriter(label: string): SSEWriter {
     end() {},
   };
 }
+
+// ─── Stream delta forwarding ───────────────────────────────────────────
+
+import type { StreamDelta } from "./llm/providers";
+
+/**
+ * The standard translation from provider stream deltas to SSE events —
+ * the producer side of the catalog in sse-events.ts. The agent loop's
+ * onDelta is exactly this: keeping the translation here means a new delta
+ * type or payload change is made once, next to the event names it emits.
+ */
+export function forwardStreamDelta(sse: SSEWriter, delta: StreamDelta): void {
+  if (delta.type === "reasoning" && delta.content) {
+    sse.write("reasoning", { content: delta.content });
+  }
+  if (delta.type === "text" && delta.content) {
+    sse.write("thinking", { content: delta.content });
+  }
+  if (delta.type === "tool_call_start" && delta.toolCall) {
+    sse.write("tool_call_start", {
+      index: delta.toolCall.index,
+      id: delta.toolCall.id,
+      name: delta.toolCall.name,
+    });
+  }
+  if (delta.type === "tool_call_delta" && delta.content) {
+    sse.write("tool_call_args", {
+      index: delta.toolCall?.index,
+      content: delta.content,
+    });
+  }
+  if (delta.type === "tool_call_done" && delta.toolCall) {
+    sse.write("tool_call_ready", {
+      index: delta.toolCall.index,
+      id: delta.toolCall.id,
+      name: delta.toolCall.name,
+      arguments: delta.toolCall.arguments,
+    });
+  }
+}
