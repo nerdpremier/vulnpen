@@ -1,5 +1,6 @@
 import SessionsModel from "../models/Sessions/Sessions.model";
 import type { SSEWriter } from "../utils/sse";
+import { createSlashReply, SlashReply } from "./slash-reply";
 import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { sessionLifecycle } from "./session.lifecycle";
@@ -121,28 +122,17 @@ export async function executeSlashCommand(params: {
   const { sessionId, userId, command, args, sse } = params;
 
   const handler = commandHandlers[command];
+  const reply = createSlashReply(sse, command);
   if (!handler) {
-    sse.write("slash_command_result", {
-      command,
-      success: false,
-      content: `Unknown command \`/${command}\`. Type \`/help\` to see available commands.`,
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    reply.fail(`Unknown command \`/${command}\`. Type \`/help\` to see available commands.`);
     return;
   }
 
   try {
-    await handler({ sessionId, userId, args, sse });
+    await handler({ sessionId, userId, args, reply });
   } catch (err: any) {
     console.error(`[slash-command] /${command} error:`, err);
-    sse.write("slash_command_result", {
-      command,
-      success: false,
-      content: `Error executing \`/${command}\`: ${err.message ?? "Unknown error"}`,
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    reply.fail(`Error executing \`/${command}\`: ${err.message ?? "Unknown error"}`);
   }
 }
 
@@ -150,7 +140,7 @@ type CommandHandler = (ctx: {
   sessionId: string;
   userId: string;
   args: string;
-  sse: SSEWriter;
+  reply: SlashReply;
 }) => Promise<void>;
 
 const SUMMARIZE_PROMPT_OVERHEAD_TOKENS = 500;
@@ -191,59 +181,39 @@ async function buildConversationText(messages: any[]): Promise<string> {
 }
 
 const commandHandlers: Record<string, CommandHandler> = {
-  help: async ({ sse }) => {
+  help: async ({ reply }) => {
     const lines = SLASH_COMMANDS.map(
       (cmd) => `**\`/${cmd.name}\`** — ${cmd.description}`,
     );
-    sse.write("slash_command_result", {
-      command: "help",
-      success: true,
-      content: `### Available Commands\n\n${lines.join("\n\n")}`,
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    reply.ok(`### Available Commands\n\n${lines.join("\n\n")}`);
   },
 
-  clear: async ({ sessionId, sse }) => {
+  clear: async ({ sessionId, reply }) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) {
-      sse.write("slash_command_result", { command: "clear", success: false, content: "Session not found." });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.sessionMissing();
       return;
     }
 
     await resetSessionContext(sessionId);
 
-    sse.write("slash_command_result", {
-      command: "clear",
-      success: true,
-      content: "Context cleared. Session history has been reset.",
+    reply.ok("Context cleared. Session history has been reset.", {
       action: "clear_messages",
     });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
   },
 
-  reset: async ({ sessionId, sse }) => {
+  reset: async ({ sessionId, reply }) => {
     await resetAgentRun(sessionId);
 
-    sse.write("slash_command_result", {
-      command: "reset",
-      success: true,
-      content: "Agent state has been reset to idle.",
+    reply.ok("Agent state has been reset to idle.", {
       action: "reset_state",
     });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
   },
 
-  summarize: async ({ sessionId, userId, sse }) => {
+  summarize: async ({ sessionId, userId, reply }) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) {
-      sse.write("slash_command_result", { command: "summarize", success: false, content: "Session not found." });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.sessionMissing();
       return;
     }
 
@@ -252,28 +222,13 @@ const commandHandlers: Record<string, CommandHandler> = {
     );
 
     if (nonSystemMessages.length === 0) {
-      sse.write("slash_command_result", {
-        command: "summarize",
-        success: true,
-        content: "Nothing to summarize — the session is empty.",
-      });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.ok("Nothing to summarize — the session is empty.");
       return;
     }
 
     const conversationText = await buildConversationText(nonSystemMessages);
 
-    const resultId = `slash_result_${Date.now()}`;
-    sse.write("slash_command_ack", { command: "summarize", message: "Generating summary..." });
-
-    sse.write("slash_command_result", {
-      command: "summarize",
-      success: true,
-      content: "",
-      streaming: true,
-      id: resultId,
-    });
+    const stream = reply.stream("Generating summary...");
 
     let accumulated = "";
 
@@ -299,30 +254,20 @@ const commandHandlers: Record<string, CommandHandler> = {
       onDelta(delta) {
         if (delta.type === "text" && delta.content) {
           accumulated += delta.content;
-          sse.write("slash_command_stream", {
-            command: "summarize",
-            id: resultId,
-            content: delta.content,
-          });
+          stream.emit(delta.content);
         }
       },
     });
 
-    sse.write("slash_command_done", {
-      command: "summarize",
-      id: resultId,
-      content: accumulated || result.content || "Failed to generate summary.",
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    stream.complete(
+      accumulated || result.content || "Failed to generate summary.",
+    );
   },
 
-  status: async ({ sessionId, sse }) => {
+  status: async ({ sessionId, reply }) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) {
-      sse.write("slash_command_result", { command: "status", success: false, content: "Session not found." });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.sessionMissing();
       return;
     }
 
@@ -336,21 +281,13 @@ const commandHandlers: Record<string, CommandHandler> = {
     lines.push(`- **Turn Index:** ${session.turnIndex}`);
     lines.push(`- **Total Tokens Used:** ${session.totalTokens?.toLocaleString() ?? 0}`);
 
-    sse.write("slash_command_result", {
-      command: "status",
-      success: true,
-      content: lines.join("\n"),
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    reply.ok(lines.join("\n"));
   },
 
-  targets: async ({ sessionId, sse }) => {
+  targets: async ({ sessionId, reply }) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) {
-      sse.write("slash_command_result", { command: "targets", success: false, content: "Session not found." });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.sessionMissing();
       return;
     }
 
@@ -395,21 +332,13 @@ const commandHandlers: Record<string, CommandHandler> = {
       lines.push("No targets found in the session history.");
     }
 
-    sse.write("slash_command_result", {
-      command: "targets",
-      success: true,
-      content: lines.join("\n"),
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    reply.ok(lines.join("\n"));
   },
 
-  export: async ({ sessionId, userId, sse }) => {
+  export: async ({ sessionId, userId, reply }) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) {
-      sse.write("slash_command_result", { command: "export", success: false, content: "Session not found." });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.sessionMissing();
       return;
     }
 
@@ -418,13 +347,7 @@ const commandHandlers: Record<string, CommandHandler> = {
     );
 
     if (nonSystemMessages.length === 0) {
-      sse.write("slash_command_result", {
-        command: "export",
-        success: true,
-        content: "Nothing to export — the session is empty.",
-      });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.ok("Nothing to export — the session is empty.");
       return;
     }
 
@@ -457,7 +380,7 @@ const commandHandlers: Record<string, CommandHandler> = {
       ? `${conversationText}\n\n<structured_vulnerabilities>\n${JSON.stringify(structuredFindings, null, 2)}\n</structured_vulnerabilities>`
       : conversationText;
 
-    sse.write("slash_command_ack", { command: "export", message: "Generating report..." });
+    reply.ack("Generating report...");
 
     const result = await invoke_llm({
       messages: [
@@ -504,39 +427,21 @@ Use markdown formatting. Be thorough but concise.`,
       generationName: "slash-export-report",
     });
 
-    sse.write("slash_command_result", {
-      command: "export",
-      success: true,
-      content: result.content ?? "Failed to generate report.",
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    reply.ok(result.content ?? "Failed to generate report.");
   },
 
-  shells: async ({ sessionId, sse }) => {
+  shells: async ({ sessionId, reply }) => {
     let shellManager;
     try {
       shellManager = await sessionLifecycle.getShellManager(sessionId);
     } catch {
-      sse.write("slash_command_result", {
-        command: "shells",
-        success: true,
-        content: "No shell manager available for this session.",
-      });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.ok("No shell manager available for this session.");
       return;
     }
 
     const shells = shellManager.getShellList();
     if (shells.length === 0) {
-      sse.write("slash_command_result", {
-        command: "shells",
-        success: true,
-        content: "No shells have been created in this session.",
-      });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
+      reply.ok("No shells have been created in this session.");
       return;
     }
 
@@ -565,22 +470,10 @@ Use markdown formatting. Be thorough but concise.`,
       }
     }
 
-    sse.write("slash_command_result", {
-      command: "shells",
-      success: true,
-      content: lines.join("\n"),
-    });
-    sse.write("done", { message: "Slash command completed" });
-    sse.end();
+    reply.ok(lines.join("\n"));
   },
 
-  wstg: async ({ sessionId, args, sse }) => {
-    const finish = (content: string, success = true) => {
-      sse.write("slash_command_result", { command: "wstg", success, content });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
-    };
-
+  wstg: async ({ sessionId, args, reply }) => {
     try {
       const existing = await loadSessionPlan(sessionId);
       const tokens = args.trim().split(/\s+/).filter(Boolean);
@@ -605,14 +498,13 @@ Use markdown formatting. Be thorough but concise.`,
           "",
           "Refresh or re-scope with `/wstg <target>`.",
         ];
-        finish(lines.filter(Boolean).join("\n"));
+        reply.ok(lines.filter(Boolean).join("\n"));
         return;
       }
 
       if (!target && !existing?.cases?.length) {
-        finish(
+        reply.fail(
           "Usage: `/wstg <target>` — for example `/wstg https://app.example.com`. Plans the full OWASP WSTG catalogue; ask the assistant to restrict categories or add custom cases.",
-          false,
         );
         return;
       }
@@ -638,26 +530,20 @@ Use markdown formatting. Be thorough but concise.`,
         "Ask the assistant to work through the plan; it records each result with `wstg_test_plan` action `update_case`.",
         `Not started: ${coverage.notStarted} of ${coverage.total}.`,
       ];
-      finish(lines.join("\n"));
+      reply.ok(lines.join("\n"));
     } catch (err: any) {
-      finish(`Error building the WSTG test plan: ${err?.message ?? err}`, false);
+      reply.fail(`Error building the WSTG test plan: ${err?.message ?? err}`);
     }
   },
 
-  map: async ({ sessionId, sse }) => {
-    const finish = (content: string, success = true) => {
-      sse.write("slash_command_result", { command: "map", success, content });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
-    };
-
+  map: async ({ sessionId, reply }) => {
     try {
       const session = await SessionsModel.findOne({ sessionId })
         .select("vulnerabilities")
         .lean();
       const vulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
       if (!vulnerabilities.length) {
-        finish("No findings are tracked in this session yet, so there is nothing to map.");
+        reply.ok("No findings are tracked in this session yet, so there is nothing to map.");
         return;
       }
 
@@ -697,25 +583,19 @@ Use markdown formatting. Be thorough but concise.`,
           `${unmapped.length} finding(s) still have no mapping. Ask the assistant to classify them with \`map_finding_owasp\`, adding a WSTG test id or CWE for the ones the classifier could not place.`,
         );
       }
-      finish(lines.join("\n"));
+      reply.ok(lines.join("\n"));
     } catch (err: any) {
-      finish(`Error mapping findings: ${err?.message ?? err}`, false);
+      reply.fail(`Error mapping findings: ${err?.message ?? err}`);
     }
   },
 
-  report: async ({ sessionId, sse }) => {
-    const finish = (content: string, success = true) => {
-      sse.write("slash_command_result", { command: "report", success, content });
-      sse.write("done", { message: "Slash command completed" });
-      sse.end();
-    };
-
+  report: async ({ sessionId, reply }) => {
     try {
       const session = await SessionsModel.findOne({ sessionId })
         .select("name description createdAt vulnerabilities webAppTestPlan")
         .lean();
       if (!session) {
-        finish("Session not found.", false);
+        reply.fail("Session not found.");
         return;
       }
 
@@ -730,11 +610,11 @@ Use markdown formatting. Be thorough but concise.`,
         testPlan: (session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
       });
 
-      finish(
+      reply.ok(
         [`*File name for this draft: \`${report.fileName}\`*`, "", report.markdown].join("\n"),
       );
     } catch (err: any) {
-      finish(`Error generating the report draft: ${err?.message ?? err}`, false);
+      reply.fail(`Error generating the report draft: ${err?.message ?? err}`);
     }
   },};
 
