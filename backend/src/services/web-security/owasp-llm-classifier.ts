@@ -6,7 +6,7 @@
  * Every LLM verdict must carry a rationale and is stored for audit.
  */
 
-import { invoke_llm, getProviderForUser } from "../../utils/llm/providers";
+import { invoke_llm, resolveOrchestrator } from "../../utils/llm/providers";
 import {
   OWASP_TOP10_2025,
   getOwaspCategory,
@@ -27,7 +27,7 @@ export async function classifyWithLlm(
   params: { userId?: string; sessionId?: string; candidates?: OwaspTop10Id[] },
 ): Promise<OwaspMappingResult | undefined> {
   if (!params.userId) return undefined;
-  const provider = await getProviderForUser(params.userId);
+  const { config: provider } = await resolveOrchestrator(params.userId);
   const candidateNote = params.candidates?.length
     ? `The CWE already narrows this to: ${params.candidates.join(", ")}. Choose one of these unless the evidence clearly contradicts all of them.`
     : "";

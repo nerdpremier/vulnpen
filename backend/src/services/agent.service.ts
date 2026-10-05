@@ -4,10 +4,7 @@ import SessionsModel, {
 import {
   invoke_llm_streaming,
   ToolCallData,
-  ReasoningMode,
-  getUserModels,
-  presetToProviderConfig,
-  ProviderConfig,
+  resolveOrchestrator,
 } from "../utils/llm/providers";
 
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
@@ -371,10 +368,8 @@ export async function runAgentLoop(params: {
   };
 
   // ─── Resolve user model config for the orchestrator ──
-  const userModels = await getUserModels(userId);
-  const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
-  const orchestratorReasoningMode: ReasoningMode =
-    (userModels.orchestrator.reasoningMode as ReasoningMode) || "off";
+  const { config: orchestratorConfig, reasoningMode: orchestratorReasoningMode } =
+    await resolveOrchestrator(userId);
 
   // The loop knows the orchestrator's model here, so it injects the context
   // limit instead of letting the budget re-derive it from the provider config

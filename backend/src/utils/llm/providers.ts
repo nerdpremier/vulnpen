@@ -210,9 +210,7 @@ async function maybeRefreshOAuthToken(): Promise<string | null> {
 async function loadProviderConfig(): Promise<ProviderConfig> {
   const registry = getAssignedModels();
   if (registry.orchestrator) {
-    if (!registry.orchestrator.verifiedAt) {
-      throw new Error("The orchestrator model is unverified. Test and save it in Settings -> Models.");
-    }
+    assertOrchestratorVerified(registry.orchestrator);
     return await presetToProviderConfig(registry.orchestrator);
   }
 
@@ -247,7 +245,6 @@ export async function getProvider(): Promise<ProviderConfig> {
 export function clearProviderCache(): void {
   cachedProvider = null;
   cacheTimestamp = 0;
-  userProviderCache.clear();
 }
 
 // ─── Per-user model config ───────────────────────────────────────────
@@ -255,14 +252,21 @@ export function clearProviderCache(): void {
 import { getAssignedModels, ModelPreset } from "../modelRegistryStore";
 import { isHostOwner } from "../../services/host-owner.service";
 
-const userProviderCache = new Map<
-  string,
-  { config: ProviderConfig; ts: number }
->();
-
 export interface UserModelsResult {
   orchestrator: ModelPreset;
   all: ModelPreset[];
+}
+
+/**
+ * One guard for the one unverified-orchestrator rule — previously written
+ * twice with two different messages (env-default path and per-user path).
+ */
+function assertOrchestratorVerified(orchestrator: ModelPreset): void {
+  if (!orchestrator.verifiedAt) {
+    throw new Error(
+      `Assigned model "${orchestrator.label}" is unverified. Test and save it in Settings -> Models.`,
+    );
+  }
 }
 
 export function restrictHostSubscriptionModels(
@@ -304,14 +308,7 @@ export async function getUserModels(
     );
   }
 
-  const unverifiedAssigned = [registry.orchestrator].find(
-    (model) => !model.verifiedAt,
-  );
-  if (unverifiedAssigned) {
-    throw new Error(
-      `Assigned model "${unverifiedAssigned.label}" is unverified. Test and save it in Settings -> Models.`,
-    );
-  }
+  assertOrchestratorVerified(registry.orchestrator);
 
   const models = {
     orchestrator: registry.orchestrator,
@@ -359,17 +356,30 @@ export async function presetToProviderConfig(
   };
 }
 
-export async function getProviderForUser(
-  userId: string,
-): Promise<ProviderConfig> {
-  const cached = userProviderCache.get(userId);
-  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.config;
+export interface OrchestratorResolution {
+  config: ProviderConfig;
+  reasoningMode: ReasoningMode;
+}
 
+/**
+ * The one way to ask "which model orchestrates for this user": the assigned
+ * orchestrator (verified, host-owner-restricted) or the env default, as a
+ * ready ProviderConfig plus its reasoning mode. Fresh on every call, so
+ * model changes in Settings are visible on the next call — callers used to
+ * pick between getProvider (global, owner-blind), getProviderForUser
+ * (per-user cache that dropped reasoningMode), and the
+ * getUserModels + presetToProviderConfig dance; those questions were the
+ * same question.
+ */
+export async function resolveOrchestrator(
+  userId: string,
+): Promise<OrchestratorResolution> {
   const { orchestrator } = await getUserModels(userId);
   const config = await presetToProviderConfig(orchestrator);
-
-  userProviderCache.set(userId, { config, ts: Date.now() });
-  return config;
+  return {
+    config,
+    reasoningMode: (orchestrator.reasoningMode as ReasoningMode) || "off",
+  };
 }
 
 // ─── Shared types ────────────────────────────────────────────────────

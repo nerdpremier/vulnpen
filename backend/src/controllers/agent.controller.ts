@@ -21,7 +21,7 @@ import { parseSlashCommand, executeSlashCommand, SLASH_COMMANDS } from "../servi
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { resolveSessionFile } from "../services/artifacts.service";
-import { getProvider } from "../utils/llm/providers";
+import { resolveOrchestrator } from "../utils/llm/providers";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import type { SSEWriter } from "../utils/sse";
 import {
@@ -265,7 +265,9 @@ export const getHistory = async (req: Request, res: Response) => {
 
     let contextLimit = 128_000;
     try {
-      const config = await getProvider();
+      // The widget must reflect the model actually driving the loop — the
+      // user's assigned orchestrator, not the env default.
+      const { config } = await resolveOrchestrator(userId);
       contextLimit = getModelContextLimit(config.model);
     } catch { /* use default */ }
 
