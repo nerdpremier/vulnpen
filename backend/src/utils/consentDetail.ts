@@ -109,6 +109,29 @@ export function shellSafetyDetail(
   return undefined;
 }
 
+/**
+ * Same boundary as shellSafetyDetail, with the reason worded for a Python
+ * script instead of a shell command. Composed explicitly — never derive a
+ * script's verdict by string-replacing the command one (a rephrase of the
+ * command wording would silently turn it into a no-op).
+ */
+export function scriptSafetyDetail(
+  text: string,
+  ctx: ExecutionContext,
+): SafetyDetail | undefined {
+  const target = destructiveTargetDetail(text);
+  if (target) return target;
+  const crossing = crossingHosts(text, ctx);
+  if (crossing.length) {
+    return {
+      kind: "out_of_scope",
+      reason: `สคริปต์เชื่อมต่อไปยัง ${crossing.join(", ")} ซึ่งอยู่นอกขอบเขตการทดสอบที่กำหนดไว้`,
+      impact: OUT_OF_SCOPE_IMPACT,
+    };
+  }
+  return undefined;
+}
+
 /** Same boundary for shell input typed into a shell on the attack box. */
 export function shellInputSafetyDetail(
   text: string,

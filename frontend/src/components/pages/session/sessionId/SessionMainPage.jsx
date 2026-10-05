@@ -1,10 +1,12 @@
 ﻿"use client";
 
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { TbWorldWww } from "react-icons/tb";
 import ChatView from "./ChatView";
 import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
 import BurpProxyPage from "@/components/pages/session/burp/BurpProxyPage";
+import { useAgentStreamStore } from "@/store/agentStream.store";
+import { isBrowserAgentActive } from "@/utils/browserAgentActivity.mjs";
 
 // The right rail: one strip split into two halves, BROWSER AGENT above and
 // BURP below. Each half toggles its own panel.
@@ -37,37 +39,40 @@ const SessionMainPage = ({ session_id }) => {
   // the browser-agent view and vice versa.
   const [activePanel, setActivePanel] = useState(null);
 
-  // Unfold the live browser view whenever the agent starts driving the
-  // browser (ToolCallBlock broadcasts browser tool activity), and fold it
-  // back to the rail when that call finishes — unless the user opened the
-  // panel themselves (manualOpenRef keeps their choice until the agent's
-  // next browser action supersedes it).
-  const manualOpenRef = useRef(false);
+  // Browser-agent activity is derived from the session's message list, not
+  // from tool-block CustomEvents — the panel can never leak open.
+  const sessionMessages = useAgentStreamStore(
+    (s) => s.sessions[session_id]?.messages,
+  );
+  const browserActive = isBrowserAgentActive(sessionMessages);
+
+  // Fold the live browser view back to the rail once the agent's browser
+  // call finishes — unless the user opened the panel themselves (manualOpenRef
+  // keeps their choice until the agent's next browser action supersedes it).
+  // Derived-state adjustment during render (not an effect) — setState inside
+  // an effect body cascades renders.
+  const [manualOpenPanel, setManualOpenPanel] = useState(null);
   const openPanelManually = useCallback((key) => {
-    manualOpenRef.current = true;
+    setManualOpenPanel((prev) => (prev === key ? null : key));
     setActivePanel((prev) => (prev === key ? null : key));
   }, []);
-  useEffect(() => {
-    const open = () => {
+
+  const [prevBrowserActive, setPrevBrowserActive] = useState(browserActive);
+  if (browserActive !== prevBrowserActive) {
+    setPrevBrowserActive(browserActive);
+    if (browserActive) {
       // The agent opening the panel supersedes a previous manual open:
       // when its work finishes the panel must fold back automatically.
-      manualOpenRef.current = false;
+      setManualOpenPanel(null);
       setActivePanel("browser");
-    };
-    const close = () => {
-      if (manualOpenRef.current) {
-        manualOpenRef.current = false;
-        return;
-      }
+    } else if (manualOpenPanel === null) {
       setActivePanel((prev) => (prev === "browser" ? null : prev));
-    };
-    window.addEventListener("browser-agent-active", open);
-    window.addEventListener("browser-agent-idle", close);
-    return () => {
-      window.removeEventListener("browser-agent-active", open);
-      window.removeEventListener("browser-agent-idle", close);
-    };
-  }, []);
+    } else {
+      // The operator was looking at their own panel when the run ended;
+      // theirs stays open, the agent's view folds away with the run.
+      setManualOpenPanel(null);
+    }
+  }
 
   const handleMouseDown = useCallback((e) => {
     e.preventDefault();

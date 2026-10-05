@@ -186,6 +186,17 @@ export interface RunBuffer {
    */
   replaceTranscript(messages: AgentMessageDoc[]): void;
   /**
+   * Replace the system slot (index 0) WITHOUT touching the tail. This is the
+   * only way a run edits the transcript in place: the system message is
+   * refreshed every iteration, but it was never produced by `add`, so it must
+   * never enter the unflushed tail — flushing it would persist the volatile
+   * `<volatile_system>` tail into Mongo. Direct `runBuffer.transcript[0] = ...`
+   * writes are out of bounds; they keep this invariant by convention only.
+   */
+  setSystem(message: AgentMessageDoc): void;
+  /** Like setSystem, transforming the current system message. */
+  updateSystem(update: (message: AgentMessageDoc) => AgentMessageDoc): void;
+  /**
    * Append the tail to Mongo and clear it — unless `isLive()` says the tail's
    * destination is gone. Agent runs pass "the session was not cleared
    * mid-run": clearContext wipes the document and stale pre-clear messages
@@ -220,6 +231,16 @@ export function createRunBuffer(
     replaceTranscript(messages) {
       transcript = messages;
       tail = [];
+    },
+    setSystem(message) {
+      if (transcript.length > 0 && transcript[0].role === "system") {
+        transcript[0] = message;
+      }
+    },
+    updateSystem(update) {
+      if (transcript.length > 0 && transcript[0].role === "system") {
+        transcript[0] = update(transcript[0]);
+      }
     },
     async flushIfLive() {
       if (tail.length > 0 && isLive()) await flush();

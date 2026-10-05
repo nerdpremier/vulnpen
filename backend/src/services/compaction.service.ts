@@ -248,14 +248,14 @@ export class ContextBudget {
     opts: {
       traceContext?: { sessionId?: string; userId?: string };
       engagementState?: EngagementState;
-      toolSchemaTokens?: number;
-    } = {},
+      toolSchemaTokens: number;
+    },
   ): Promise<CompactionResult> {
     const result = await summarizeMessages(
       messages,
+      opts.toolSchemaTokens,
       opts.traceContext,
       opts.engagementState,
-      opts.toolSchemaTokens,
     );
     this.lastPromptTokens = result.projectedPromptTokens;
     return result;
@@ -350,9 +350,12 @@ export async function boundedConversationText(messages: any[]): Promise<string> 
 
 export async function summarizeMessages(
   messages: AgentMessageDoc[],
+  // Required, not defaulted: the agent loop prices the real in-play schemas,
+  // so a silent fallback to the fixed 3.2k estimate would quietly under-price
+  // the compaction's headroom. Tests without a schema payload pass 0.
+  toolSchemaTokens: number,
   traceContext?: { sessionId?: string; userId?: string },
   engagementState?: EngagementState,
-  toolSchemaTokens: number = TOOL_SCHEMA_TOKEN_ESTIMATE,
 ): Promise<CompactionResult> {
   const fixedMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
   const nonSystemMessages = messages.filter((m) => !m.isSummary && m.role !== "system");

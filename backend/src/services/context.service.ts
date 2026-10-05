@@ -30,12 +30,19 @@ import {
 // replay window in messagesToOpenAI.
 export const PRESERVE_RECENT_MESSAGES = 6;
 
-
-
 // Tool results older than this many messages are collapsed to a stub: the
 // summary and the engagement state already carry what mattered, and re-sending
 // full scan output for hundreds of turns was pure token burn.
 const RECENT_FULL_TOOL_RESULTS = 8;
+// Both "how recent counts as full fidelity" windows live together so a change
+// to one is a deliberate edit, not a silent drift between the elider and the
+// estimator (the compaction budget is only honest while they agree).
+export const RECENT_WINDOW = {
+  toolResults: RECENT_FULL_TOOL_RESULTS,
+  messages: PRESERVE_RECENT_MESSAGES,
+} as const;
+
+
 const STALE_TOOL_RESULT_CHARS = 250;
 // Old tool-call ARGUMENTS are stubbed too: re-sending a 5k-char nmap command
 // or a full add_vulnerability payload hundreds of turns later is pure burn.
@@ -55,7 +62,7 @@ const RECENT_TOOL_RESULT_MAX_CHARS = 2_500;
 /** Messages older than this many from the end are "stale": their tool output
  *  and arguments collapse to stubs. */
 export function isStaleMessage(index: number, total: number): boolean {
-  return index < total - RECENT_FULL_TOOL_RESULTS;
+  return index < total - RECENT_WINDOW.toolResults;
 }
 
 /** The character ceiling a tool result renders at, staleness-dependent. */
@@ -86,7 +93,7 @@ export function elideToolCallArgs(args: string, isStale: boolean): string {
 
 /** Assistant messages from this index on may replay their reasoning_content. */
 export function reasoningReplayWindowStart(total: number): number {
-  return total - PRESERVE_RECENT_MESSAGES;
+  return total - RECENT_WINDOW.messages;
 }
 
 /**
@@ -107,7 +114,9 @@ export function estimateMessageTokens(m: AgentMessageDoc, index: number, total: 
     chars = Math.min(chars, toolResultCap(isStale));
   } else if (m.role === "assistant" && m.toolCalls?.length) {
     for (const tc of m.toolCalls) {
-      chars += Math.min(tc.arguments.length, isStale ? STALE_TOOL_CALL_ARGS_CHARS : tc.arguments.length);
+      // Mirrors elideToolCallArgs: stale args collapse to a head+tail stub,
+      // fresh args pass through whole.
+      chars += isStale ? Math.min(tc.arguments.length, STALE_TOOL_CALL_ARGS_CHARS) : tc.arguments.length;
     }
   }
   // +1 token per capped message approximates the elision marker text.

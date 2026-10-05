@@ -3,6 +3,7 @@ import { ToolDefinition, ExecutionContext, ToolResult, SafetyKind } from "../too
 import { ToolCallData } from "../utils/llm/types";
 import { ShellManager, ShellPurpose } from "./shell.manager";
 import { EngagementState } from "./engagement-state";
+import { stripAnsi, collapseBlankLines } from "../utils/ansi";
 import { parseToolArguments } from "../utils/toolArguments";
 import { elideMiddle } from "../utils/transcript";
 import type { ToolExecutionMode } from "../models/User/User.model";
@@ -12,9 +13,6 @@ import {
   ToolSafetyEvaluator,
 } from "./tool-approval.service";
 
-// ANSI escape sequences necessarily contain a control character.
-// eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /\x1B\[[0-?]*[-[\]#-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[@-_]|\r(?!\n)/g;
 // The model only ever sees this much of a tool result. Too small and it has to
 // re-run scans to read their own output; too large and every turn pays for it.
 // 12k chars ≈ 3.4k tokens: scan verdicts and errors live in the tail, which
@@ -137,10 +135,7 @@ export function hasTranscriptResult(
 }
 
 function truncateOutput(output: string): string {
-  let cleaned = output.replace(ANSI_REGEX, "");
-  // Progress bars and redraws leave runs of blank/whitespace-only lines that
-  // render as stacked stray marks in the chat — collapse them to one.
-  cleaned = cleaned.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const cleaned = collapseBlankLines(stripAnsi(output));
   // Weight the tail: scan results, summaries and errors live at the end.
   return elideMiddle(
     cleaned,
@@ -419,6 +414,7 @@ export async function executeConsentedTool(
   args: Record<string, any>,
   callbacks: ToolExecutionCallbacks,
   ctx: ExecutionContext,
+  parkedSafetyKind?: SafetyKind,
 ): Promise<ToolResult> {
   const toolDef = toolRegistry.get(toolName);
   if (!toolDef) {
@@ -430,11 +426,23 @@ export async function executeConsentedTool(
     return notReadyResult;
   }
 
-  // Defence in depth: a destructive target action can never be executed, even if
-  // a stale pending-consent record somehow tried to carry one here.
-  const blockedAtBoundary = toolDef.describeSafety?.(args, ctx);
-  if (blockedAtBoundary?.kind === "destructive_target") {
-    const output = pocBoundaryOutput(blockedAtBoundary.reason);
+  // Defence in depth: the boundary verdict must be re-derived on resume,
+  // not trusted from the parked record. engagementState and the declared
+  // Target can have changed while the batch waited (the check fails open
+  // until a Target exists, so a batch parked early carries no verdict), and
+  // a resume that only re-checks destructive_target would execute a tool
+  // whose fresh verdict is out_of_scope or dangerous.
+  const freshVerdict = toolDef.describeSafety?.(args, ctx);
+  if (freshVerdict?.kind === "destructive_target") {
+    const output = pocBoundaryOutput(freshVerdict.reason);
+    callbacks.onToolError(toolCallId, output);
+    return { output, exitCode: 126 };
+  }
+  if (freshVerdict && freshVerdict.kind !== parkedSafetyKind) {
+    const output =
+      `Not executed: the consent boundary changed while this approval was pending. ` +
+      `Fresh verdict: ${freshVerdict.kind} — ${freshVerdict.reason}. ` +
+      "Ask the user for a fresh approval rather than relying on the parked one.";
     callbacks.onToolError(toolCallId, output);
     return { output, exitCode: 126 };
   }

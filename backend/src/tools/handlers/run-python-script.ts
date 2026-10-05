@@ -1,7 +1,11 @@
 import { ToolDefinition } from "../types";
 import { detectMissingCapability, MODULE_NOT_FOUND_PATTERNS } from "../../capabilities/detect-missing";
-import { shellSafetyDetail } from "../../utils/consentDetail";
+import { scriptSafetyDetail } from "../../utils/consentDetail";
 import crypto from "crypto";
+
+// Aliased to a module constant: `this.timeoutMs` inside execute breaks the
+// moment the registry destructures or wraps the definition.
+const SCRIPT_TIMEOUT_MS = 300_000;
 
 const runPythonScript: ToolDefinition = {
   name: "run_python_script",
@@ -25,17 +29,9 @@ const runPythonScript: ToolDefinition = {
     },
     required: ["script"],
   },
-  timeoutMs: 300_000,
+  timeoutMs: SCRIPT_TIMEOUT_MS,
   describeSafety(args, ctx) {
-    const scope = shellSafetyDetail(args.script ?? "", ctx);
-    if (scope) {
-      return {
-        kind: scope.kind,
-        reason: scope.reason.replace("คำสั่ง", "สคริปต์"),
-        impact: scope.impact,
-      };
-    }
-    return undefined;
+    return scriptSafetyDetail(args.script ?? "", ctx);
   },
   async execute(args, ctx) {
     const { script, file_name } = args;
@@ -64,7 +60,7 @@ const runPythonScript: ToolDefinition = {
     // Always run in-memory via stdin — faster and avoids path issues
     const { output, exitCode } = await ctx.runCommand(
       `python3 << '${delimiter}'\n${script}\n${delimiter}`,
-      this.timeoutMs,
+      SCRIPT_TIMEOUT_MS,
     );
     const suggestion = exitCode !== 0
       ? await detectMissingCapability(output, undefined, ctx.runCommand, MODULE_NOT_FOUND_PATTERNS)

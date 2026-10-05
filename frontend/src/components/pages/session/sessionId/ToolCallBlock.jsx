@@ -14,8 +14,8 @@ import {
   parseArgs,
   formatArgsPreview,
   getCodePreview,
-  isBrowserTool,
 } from "@/utils/toolCatalog";
+import { stripAnsi, collapseBlankLines } from "@/utils/ansi.mjs";
 import {
   CaretRightOutlined,
   LoadingOutlined,
@@ -68,20 +68,6 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
     }
   }, [content, streaming]);
 
-  // The Browser Agent live panel unfolds while the agent drives the browser
-  // and folds back to the rail once that call finishes.
-  const wasBrowserStreamingRef = useRef(false);
-  useEffect(() => {
-    const browserTool = isBrowserTool(toolName);
-    if (browserTool && streaming) {
-      wasBrowserStreamingRef.current = true;
-      window.dispatchEvent(new CustomEvent("browser-agent-active"));
-    } else if (wasBrowserStreamingRef.current && !streaming) {
-      wasBrowserStreamingRef.current = false;
-      window.dispatchEvent(new CustomEvent("browser-agent-idle"));
-    }
-  }, [toolName, streaming]);
-
   const copyText = useCallback((text) => {
     if (navigator.clipboard?.writeText) {
       return navigator.clipboard.writeText(text);
@@ -117,11 +103,7 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
 
   const trimmed = hasContent && content.length > OUTPUT_WINDOW;
   const cleanedContent = hasContent
-    ? content
-        // eslint-disable-next-line no-control-regex
-        .replace(/\x1B\[[0-?]*[-[\]#-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[@-_]|\r(?!\n)/g, "")
-        .replace(/[ \t]+\n/g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
+    ? collapseBlankLines(stripAnsi(content))
     : content;
   const outputLines = hasContent ? cleanedContent.split("\n").length : 0;
   const displayContent = hasContent

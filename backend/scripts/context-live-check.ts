@@ -160,9 +160,9 @@ async function main(): Promise<void> {
     const started = Date.now();
     const { summaryMessage, preservedMessages, projectedPromptTokens } = await summarizeMessages(
       messages,
+      toolSchemaTokens,
       undefined,
       engagement,
-      toolSchemaTokens,
     );
     summaryRounds.push(round);
     if (summaryRounds.length === 1 && summaryMessage) {

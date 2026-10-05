@@ -12,7 +12,6 @@ function createSessionState() {
 
     controllerRef: { current: null },
     streamingAssistantRef: { current: null },
-    toolCallAccRef: { current: {} },
     toolOutputBufferRef: { current: {} },
     toolOutputRafRef: { current: null },
     thinkingBufferRef: { current: null },

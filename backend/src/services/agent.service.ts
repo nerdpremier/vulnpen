@@ -255,7 +255,7 @@ export async function runAgentLoop(params: {
   // mid-run reach the model without invalidating the prompt-cached static
   // prefix.
   if (runBuffer.transcript.length > 0 && runBuffer.transcript[0].role === "system") {
-    runBuffer.transcript[0] = await buildSystemMessage(sessionId, userId, envInfo);
+    runBuffer.setSystem(await buildSystemMessage(sessionId, userId, envInfo));
   }
 
   const turnIndex = session.turnIndex;
@@ -391,14 +391,13 @@ export async function runAgentLoop(params: {
           ? ""
           : "\n" + engagementState.toPromptBlock();
         const volatileWebApp = await buildVolatileWebAppForSession(sessionId);
-        const sysContent = runBuffer.transcript[0].content ?? "";
-        runBuffer.transcript[0] = {
-          ...runBuffer.transcript[0],
+        runBuffer.updateSystem((system) => ({
+          ...system,
           content: injectVolatileTail(
-            sysContent,
+            system.content ?? "",
             buildVolatileTail({ timezone: tz, stateBlock, webApp: volatileWebApp }),
           ),
-        };
+        }));
       }
 
       const openaiMessages = messagesToOpenAI(runBuffer.transcript, orchestratorConfig.provider === "kimi");
@@ -697,6 +696,7 @@ export async function handleConsent(params: {
       pending.arguments,
       callbacks,
       ctx,
+      pending.safetyKind,
     );
     toolMessages.push(
       toolResultMessage(

@@ -217,19 +217,10 @@ export default function useAgentStream({
           r2.thinkingBufferRef.current = true;
           scheduleThinkingFlush();
         })
-        .onEvent("tool_call_start", (data) => {
-          refs().toolCallAccRef.current[data.index] = {
-            id: data.id,
-            name: data.name,
-            arguments: "",
-          };
-        })
-        .onEvent("tool_call_args", (data) => {
-          const r2 = refs();
-          if (r2.toolCallAccRef.current[data.index]) {
-            r2.toolCallAccRef.current[data.index].arguments += data.content;
-          }
-        })
+        // Consume the streamed fragments so the contract holds, but keep no
+        // accumulator: the assembled call arrives whole on tool_call_ready.
+        .onEvent("tool_call_start", () => {})
+        .onEvent("tool_call_args", () => {})
         .onEvent("tool_call_ready", (data) => {
           const r2 = refs();
           const tc = {
@@ -244,7 +235,6 @@ export default function useAgentStream({
               patchMessage(prev, ref.id, { toolCalls: [...ref.toolCalls] }),
             );
           }
-          r2.toolCallAccRef.current = {};
         })
         .onEvent("tool_start", (data) => {
           flushAssistant();
@@ -403,7 +393,22 @@ export default function useAgentStream({
             maxIterations: data.maxIterations,
           });
         })
-        .onEvent("summary_done", () => {})
+        .onEvent("summary_done", (data) => {
+          // A compaction folded the history into a summary; surface it or the
+          // run looks like it lost its memory without explanation. Trailing
+          // preview only — the persisted message carries the full text.
+          const summary = typeof data?.summary === "string" ? data.summary : "";
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `summary_done_${Date.now()}`,
+              role: "system",
+              content: summary,
+              isSummary: true,
+              timestamp: new Date(),
+            },
+          ]);
+        })
         .onEvent("paused", () => {
           flushAssistant();
           setAgentState("paused");
@@ -449,10 +454,9 @@ export default function useAgentStream({
 
   // Stopping has to be more than tearing down the fetch. Tool messages that
   // were streaming when Stop fired never receive tool_done / tool_error, so
-  // they would stay `streaming: true` forever - and ToolCallBlock reads that
-  // flag to decide whether to broadcast `browser-agent-idle`, which is what
-  // folds the Browser Agent panel. Without this the panel stayed unfolded
-  // after Stop until the page was reloaded.
+  // they would stay `streaming: true` forever. The Browser Agent panel
+  // derives from that flag, so a stuck message keeps the panel unfolded
+  // after Stop until the page is reloaded.
   const abort = useCallback(() => {
     const r = refs();
     if (r.toolOutputRafRef.current) {

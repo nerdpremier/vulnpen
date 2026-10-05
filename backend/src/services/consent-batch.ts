@@ -97,6 +97,8 @@ export interface PendingConsentItem {
   toolCallId: string;
   toolName: string;
   arguments: Record<string, any>;
+  /** The boundary verdict captured when the consent was parked. */
+  safetyKind?: SafetyKind;
 }
 
 /**
@@ -107,9 +109,11 @@ export function loadPendingConsent(
   pending: PendingConsentDoc | null | undefined,
 ): PendingConsentItem[] {
   if (!pending) return [];
-  return pending.batch && pending.batch.length > 1
-    ? pending.batch
-    : [{ toolCallId: pending.toolCallId, toolName: pending.toolName, arguments: pending.arguments }];
+  const single: PendingConsentItem = pending.safetyKind
+    ? { toolCallId: pending.toolCallId, toolName: pending.toolName, arguments: pending.arguments, safetyKind: pending.safetyKind }
+    : { toolCallId: pending.toolCallId, toolName: pending.toolName, arguments: pending.arguments };
+
+  return pending.batch && pending.batch.length > 1 ? pending.batch : [single];
 }
 
 /**

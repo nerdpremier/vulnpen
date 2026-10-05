@@ -3,8 +3,8 @@
 // arrive, so nothing ever re-renders them as finished.
 //
 // The visible symptom was the Browser Agent panel staying unfolded after Stop:
-// ToolCallBlock only broadcasts `browser-agent-idle` when `streaming` flips
-// off, so the panel had no way to learn that the run was over.
+// the panel derives from whether a browser tool message is still streaming, so
+// a message stuck on `streaming: true` kept it open.
 //
 // Kept in its own module so the rule is testable without React.
 
