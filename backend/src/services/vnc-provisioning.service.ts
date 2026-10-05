@@ -96,6 +96,22 @@ export function updateVncConfig(input: {
   });
 }
 
+export function completeAutoProvision(input: {
+  host: string;
+  port?: number | string;
+  password?: string;
+  baseUrl?: string;
+}): void {
+  updateEnvVars({
+    [VNC_ENV_KEYS.mode]: "auto",
+    [VNC_ENV_KEYS.host]: input.host,
+    [VNC_ENV_KEYS.port]: String(input.port ?? "9020"),
+    [VNC_ENV_KEYS.password]: input.password ?? "",
+    [VNC_ENV_KEYS.setupDone]: "true",
+    [VNC_ENV_KEYS.baseUrl]: (input.baseUrl ?? "").trim(),
+  });
+}
+
 export function resetVncConfig(): void {
   updateEnvVars({
     [VNC_ENV_KEYS.mode]: "",
@@ -338,13 +354,11 @@ export async function provisionVnc(sessionId: string): Promise<VncProvisionResul
           const passwordProtected = isX11vnc || useVncAuth;
           const effectivePassword = passwordProtected ? randomPassword : "";
 
-          updateEnvVars({
-            [VNC_ENV_KEYS.mode]: "auto",
-            [VNC_ENV_KEYS.host]: vncHost,
-            [VNC_ENV_KEYS.port]: vncPort,
-            [VNC_ENV_KEYS.password]: effectivePassword,
-            [VNC_ENV_KEYS.setupDone]: "true",
-            [VNC_ENV_KEYS.baseUrl]: baseUrl,
+          completeAutoProvision({
+            host: vncHost,
+            port: vncPort,
+            password: effectivePassword,
+            baseUrl,
           });
 
           sshClient.end();

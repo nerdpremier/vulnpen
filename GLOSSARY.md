@@ -6,6 +6,34 @@ Domain and seam vocabulary for this codebase. The architecture vocabulary
 recurred often enough to earn a seam — use these names when touching the areas
 below, and add a term here when a refactor gives a concept a module of its own.
 
+## VPN
+
+**VPN profile store** — the local `.ovpn`/`.conf` bundles under
+`kali-data/vpn-profiles`, owned by
+`services/vpn-profiles.service.ts`: `sanitizeProfileName`,
+`listLocalProfiles`, `findProfile`, `saveProfile` (replaces an existing
+same-name profile plus its asset dir, rolls back on duplicate asset
+names), `deleteProfile`, and `requiresInteractiveAuth`. The HTTP
+handlers in `vpn.controller.ts` map requests to these verbs; they never
+touch the directory layout or the sanitize rule themselves.
+
+## Shell
+
+**Shell I/O** — the mechanics of a shell's output channel, owned by
+`services/shell-io.ts`: the bounded `RingBuffer` tail with its
+async-offset resume protocol, `escapeForLoginShell`, `stripAnsi`, and
+the local-process `RuntimeChannel` adapter. `ShellManager` composes
+them; it owns session lifecycle (connect, reconnect, shell registry),
+never the buffer/escape rules.
+
+## OAuth
+
+**Anthropic OAuth** — the PKCE connect flow, owned by
+`services/anthropic-oauth.service.ts`: `beginAnthropicOAuth` (mint state
++ consent URL), `completeAnthropicOAuth` (verify state, exchange the
+code, persist tokens via `applyEnvUpdates`), and
+`disconnectAnthropicOAuth`. Controllers map HTTP to these verbs only.
+
 ## Engagement
 
 **Engagement** — one session's offensive-testing effort against a declared
@@ -169,10 +197,17 @@ one place, errors left to `executeSlashCommand`'s catch); only `/map` and
 missing-session guard.
 
 **Context budget** — the per-run compaction state machine in
-`services/context.service.ts` (`ContextBudget`): the cached prompt size, the
+`services/compaction.service.ts` (`ContextBudget`): the cached prompt size, the
 plan decision, and the invariant that a compaction resets the cached size to
 the post-compaction projection (the anti-thrashing guard against
 summarize → one tool → summarize loops).
+
+**VNC config** — the stored VNC settings (`VNC_*` env keys), owned by
+`services/vnc-provisioning.service.ts`: `getVncConfig` (the one
+projection — handlers never re-read the raw env keys),
+`updateVncConfig`/`resetVncConfig`, and `completeAutoProvision` (the
+stamp written when the one-click setup finishes). All writes go through
+these verbs.
 
 **Volatile tail** — the `<volatile_system>` block appended after the static
 system prompt (run clock, engagement state, WSTG plan + OWASP posture). Owned
@@ -211,10 +246,13 @@ re-derive `arguments` with parseToolArguments at a call site, or `$inc` a
 staleness window (`isStaleMessage`), tool-result/args caps
 (`toolResultCap`, `elideToolResult`, `elideToolCallArgs`), the reasoning
 replay window, and the conversation input bounding for LLM calls that receive
-the whole history (`boundedConversationText`), all in
-`services/context.service.ts`. The token estimator, `messagesToOpenAI`, and
-the /summarize and /export commands all consume these helpers — never write
-the caps or the window arithmetic a second time.
+the whole history (`boundedConversationText`). The first three live in
+`services/context.service.ts` (with the token estimator, `messagesToOpenAI`,
+and the /summarize and /export projections); `boundedConversationText` lives
+in `services/compaction.service.ts` beside the summarizer that built it. Never
+write the caps or the window arithmetic a second time — `estimateMessageTokens`
+and `messagesToOpenAI` share these helpers so the budget can never drift from
+what the prompt actually sends.
 
 **Finding store** — the finding lifecycle in
 `services/vulnerability.service.ts`: `recordSessionFinding` (resolve plan case

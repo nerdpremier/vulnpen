@@ -1,5 +1,4 @@
 import { Response, Request } from "express";
-import { readEnvFile } from "../utils/envWriter";
 import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
 import { requireActiveSession } from "../services/session.helpers";
 import { execOnWorkHost, resolveSessionWorkHost } from "../services/work-host.service";
@@ -50,13 +49,14 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
     const VNC_DISPLAY = getVncDisplay();
     const VNC_RFBPORT = getVncRfbPort();
     const WEBSOCKIFY_PORT = getWebsockifyPort();
-    const env = readEnvFile();
-    const vncMode = env.VNC_MODE || "";
-    const savedHost = env.VNC_HOST || "";
-    const savedPort = env.VNC_PORT || "9020";
-    const savedPassword = env.VNC_PASSWORD || "";
-    const setupDone = env.VNC_SETUP_DONE === "true";
-    const baseUrlOverride = (env.VNC_BASE_URL || "").trim();
+    const {
+      mode: vncMode,
+      host: savedHost,
+      port: savedPort,
+      password: savedPassword,
+      setupDone,
+      baseUrl: baseUrlOverride,
+    } = getVncConfig();
 
     const defaultVncURL = savedPort ? `${savedHost}:${savedPort}` : savedHost;
 

@@ -6,37 +6,17 @@ import {
   execOnWorkHost,
   resolveSessionWorkHost,
 } from "../services/work-host.service";
+import {
+  deleteProfile,
+  findProfile,
+  listLocalProfiles,
+  requiresInteractiveAuth,
+  sanitizeProfileName,
+  saveProfile,
+  VPN_DIR,
+} from "../services/vpn-profiles.service";
 import path from "path";
 import fs from "fs";
-import { KALI_DATA_DIR } from "../config/constants";
-
-const VPN_DIR = path.join(KALI_DATA_DIR, "vpn-profiles");
-
-function ensureVPNDir(): void {
-  if (!fs.existsSync(VPN_DIR)) {
-    fs.mkdirSync(VPN_DIR, { recursive: true });
-  }
-}
-
-function sanitizeProfileName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_.-]/g, "_").substring(0, 64);
-}
-
-function listLocalProfiles(): Array<{ name: string; filename: string; path: string; assetDir: string; size: number }> {
-  ensureVPNDir();
-  const files = fs.readdirSync(VPN_DIR).filter((f: string) => f.endsWith(".ovpn") || f.endsWith(".conf"));
-  return files.map((f: string) => {
-    const fullPath = path.join(VPN_DIR, f);
-    const stat = fs.statSync(fullPath);
-    return {
-      name: f.replace(/\.(ovpn|conf)$/, ""),
-      filename: f,
-      path: fullPath,
-      assetDir: path.join(VPN_DIR, `${f.replace(/\.(ovpn|conf)$/, "")}.files`),
-      size: stat.size,
-    };
-  });
-}
 
 function sshExecPromise(ssh: SSHClient, command: string): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
@@ -120,41 +100,22 @@ export const uploadVPNProfile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Upload exactly one .ovpn or .conf profile" });
     }
     const file = profileFiles[0];
-    ensureVPNDir();
 
-    const safeName = sanitizeProfileName(profileName || file.originalname.replace(/\.(ovpn|conf)$/, ""));
-    if (!safeName) {
-      return res.status(400).json({ message: "VPN profile name is invalid" });
-    }
-    const ext = file.originalname.endsWith(".conf") ? ".conf" : ".ovpn";
-    const filename = safeName + ext;
-    const filePath = path.join(VPN_DIR, filename);
-
-    fs.rmSync(path.join(VPN_DIR, safeName + (ext === ".ovpn" ? ".conf" : ".ovpn")), { force: true });
-    fs.writeFileSync(filePath, file.buffer, { mode: 0o600 });
-    fs.chmodSync(filePath, 0o600);
-    const assetDir = path.join(VPN_DIR, `${safeName}.files`);
-    fs.rmSync(assetDir, { recursive: true, force: true });
-    fs.mkdirSync(assetDir, { recursive: true });
-    const assetNames = new Set<string>();
-    for (const asset of files.filter((entry) => entry !== file)) {
-      const assetName = path.basename(asset.originalname);
-      if (assetNames.has(assetName)) {
-        fs.rmSync(assetDir, { recursive: true, force: true });
-        fs.rmSync(filePath, { force: true });
-        return res.status(400).json({ message: `Duplicate VPN bundle filename: ${assetName}` });
-      }
-      assetNames.add(assetName);
-      fs.writeFileSync(path.join(assetDir, assetName), asset.buffer, { mode: 0o600 });
+    const stored = saveProfile({
+      profileName,
+      originalName: file.originalname,
+      profileBuffer: file.buffer,
+      assets: files
+        .filter((entry) => entry !== file)
+        .map((entry) => ({ originalname: entry.originalname, buffer: entry.buffer })),
+    });
+    if ("error" in stored) {
+      return res.status(400).json({ message: stored.error });
     }
 
     return res.status(200).json({
       message: "VPN profile uploaded",
-      profile: {
-        name: safeName,
-        filename,
-        assets: files.length - 1,
-      },
+      profile: stored.profile,
     });
   } catch (err) {
     console.log(err);
@@ -184,16 +145,10 @@ export const deleteVPNProfile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Profile name is required" });
     }
 
-    const safeName = sanitizeProfileName(profile_name);
-    const profiles = listLocalProfiles();
-    const profile = profiles.find((p) => p.name === safeName);
-
-    if (!profile) {
+    const outcome = deleteProfile(profile_name);
+    if (outcome === "not_found") {
       return res.status(404).json({ message: "Profile not found" });
     }
-
-    fs.unlinkSync(profile.path);
-    fs.rmSync(profile.assetDir, { recursive: true, force: true });
 
     return res.status(200).json({ message: "Profile deleted" });
   } catch (err) {
@@ -224,16 +179,14 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
     console.log("[vpn/connect] 3 session ok");
 
     const safeName = sanitizeProfileName(profile_name);
-    const profiles = listLocalProfiles();
-    const profile = profiles.find((p) => p.name === safeName);
+    const profile = findProfile(profile_name);
 
     if (!profile) {
       return res.status(404).json({ message: "VPN profile not found" });
     }
     console.log("[vpn/connect] 4 profile found", { path: profile.path });
 
-    const profileContent = fs.readFileSync(profile.path, "utf8");
-    if (/^\s*auth-user-pass\s*(?:#.*)?$/m.test(profileContent)) {
+    if (requiresInteractiveAuth(profile.path)) {
       return res.status(400).json({
         message: "This VPN requires an interactive username/password prompt. Add an auth-user-pass credentials file to the bundle or connect it manually on the work host.",
       });

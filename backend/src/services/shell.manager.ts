@@ -1,5 +1,5 @@
 import { Client as SSHClient } from "ssh2";
-import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { spawn } from "child_process";
 import { EventEmitter } from "events";
 import { v4 as uuidv4 } from "uuid";
 import { ShellType, ShellCreator } from "../models/Sessions/Sessions.model";
@@ -9,27 +9,17 @@ import {
   shellFolderExpression,
   spawnLocalShell,
 } from "./work-host.service";
+import {
+  escapeForLoginShell,
+  localChannel,
+  RECONNECT_BASE_MS,
+  RECONNECT_MAX_MS,
+  RingBuffer,
+  RuntimeChannel,
+  stripAnsi,
+} from "./shell-io";
 
-const RING_BUFFER_MAX = 256 * 1024; // 256KB per shell
-const RECONNECT_BASE_MS = 1000;
-const RECONNECT_MAX_MS = 30_000;
-// ANSI escape sequences necessarily contain a control character.
-// eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /\x1B\[[0-?]*[-[\]#-~]/g;
-
-/**
- * Wrap a command in a login shell so PATH additions from .zprofile/.bashrc
- * (brew, apt-installed tooling, language version managers) are available.
- *
- * $SHELL must not be used bare: it is routinely unset in containers and over
- * non-interactive SSH, and the wrapper then degrades to ` -l -c '…'`, so the
- * shell tries to execute "-l" as a program and every command fails with
- * "/bin/sh: 1: -l: not found". Fall back to bash, then sh, when it is empty.
- */
-export function escapeForLoginShell(command: string): string {
-  const escaped = command.replace(/'/g, "'\\''");
-  return `"\${SHELL:-$(command -v bash || command -v sh)}" -l -c '${escaped}'`;
-}
+export { escapeForLoginShell, RingBuffer } from "./shell-io";
 
 export type ShellPurpose = "exploit-box" | "reverse-shell" | "listener";
 
@@ -53,47 +43,6 @@ export interface ShellSpawnOptions {
   purpose?: ShellPurpose;
 }
 
-class RingBuffer {
-  private buffer: string = "";
-  private maxSize: number;
-  private _offset: number = 0;
-
-  constructor(maxSize: number = RING_BUFFER_MAX) {
-    this.maxSize = maxSize;
-  }
-
-  append(data: string): void {
-    this.buffer += data;
-    if (this.buffer.length > this.maxSize) {
-      const excess = this.buffer.length - this.maxSize;
-      this.buffer = this.buffer.slice(excess);
-      this._offset += excess;
-    }
-  }
-
-  read(fromOffset?: number): { data: string; offset: number } {
-    const start = fromOffset ?? this._offset;
-    const relativeStart = Math.max(0, start - this._offset);
-    return {
-      data: this.buffer.slice(relativeStart),
-      offset: this._offset + this.buffer.length,
-    };
-  }
-
-  get currentOffset(): number {
-    return this._offset + this.buffer.length;
-  }
-
-  get length(): number {
-    return this.buffer.length;
-  }
-
-  clear(): void {
-    this.buffer = "";
-    this._offset = 0;
-  }
-}
-
 interface ManagedShell {
   shellId: string;
   label: string;
@@ -105,25 +54,6 @@ interface ManagedShell {
   subagentId?: string;
   purpose: ShellPurpose;
   createdAt: Date;
-}
-
-interface RuntimeChannel extends EventEmitter {
-  stderr?: EventEmitter;
-  write(data: string): unknown;
-  end(): unknown;
-  destroy(): unknown;
-  setWindow?(rows: number, cols: number, height: number, width: number): unknown;
-}
-
-function localChannel(child: ChildProcessWithoutNullStreams): RuntimeChannel {
-  const channel = child.stdout as unknown as RuntimeChannel;
-  channel.stderr = child.stderr;
-  channel.write = (data: string) => child.stdin.write(data);
-  channel.end = () => child.stdin.end();
-  channel.destroy = () => child.kill("SIGTERM");
-  child.on("close", (code) => channel.emit("close", code));
-  child.on("error", (error) => channel.emit("error", error));
-  return channel;
 }
 
 export class ShellManager extends EventEmitter {
@@ -608,7 +538,7 @@ export class ShellManager extends EventEmitter {
   }
 
   cleanOutput(output: string): string {
-    return output.replace(ANSI_REGEX, "").trim();
+    return stripAnsi(output);
   }
 
   async destroy(): Promise<void> {
