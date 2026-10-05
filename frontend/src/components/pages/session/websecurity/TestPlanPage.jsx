@@ -45,6 +45,7 @@ import styles from "@/styles/pages/TestPlan.module.scss";
 import { ProgressRing } from "@/components/common/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { summarise, groupCases, matchesFilters, caseCarriesWork, OTHER_GROUP } from "@/utils/testPlan.mjs";
 
 const STATUS_OPTIONS = [
   { value: "not_started", label: "Not started" },
@@ -75,9 +76,6 @@ const FILTERS = [
   { value: "skipped", label: "Skipped" },
 ];
 
-/** Group key for cases that do not belong to one of the twelve WSTG categories. */
-const OTHER_GROUP = "OTHER";
-
 function CoverageBar({ value, tone }) {
   const clamped = Math.max(0, Math.min(100, Number(value) || 0));
   return (
@@ -90,57 +88,6 @@ function CoverageBar({ value, tone }) {
   );
 }
 
-/** Execution totals for one set of cases. */
-function summarise(cases) {
-  const counts = { passed: 0, failed: 0, blocked: 0, inProgress: 0, skipped: 0, notStarted: 0 };
-  for (const testCase of cases) {
-    if (counts[testCase.status] !== undefined) counts[testCase.status] += 1;
-  }
-  const total = cases.length;
-  const executed = counts.passed + counts.failed + counts.blocked;
-  return { ...counts, total, executed, percent: total ? Math.round((executed / total) * 100) : 0 };
-}
-
-/**
- * The plan grouped by WSTG category, in catalogue order. Cases the assistant added by hand land in
- * a trailing "Other" group, and empty groups are dropped so no empty headings are drawn.
- */
-function groupCases(cases, categories) {
-  const groups = (categories ?? []).map((category) => ({
-    key: category.code,
-    code: category.code,
-    section: category.section,
-    name: category.name,
-    cases: [],
-  }));
-  const position = new Map(groups.map((group, index) => [group.key, index]));
-  const other = { key: OTHER_GROUP, code: "", section: "", name: "Other test cases", cases: [] };
-
-  for (const testCase of cases) {
-    const index = position.get(testCase.categoryCode);
-    (index === undefined ? other : groups[index]).cases.push(testCase);
-  }
-
-  return [...groups, other].filter((group) => group.cases.length > 0);
-}
-
-function matchesFilters(testCase, needle, status) {
-  if (status !== "all" && testCase.status !== status) return false;
-  if (!needle) return true;
-  return [testCase.testId, testCase.section, testCase.title, testCase.objective, testCase.observations]
-    .filter(Boolean)
-    .some((value) => String(value).toLowerCase().includes(needle));
-}
-
-/** True when dropping a case would throw away something a tester recorded. */
-function caseCarriesWork(testCase) {
-  return (
-    testCase.status !== "not_started" ||
-    Boolean(testCase.observations?.trim()) ||
-    Boolean(testCase.notes?.trim()) ||
-    (testCase.linkedVulnerabilityIds?.length ?? 0) > 0
-  );
-}
 export default function TestPlanPage({ sessionId }) {
   const { message } = App.useApp();
   const confirmPopUp = useConfirmPopUp();

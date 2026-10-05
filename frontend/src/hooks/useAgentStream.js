@@ -6,13 +6,15 @@ import { useShallow } from "zustand/react/shallow";
 import { notification } from "antd";
 import { finalizeAbortedToolCalls } from "@/utils/finalizeAbortedToolCalls.mjs";
 import { isBrowserTool } from "@/utils/toolCatalog";
+import {
+  applyToolOutputBuffer,
+  applyToolDone,
+  applyToolError,
+  finalizeStreamedAssistant,
+  patchMessage,
+} from "@/utils/agentStreamMessages.mjs";
 
 const EMPTY_MESSAGES = [];
-
-// Cap live tool output held in client state. A chatty scan streams far more
-// stdout than the UI ever shows (the block renders the tail only), and keeping
-// every byte makes each later render - and the GC - pay for invisible text.
-const MAX_LIVE_TOOL_CHARS = 60_000;
 
 // ReactMarkdown re-parses the whole assistant document on every render, so
 // coalesce streaming content updates into at most one update per interval.
@@ -82,25 +84,7 @@ export default function useAgentStream({
     r.toolOutputRafRef.current = null;
     if (Object.keys(buffer).length === 0) return;
 
-    // One pass over the message list no matter how many tools streamed in
-    // parallel, instead of a full map per tool id.
-    setMessages((prev) => {
-      let changed = false;
-      const next = prev.map((m) => {
-        const chunk = buffer[m.id];
-        if (!chunk) return m;
-        changed = true;
-        const combined = m.content + chunk;
-        return {
-          ...m,
-          content:
-            combined.length > MAX_LIVE_TOOL_CHARS
-              ? "[... earlier output trimmed ...]\n" + combined.slice(-MAX_LIVE_TOOL_CHARS)
-              : combined,
-        };
-      });
-      return changed ? next : prev;
-    });
+    setMessages((prev) => applyToolOutputBuffer(prev, buffer));
     r.toolOutputBufferRef.current = {};
   }, [refs, setMessages]);
 
@@ -109,7 +93,7 @@ export default function useAgentStream({
     const ref = r.streamingAssistantRef.current;
     if (!ref || r.reasoningBufferRef.current === null) return;
     setMessages((prev) =>
-      prev.map((m) => (m.id === ref.id ? { ...m, reasoning: ref.reasoning } : m)),
+      patchMessage(prev, ref.id, { reasoning: ref.reasoning }),
     );
     r.reasoningBufferRef.current = null;
     r.reasoningRafRef.current = null;
@@ -122,7 +106,7 @@ export default function useAgentStream({
     if (!ref || r.thinkingBufferRef.current === null) return;
     r.lastThinkingFlushRef.current = Date.now();
     setMessages((prev) =>
-      prev.map((m) => (m.id === ref.id ? { ...m, content: ref.content } : m)),
+      patchMessage(prev, ref.id, { content: ref.content }),
     );
     r.thinkingBufferRef.current = null;
   }, [refs, setMessages]);
@@ -155,17 +139,7 @@ export default function useAgentStream({
       r.reasoningBufferRef.current = null;
     }
 
-    setMessages((prev) => {
-      const existing = prev.find((m) => m.id === ref.id);
-      if (existing) {
-        return prev.map((m) =>
-          m.id === ref.id
-            ? { ...m, content: ref.content, reasoning: ref.reasoning || undefined, toolCalls: [...ref.toolCalls], streaming: false, reasoningStreaming: false }
-            : m,
-        );
-      }
-      return prev;
-    });
+    setMessages((prev) => finalizeStreamedAssistant(prev, ref));
     r.streamingAssistantRef.current = null;
   }, [refs, setMessages]);
 
@@ -236,9 +210,7 @@ export default function useAgentStream({
           }
           if (r2.streamingAssistantRef.current.reasoning) {
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === r2.streamingAssistantRef.current.id ? { ...m, reasoningStreaming: false } : m,
-              ),
+              patchMessage(prev, r2.streamingAssistantRef.current.id, { reasoningStreaming: false }),
             );
           }
           r2.streamingAssistantRef.current.content += data.content;
@@ -269,9 +241,7 @@ export default function useAgentStream({
             r2.streamingAssistantRef.current.toolCalls.push(tc);
             const ref = r2.streamingAssistantRef.current;
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === ref.id ? { ...m, toolCalls: [...ref.toolCalls] } : m,
-              ),
+              patchMessage(prev, ref.id, { toolCalls: [...ref.toolCalls] }),
             );
           }
           r2.toolCallAccRef.current = {};
@@ -316,19 +286,7 @@ export default function useAgentStream({
             delete r2.toolNameMapRef.current[data.id];
           }
 
-          setMessages((prev) =>
-            prev.map((m) => {
-              if (m.id !== `tool_${data.id}`) return m;
-              const useServerOutput = data.output && (!m.content || m.content.length === 0);
-              return {
-                ...m,
-                content: useServerOutput ? data.output : m.content,
-                streaming: false,
-                exitCode: data.exitCode,
-                files: data.files ?? m.files,
-              };
-            }),
-          );
+          setMessages((prev) => applyToolDone(prev, data));
         })
         .onEvent("tool_error", (data) => {
           const r2 = refs();
@@ -343,13 +301,7 @@ export default function useAgentStream({
             delete r2.toolNameMapRef.current[data.id];
           }
 
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === `tool_${data.id}`
-                ? { ...m, content: data.error, streaming: false, exitCode: 1 }
-                : m,
-            ),
-          );
+          setMessages((prev) => applyToolError(prev, data));
         })
         .onEvent("consent_required", (data) => {
           flushAssistant();
@@ -417,9 +369,7 @@ export default function useAgentStream({
             ref.content += data.content;
             const snapshot = ref.content;
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === data.id ? { ...m, content: snapshot } : m,
-              ),
+              patchMessage(prev, data.id, { content: snapshot }),
             );
           }
         })
@@ -427,11 +377,7 @@ export default function useAgentStream({
           const r2 = refs();
           const finalContent = r2.slashStreamRef.current?.content || data.content;
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === data.id
-                ? { ...m, content: finalContent, streaming: false }
-                : m,
-            ),
+            patchMessage(prev, data.id, { content: finalContent, streaming: false }),
           );
           r2.slashStreamRef.current = null;
         })
