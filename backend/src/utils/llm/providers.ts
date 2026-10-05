@@ -471,6 +471,25 @@ function normalizeFinishReason(raw: string | null | undefined): FinishReason {
   return "stop";
 }
 
+/**
+ * OpenRouter (and similar gateways) can answer 200 with an error body that has
+ * no `choices` — e.g. `{ error: { code: 502, message: "Provider returned an
+ * empty response" } }` when the model's upstream is down. Surface that as a
+ * readable error instead of a TypeError on `choices[0]`.
+ */
+function assertCompletionChoices(
+  response: OpenAI.Chat.ChatCompletion | undefined,
+): void {
+  if (response?.choices?.length) return;
+  const upstream = (response as any)?.error;
+  const detail = upstream?.message || upstream?.code;
+  throw new Error(
+    detail
+      ? `The model provider returned an error instead of a completion: ${detail}. The upstream model may be down — try again or pick another model.`
+      : "The model provider returned a response with no completions. The upstream model may be down — try again or pick another model.",
+  );
+}
+
 function extractToolCalls(
   message: OpenAI.Chat.ChatCompletionMessage,
 ): ToolCallData[] {
@@ -751,6 +770,7 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
     const response = (await client.chat.completions.create(
       params,
     )) as OpenAI.Chat.ChatCompletion;
+    assertCompletionChoices(response);
     const elapsed = Date.now() - start;
     const message = response.choices[0]?.message;
 
@@ -1541,6 +1561,7 @@ async function invoke_llm_json_fallback(
   const response = (await client.chat.completions.create(
     params,
   )) as OpenAI.Chat.ChatCompletion;
+  assertCompletionChoices(response);
   const elapsed = Date.now() - startTime;
   const rawContent = response.choices[0]?.message?.content ?? "";
 

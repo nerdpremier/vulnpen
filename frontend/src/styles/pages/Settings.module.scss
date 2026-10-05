@@ -1,6 +1,20 @@
 ﻿@import "../_variables";
 
+/* Fields here paint with translucent --input-bg instead of the app-wide solid
+   surface, so the autofill paint must be re-matched to the composited color or
+   it reads as a band inside the field. */
+%autofill-match {
+  :global(input:-webkit-autofill),
+  :global(input:-webkit-autofill:hover),
+  :global(input:-webkit-autofill:focus),
+  :global(input:-webkit-autofill:active) {
+    -webkit-box-shadow: 0 0 0 1000px var(--input-bg-solid) inset;
+  }
+}
+
 .settingsContainer {
+  @extend %autofill-match;
+
   padding: 1.5rem;
   padding-bottom: 3rem;
   max-width: 640px;
@@ -43,14 +57,35 @@
       .ant-form-item-control
       .ant-input-affix-wrapper
       .ant-input
+  ),
+  :global(
+    .ant-form
+      .ant-form-item
+      .ant-form-item-control
+      .ant-input-affix-wrapper
+      .ant-input:hover
+  ),
+  :global(
+    .ant-form
+      .ant-form-item
+      .ant-form-item-control
+      .ant-input-affix-wrapper
+      .ant-input:focus
+  ),
+  :global(
+    .ant-form
+      .ant-form-item
+      .ant-form-item-control
+      .ant-input-affix-wrapper:hover
+      .ant-input
   ) {
     border: none !important;
     padding: 0 !important;
     min-height: unset;
     box-shadow: none !important;
     /* The wrapper already paints the field background; the inner input must
-       stay transparent or its own translucent bg stacks and shows as a
-       lighter inset box. */
+       stay transparent (hover and focus included) or its own translucent bg
+       stacks and shows as a lighter inset box. */
     background: transparent !important;
   }
 
@@ -770,6 +805,8 @@
 }
 
 .modelModal {
+  @extend %autofill-match;
+
   :global(.ant-modal-content) {
     background: var(--primary-bg) !important;
     border: 1px solid var(--border-subtle);
@@ -844,8 +881,16 @@
 
   /* The wrapper paints the field background; the inner input (also matched by
      .ant-input above) must stay transparent or its translucent bg stacks and
-     shows as a lighter inset box. */
-  :global(.ant-input-affix-wrapper .ant-input) {
+     shows as a lighter inset box. The :hover/:focus variants keep the hover
+     and focus rules above from repainting the bare input while the pointer
+     sits on (or the caret is in) the field — those rules tie with this one on
+     specificity, so they must not win. */
+  :global(.ant-input-affix-wrapper .ant-input),
+  :global(.ant-input-affix-wrapper .ant-input:hover),
+  :global(.ant-input-affix-wrapper .ant-input:focus),
+  :global(.ant-input-affix-wrapper .ant-input:focus-visible),
+  :global(.ant-input-affix-wrapper:hover .ant-input),
+  :global(.ant-input-affix-wrapper-focused .ant-input) {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;

@@ -161,6 +161,10 @@
   --navbar-bg: rgba(10, 10, 10, 0.92);
   --card-bg: #191919;
   --input-bg: rgba(255, 255, 255, 0.04);
+  /* --input-bg composited over --primary-bg (#0a0a0a). Chrome's autofill paint
+     can only be covered with an opaque color, so this is what autofilled
+     fields must match to blend into the translucent field background. */
+  --input-bg-solid: #141414;
 
   --vulnpen-green: #5fd39a;
   --danger: #ff6b6b;

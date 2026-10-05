@@ -235,9 +235,13 @@ textarea::placeholder,
   }
 }
 
-/* Replace Chrome's default light-blue autofill paint with the app surface so
+/* Replace Chrome's default light-blue autofill paint with the field surface so
    autofilled fields stay on-palette (dark bg, readable text). The inset
-   box-shadow is the standard way to override the autofill background. */
+   box-shadow is the standard way to override the autofill background. The
+   default matches the app-wide solid field background; surfaces that restyle
+   fields with translucent --input-bg (Settings pages) re-match it with
+   --input-bg-solid, because the autofill paint only covers the bare <input>
+   and a mismatched color reads as a band that stops before the suffix icon. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -1257,12 +1261,15 @@ textarea.ant-input {
   border-radius: var(--moon-radius-lg);
   box-shadow: var(--moon-shadow-3);
 
+  /* !important: antd injects its light-theme text colors at runtime after this
+     sheet, so equal-specificity rules lose and toasts end up near-black on the
+     dark surface. */
   .ant-notification-notice-message {
-    color: var(--moon-text);
+    color: var(--moon-text) !important;
   }
 
   .ant-notification-notice-description {
-    color: var(--moon-text-dim);
+    color: var(--moon-text-dim) !important;
   }
 }
 
