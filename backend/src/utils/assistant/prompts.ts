@@ -5,6 +5,7 @@ import {
 } from "../../capabilities/registry";
 import { readEnvFile } from "../envWriter";
 import { getAssignedModels } from "../modelRegistryStore";
+import { SHELL_TOOL_NAMES } from "../../tools/names";
 import {
   WSTG_SOURCE,
   WSTG_VERSION,
@@ -237,7 +238,7 @@ ${installSection}
 </environment>
 
 <deferred_tools>
-Not every tool ships in your tool list: the interactive shell tools (spawn_shell, write_to_shell, read_shell, list_shells, close_shell — for reverse shells and interactive sessions), the Burp suite, map_finding_owasp and generate_pentest_report are deferred — call load_tools with their names when you need them (its description lists them); they stay loaded for the session.
+Not every tool ships in your tool list: the interactive shell tools (${SHELL_TOOL_NAMES.join(", ")} — for reverse shells and interactive sessions), the Burp suite, map_finding_owasp and generate_pentest_report are deferred — call load_tools with their names when you need them (its description lists them); they stay loaded for the session.
 </deferred_tools>
 
 ${burpSection}<guidelines>

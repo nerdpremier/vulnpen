@@ -1,10 +1,10 @@
 import { toolRegistry } from "../tools/registry";
-import { ExecutionContext, ToolResult, AgentRole, SafetyKind } from "../tools/types";
+import { ToolDefinition, ExecutionContext, ToolResult, SafetyKind } from "../tools/types";
 import { ToolCallData } from "../utils/llm/providers";
 import { ShellManager, ShellPurpose } from "./shell.manager";
-import { SSEWriter } from "./agent.service";
 import { EngagementState } from "./engagement-state";
 import { parseToolArguments } from "../utils/toolArguments";
+import { elideMiddle } from "../utils/transcript";
 import type { ToolExecutionMode } from "../models/User/User.model";
 import {
   decideToolConsent,
@@ -22,8 +22,21 @@ const ANSI_REGEX = /\x1B\[[0-?]*[-[\]#-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B
 const MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_TOOL_TIMEOUT_MS = 60_000; // 1 min hard cap if no timeoutMs on the definition
 
+/**
+ * The proof-of-concept boundary policy, in one place. Both the consent-decision
+ * path and the consented-execution defence-in-depth path show this exact text.
+ */
+function pocBoundaryOutput(reason: string): string {
+  return (
+    "Blocked at the proof-of-concept boundary: " + reason +
+    "\nVulnPen is a security tester, not a system destroyer: a destructive action against the engagement target is never executed and can never be approved. " +
+    "Prove the weakness without carrying it out - access what you should not be able to access, act on a test object you own, or show the endpoint is reachable - then record the finding and state that the destructive step was deliberately not performed. " +
+    "Note that this only gates altering or deleting data that already exists: creating and using your own resources on the target (registering your own account, filling your own basket, placing your own orders) is normal testing and is allowed."
+  );
+}
+
 async function executeWithTimeout(
-  toolDef: import("../tools/types").ToolDefinition,
+  toolDef: ToolDefinition,
   args: Record<string, any>,
   ctx: ExecutionContext,
 ): Promise<ToolResult> {
@@ -111,23 +124,19 @@ function truncateOutput(output: string): string {
   // Progress bars and redraws leave runs of blank/whitespace-only lines that
   // render as stacked stray marks in the chat — collapse them to one.
   cleaned = cleaned.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  if (cleaned.length <= MAX_OUTPUT_CHARS) return cleaned;
   // Weight the tail: scan results, summaries and errors live at the end.
-  const head = Math.floor(MAX_OUTPUT_CHARS * 0.4);
-  const tail = MAX_OUTPUT_CHARS - head;
-  return (
-    cleaned.slice(0, head) +
-    `\n\n... [truncated ${cleaned.length - MAX_OUTPUT_CHARS} chars - save to a file for the full output] ...\n\n` +
-    cleaned.slice(-tail)
+  return elideMiddle(
+    cleaned,
+    MAX_OUTPUT_CHARS,
+    `\n\n... [truncated ${cleaned.length - MAX_OUTPUT_CHARS} chars - save to a file for the full output] ...\n\n`,
+    0.4,
   );
 }
 
 export function buildExecutionContext(params: {
   sessionId: string;
   agentId: string;
-  agentRole?: AgentRole;
   shellManager: ShellManager;
-  sse?: SSEWriter;
   userId?: string;
   onChunk?: (chunk: string) => void;
   abortSignal?: AbortSignal;
@@ -135,15 +144,13 @@ export function buildExecutionContext(params: {
 }): ExecutionContext {
   const {
     sessionId, agentId, shellManager,
-    sse, userId, onChunk, abortSignal, engagementState,
+    userId, onChunk, abortSignal, engagementState,
   } = params;
-  const agentRole = params.agentRole ?? "main";
 
   return {
     sessionId,
     userId,
     agentId,
-    agentRole,
     runCommand: (command: string, timeoutMs?: number) =>
       shellManager.execInShell(command, timeoutMs, onChunk, abortSignal),
     spawnShell: (label: string, type?: "pty" | "exec", purpose?: ShellPurpose) =>
@@ -163,6 +170,43 @@ export function buildExecutionContext(params: {
     onOutput: onChunk,
     engagementState,
   };
+}
+
+/**
+ * The one place a tool definition actually runs: start notification, output
+ * wiring, timeout, truncation, done/error notification. Both the direct path
+ * and the consented path go through here.
+ */
+async function runToolDefinition(
+  toolDef: ToolDefinition,
+  toolCallId: string,
+  toolName: string,
+  args: Record<string, any>,
+  callbacks: ToolExecutionCallbacks,
+  ctx: ExecutionContext,
+): Promise<{ result: ToolResult; failed: boolean }> {
+  callbacks.onToolStart(toolCallId, toolName, args);
+
+  try {
+    const toolCtx: ExecutionContext = {
+      ...ctx,
+      onOutput: (chunk) => callbacks.onToolOutput(toolCallId, chunk),
+    };
+
+    const result = await executeWithTimeout(toolDef, args, toolCtx);
+    result.output = truncateOutput(result.output);
+
+    if (result.installSuggestion && callbacks.onInstallSuggestion) {
+      callbacks.onInstallSuggestion(result.installSuggestion);
+    }
+
+    callbacks.onToolDone(toolCallId, result);
+    return { result, failed: false };
+  } catch (err: any) {
+    const error = `Tool execution error: ${err.message ?? err}`;
+    callbacks.onToolError(toolCallId, error);
+    return { result: { output: error, exitCode: 1 }, failed: true };
+  }
 }
 
 export async function executeToolCall(
@@ -237,11 +281,7 @@ export async function executeToolCall(
   }
 
   if (approval.denied && approval.source === "boundary") {
-    const output =
-      "Blocked at the proof-of-concept boundary: " + approval.reason +
-      "\nVulnPen is a security tester, not a system destroyer: a destructive action against the engagement target is never executed and can never be approved. " +
-      "Prove the weakness without carrying it out - access what you should not be able to access, act on a test object you own, or show the endpoint is reachable - then record the finding and state that the destructive step was deliberately not performed. " +
-      "Note that this only gates altering or deleting data that already exists: creating and using your own resources on the target (registering your own account, filling your own basket, placing your own orders) is normal testing and is allowed.";
+    const output = pocBoundaryOutput(approval.reason);
     callbacks.onToolError(toolCall.id, output);
     return {
       toolCallId: toolCall.id,
@@ -272,39 +312,16 @@ export async function executeToolCall(
     };
   }
 
-  callbacks.onToolStart(toolCall.id, toolCall.name, args);
-
-  try {
-    const toolCtx: ExecutionContext = {
-      ...ctx,
-      onOutput: (chunk) => callbacks.onToolOutput(toolCall.id, chunk),
-    };
-
-    const result = await executeWithTimeout(toolDef, args, toolCtx);
-    result.output = truncateOutput(result.output);
-
-    if (result.installSuggestion && callbacks.onInstallSuggestion) {
-      callbacks.onInstallSuggestion(result.installSuggestion);
-    }
-
-    callbacks.onToolDone(toolCall.id, result);
-    return {
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      result,
-      needsConsent: false,
-      approvalReviewed: approval.reviewed,
-    };
-  } catch (err: any) {
-    const error = `Tool execution error: ${err.message ?? err}`;
-    callbacks.onToolError(toolCall.id, error);
-    return {
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      result: { output: error, exitCode: 1 },
-      needsConsent: false,
-    };
-  }
+  const { result, failed } = await runToolDefinition(toolDef, toolCall.id, toolCall.name, args, callbacks, ctx);
+  return {
+    toolCallId: toolCall.id,
+    toolName: toolCall.name,
+    result,
+    needsConsent: false,
+    // An execution error is not an approval outcome: leave it unset so the
+    // approval circuit breaker ignores the call.
+    approvalReviewed: failed ? undefined : approval.reviewed,
+  };
 }
 
 export async function executeToolCalls(
@@ -355,29 +372,11 @@ export async function executeConsentedTool(
   // a stale pending-consent record somehow tried to carry one here.
   const blockedAtBoundary = toolDef.describeSafety?.(args, ctx);
   if (blockedAtBoundary?.kind === "destructive_target") {
-    const output =
-      "Blocked at the proof-of-concept boundary: " + blockedAtBoundary.reason +
-      "\nVulnPen never carries a destructive action out against the engagement target.";
+    const output = pocBoundaryOutput(blockedAtBoundary.reason);
     callbacks.onToolError(toolCallId, output);
     return { output, exitCode: 126 };
   }
 
-  callbacks.onToolStart(toolCallId, toolName, args);
-
-  try {
-    const toolCtx: ExecutionContext = {
-      ...ctx,
-      onOutput: (chunk) => callbacks.onToolOutput(toolCallId, chunk),
-    };
-
-    const result = await executeWithTimeout(toolDef, args, toolCtx);
-    result.output = truncateOutput(result.output);
-
-    callbacks.onToolDone(toolCallId, result);
-    return result;
-  } catch (err: any) {
-    const error = `Tool execution error: ${err.message ?? err}`;
-    callbacks.onToolError(toolCallId, error);
-    return { output: error, exitCode: 1 };
-  }
+  const { result } = await runToolDefinition(toolDef, toolCallId, toolName, args, callbacks, ctx);
+  return result;
 }

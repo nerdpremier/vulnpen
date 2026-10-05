@@ -22,10 +22,11 @@ import {
   buildExecutionContext,
   buildPendingConsentBatch,
   ToolExecutionCallbacks,
+  ToolExecutionResult,
 } from "./agent.tools";
 import { planCompaction, summarizeMessages, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
 import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
-import { OWASP_TOP10_2025, normalizeOwaspTop10Id } from "../knowledge";
+import { computeOwaspCoverage } from "../knowledge";
 import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
@@ -216,19 +217,12 @@ async function buildAgentPromptConfig(
   };
 
   const storedVulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
+  const owaspCoverage = computeOwaspCoverage(storedVulnerabilities);
   promptConfig.webAppSecurity = {
     testPlan: (session?.webAppTestPlan as any) ?? null,
-    findingCount: storedVulnerabilities.length,
-    unmappedFindingCount: storedVulnerabilities.filter(
-      (vulnerability) => !normalizeOwaspTop10Id(vulnerability.owaspTop10),
-    ).length,
-    owaspBreakdown: OWASP_TOP10_2025.map((category) => ({
-      id: category.id,
-      title: category.title,
-      findings: storedVulnerabilities.filter(
-        (vulnerability) => normalizeOwaspTop10Id(vulnerability.owaspTop10) === category.id,
-      ).length,
-    })).filter((row) => row.findings > 0),
+    findingCount: owaspCoverage.total,
+    unmappedFindingCount: owaspCoverage.unmapped,
+    owaspBreakdown: owaspCoverage.byOwasp.filter((row) => row.findings > 0),
   };
 
   return promptConfig;
@@ -283,6 +277,63 @@ export function buildTraceTags(
 }
 
 // ─── Core agent loop ─────────────────────────────────────────────────
+
+/**
+ * SSE plumbing shared by every tool-execution site (the main loop and the
+ * consent-resume path). `onConsentRequired` differs per site: the main loop
+ * batches consent into one event, so it passes a no-op with a comment.
+ */
+function createSseToolCallbacks(
+  sse: SSEWriter,
+  onConsentRequired?: ToolExecutionCallbacks["onConsentRequired"],
+): ToolExecutionCallbacks {
+  return {
+    onToolStart(id, name, args) {
+      sse.write("tool_start", { id, name, args });
+    },
+    onToolOutput(id, chunk) {
+      sse.write("tool_output", { id, chunk });
+    },
+    onToolDone(id, result) {
+      sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length, files: result.files });
+    },
+    onToolError(id, error) {
+      sse.write("tool_error", { id, error });
+    },
+    onConsentRequired:
+      onConsentRequired ??
+      ((_id, _name, _args, _safetyBlock, _approvalReason, _safetyDetail) => {}),
+    onInstallSuggestion(suggestion) {
+      sse.write("install_suggestion", suggestion);
+    },
+  };
+}
+
+function toolResultToMessage(tr: ToolExecutionResult, turnIndex: number): AgentMessageDoc {
+  return {
+    id: uuidv4(),
+    role: "tool",
+    content: tr.result.output,
+    toolCallId: tr.toolCallId,
+    toolName: tr.toolName,
+    files: tr.result.files,
+    timestamp: new Date(),
+    turnIndex,
+  };
+}
+
+function pushToolResultMessages(
+  toolResults: ToolExecutionResult[],
+  messages: AgentMessageDoc[],
+  newMessages: AgentMessageDoc[],
+  turnIndex: number,
+): void {
+  for (const tr of toolResults) {
+    const toolMsg = toolResultToMessage(tr, turnIndex);
+    messages.push(toolMsg);
+    newMessages.push(toolMsg);
+  }
+}
 
 export async function runAgentLoop(params: {
   sessionId: string;
@@ -373,6 +424,33 @@ export async function runAgentLoop(params: {
   let completedNormally = false;
   const approvalRejections = new ApprovalRejectionTracker();
 
+  // Shared by the proactive path and the finishReason === "length" path. The
+  // cached-prompt reset inside is the invariant that once caused the re-summary
+  // loop: keeping the pre-summary number made the next iteration measure a
+  // prompt that no longer existed, so it summarized again immediately.
+  const compactMessages = async (
+    summarizingEvent: Record<string, unknown>,
+    toolSchemaTokens: number,
+    opts: { emitSummaryDone?: boolean } = {},
+  ): Promise<void> => {
+    sse.write("summarizing", summarizingEvent);
+    const { summaryMessage, preservedMessages, projectedPromptTokens } =
+      await summarizeMessages(
+        messages,
+        { sessionId, userId },
+        engagementState,
+        toolSchemaTokens,
+      );
+    messages = preservedMessages;
+    // Reset the cached prompt size to the POST-compaction projection.
+    lastPromptTokens = projectedPromptTokens;
+    await replaceMessages(sessionId, messages);
+    newMessages.length = 0;
+    if (summaryMessage && opts.emitSummaryDone) {
+      sse.write("summary_done", { summary: summaryMessage.content });
+    }
+  };
+
   // ─── Resolve user model config for the orchestrator ──
   const userModels = await getUserModels(userId);
   const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
@@ -391,9 +469,7 @@ export async function runAgentLoop(params: {
   const executionCtx = buildExecutionContext({
     sessionId,
     agentId: "main",
-    agentRole: "main",
     shellManager,
-    sse,
     userId,
     abortSignal: params.abortSignal,
     engagementState,
@@ -441,7 +517,6 @@ export async function runAgentLoop(params: {
       // deferred tools loaded mid-run) so the budget self-corrects.
       const unconfiguredTools = getUnconfiguredToolNames();
       const tools = toolRegistry.toOpenAISchemas({
-        agentRole: "main",
         disabledTools: disabledAgentTools,
         unconfiguredTools,
         loadedTools: session.loadedTools ?? [],
@@ -449,33 +524,17 @@ export async function runAgentLoop(params: {
       const toolSchemaTokens = estimateToolSchemaTokens(tools);
       const compaction = await planCompaction(messages, lastPromptTokens, toolSchemaTokens);
       if (compaction.shouldCompact) {
-        sse.write("summarizing", {
-          message: "Context approaching limit, summarizing...",
-          promptTokens: compaction.promptTokens,
-          budget: compaction.budget,
-          projectedPromptTokens: compaction.projectedPromptTokens,
-          reason: compaction.reason,
-        });
-
-        const { summaryMessage, preservedMessages, projectedPromptTokens } =
-          await summarizeMessages(
-            messages,
-            { sessionId, userId },
-            engagementState,
-            toolSchemaTokens,
-          );
-        messages = preservedMessages;
-        // Reset the cached prompt size to the POST-compaction projection.
-        // Keeping the pre-summary number here is what caused the re-summary
-        // loop: the next iteration measured a prompt that no longer existed.
-        lastPromptTokens = projectedPromptTokens;
-
-        await replaceMessages(sessionId, messages);
-        newMessages.length = 0;
-
-        if (summaryMessage) {
-          sse.write("summary_done", { summary: summaryMessage.content });
-        }
+        await compactMessages(
+          {
+            message: "Context approaching limit, summarizing...",
+            promptTokens: compaction.promptTokens,
+            budget: compaction.budget,
+            projectedPromptTokens: compaction.projectedPromptTokens,
+            reason: compaction.reason,
+          },
+          toolSchemaTokens,
+          { emitSummaryDone: true },
+        );
 
         const shellStatusMsg = buildShellStatusMessage(shellManager, turnIndex);
         if (shellStatusMsg) {
@@ -604,20 +663,10 @@ export async function runAgentLoop(params: {
       newMessages.push(assistantMsg);
 
       if (result.finishReason === "length") {
-        sse.write("summarizing", { message: "Hit token limit, summarizing..." });
-        const { preservedMessages, projectedPromptTokens } = await summarizeMessages(
-          messages,
-          { sessionId, userId },
-          engagementState,
-          toolSchemaTokens,
-        );
-        messages = preservedMessages;
-        // Same reset as the proactive path: the completion was truncated at the
-        // token limit, so the cached prompt size is stale-high and would trigger
-        // another summary on the very next iteration.
-        lastPromptTokens = projectedPromptTokens;
-        await replaceMessages(sessionId, messages);
-        newMessages.length = 0;
+        // The completion was truncated at the token limit, so the cached prompt
+        // size is stale-high and would trigger another summary on the very next
+        // iteration without the reset inside compactMessages.
+        await compactMessages({ message: "Hit token limit, summarizing..." }, toolSchemaTokens);
         continue;
       }
 
@@ -626,27 +675,10 @@ export async function runAgentLoop(params: {
         break;
       }
 
-      const callbacks: ToolExecutionCallbacks = {
-        onToolStart(id, name, args) {
-          sse.write("tool_start", { id, name, args });
-        },
-        onToolOutput(id, chunk) {
-          sse.write("tool_output", { id, chunk });
-        },
-        onToolDone(id, result) {
-          sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length, files: result.files });
-        },
-        onToolError(id, error) {
-          sse.write("tool_error", { id, error });
-        },
-        onConsentRequired(_id, _name, _args, _safetyBlock, _approvalReason, _safetyDetail) {
-          // Emitted once as a complete batch below. Streaming individual
-          // requests here could briefly hide siblings behind one approval.
-        },
-        onInstallSuggestion(suggestion) {
-          sse.write("install_suggestion", suggestion);
-        },
-      };
+      const callbacks = createSseToolCallbacks(sse, () => {
+        // Emitted once as a complete batch below. Streaming individual
+        // requests here could briefly hide siblings behind one approval.
+      });
 
       const toolResults = await executeToolCalls(
         sessionId,
@@ -678,21 +710,12 @@ export async function runAgentLoop(params: {
 
       const consentResults = toolResults.filter((r) => r.needsConsent);
       if (consentResults.length > 0) {
-        for (const tr of toolResults) {
-          if (tr.needsConsent) continue;
-          const toolMsg: AgentMessageDoc = {
-            id: uuidv4(),
-            role: "tool",
-            content: tr.result.output,
-            toolCallId: tr.toolCallId,
-            toolName: tr.toolName,
-            files: tr.result.files,
-            timestamp: new Date(),
-            turnIndex,
-          };
-          messages.push(toolMsg);
-          newMessages.push(toolMsg);
-        }
+        pushToolResultMessages(
+          toolResults.filter((tr) => !tr.needsConsent),
+          messages,
+          newMessages,
+          turnIndex,
+        );
 
         const firstConsent = consentResults[0];
         const batch = buildPendingConsentBatch(consentResults, assistantToolCalls);
@@ -745,20 +768,7 @@ export async function runAgentLoop(params: {
           { sessionId },
           { $inc: { "consentStats.circuitOpens": 1 } },
         );
-        for (const tr of toolResults) {
-          const toolMsg: AgentMessageDoc = {
-            id: uuidv4(),
-            role: "tool",
-            content: tr.result.output,
-            toolCallId: tr.toolCallId,
-            toolName: tr.toolName,
-            files: tr.result.files,
-            timestamp: new Date(),
-            turnIndex,
-          };
-          messages.push(toolMsg);
-          newMessages.push(toolMsg);
-        }
+        pushToolResultMessages(toolResults, messages, newMessages, turnIndex);
         await appendMessages(sessionId, newMessages);
         newMessages.length = 0;
         await setAgentState(sessionId, "idle");
@@ -770,20 +780,7 @@ export async function runAgentLoop(params: {
         return;
       }
 
-      for (const tr of toolResults) {
-        const toolMsg: AgentMessageDoc = {
-          id: uuidv4(),
-          role: "tool",
-          content: tr.result.output,
-          toolCallId: tr.toolCallId,
-          toolName: tr.toolName,
-          files: tr.result.files,
-          timestamp: new Date(),
-          turnIndex,
-        };
-        messages.push(toolMsg);
-        newMessages.push(toolMsg);
-      }
+      pushToolResultMessages(toolResults, messages, newMessages, turnIndex);
 
       // The load_tools handler persists to the session document; mirror the
       // change here so the schemas are present from the next iteration on
@@ -995,22 +992,13 @@ export async function handleConsent(params: {
   const ctx = buildExecutionContext({
     sessionId,
     agentId: "main",
-    agentRole: "main",
     shellManager,
-    sse,
     userId,
     abortSignal,
     engagementState: buildEngagementState(session),
   });
 
-  const callbacks: ToolExecutionCallbacks = {
-    onToolStart(id, name, args) { sse.write("tool_start", { id, name, args }); },
-    onToolOutput(id, chunk) { sse.write("tool_output", { id, chunk }); },
-    onToolDone(id, result) { sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length, files: result.files }); },
-    onToolError(id, error) { sse.write("tool_error", { id, error }); },
-    onConsentRequired() {},
-    onInstallSuggestion(suggestion) { sse.write("install_suggestion", suggestion); },
-  };
+  const callbacks = createSseToolCallbacks(sse);
 
   const toolMessages: AgentMessageDoc[] = [];
   for (const pending of allPending) {

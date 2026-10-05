@@ -20,6 +20,7 @@ import {
   OWASP_TOP10_2025,
   WSTG_SOURCE,
   WSTG_VERSION,
+  computeOwaspCoverage,
   getOwaspCategory,
   getWstgTest,
   normalizeOwaspTop10Id,
@@ -220,20 +221,16 @@ export function computeReportStats(
     {} as Record<Severity, number>,
   );
 
-  const byOwasp = OWASP_TOP10_2025.map((category) => ({
-    id: category.id,
-    title: category.title,
-    findings: findings.filter((finding) => finding.owaspTop10 === category.id).length,
-  }));
+  const owaspCoverage = computeOwaspCoverage(findings);
 
   const coverage = computeCoverage(testPlan?.cases ?? []);
 
   return {
-    totalFindings: findings.length,
+    totalFindings: owaspCoverage.total,
     bySeverity,
     exploited: findings.filter((finding) => finding.exploited).length,
-    unmapped: findings.filter((finding) => !finding.owaspTop10).length,
-    byOwasp,
+    unmapped: owaspCoverage.unmapped,
+    byOwasp: owaspCoverage.byOwasp,
     coverage: {
       total: coverage.total,
       executed: coverage.executed,

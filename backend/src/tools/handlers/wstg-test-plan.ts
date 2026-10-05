@@ -1,4 +1,5 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
+import { BROWSER_TOOL_NAMES } from "../names";
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import type { WebAppTestPlanDoc } from "../../models/Sessions/Sessions.model";
 import {
@@ -367,12 +368,9 @@ const wstgTestPlan: ToolDefinition = {
             : undefined;
           const browserUsed = ((session?.messages as any[] | undefined) ?? []).some(
             (m) =>
-              m?.toolName === "browser_action" ||
-              m?.toolName === "magnitude_browser" ||
+              BROWSER_TOOL_NAMES.includes(m?.toolName) ||
               (Array.isArray(m?.toolCalls) &&
-                m.toolCalls.some(
-                  (t: any) => t?.name === "browser_action" || t?.name === "magnitude_browser",
-                )),
+                m.toolCalls.some((t: any) => BROWSER_TOOL_NAMES.includes(t?.name))),
           );
           const blockedRefusal = blockedCaseError(reason, {
             browserMentioned: /browser/i.test(reason),

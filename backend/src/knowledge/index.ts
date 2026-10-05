@@ -130,3 +130,43 @@ export function owaspLabel(value: unknown): string {
   const category = getOwaspCategory(value);
   return category ? `${category.id} ${category.title}` : "";
 }
+
+export interface OwaspCoverageRow {
+  id: OwaspTop10Id;
+  title: string;
+  findings: number;
+}
+
+export interface OwaspCoverage {
+  total: number;
+  unmapped: number;
+  /** One row per OWASP Top 10:2025 category, in catalogue order. */
+  byOwasp: OwaspCoverageRow[];
+}
+
+/**
+ * Counts findings per OWASP Top 10:2025 category. Finding `owaspTop10` values
+ * arrive in variant forms ("a05", "A05:2025", "A5"), so every comparison goes
+ * through normalizeOwaspTop10Id — the single place this invariant lives.
+ */
+export function computeOwaspCoverage(findings: ReadonlyArray<{ owaspTop10?: unknown }>): OwaspCoverage {
+  const counts = new Map<OwaspTop10Id, number>();
+  let unmapped = 0;
+  for (const finding of findings) {
+    const id = normalizeOwaspTop10Id(finding.owaspTop10);
+    if (!id) {
+      unmapped += 1;
+      continue;
+    }
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return {
+    total: findings.length,
+    unmapped,
+    byOwasp: OWASP_TOP10_2025.map((category) => ({
+      id: category.id,
+      title: category.title,
+      findings: counts.get(category.id) ?? 0,
+    })),
+  };
+}

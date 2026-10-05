@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ToolDefinition, toolToOpenAISchema, AgentRole } from "./types";
+import { ToolDefinition, toolToOpenAISchema } from "./types";
 
 import runBash from "./handlers/run-bash";
 import runPythonScript from "./handlers/run-python-script";
@@ -47,16 +47,12 @@ class ToolRegistry {
   }
 
   toOpenAISchemas(opts?: {
-    agentRole?: AgentRole;
     disabledTools?: string[];
     unconfiguredTools?: string[];
     /** Deferred tools explicitly loaded for this session via `load_tools`. */
     loadedTools?: string[];
   }): OpenAI.Chat.ChatCompletionTool[] {
     let tools = this.getAll();
-    if (opts?.agentRole) {
-      tools = tools.filter((t) => !t.allowedRoles || t.allowedRoles.includes(opts.agentRole!));
-    }
     if (opts?.disabledTools?.length) {
       const disabled = new Set(opts.disabledTools);
       tools = tools.filter((t) => !disabled.has(t.name));

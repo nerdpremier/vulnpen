@@ -15,6 +15,10 @@ import {
 } from "./web-security/test-plan.service";
 import { buildWebAppPentestReport } from "./web-security/report.service";
 import { mapUnclassifiedVulnerabilities } from "./vulnerability.service";
+import {
+  estimateTokens,
+  formatMessageForTranscript,
+} from "../utils/transcript";
 
 export interface SlashCommandDef {
   name: string;
@@ -143,30 +147,12 @@ type CommandHandler = (ctx: {
   sse: SSEWriter;
 }) => Promise<void>;
 
-const CHARS_PER_TOKEN_ESTIMATE = 3.5;
 const SUMMARIZE_PROMPT_OVERHEAD_TOKENS = 500;
-
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN_ESTIMATE);
-}
 
 async function getMaxInputTokens(): Promise<number> {
   const config = await getProvider();
   const limit = getModelContextLimit(config.model);
   return Math.floor(limit * 0.6) - SUMMARIZE_PROMPT_OVERHEAD_TOKENS;
-}
-
-function formatMessageForSummary(m: any): string {
-  if (m.role === "assistant" && m.toolCalls?.length) {
-    const toolDesc = m.toolCalls
-      .map((tc: any) => `[Tool: ${tc.name}](${tc.arguments})`)
-      .join(", ");
-    return `Assistant: ${m.content ?? ""} ${toolDesc}`;
-  }
-  if (m.role === "tool") {
-    return `Tool Result (${m.toolName ?? "unknown"}): ${m.content?.slice(0, 500) ?? ""}`;
-  }
-  return `${m.role}: ${m.content ?? ""}`;
 }
 
 /**
@@ -177,7 +163,7 @@ function formatMessageForSummary(m: any): string {
 async function buildConversationText(messages: any[]): Promise<string> {
   const maxTokens = await getMaxInputTokens();
 
-  const formatted = messages.map(formatMessageForSummary);
+  const formatted = messages.map((m) => formatMessageForTranscript(m));
 
   const fullText = formatted.join("\n\n");
   if (estimateTokens(fullText) <= maxTokens) {

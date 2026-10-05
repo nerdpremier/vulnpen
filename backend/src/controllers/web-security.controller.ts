@@ -27,8 +27,8 @@ import {
   WSTG_SOURCE,
   WSTG_TESTS,
   WSTG_VERSION,
+  computeOwaspCoverage,
   getOwaspCategory,
-  normalizeOwaspTop10Id,
 } from "../knowledge";
 
 function catalogPayload() {
@@ -378,6 +378,8 @@ export const getOwaspCoverage = async (req: Request, res: Response) => {
       .select("vulnerabilities webAppTestPlan")
       .lean();
     const vulnerabilities = (refreshed?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
+    const coverage = computeOwaspCoverage(vulnerabilities);
+    const findingsByCategory = new Map(coverage.byOwasp.map((row) => [row.id, row.findings]));
 
     return res.status(200).json({
       framework: {
@@ -390,19 +392,11 @@ export const getOwaspCoverage = async (req: Request, res: Response) => {
           summary: category.summary,
           cwes: category.cwes,
           wstgFocus: category.wstgFocus,
-          findings: vulnerabilities.filter(
-            // Findings may store the category in variant forms ("a05", "A05:2025");
-            // normalize before comparing, same as the prompt/report paths.
-            (vulnerability) =>
-              vulnerability.owaspTop10 &&
-              normalizeOwaspTop10Id(vulnerability.owaspTop10) === category.id,
-          ).length,
+          findings: findingsByCategory.get(category.id) ?? 0,
         })),
       },
-      totalFindings: vulnerabilities.length,
-      unmappedFindings: vulnerabilities.filter(
-        (vulnerability) => !normalizeOwaspTop10Id(vulnerability.owaspTop10),
-      ).length,
+      totalFindings: coverage.total,
+      unmappedFindings: coverage.unmapped,
     });
   } catch (err: any) {
     console.error("[web-security] owasp coverage error:", err);

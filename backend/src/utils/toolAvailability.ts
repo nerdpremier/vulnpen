@@ -1,11 +1,5 @@
 import { readEnvFile } from "./envWriter";
-
-const BURP_TOOLS = [
-  "search_burp_proxy_history",
-  "send_to_burp_repeater",
-  "send_to_burp_intruder",
-  "burp_collaborator",
-];
+import { BROWSER_TOOL_NAMES, BURP_TOOL_NAMES } from "../tools/names";
 
 /**
  * Returns tool names that are NOT configured (missing required env/settings).
@@ -17,12 +11,12 @@ export function getUnconfiguredToolNames(): string[] {
 
   const burpConfigured = !!env.BURP_RPC_HOST;
   if (!burpConfigured) {
-    unconfigured.push(...BURP_TOOLS);
+    unconfigured.push(...BURP_TOOL_NAMES);
   }
 
   const magnitudeConfigured = env.MAGNITUDE_ENABLED === "true";
   if (!magnitudeConfigured) {
-    unconfigured.push("browser_action");
+    unconfigured.push(...BROWSER_TOOL_NAMES);
   }
 
   return unconfigured;

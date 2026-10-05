@@ -20,23 +20,14 @@ export interface CapabilityBucket {
   capabilities: Capability[];
 }
 
-;
 
-;
 
-;
 
-;
 
-;
 
-;
 
-;
 
-;
 
-;
 
 const webappBucket: CapabilityBucket = {
   id: "webapp",

@@ -16,13 +16,10 @@ export interface ToolResult {
   installSuggestion?: InstallSuggestion;
 }
 
-export type AgentRole = "main";
-
 export interface ExecutionContext {
   sessionId: string;
   userId?: string;
   agentId: string;
-  agentRole: AgentRole;
   runCommand: (command: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>;
   spawnShell: (label: string, type?: "pty" | "exec", purpose?: ShellPurpose) => Promise<string>;
   writeToShell: (shellId: string, data: string) => Promise<void>;
@@ -41,7 +38,6 @@ export interface ToolDefinition {
   parameters: Record<string, any>;
   requiresConsent?: boolean;
   timeoutMs?: number;
-  allowedRoles?: AgentRole[];
   shouldRequireConsent?: (args: Record<string, any>, ctx: ExecutionContext) => boolean;
   /** Thai reason/impact for the consent dialog when the boundary is crossed. */
   describeSafety?: (args: Record<string, any>, ctx: ExecutionContext) => SafetyDetail | undefined;

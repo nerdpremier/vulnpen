@@ -4,6 +4,11 @@ import { getProvider } from "../utils/llm/providers";
 import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
+import {
+  CHARS_PER_TOKEN_ESTIMATE,
+  elideMiddle,
+  formatMessageForTranscript,
+} from "../utils/transcript";
 
 // ─── Budget model ──────────────────────────────────────────────────────────
 // The full prompt sent on EVERY tool-loop iteration is
@@ -37,8 +42,6 @@ const WORKING_SET_TOKEN_BUDGET = 18_000;
 // message list itself (system prompt included). A single honest constant for
 // the schema cost is what removes the double-count above.
 const TOOL_SCHEMA_TOKEN_ESTIMATE = 3_200;
-
-const CHARS_PER_TOKEN_ESTIMATE = 3.5;
 
 // Recent history kept verbatim after a compaction. Doubles as the reasoning
 // replay window in messagesToOpenAI.
@@ -351,18 +354,7 @@ export async function summarizeMessages(
   }
 
   const transcript = toSummarize
-    .map((m) => {
-      if (m.role === "assistant" && m.toolCalls?.length) {
-        const toolDesc = m.toolCalls
-          .map((tc) => `[Tool: ${tc.name}](${tc.arguments.slice(0, 300)})`)
-          .join(", ");
-        return `Assistant: ${m.content ?? ""} ${toolDesc}`;
-      }
-      if (m.role === "tool") {
-        return `Tool Result (${m.toolName ?? "unknown"}): ${m.content?.slice(0, 500) ?? ""}`;
-      }
-      return `${m.role}: ${m.content ?? ""}`;
-    })
+    .map((m) => formatMessageForTranscript(m, 300))
     .join("\n\n");
 
   // Carry the previous summary forward explicitly. It used to be dropped
@@ -374,12 +366,12 @@ export async function summarizeMessages(
       ? `Existing summary of the earlier conversation (carry it forward, do not lose detail):\n${previous}\n\n--- NEW EVENTS SINCE THAT SUMMARY ---\n`
       : "") + transcript;
 
-  const boundedTranscript =
-    transcriptWithHistory.length <= MAX_SUMMARIZER_INPUT_CHARS
-      ? transcriptWithHistory
-      : transcriptWithHistory.slice(0, MAX_SUMMARIZER_INPUT_CHARS * 0.7) +
-        `\n... [middle of history elided from the summarizer input] ...\n` +
-        transcriptWithHistory.slice(-MAX_SUMMARIZER_INPUT_CHARS * 0.25);
+  const boundedTranscript = elideMiddle(
+    transcriptWithHistory,
+    MAX_SUMMARIZER_INPUT_CHARS,
+    "\n... [middle of history elided from the summarizer input] ...\n",
+    0.7,
+  );
 
   const summaryResult = await invoke_llm({
     messages: [
@@ -500,19 +492,17 @@ export function messagesToOpenAI(
         content.length > STALE_TOOL_RESULT_CHARS &&
         index < messages.length - RECENT_FULL_TOOL_RESULTS
       ) {
-        const head = Math.floor(STALE_TOOL_RESULT_CHARS * 0.5);
-        const tail = STALE_TOOL_RESULT_CHARS - head;
-        content =
-          content.slice(0, head) +
-          `\n... [${content.length - STALE_TOOL_RESULT_CHARS} chars of this older tool output elided from context] ...\n` +
-          content.slice(-tail);
+        content = elideMiddle(
+          content,
+          STALE_TOOL_RESULT_CHARS,
+          `\n... [${content.length - STALE_TOOL_RESULT_CHARS} chars of this older tool output elided from context] ...\n`,
+        );
       } else if (content.length > RECENT_TOOL_RESULT_MAX_CHARS) {
-        const head = Math.floor(RECENT_TOOL_RESULT_MAX_CHARS * 0.5);
-        const tail = RECENT_TOOL_RESULT_MAX_CHARS - head;
-        content =
-          content.slice(0, head) +
-          `\n... [${content.length - RECENT_TOOL_RESULT_MAX_CHARS} chars of this tool output elided from context] ...\n` +
-          content.slice(-tail);
+        content = elideMiddle(
+          content,
+          RECENT_TOOL_RESULT_MAX_CHARS,
+          `\n... [${content.length - RECENT_TOOL_RESULT_MAX_CHARS} chars of this tool output elided from context] ...\n`,
+        );
       }
       return {
         role: "tool" as const,
