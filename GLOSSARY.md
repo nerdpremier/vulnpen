@@ -51,12 +51,25 @@ tool X" projection.
 
 **Run buffer** — the agent run's unflushed tail, in `session-transcript.ts`
 (`createRunBuffer`). Owns the dual-push discipline (`add` writes the working
-transcript AND the tail in one call) and the flush protocol: `flush` at every
-turn-ending exit, `flushIfLive` at iteration boundaries and on the error
-path — skipped while the run is aborting, because clearContext wipes the
-document and stale pre-clear messages must not be re-appended into the
-cleared session; `replaceTranscript` swaps the post-compaction transcript and
-discards the tail. The loop never keeps a parallel `newMessages` array.
+transcript AND the tail in one call) and the flush protocol: `flushIfLive` at
+every exit path — iteration boundaries, turn endings, and the error path.
+Liveness is "the session was not cleared mid-run" (`wasSessionClearedSince`
+in `session.helpers.ts`, marked by `resetSessionContext`): a clear is the
+only thing that suppresses flushing, because the document was wiped and
+pre-clear messages must not be re-appended; a pause or stop still flushes.
+`replaceTranscript` swaps the post-compaction transcript and discards the
+tail. The loop never keeps a parallel `newMessages` array.
+
+**Stream collector** — the state every LLM provider stream accumulates, in
+`utils/llm/streamCollector.ts` (`createStreamCollector`): text/reasoning
+parts, the tool-call lifecycle keyed by the provider's own id (start →
+argument chunks → `tool_call_done` in start order), the "tool calls imply
+finishReason=tool_calls" promotion, and the `join("") || null` result
+assembly. The three streaming pipelines in `providers.ts` (Anthropic native,
+OpenAI Responses, chat completions) are event pumps over it and own only what
+genuinely differs per provider (Anthropic's usage merge, Responses' item ids
+and `arguments.done`, chunk-level usage/model). Never add a fourth pipeline
+that re-derives the lifecycle.
 
 **Slash reply** — the slash-command reply protocol, owned by
 `services/slash-reply.ts` (`createSlashReply`): every command terminates with
