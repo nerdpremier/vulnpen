@@ -4,6 +4,7 @@ import SessionsModel, {
 } from "../models/Sessions/Sessions.model";
 import type { WebAppTestPlanDoc } from "../models/Sessions/Sessions.model";
 import { requireActiveSession } from "../services/session.helpers";
+import { saveSessionPlan } from "../services/web-security/session-plan-store";
 import { mapUnclassifiedVulnerabilities } from "../services/vulnerability.service";
 import {
   addCatalogueCases,
@@ -54,23 +55,6 @@ function catalogPayload() {
   };
 }
 
-/**
- * Persist the plan and fail loudly when Mongo does not store it: a write that silently does
- * nothing looks like success in the UI, which is worse than an error.
- */
-async function persistTestPlan(sessionId: string, uid: unknown, plan: WebAppTestPlanDoc) {
-  const result = await SessionsModel.updateOne(
-    { sessionId, uid },
-    { $set: { webAppTestPlan: plan } },
-  );
-  if (!result.modifiedCount) {
-    throw new Error(
-      result.matchedCount
-        ? "MongoDB stored no change for the WSTG test plan"
-        : "Session not found while saving the WSTG test plan",
-    );
-  }
-}
 function planPayload(plan: WebAppTestPlanDoc | null) {
   return {
     plan,
@@ -139,7 +123,7 @@ export const generateTestPlan = async (req: Request, res: Response) => {
         });
       }
 
-      await persistTestPlan(sessionId, userId, result.plan);
+      await saveSessionPlan(sessionId, result.plan, { uid: userId });
 
       return res.status(200).json({
         ...planPayload(result.plan),
@@ -166,7 +150,7 @@ export const generateTestPlan = async (req: Request, res: Response) => {
       existing,
     });
 
-    await persistTestPlan(sessionId, userId, result.plan);
+    await saveSessionPlan(sessionId, result.plan, { uid: userId });
 
     // Keep the engagement boundary in step with the plan: the scope gate reads
     // engagementContext, so "edit the plan later" must update it too.
@@ -225,7 +209,7 @@ export const updateTestCaseStatus = async (req: Request, res: Response) => {
       return res.status(404).json({ message: `${testId} is not part of this test plan` });
     }
 
-    await persistTestPlan(sessionId, userId, updated.plan);
+    await saveSessionPlan(sessionId, updated.plan, { uid: userId });
 
     return res.status(200).json({
       testCase: updated.testCase,
@@ -255,7 +239,7 @@ export const removeTestCase = async (req: Request, res: Response) => {
       return res.status(404).json({ message: `${testId} is not part of this test plan` });
     }
 
-    await persistTestPlan(sessionId, userId, removed.plan);
+    await saveSessionPlan(sessionId, removed.plan, { uid: userId });
 
     return res.status(200).json({
       testId: removed.testId,
@@ -308,7 +292,7 @@ export const removeTestCases = async (req: Request, res: Response) => {
         .json({ message: "None of these test cases are part of this plan" });
     }
 
-    await persistTestPlan(sessionId, userId, removed.plan);
+    await saveSessionPlan(sessionId, removed.plan, { uid: userId });
 
     return res.status(200).json({
       ...planPayload(removed.plan),

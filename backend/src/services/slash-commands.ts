@@ -14,6 +14,10 @@ import {
   createTestPlan,
   nextTestsToRun,
 } from "./web-security/test-plan.service";
+import {
+  loadSessionPlan,
+  saveSessionPlan,
+} from "./web-security/session-plan-store";
 import { buildWebAppPentestReport } from "./web-security/report.service";
 import { mapUnclassifiedVulnerabilities } from "./vulnerability.service";
 import {
@@ -585,10 +589,7 @@ Use markdown formatting. Be thorough but concise.`,
     };
 
     try {
-      const session = await SessionsModel.findOne({ sessionId })
-        .select("webAppTestPlan")
-        .lean();
-      const existing = (session?.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
+      const existing = await loadSessionPlan(sessionId);
       const tokens = args.trim().split(/\s+/).filter(Boolean);
       const target = tokens.join(" ").trim();
 
@@ -627,10 +628,7 @@ Use markdown formatting. Be thorough but concise.`,
         target: target || undefined,
         existing,
       });
-      await SessionsModel.updateOne(
-        { sessionId },
-        { $set: { webAppTestPlan: result.plan } },
-      );
+      await saveSessionPlan(sessionId, result.plan);
 
       const coverage = result.coverage;
       const lines = [

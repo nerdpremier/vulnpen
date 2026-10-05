@@ -1,6 +1,4 @@
 import { Response, Request } from "express";
-import fs from "fs";
-import path from "path";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
@@ -22,6 +20,7 @@ import {
 import { parseSlashCommand, executeSlashCommand, SLASH_COMMANDS } from "../services/slash-commands";
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
+import { resolveSessionFile } from "../services/artifacts.service";
 import { getProvider } from "../utils/llm/providers";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import type { SSEWriter } from "../services/agent.service";
@@ -422,7 +421,7 @@ export const getSessionAgentToolsConfig = async (req: Request, res: Response) =>
     if (!session) return;
 
     const disabledTools: string[] = session.disabledAgentTools || [];
-    const unconfigured = new Set(getUnconfiguredToolNames());
+    const unconfigured = new Set(await getUnconfiguredToolNames());
     const allTools = toolRegistry.getAll().map((t) => ({
       name: t.name,
       description: t.description,
@@ -552,41 +551,33 @@ export const installCapability = async (req: Request, res: Response) => {
   }
 };
 
-const SESSION_FILE_MIME: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  txt: "text/plain; charset=utf-8",
-};
-
-// Serves agent-produced artifacts (browser screenshots) by stored filename —
-// names carry no path components, so traversal is impossible by construction.
+// Serves agent-produced artifacts (browser screenshots) by stored filename.
+// Path sanitization, the MIME table, and the traversal guard live in the
+// artifacts module; this handler only checks session ownership and streams.
 export const getSessionFile = async (req: Request, res: Response) => {
   try {
     // verifySess puts the authenticated user on res.locals, not req.user.
     const userId = res.locals?.userId ?? (req as any).user?.uid;
     const { sessionId, filename } = req.params;
-    if (!filename || /[/]|\.\./.test(filename)) {
-      return res.status(400).json({ message: "Invalid filename" });
-    }
 
     const session = await SessionsModel.findOne({ sessionId, uid: userId }).select("_id");
     if (!session) return res.status(404).json({ message: "Session not found" });
 
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-    const mime = SESSION_FILE_MIME[ext];
-    if (!mime) return res.status(400).json({ message: "Unsupported file type" });
+    const resolved = resolveSessionFile(sessionId, filename ?? "");
+    if (!resolved.ok) {
+      return res.status(resolved.reason === "not-found" ? 404 : 400).json({
+        message:
+          resolved.reason === "invalid-filename"
+            ? "Invalid filename"
+            : resolved.reason === "unsupported-type"
+              ? "Unsupported file type"
+              : "File not found",
+      });
+    }
 
-    const { getDataDir } = await import("../utils/loadConfig");
-    const safeSession = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const filePath = path.join(getDataDir(), "screenshots", safeSession, filename);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ message: "File not found" });
-
-    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Type", resolved.mime);
     res.setHeader("Cache-Control", "private, max-age=86400");
-    return res.sendFile(filePath);
+    return res.sendFile(resolved.filePath);
   } catch (err: any) {
     console.error("[agent] getSessionFile error:", err);
     return res.status(500).json({ message: err.message ?? "Failed to read file" });

@@ -1,5 +1,5 @@
 import { ToolDefinition } from "../types";
-import { burpFailureToToolOutput, decodeBurpBody, withBurpClient } from "../../services/burp-client.service";
+import { burpNotReady, burpFailureToToolOutput, decodeBurpBody, withBurpClient } from "../../services/burp-client.service";
 
 const MAX_ENTRIES_RETURNED = 25;
 
@@ -50,6 +50,7 @@ const burpProxyHistory: ToolDefinition = {
     },
     required: ["action"],
   },
+  checkReady: burpNotReady,
   timeoutMs: 30_000,
   async execute(args, _ctx) {
     const { action } = args;

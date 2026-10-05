@@ -38,6 +38,16 @@ export interface ToolDefinition {
   parameters: Record<string, any>;
   requiresConsent?: boolean;
   timeoutMs?: number;
+  /**
+   * Whether the tool's external dependency (env settings, assigned model, API
+   * key) is configured right now. Returns the user-facing refusal when it is
+   * not, undefined when the tool is ready. One source of truth for both the
+   * schema filter (unconfigured tools are dropped from the LLM context and
+   * greyed out in the UI) and the run path (refuses before execute), so a tool
+   * can never be offered to the model without also being callable, and vice
+   * versa. Configuration only: per-user authorization stays in execute.
+   */
+  checkReady?: () => string | undefined | Promise<string | undefined>;
   shouldRequireConsent?: (args: Record<string, any>, ctx: ExecutionContext) => boolean;
   /** Thai reason/impact for the consent dialog when the boundary is crossed. */
   describeSafety?: (args: Record<string, any>, ctx: ExecutionContext) => SafetyDetail | undefined;

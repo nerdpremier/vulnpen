@@ -487,7 +487,7 @@ export async function runAgentLoop(params: {
       // The tool schemas ride along on every call but are not part of the
       // message list; cost them from the schemas actually in play (including
       // deferred tools loaded mid-run) so the budget self-corrects.
-      const unconfiguredTools = getUnconfiguredToolNames();
+      const unconfiguredTools = await getUnconfiguredToolNames();
       const tools = toolRegistry.toOpenAISchemas({
         disabledTools: disabledAgentTools,
         unconfiguredTools,

@@ -209,6 +209,22 @@ async function runToolDefinition(
   }
 }
 
+/**
+ * The run-path half of the readiness seam: a tool whose external dependency is
+ * not configured refuses here instead of executing, and — critically — before
+ * the consent decision, so an unconfigured tool never collects an approval it
+ * could not honour. checkReady and the schema filter share the same source of
+ * truth, so a refusal here means the tool should never have been offered.
+ */
+async function readinessRefusal(toolDef: ToolDefinition): Promise<string | undefined> {
+  if (!toolDef.checkReady) return undefined;
+  try {
+    return await toolDef.checkReady();
+  } catch (err: any) {
+    return `Tool '${toolDef.name}' readiness check failed: ${err?.message ?? err}`;
+  }
+}
+
 export async function executeToolCall(
   sessionId: string,
   toolCall: ToolCallData,
@@ -247,6 +263,19 @@ export async function executeToolCall(
       toolCallId: toolCall.id,
       toolName: toolCall.name,
       result: { output: error, exitCode: 1 },
+      needsConsent: false,
+    };
+  }
+
+  const notReady = await readinessRefusal(toolDef);
+  if (notReady) {
+    callbacks.onToolStart(toolCall.id, toolCall.name, args);
+    const result: ToolResult = { output: notReady, exitCode: 1 };
+    callbacks.onToolDone(toolCall.id, result);
+    return {
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      result,
       needsConsent: false,
     };
   }
@@ -366,6 +395,13 @@ export async function executeConsentedTool(
   const toolDef = toolRegistry.get(toolName);
   if (!toolDef) {
     return { output: `Unknown tool: ${toolName}`, exitCode: 1 };
+  }
+
+  const notReady = await readinessRefusal(toolDef);
+  if (notReady) {
+    callbacks.onToolStart(toolCallId, toolName, args);
+    callbacks.onToolDone(toolCallId, { output: notReady, exitCode: 1 });
+    return { output: notReady, exitCode: 1 };
   }
 
   // Defence in depth: a destructive target action can never be executed, even if

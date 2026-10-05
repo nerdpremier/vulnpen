@@ -50,6 +50,16 @@ export function isBurpUnreachable(err: any): boolean {
   return err?.code === 14 || err?.code === 4;
 }
 
+/**
+ * checkReady adapter for the Burp tool definitions: undefined when Burp RPC is
+ * configured, the refusal otherwise. Lets the registry-derived availability
+ * check and the run path share the same notion of "configured" that
+ * withBurpClient enforces at call time.
+ */
+export function burpNotReady(): string | undefined {
+  return getBurpRpcConfig() ? undefined : BURP_NOT_CONFIGURED_MSG;
+}
+
 export type BurpCallFailure =
   | { ok: false; reason: "not-configured"; message: string }
   | { ok: false; reason: "unreachable"; message: string; config: BurpRpcConfig }

@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import {
+  burpNotReady,
   burpFailureToToolOutput,
   encodeBurpBody,
   normalizeHttpRequest,
@@ -56,6 +57,7 @@ const burpIntruder: ToolDefinition = {
     },
     required: ["host", "raw_request"],
   },
+  checkReady: burpNotReady,
   timeoutMs: 30_000,
   shouldRequireConsent(args, ctx) {
     return rawRequestSafetyDetail(args, ctx) !== undefined;

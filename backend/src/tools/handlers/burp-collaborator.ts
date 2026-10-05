@@ -1,5 +1,5 @@
 import { ToolDefinition } from "../types";
-import { burpFailureToToolOutput, withBurpClient } from "../../services/burp-client.service";
+import { burpNotReady, burpFailureToToolOutput, withBurpClient } from "../../services/burp-client.service";
 
 const burpCollaborator: ToolDefinition = {
   name: "burp_collaborator",
@@ -28,6 +28,7 @@ const burpCollaborator: ToolDefinition = {
     },
     required: ["action"],
   },
+  checkReady: burpNotReady,
   timeoutMs: 30_000,
   async execute(args, _ctx) {
     const { action, secret_key, custom_data } = args;

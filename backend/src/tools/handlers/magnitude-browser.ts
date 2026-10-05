@@ -18,10 +18,8 @@ import {
   scheduleBrowserAgentIdleStop,
   stopBrowserAgent,
 } from "../../services/browser-agent.service";
-import { getDataDir } from "../../utils/loadConfig";
+import { newScreenshotName, saveSessionScreenshot } from "../../services/artifacts.service";
 import { z } from "zod";
-import fs from "fs";
-import path from "path";
 
 const magnitudeBrowser: ToolDefinition = {
   name: "browser_action",
@@ -53,6 +51,29 @@ const magnitudeBrowser: ToolDefinition = {
     },
     required: ["url", "goal"],
   },
+  /**
+   * Configuration gate shared by the schema filter and the run path: without
+   * it the model would see browser_action only to burn a turn on the refusal.
+   * Per-user authorization (host CLI subscriptions) stays in execute.
+   */
+  async checkReady() {
+    const env = readEnvFile();
+    if (env.MAGNITUDE_ENABLED !== "true") {
+      return "Magnitude browser agent is not enabled. Enable it in Settings -> Browser Agent.";
+    }
+    const browserModel = getAssignedModels().browser;
+    if (!browserModel) {
+      return "No Browser Agent model selected. Assign one in Settings -> Models.";
+    }
+    if (!browserModel.verifiedAt) {
+      return "The Browser Agent model is unverified. Test and save it in Settings -> Models.";
+    }
+    const { apiKey } = await presetToProviderConfig(browserModel);
+    if (!apiKey) {
+      return "The selected Browser Agent model has no API key. Configure it in Settings -> Models.";
+    }
+    return undefined;
+  },
   requiresConsent: true,
   shouldRequireConsent(args, ctx) {
     return browserActionSafetyDetail(args, ctx) !== undefined;
@@ -73,50 +94,28 @@ const magnitudeBrowser: ToolDefinition = {
 
     const env = readEnvFile();
 
-    if (env.MAGNITUDE_ENABLED !== "true") {
-      return {
-        output:
-          "Magnitude browser agent is not enabled. Enable it in Settings -> Browser Agent.",
-        exitCode: 1,
-      };
-    }
-
+    // checkReady (configuration) already ran on the run path, so the model is
+    // assigned, verified and carries a key; what is left here is per-user
+    // authorization: host CLI subscriptions are reserved for the owner.
     const browserModel = getAssignedModels().browser;
     if (!browserModel) {
       return {
-        output:
-          "No Browser Agent model selected. Assign one in Settings -> Models.",
+        output: "No Browser Agent model selected. Assign one in Settings -> Models.",
         exitCode: 1,
       };
     }
-    if (!browserModel.verifiedAt) {
-      return {
-        output:
-          "The Browser Agent model is unverified. Test and save it in Settings -> Models.",
-        exitCode: 1,
-      };
-    }
-
-    if (
-      isSubscriptionProvider(browserModel.provider) &&
-      !(await isHostOwner(ctx.userId))
-    ) {
-      return {
-        output:
-          "The selected Browser Agent model uses a host CLI subscription reserved for the installation owner.",
-        exitCode: 1,
-      };
+    if (isSubscriptionProvider(browserModel.provider)) {
+      const hostOwner = ctx.userId ? await isHostOwner(ctx.userId) : false;
+      if (!hostOwner) {
+        return {
+          output:
+            "The selected Browser Agent model uses a host CLI subscription reserved for the installation owner.",
+          exitCode: 1,
+        };
+      }
     }
 
     const providerConfig = await presetToProviderConfig(browserModel);
-    const { apiKey } = providerConfig;
-    if (!apiKey) {
-      return {
-        output:
-          "The selected Browser Agent model has no API key. Configure it in Settings -> Models.",
-        exitCode: 1,
-      };
-    }
 
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
@@ -164,22 +163,20 @@ const magnitudeBrowser: ToolDefinition = {
             let files: string[] | undefined;
             let screenshotNote = "";
             if (args.screenshot !== false) {
-              try {
-                const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-                const safeSession = (ctx.sessionId || "session").replace(
-                  /[^a-zA-Z0-9_-]/g,
-                  "_",
-                );
-                const dir = path.join(getDataDir(), "screenshots", safeSession);
-                fs.mkdirSync(dir, { recursive: true });
-                const fileName = `${stamp}.png`;
-                await agent.page.screenshot({
-                  path: path.join(dir, fileName),
-                  fullPage: false,
-                });
-                files = [fileName];
-                screenshotNote = `\n\nScreenshot captured: ${fileName} (shown to the user in the chat).`;
-              } catch (shotErr: any) {
+              const shot = await saveSessionScreenshot(
+                ctx.sessionId,
+                newScreenshotName(),
+                (filePath) =>
+                  agent.page.screenshot({
+                    path: filePath,
+                    fullPage: false,
+                  }),
+              );
+              if (shot.ok) {
+                files = [shot.fileName];
+                screenshotNote = `\n\nScreenshot captured: ${shot.fileName} (shown to the user in the chat).`;
+              } else {
+                const shotErr: any = shot.error;
                 screenshotNote = `\n\nScreenshot failed: ${shotErr?.message ?? shotErr}`;
               }
             }

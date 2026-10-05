@@ -3,6 +3,11 @@ import { BROWSER_TOOL_NAMES } from "../names";
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import type { WebAppTestPlanDoc } from "../../models/Sessions/Sessions.model";
 import {
+  loadSessionPlan,
+  saveSessionPlan,
+  alignFindingLink,
+} from "../../services/web-security/session-plan-store";
+import {
   TEST_STATUSES,
   computeCoverage,
   createTestPlan,
@@ -12,24 +17,9 @@ import {
   caseUpdateError,
   blockedCaseError,
   findDuplicateCases,
-  findPlanCase,
   removeCases,
 } from "../../services/web-security/test-plan.service";
 import { WSTG_VERSION, getWstgTest } from "../../knowledge";
-
-async function loadPlan(sessionId: string): Promise<WebAppTestPlanDoc | null> {
-  const session = await SessionsModel.findOne({ sessionId })
-    .select("webAppTestPlan")
-    .lean();
-  return (session?.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
-}
-
-async function persistPlan(sessionId: string, plan: WebAppTestPlanDoc): Promise<void> {
-  await SessionsModel.updateOne(
-    { sessionId },
-    { $set: { webAppTestPlan: plan } },
-  );
-}
 
 function coverageLine(plan: WebAppTestPlanDoc): string {
   const coverage = computeCoverage(plan.cases);
@@ -164,7 +154,7 @@ const wstgTestPlan: ToolDefinition = {
 
     try {
       if (action === "generate") {
-        const existing = await loadPlan(sessionId);
+        const existing = await loadSessionPlan(sessionId);
         const result = createTestPlan({
           target: typeof args.target === "string" ? args.target : undefined,
           scope: typeof args.scope === "string" ? args.scope : undefined,
@@ -172,7 +162,7 @@ const wstgTestPlan: ToolDefinition = {
           testIds: Array.isArray(args.test_ids) ? args.test_ids : undefined,
           existing,
         });
-        await persistPlan(sessionId, result.plan);
+        await saveSessionPlan(sessionId, result.plan);
 
         const next = nextTestsToRun(result.plan, 8);
         const lines = [
@@ -191,7 +181,7 @@ const wstgTestPlan: ToolDefinition = {
         return { output: lines.filter(Boolean).join("\n"), exitCode: 0 };
       }
 
-      const plan = await loadPlan(sessionId);
+      const plan = await loadSessionPlan(sessionId);
       if (!plan) {
         return {
           output:
@@ -274,7 +264,7 @@ const wstgTestPlan: ToolDefinition = {
             exitCode: 1,
           };
         }
-        await persistPlan(sessionId, added.plan);
+        await saveSessionPlan(sessionId, added.plan);
         const lines = [
           `Added case ${added.testCase.testId}: ${added.testCase.title}`,
           added.testCase.objective ? `  objective: ${added.testCase.objective}` : "",
@@ -300,7 +290,7 @@ const wstgTestPlan: ToolDefinition = {
             exitCode: 1,
           };
         }
-        await persistPlan(sessionId, removed.plan);
+        await saveSessionPlan(sessionId, removed.plan);
         return {
           output: [
             `Removed ${removed.removed.length} case(s): ${removed.removed.join(", ")}.`,
@@ -382,52 +372,8 @@ const wstgTestPlan: ToolDefinition = {
         const vulnerabilityId =
           typeof args.vulnerability_id === "string" ? args.vulnerability_id.trim() : "";
         if (vulnerabilityId) {
-          const session = await SessionsModel.findOne({ sessionId })
-            .select("vulnerabilities.vulnerabilityId vulnerabilities.wstgId")
-            .lean();
-          const findings = (
-            session?.vulnerabilities as
-              | Array<{ vulnerabilityId?: string; wstgId?: string }>
-              | undefined
-          ) ?? [];
-          const finding = findings.find((v) => v?.vulnerabilityId === vulnerabilityId);
-          if (!finding) {
-            return {
-              output:
-                `Cannot link "${vulnerabilityId}": no finding with that id exists in this session. ` +
-                `Record it first with update_engagement_state action "add_vulnerability", then link ` +
-                `the id it returns.`,
-              exitCode: 1,
-            };
-          }
-
-          // Keep a finding's wstgId and the cases it is linked to consistent:
-          // the report traces every finding through its wstgId, so a link to a
-          // case the finding does not claim (or a wstgId pointing at a case the
-          // finding never touched) breaks that chain.
-          const caseId = findPlanCase(plan, testId)?.testId;
-          const findingWstg = (finding.wstgId ?? "").trim().toUpperCase();
-          if (caseId && !findingWstg) {
-            await SessionsModel.updateOne(
-              { sessionId, "vulnerabilities.vulnerabilityId": vulnerabilityId },
-              { $set: { "vulnerabilities.$.wstgId": caseId } },
-            );
-          } else if (caseId && findingWstg && findingWstg !== caseId.toUpperCase()) {
-            const primaryCase = plan.cases.find(
-              (c) => c.testId.toUpperCase() === findingWstg,
-            );
-            if (!primaryCase?.linkedVulnerabilityIds?.includes(vulnerabilityId)) {
-              return {
-                output:
-                  `Cannot link "${vulnerabilityId}" to ${caseId}: the finding is recorded with ` +
-                  `wstgId ${findingWstg.toUpperCase()} and that case is not linked to it. Either link ` +
-                  `${findingWstg.toUpperCase()} first (update_case ${findingWstg.toUpperCase()} with ` +
-                  `vulnerability_id), or record the finding again with data.wstgId = ${caseId} if this ` +
-                  `case is where it actually belongs.`,
-                exitCode: 1,
-              };
-            }
-          }
+          const alignRefusal = await alignFindingLink(sessionId, plan, vulnerabilityId, testId);
+          if (alignRefusal) return { output: alignRefusal, exitCode: 1 };
         }
 
         const updated = updateTestCase(plan, testId, patch);
@@ -437,7 +383,7 @@ const wstgTestPlan: ToolDefinition = {
             exitCode: 1,
           };
         }
-        await persistPlan(sessionId, updated.plan);
+        await saveSessionPlan(sessionId, updated.plan);
 
         const lines = [
           `${updated.testCase.testId} → ${updated.testCase.status}`,

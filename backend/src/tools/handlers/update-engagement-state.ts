@@ -1,21 +1,14 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
-import fs from "fs";
-import path from "path";
 import { EngagementState } from "../../services/engagement-state";
 import SessionsModel from "../../models/Sessions/Sessions.model";
-import type {
-  SessionVulnerabilityDoc,
-  WebAppTestPlanDoc,
-} from "../../models/Sessions/Sessions.model";
+import type { SessionVulnerabilityDoc } from "../../models/Sessions/Sessions.model";
+import { filterKnownScreenshots } from "../../services/artifacts.service";
+import { resolvePlanCase, linkFindingToCase, unlinkFindingFromCases } from "../../services/web-security/session-plan-store";
 import {
   normalizeVulnerability,
   upsertSessionVulnerability,
 } from "../../services/vulnerability.service";
 import { classifyWithLlm } from "../../services/web-security/owasp-llm-classifier";
-import {
-  findPlanCase,
-  updateTestCase,
-} from "../../services/web-security/test-plan.service";
 
 function str(v: any): string {
   return typeof v === "string" ? v.trim() : "";
@@ -182,51 +175,27 @@ const updateEngagementState: ToolDefinition = {
         // report traces every finding back through it, and a made-up or
         // mistyped id silently breaks that chain.
         const wstgId = str(data.wstgId).toUpperCase();
-        let planCase: ReturnType<typeof findPlanCase> | undefined;
+        let resolvedTestId: string | undefined;
         if (wstgId) {
-          const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
-            .select("webAppTestPlan");
-          const plan = session?.webAppTestPlan as WebAppTestPlanDoc | undefined;
-          if (!plan?.cases?.length) {
+          const resolved = await resolvePlanCase(ctx.sessionId, wstgId);
+          if (!resolved.ok) {
             return {
-              output:
-                `"add_vulnerability" refused: data.wstgId "${wstgId}" cannot be verified — ` +
-                "this session has no test plan. Re-record without data.wstgId, or generate the " +
-                'plan first (wstg_test_plan action "generate").',
+              output: `"add_vulnerability" refused: ${resolved.refusal}`,
               exitCode: 1,
             };
           }
-          planCase = findPlanCase(plan, wstgId);
-          if (!planCase) {
-            const ids = plan.cases.map((c) => c.testId);
-            const near = ids.filter((id) => id.split("-")[1] === wstgId.split("-")[1]).slice(0, 8);
-            return {
-              output:
-                `"add_vulnerability" refused: data.wstgId "${wstgId}" is not a case in this ` +
-                `session's test plan${near.length ? `. Cases in that category: ${near.join(", ")}` : ""}. ` +
-                "Re-record with the exact test id of the case that produced this finding (see the " +
-                'plan via wstg_test_plan action "coverage"), or omit data.wstgId if no plan case fits.',
-              exitCode: 1,
-            };
-          }
+          resolvedTestId = resolved.testId;
         }
 
         const normalized = normalizeVulnerability(data, {
           source: `agent:${ctx.agentId ?? "main"}`,
         });
-        if (planCase) normalized.wstgId = planCase.testId;
+        if (resolvedTestId) normalized.wstgId = resolvedTestId;
         // Screenshot evidence must point at captures this session actually
         // produced — a made-up filename would render as a broken image.
         let screenshotNote = "";
         if (normalized.screenshots.length) {
-          const { getDataDir } = await import("../../utils/loadConfig");
-          const safeSession = (ctx.sessionId || "session").replace(/[^a-zA-Z0-9_-]/g, "_");
-          const dir = path.join(getDataDir(), "screenshots", safeSession);
-          const kept: string[] = [];
-          for (const name of normalized.screenshots) {
-            if (fs.existsSync(path.join(dir, name))) kept.push(name);
-          }
-          const dropped = normalized.screenshots.filter((name) => !kept.includes(name));
+          const { kept, dropped } = filterKnownScreenshots(ctx.sessionId, normalized.screenshots);
           normalized.screenshots = kept;
           if (kept.length) {
             screenshotNote = `\nAttached screenshot evidence: ${kept.join(", ")}.`;
@@ -273,23 +242,12 @@ const updateEngagementState: ToolDefinition = {
         // case: link it here so wstgId and the plan can never drift apart (the
         // old two-step add_vulnerability → update_case path let them disagree).
         let linkedCaseId: string | undefined;
-        if (planCase) {
-          const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
-            .select("webAppTestPlan");
-          const plan = session?.webAppTestPlan as WebAppTestPlanDoc | undefined;
-          if (plan?.cases?.length) {
-            const linked = updateTestCase(plan, planCase.testId, {
-              status: "failed",
-              addLinkedVulnerabilityId: persisted.vulnerability.vulnerabilityId,
-            });
-            if (linked) {
-              await SessionsModel.updateOne(
-                { sessionId: ctx.sessionId },
-                { $set: { webAppTestPlan: linked.plan } },
-              );
-              linkedCaseId = linked.testCase.testId;
-            }
-          }
+        if (resolvedTestId) {
+          linkedCaseId = await linkFindingToCase(
+            ctx.sessionId,
+            persisted.vulnerability.vulnerabilityId,
+            resolvedTestId,
+          );
         }
 
         return {
@@ -317,7 +275,7 @@ const updateEngagementState: ToolDefinition = {
           };
         }
         const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
-          .select("vulnerabilities webAppTestPlan");
+          .select("vulnerabilities");
         if (!session) return { output: "Session not found.", exitCode: 1 };
 
         const vulns = (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
@@ -341,24 +299,7 @@ const updateEngagementState: ToolDefinition = {
           { $pull: { vulnerabilities: { vulnerabilityId: target.vulnerabilityId } } },
         );
 
-        const plan = session.webAppTestPlan as WebAppTestPlanDoc | undefined;
-        if (plan?.cases?.length) {
-          let unlinked = 0;
-          for (const testCase of plan.cases) {
-            if (testCase.linkedVulnerabilityIds?.includes(target.vulnerabilityId)) {
-              testCase.linkedVulnerabilityIds = testCase.linkedVulnerabilityIds.filter(
-                (id) => id !== target.vulnerabilityId,
-              );
-              unlinked += 1;
-            }
-          }
-          if (unlinked) {
-            await SessionsModel.updateOne(
-              { sessionId: ctx.sessionId },
-              { $set: { webAppTestPlan: plan } },
-            );
-          }
-        }
+        await unlinkFindingFromCases(ctx.sessionId, target.vulnerabilityId);
 
         state.vulnerabilities = state.vulnerabilities.filter(
           (v) => v.vulnerabilityId !== target.vulnerabilityId,
