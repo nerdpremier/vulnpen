@@ -12,7 +12,7 @@ import {
 
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { toolRegistry } from "../tools/registry";
-import { filterDeferredToolNames } from "../tools/deferred";
+import { requestedDeferredNames, mergeLoadedTools } from "../tools/deferred";
 import {
   executeToolCalls,
   executeConsentedTool,
@@ -660,17 +660,12 @@ export async function runAgentLoop(params: {
 
       pushToolResultMessages(toolResults, messages, newMessages, turnIndex);
 
-      // The load_tools handler persists to the session document; mirror the
-      // change here so the schemas are present from the next iteration on
-      // without re-reading the document. filterDeferredToolNames is the same
-      // filter the handler applies, so the mirror can never admit a name the
-      // document would have rejected.
-      for (const tc of assistantToolCalls) {
-        if (tc.name !== "load_tools") continue;
-        const { valid } = filterDeferredToolNames(parseToolArguments(tc.arguments).args?.tools);
-        if (valid.length > 0) {
-          session.loadedTools = [...new Set([...(session.loadedTools ?? []), ...valid])];
-        }
+      // The load_tools handler persists to the session document through the
+      // same requestedDeferredNames parser applied here, so the in-memory
+      // mirror can never admit a name the document would have rejected.
+      const newlyLoaded = requestedDeferredNames(assistantToolCalls);
+      if (newlyLoaded.length > 0) {
+        session.loadedTools = mergeLoadedTools(session.loadedTools, newlyLoaded);
       }
 
       const askedUser = toolResults.find((r) => r.toolName === "ask_user");

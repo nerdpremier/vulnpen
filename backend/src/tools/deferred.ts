@@ -1,4 +1,5 @@
 import { DEFERRED_TOOL_NAMES } from "./names";
+import { parseToolArguments } from "../utils/toolArguments";
 
 // Tools excluded from the always-loaded schema set. The agent re-sends every
 // tool schema on each tool-call iteration, so keeping the Burp suite, the
@@ -26,4 +27,35 @@ export function filterDeferredToolNames(requested: unknown): {
     valid: names.filter((name): name is string => typeof name === "string" && DEFERRED_TOOLS.has(name)),
     unknown: names.filter((name) => !(typeof name === "string" && DEFERRED_TOOLS.has(name))),
   };
+}
+
+/**
+ * Which deferred tools a turn's tool calls request to load. The one parser
+ * both the load_tools handler and the agent loop's in-memory mirror run over
+ * the assistant's tool calls, so the persisted set and the in-memory set can
+ * never disagree about what a call loaded.
+ */
+export function requestedDeferredNames(
+  toolCalls: { name: string; arguments: string }[],
+): string[] {
+  const names: string[] = [];
+  for (const tc of toolCalls) {
+    if (tc.name !== "load_tools") continue;
+    let args: { tools?: unknown } | undefined;
+    try {
+      args = parseToolArguments(tc.arguments).args;
+    } catch {
+      continue;
+    }
+    names.push(...filterDeferredToolNames(args?.tools).valid);
+  }
+  return names;
+}
+
+/** Merge newly loaded names into a session's loaded set, keeping it unique. */
+export function mergeLoadedTools(
+  current: string[] | undefined,
+  newlyLoaded: string[],
+): string[] {
+  return [...new Set([...(current ?? []), ...newlyLoaded])];
 }
