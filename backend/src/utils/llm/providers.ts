@@ -11,6 +11,7 @@ import {
   buildAnthropicStreamParams,
 } from "./anthropicParams";
 import { normalizeModelId } from "../modelMetadata";
+import { createStreamCollector } from "./streamCollector";
 import {
   invokeSubscriptionInference,
   isSubscriptionProvider,
@@ -561,12 +562,7 @@ function buildCompletionConfig(
 
   if (opts.reasoningMode && opts.reasoningMode !== "off") {
     if (config.provider === "kimi") {
-      params.reasoning_effort =
-        opts.reasoningMode === "low"
-          ? "low"
-          : opts.reasoningMode === "max"
-            ? "max"
-            : "high";
+      params.reasoning_effort = kimiReasoningEffort(opts.reasoningMode);
     } else if (config.provider === "openai") {
       params.reasoning_effort = opts.reasoningMode;
     }
@@ -792,12 +788,7 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
   try {
     return await tryCompletion(requestedTemp);
   } catch (err: any) {
-    const isTempUnsupported =
-      err?.code === "unsupported_value" &&
-      err?.param === "temperature" &&
-      requestedTemp !== 1;
-
-    if (isTempUnsupported) {
+    if (isTemperatureUnsupportedError(err, requestedTemp)) {
       console.warn(
         `[inference] Model ${config.model} does not support temperature=${requestedTemp}, retrying with temperature=1`,
       );
@@ -815,14 +806,20 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
 
 // ─── Anthropic native streaming (for extended thinking) ─────────────
 
-async function runAnthropicThinkingStream(
+/**
+ * The provider pipelines are the event pumps: they translate one SDK's
+ * stream into collector calls and own only what genuinely differs per
+ * provider (Anthropic's usage merge, Responses' item ids, chunk-level
+ * usage/model). Exported for fixture tests — internal seam, not for
+ * production callers.
+ */
+export async function runAnthropicThinkingStream(
+  client: Anthropic,
   config: ProviderConfig,
   opts: StreamingInvokeOptions,
   budgetTokens: number | null,
   start: number,
 ): Promise<InvokeResult> {
-  const client = buildAnthropicClient(config);
-
   const params = buildAnthropicStreamParams(
     {
       model: config.model,
@@ -842,64 +839,35 @@ async function runAnthropicThinkingStream(
 
   const stream = client.messages.stream(params);
 
-  const contentParts: string[] = [];
-  const reasoningParts: string[] = [];
-  const toolCallAccumulators: Map<
-    string,
-    { id: string; name: string; argParts: string[] }
-  > = new Map();
-  let finishReason: FinishReason = "stop";
+  const collector = createStreamCollector(opts.onDelta);
   let usage: OpenAI.Completions.CompletionUsage | undefined;
 
   for await (const event of stream) {
     if (opts.abortSignal?.aborted) {
-      finishReason = "stop";
+      collector.setFinishReason("stop");
       break;
     }
 
     if (event.type === "content_block_delta") {
       const delta = event.delta as any;
-      if (delta.type === "thinking_delta" && delta.thinking) {
-        reasoningParts.push(delta.thinking);
-        opts.onDelta({ type: "reasoning", content: delta.thinking });
-      }
-      if (delta.type === "text_delta" && delta.text) {
-        contentParts.push(delta.text);
-        opts.onDelta({ type: "text", content: delta.text });
-      }
-      if (delta.type === "input_json_delta" && delta.partial_json) {
-        const acc = toolCallAccumulators.get(String(event.index));
-        if (acc) {
-          acc.argParts.push(delta.partial_json);
-          opts.onDelta({
-            type: "tool_call_delta",
-            toolCall: { index: toolCallAccumulators.size - 1 },
-            content: delta.partial_json,
-          });
-        }
+      if (delta.type === "thinking_delta") collector.onReasoning(delta.thinking);
+      if (delta.type === "text_delta") collector.onText(delta.text);
+      if (delta.type === "input_json_delta") {
+        collector.appendToolCallArgs(String(event.index), delta.partial_json);
       }
     }
 
     if (event.type === "content_block_start") {
       const block = (event as any).content_block;
       if (block?.type === "tool_use") {
-        const idx = toolCallAccumulators.size;
-        toolCallAccumulators.set(String(event.index), {
-          id: block.id,
-          name: block.name,
-          argParts: [],
-        });
-        opts.onDelta({
-          type: "tool_call_start",
-          toolCall: { index: idx, id: block.id, name: block.name },
-        });
+        collector.startToolCall(String(event.index), block.id, block.name);
       }
     }
 
     if (event.type === "message_delta") {
       const md = event as any;
       if (md.delta?.stop_reason) {
-        finishReason = normalizeFinishReason(md.delta.stop_reason);
+        collector.setFinishReason(normalizeFinishReason(md.delta.stop_reason));
       }
       if (md.usage) {
         // message_delta arrives after message_start and only carries output
@@ -927,26 +895,12 @@ async function runAnthropicThinkingStream(
     }
   }
 
-  const toolCalls: ToolCallData[] = [];
-  let idx = 0;
-  for (const [, acc] of toolCallAccumulators) {
-    const tc: ToolCallData = {
-      id: acc.id,
-      name: acc.name,
-      arguments: acc.argParts.join(""),
-    };
-    toolCalls.push(tc);
-    opts.onDelta({ type: "tool_call_done", toolCall: { index: idx++, ...tc } });
-  }
-
-  if (toolCalls.length > 0 && finishReason === "stop") {
-    finishReason = "tool_calls";
-  }
+  const { content, reasoning, toolCalls, finishReason } = collector.finish();
 
   const elapsed = Date.now() - start;
   const result: InvokeResult = {
-    content: contentParts.join("") || null,
-    reasoning: reasoningParts.join("") || null,
+    content,
+    reasoning,
     toolCalls,
     finishReason,
     usage,
@@ -1040,7 +994,8 @@ function openaiToResponsesTools(
   }));
 }
 
-async function runOpenAIResponsesStream(
+export async function runOpenAIResponsesStream(
+  rawClient: OpenAI,
   config: ProviderConfig,
   opts: StreamingInvokeOptions,
   reasoningMode: Exclude<ReasoningMode, "off">,
@@ -1048,7 +1003,6 @@ async function runOpenAIResponsesStream(
 ): Promise<InvokeResult> {
   // Raw client: observeOpenAI maps Responses API params poorly (no `messages` in trace input).
   // We record a manual generation with Chat Completions–shaped input instead.
-  const rawClient = buildClient(config);
   const { instructions, input } = openaiToResponsesInput(opts.messages);
   const responsesTools = openaiToResponsesTools(opts.tools);
 
@@ -1096,14 +1050,9 @@ async function runOpenAIResponsesStream(
     }
   };
 
-  const contentParts: string[] = [];
-  const reasoningParts: string[] = [];
-  const toolCallAccumulators: Map<
-    string,
-    { callId: string; name: string; argParts: string[]; index: number }
-  > = new Map();
-  let toolCallIndex = 0;
-  let finishReason: FinishReason = "stop";
+  const collector = createStreamCollector(opts.onDelta);
+  let lastToolCallKey: string | undefined;
+  let responsesToolCallCount = 0;
   let usage: OpenAI.Completions.CompletionUsage | undefined;
   let model = config.model;
 
@@ -1117,76 +1066,43 @@ async function runOpenAIResponsesStream(
         completionStartTime = new Date();
       }
       if (opts.abortSignal?.aborted) {
-        finishReason = "stop";
+        collector.setFinishReason("stop");
         break;
       }
 
       switch (event.type) {
         case "response.output_text.delta": {
-          const text = event.delta as string;
-          if (text) {
-            contentParts.push(text);
-            opts.onDelta({ type: "text", content: text });
-          }
+          collector.onText(event.delta as string);
           break;
         }
 
         case "response.reasoning_summary_text.delta": {
-          const text = event.delta as string;
-          if (text) {
-            reasoningParts.push(text);
-            opts.onDelta({ type: "reasoning", content: text });
-          }
+          collector.onReasoning(event.delta as string);
           break;
         }
 
         case "response.output_item.added": {
           const item = event.item;
           if (item?.type === "function_call") {
-            const idx = toolCallIndex++;
-            toolCallAccumulators.set(item.call_id ?? item.id ?? `tc_${idx}`, {
-              callId: item.call_id ?? item.id ?? `tc_${idx}`,
-              name: item.name ?? "",
-              argParts: [],
-              index: idx,
-            });
-            opts.onDelta({
-              type: "tool_call_start",
-              toolCall: {
-                index: idx,
-                id: item.call_id ?? item.id,
-                name: item.name,
-              },
-            });
+            const key = item.call_id ?? item.id ?? `tc_${responsesToolCallCount++}`;
+            lastToolCallKey = key;
+            collector.startToolCall(key, item.call_id ?? item.id, item.name);
           }
           break;
         }
 
         case "response.function_call_arguments.delta": {
-          const delta = event.delta as string;
           const itemId = event.item_id as string;
-          const acc =
-            toolCallAccumulators.get(itemId) ??
-            [...toolCallAccumulators.values()].at(-1);
-          if (acc && delta) {
-            acc.argParts.push(delta);
-            opts.onDelta({
-              type: "tool_call_delta",
-              toolCall: { index: acc.index },
-              content: delta,
-            });
-          }
+          // A mismatched item_id falls back to the most recently started call.
+          const key = collector.hasToolCall(itemId) ? itemId : lastToolCallKey;
+          if (key) collector.appendToolCallArgs(key, event.delta as string);
           break;
         }
 
         case "response.function_call_arguments.done": {
           const itemId = event.item_id as string;
-          const acc =
-            toolCallAccumulators.get(itemId) ??
-            [...toolCallAccumulators.values()].at(-1);
-          if (acc) {
-            acc.argParts = [event.arguments ?? acc.argParts.join("")];
-          }
+          const key = collector.hasToolCall(itemId) ? itemId : lastToolCallKey;
+          if (key) collector.replaceToolCallArgs(key, event.arguments);
           break;
         }
 
@@ -1194,7 +1110,7 @@ async function runOpenAIResponsesStream(
           const resp = event.response;
           if (resp?.model) model = resp.model;
           if (resp?.status === "incomplete") {
-            finishReason = "length";
+            collector.setFinishReason("length");
           }
           if (resp?.usage) {
             usage = {
@@ -1217,28 +1133,12 @@ async function runOpenAIResponsesStream(
       }
     }
 
-    const toolCalls: ToolCallData[] = [];
-    for (const [, acc] of toolCallAccumulators) {
-      const tc: ToolCallData = {
-        id: acc.callId,
-        name: acc.name,
-        arguments: acc.argParts.join(""),
-      };
-      toolCalls.push(tc);
-      opts.onDelta({
-        type: "tool_call_done",
-        toolCall: { index: acc.index, ...tc },
-      });
-    }
-
-    if (toolCalls.length > 0 && finishReason === "stop") {
-      finishReason = "tool_calls";
-    }
+    const { content, reasoning, toolCalls, finishReason } = collector.finish();
 
     const elapsed = Date.now() - start;
     const result: InvokeResult = {
-      content: contentParts.join("") || null,
-      reasoning: reasoningParts.join("") || null,
+      content,
+      reasoning,
       toolCalls,
       finishReason,
       usage,
@@ -1274,6 +1174,118 @@ async function runOpenAIResponsesStream(
 }
 
 // ─── invoke_llm_streaming — streaming with tool calls ────────────────
+
+function kimiReasoningEffort(mode: ReasoningMode): "low" | "high" | "max" {
+  return mode === "low" ? "low" : mode === "max" ? "max" : "high";
+}
+
+function isTemperatureUnsupportedError(err: any, requestedTemp: number): boolean {
+  return (
+    err?.code === "unsupported_value" &&
+    err?.param === "temperature" &&
+    requestedTemp !== 1
+  );
+}
+
+/**
+ * Chat-completions streaming: the event pump for every OpenAI-compatible
+ * provider (openai, openrouter, ollama, kimi, gateways). Exported for fixture
+ * tests — internal seam, not for production callers.
+ */
+export async function runChatCompletionsStream(
+  client: OpenAI,
+  config: ProviderConfig,
+  opts: StreamingInvokeOptions,
+  reasoningMode: ReasoningMode,
+  temp: number,
+  start: number,
+): Promise<InvokeResult> {
+  const params = buildCompletionConfig(config, opts, temp, true);
+
+  if (
+    reasoningMode !== "off" &&
+    (config.provider === "openai-compatible" ||
+      config.provider === "openrouter" ||
+      config.provider === "ollama" ||
+      config.provider === "kimi")
+  ) {
+    params.reasoning_effort =
+      config.provider === "kimi"
+        ? kimiReasoningEffort(reasoningMode)
+        : reasoningMode;
+  }
+
+  const stream = (await client.chat.completions.create(
+    params,
+  )) as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
+
+  const collector = createStreamCollector(opts.onDelta);
+  let usage: OpenAI.Completions.CompletionUsage | undefined;
+  let model = config.model;
+
+  for await (const chunk of stream) {
+    if (opts.abortSignal?.aborted) {
+      collector.setFinishReason("stop");
+      break;
+    }
+
+    if (chunk.model) model = chunk.model;
+    if (chunk.usage) usage = chunk.usage as any;
+
+    const delta = chunk.choices?.[0]?.delta;
+    const chunkFinish = chunk.choices?.[0]?.finish_reason;
+
+    if (chunkFinish) {
+      collector.setFinishReason(normalizeFinishReason(chunkFinish));
+    }
+
+    if (!delta) continue;
+
+    const d = delta as Record<string, unknown>;
+    const reasoningContent =
+      (typeof d.reasoning_content === "string"
+        ? d.reasoning_content
+        : null) ??
+      (typeof d.reasoning_text === "string" ? d.reasoning_text : null) ??
+      (d.reasoning_text &&
+      typeof (d.reasoning_text as { text?: string }).text === "string"
+        ? (d.reasoning_text as { text: string }).text
+        : null) ??
+      (typeof d.reasoning === "string" ? d.reasoning : null);
+    collector.onReasoning(reasoningContent ?? "");
+    collector.onText(delta.content);
+
+    if (delta.tool_calls) {
+      for (const tc of delta.tool_calls) {
+        const key = String(tc.index ?? 0);
+        if (!collector.hasToolCall(key)) {
+          collector.startToolCall(key, tc.id, tc.function?.name);
+        }
+        collector.updateToolCall(key, { id: tc.id, name: tc.function?.name });
+        if (tc.function?.arguments) {
+          collector.appendToolCallArgs(key, tc.function.arguments);
+        }
+      }
+    }
+  }
+
+  const { content, reasoning, toolCalls, finishReason } = collector.finish();
+
+  const elapsed = Date.now() - start;
+  const result: InvokeResult = {
+    content,
+    reasoning,
+    toolCalls,
+    finishReason,
+    usage,
+    model,
+    provider: config.provider,
+    elapsedMs: elapsed,
+  };
+
+  logResponse(config, elapsed, result);
+  return result;
+}
 
 export async function invoke_llm_streaming(
   opts: StreamingInvokeOptions,
@@ -1323,12 +1335,24 @@ export async function invoke_llm_streaming(
     const budget =
       reasoningMode !== "off" ? ANTHROPIC_BUDGET_TOKENS[reasoningMode] : null;
     logRequest(config, opts, true);
-    return await runAnthropicThinkingStream(config, opts, budget, start);
+    return await runAnthropicThinkingStream(
+      buildAnthropicClient(config),
+      config,
+      opts,
+      budget,
+      start,
+    );
   }
 
   if (reasoningMode !== "off" && config.provider === "openai") {
     logRequest(config, opts, true);
-    return await runOpenAIResponsesStream(config, opts, reasoningMode, start);
+    return await runOpenAIResponsesStream(
+      buildClient(config),
+      config,
+      opts,
+      reasoningMode,
+      start,
+    );
   }
 
   const client = getClient(config, opts);
@@ -1339,153 +1363,26 @@ export async function invoke_llm_streaming(
 
   logRequest(config, opts, true);
 
-  const runStream = async (temp: number): Promise<InvokeResult> => {
-    const params = buildCompletionConfig(config, opts, temp, true);
-
-    if (
-      reasoningMode !== "off" &&
-      (config.provider === "openai-compatible" ||
-        config.provider === "openrouter" ||
-        config.provider === "ollama" ||
-        config.provider === "kimi")
-    ) {
-      params.reasoning_effort =
-        config.provider === "kimi"
-          ? reasoningMode === "low"
-            ? "low"
-            : reasoningMode === "max"
-              ? "max"
-              : "high"
-          : reasoningMode;
-    }
-
-    const stream = (await client.chat.completions.create(
-      params,
-    )) as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
-
-    const contentParts: string[] = [];
-    const reasoningParts: string[] = [];
-    const toolCallAccumulators: Map<
-      number,
-      { id: string; name: string; argParts: string[] }
-    > = new Map();
-    let finishReason: FinishReason = "stop";
-    let usage: OpenAI.Completions.CompletionUsage | undefined;
-    let model = config.model;
-
-    for await (const chunk of stream) {
-      if (opts.abortSignal?.aborted) {
-        finishReason = "stop";
-        break;
-      }
-
-      if (chunk.model) model = chunk.model;
-      if (chunk.usage) usage = chunk.usage as any;
-
-      const delta = chunk.choices?.[0]?.delta;
-      const chunkFinish = chunk.choices?.[0]?.finish_reason;
-
-      if (chunkFinish) {
-        finishReason = normalizeFinishReason(chunkFinish);
-      }
-
-      if (!delta) continue;
-
-      const d = delta as Record<string, unknown>;
-      const reasoningContent =
-        (typeof d.reasoning_content === "string"
-          ? d.reasoning_content
-          : null) ??
-        (typeof d.reasoning_text === "string" ? d.reasoning_text : null) ??
-        (d.reasoning_text &&
-        typeof (d.reasoning_text as { text?: string }).text === "string"
-          ? (d.reasoning_text as { text: string }).text
-          : null) ??
-        (typeof d.reasoning === "string" ? d.reasoning : null);
-      if (reasoningContent) {
-        reasoningParts.push(reasoningContent);
-        opts.onDelta({ type: "reasoning", content: reasoningContent });
-      }
-
-      if (delta.content) {
-        contentParts.push(delta.content);
-        opts.onDelta({ type: "text", content: delta.content });
-      }
-
-      if (delta.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          const idx = tc.index ?? 0;
-
-          if (!toolCallAccumulators.has(idx)) {
-            toolCallAccumulators.set(idx, {
-              id: tc.id ?? "",
-              name: tc.function?.name ?? "",
-              argParts: [],
-            });
-            opts.onDelta({
-              type: "tool_call_start",
-              toolCall: { index: idx, id: tc.id, name: tc.function?.name },
-            });
-          }
-
-          const acc = toolCallAccumulators.get(idx)!;
-          if (tc.id) acc.id = tc.id;
-          if (tc.function?.name) acc.name = tc.function.name;
-
-          if (tc.function?.arguments) {
-            acc.argParts.push(tc.function.arguments);
-            opts.onDelta({
-              type: "tool_call_delta",
-              toolCall: { index: idx },
-              content: tc.function.arguments,
-            });
-          }
-        }
-      }
-    }
-
-    const toolCalls: ToolCallData[] = [];
-    for (const [idx, acc] of toolCallAccumulators) {
-      const tc: ToolCallData = {
-        id: acc.id,
-        name: acc.name,
-        arguments: acc.argParts.join(""),
-      };
-      toolCalls.push(tc);
-      opts.onDelta({ type: "tool_call_done", toolCall: { index: idx, ...tc } });
-    }
-
-    if (toolCalls.length > 0 && finishReason === "stop") {
-      finishReason = "tool_calls";
-    }
-
-    const elapsed = Date.now() - start;
-    const result: InvokeResult = {
-      content: contentParts.join("") || null,
-      reasoning: reasoningParts.join("") || null,
-      toolCalls,
-      finishReason,
-      usage,
-      model,
-      provider: config.provider,
-      elapsedMs: elapsed,
-    };
-
-    logResponse(config, elapsed, result);
-    return result;
-  };
-
   try {
-    return await runStream(requestedTemp);
+    return await runChatCompletionsStream(
+      client,
+      config,
+      opts,
+      reasoningMode,
+      requestedTemp,
+      start,
+    );
   } catch (err: any) {
-    const isTempUnsupported =
-      err?.code === "unsupported_value" &&
-      err?.param === "temperature" &&
-      requestedTemp !== 1;
-
-    if (isTempUnsupported) {
+    if (isTemperatureUnsupportedError(err, requestedTemp)) {
       console.warn(`[inference] Retrying stream with temperature=1`);
-      return await runStream(1);
+      return await runChatCompletionsStream(
+        client,
+        config,
+        opts,
+        reasoningMode,
+        1,
+        start,
+      );
     }
 
     const isToolsUnsupported =
