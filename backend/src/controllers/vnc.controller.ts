@@ -9,6 +9,14 @@ import {
   xvncSecurityArgs,
   isDockerInternalHost,
 } from "../utils/vncSetup";
+import {
+  getVncConfig,
+  updateVncConfig,
+  resetVncConfig,
+  provisionVnc,
+  runDiagnostics,
+  repairVnc as repairVncSession,
+} from "../services/vnc-provisioning.service";
 
 const FIND_VNC_BIN = [
   'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec";',
@@ -210,3 +218,90 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "Failed to get VNC credentials" });
   }
 };
+
+
+export const getVNCConfig = async (_req: Request, res: Response) => {
+  try {
+    return res.status(200).json(getVncConfig());
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get VNC config" });
+  }
+};
+
+export const updateVNCConfig = async (req: Request, res: Response) => {
+  try {
+    updateVncConfig(req.body || {});
+    return res.status(200).json({ message: "VNC configuration saved" });
+  } catch (error: any) {
+    console.log(error);
+    return res.status(400).json({
+      message: error?.message || "Failed to update VNC config",
+    });
+  }
+};
+
+export const resetVNCConfig = async (_req: Request, res: Response) => {
+  try {
+    resetVncConfig();
+    return res.status(200).json({ message: "VNC configuration reset" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to reset VNC config" });
+  }
+};
+
+export const autoSetupVNC = async (req: Request, res: Response) => {
+  try {
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || "").trim();
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+    const session = await requireActiveSession(res.locals.userId, sessionId, res);
+    if (!session) return;
+    const result = await provisionVnc(sessionId);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.log(error);
+    return res.status(400).json({
+      message:
+        error?.message ||
+        "VNC auto-setup failed. Ensure SSH/Exploit Box is configured.",
+    });
+  }
+};
+
+export const diagnoseVNC = async (req: Request, res: Response) => {
+  try {
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || "").trim();
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+    const session = await requireActiveSession(res.locals.userId, sessionId, res);
+    if (!session) return;
+    console.log("[VNC Diagnose] Diagnose endpoint called");
+    const checks = await runDiagnostics(sessionId);
+    const allPassed = checks.every((c) => c.status === "pass");
+    console.log(`[VNC Diagnose] All passed: ${allPassed}`);
+    return res.status(200).json({ checks, allPassed });
+  } catch (error: any) {
+    console.error("[VNC Diagnose] Top-level error:", error);
+    return res.status(400).json({
+      message:
+        error?.message || "Diagnostics failed. Ensure SSH is configured.",
+    });
+  }
+};
+
+export const repairVNC = async (req: Request, res: Response) => {
+  try {
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || "").trim();
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+    const session = await requireActiveSession(res.locals.userId, sessionId, res);
+    if (!session) return;
+    const result = await repairVncSession(sessionId, req.body?.fix || "all");
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error("[VNC Repair] Top-level error:", error);
+    return res.status(400).json({
+      message: error?.message || "Repair failed. Ensure SSH is configured.",
+    });
+  }
+};
+

@@ -36,3 +36,16 @@ export async function setPaused(sessionId: string, paused: boolean): Promise<voi
 export async function setAgentState(sessionId: string, state: AgentState): Promise<void> {
   await SessionsModel.updateOne({ sessionId }, { $set: { agentState: state } });
 }
+
+/**
+ * Boot-time recovery: any session left "running" belongs to a process that
+ * died mid-run, so its run state is reset to idle. The only bulk agentState
+ * write — every other agentState write goes through setAgentState.
+ */
+export async function resetStuckRunningSessions(): Promise<number> {
+  const result = await SessionsModel.updateMany(
+    { agentState: "running" },
+    { $set: { agentState: "idle" } },
+  );
+  return result.modifiedCount;
+}

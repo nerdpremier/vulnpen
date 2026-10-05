@@ -46,9 +46,48 @@ orchestrator's provider cache. Never call `writeModelRegistry` from a
 handler, follow it with a hand-rolled `clearProviderCache()`, or re-derive
 the masked-key restore at a call site. The persistence layer stays
 `utils/modelRegistryStore.ts` (file shape, normalization, legacy
-migration); the service owns the mutation protocol.
+migration); the service owns the mutation protocol. Provider-relevant
+`.env` writes go through `applyEnvUpdates` in
+`utils/llm/orchestrator.ts` — it writes the file AND clears the provider
+cache, so no caller can forget the second half; non-provider env writes
+(SSH, Burp RPC) may still use `updateEnvVars` directly. The Settings ->
+Models page's pure provider rules (provider options, base URL rules,
+model-id slug, assignment set) live in `frontend/src/utils/modelConfig.mjs`.
 
 ## Agent run
+
+**Session ownership check** — the one guard behind every controller that
+needs only "does this session belong to this user": `requireOwnedSession`
+in `services/session.helpers.ts` (and `requireActiveSession` for handlers
+that also need the live document). Handlers never write
+`SessionsModel.findOne({ sessionId, uid })` by hand.
+
+**Stream message transforms** — the pure message-list reducers for the
+agent stream (buffered tool output with the live-char cap, tool_done /
+tool_error application, finalizing a streamed assistant message), in
+`frontend/src/utils/agentStreamMessages.mjs`. `useAgentStream.js` keeps
+only timing (rAF / interval) and store wiring; the transforms are
+unit-testable without React.
+
+**Test plan projections** — the pure grouping/filtering/coverage math of
+the test plan (`summarise`, `groupCases`, `matchesFilters`,
+`caseCarriesWork`), in `frontend/src/utils/testPlan.mjs`. The page only
+renders what these return. Status mapping is an explicit table because
+stored statuses (`in_progress`) do not match the coverage bucket keys
+(`inProgress`).
+
+**Context window seam** — the measured transcript projection sent to the
+model (token estimators, tool-result elision, `messagesToOpenAI`) lives
+in `services/context.service.ts`. The summarization state machine —
+`planCompaction`, `summarizeMessages`, `ContextBudget`, the preserve/
+summarize split, and the compaction budget constants — lives in
+`services/compaction.service.ts` and imports the projection. Mutating
+`agentState` outside `agent-state.service.ts` is out of bounds even at
+startup (`resetStuckRunningSessions` owns the boot sweep). The
+domain-config HTTP handlers live next to their domain controllers:
+Burp → `burp.controller.ts`, VNC → `vnc.controller.ts`, Magnitude →
+`magnitude.controller.ts`, SSH → `ssh.controller.ts`; `user.controller.ts`
+keeps profile/tools/model/OAuth only.
 
 **Agent loop** — the per-user-message orchestration in
 `services/agent.service.ts` (`runAgentLoop`): pause/abort polling, context

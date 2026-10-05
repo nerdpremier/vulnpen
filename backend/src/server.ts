@@ -245,13 +245,10 @@ const initializeApp = async () => {
       `${toolModeMigration.migrated} consent setting(s) migrated`,
     );
 
-    const { default: SessionsModel } = await import("./models/Sessions/Sessions.model");
-    const resetResult = await SessionsModel.updateMany(
-      { agentState: "running" },
-      { $set: { agentState: "idle" } },
-    );
-    if (resetResult.modifiedCount > 0) {
-      console.log(`[startup] Reset ${resetResult.modifiedCount} session(s) from "running" to "idle"`);
+    const { resetStuckRunningSessions } = await import("./services/agent-state.service");
+    const modified = await resetStuckRunningSessions();
+    if (modified > 0) {
+      console.log(`[startup] Reset ${modified} session(s) from "running" to "idle"`);
     }
 
     startupReady = true;

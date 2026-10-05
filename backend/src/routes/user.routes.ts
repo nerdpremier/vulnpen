@@ -1,4 +1,26 @@
 import express from "express";
+import {
+  getSSHConfig,
+  updateSSHConfig,
+} from "../controllers/ssh.controller";
+import {
+  getVNCConfig,
+  updateVNCConfig,
+  resetVNCConfig,
+  autoSetupVNC,
+  diagnoseVNC,
+  repairVNC,
+} from "../controllers/vnc.controller";
+import {
+  getBurpConfig,
+  updateBurpConfig,
+} from "../controllers/burp.controller";
+import {
+  getMagnitudeConfig,
+  updateMagnitudeConfig,
+  startMagnitudeAgent,
+  getBrowserAgentVNC,
+} from "../controllers/magnitude.controller";
 import { verifySess } from "../middlewares/VerifySession.middleware";
 import {
   deleteModelConfig,
@@ -8,29 +30,15 @@ import {
   getAvailableModels,
   getCapabilities,
   getModelConfig,
-  getSSHConfig,
   getUserTools,
   initiateAnthropicOAuth,
   saveUserInformation,
   updateCapabilities,
   updateModelConfig,
   updateSafetyProtections,
-  updateSSHConfig,
   updateToolsPreference,
   updateUserProfile,
   updateUserProfileImage,
-  getVNCConfig,
-  updateVNCConfig,
-  resetVNCConfig,
-  autoSetupVNC,
-  diagnoseVNC,
-  repairVNC,
-  getBurpConfig,
-  updateBurpConfig,
-  getMagnitudeConfig,
-  updateMagnitudeConfig,
-  startMagnitudeAgent,
-  getBrowserAgentVNC,
   getAgentToolsConfig,
   updateAgentToolsConfig,
   getAgentBehaviorConfig,

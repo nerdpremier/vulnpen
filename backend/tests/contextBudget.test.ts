@@ -54,12 +54,14 @@ test("old tool-call arguments collapse to a stub", () => {
 
 import {
   planCompaction,
-  messagesSinceSummary,
-  estimatePromptTokens,
   COMPACTION_TUNING,
   selectPreservedWindow,
-  estimateToolSchemaTokens,
   ContextBudget,
+} from "../src/services/compaction.service";
+import {
+  messagesSinceSummary,
+  estimatePromptTokens,
+  estimateToolSchemaTokens,
 } from "../src/services/context.service";
 
 function turn(i: number, chars: number): AgentMessageDoc {

@@ -3,7 +3,7 @@ import { getModelContextLimit } from "../utils/modelMetadata";
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
-import { requireActiveSession, resetSessionContext } from "../services/session.helpers";
+import { requireActiveSession, requireOwnedSession, resetSessionContext } from "../services/session.helpers";
 import { createSSEWriter } from "../utils/sse";
 import {
   initAndRun,
@@ -562,8 +562,8 @@ export const getSessionFile = async (req: Request, res: Response) => {
     const userId = res.locals?.userId ?? (req as any).user?.uid;
     const { sessionId, filename } = req.params;
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId }).select("_id");
-    if (!session) return res.status(404).json({ message: "Session not found" });
+    const session = await requireOwnedSession(userId, sessionId, res);
+    if (!session) return;
 
     const resolved = resolveSessionFile(sessionId, filename ?? "");
     if (!resolved.ok) {

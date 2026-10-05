@@ -24,7 +24,8 @@ import {
   recordConsentOutcome,
   recordCircuitOpen,
 } from "./consent-batch";
-import { ContextBudget, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
+import { ContextBudget } from "./compaction.service";
+import { messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
 import { buildVolatileTail, injectVolatileTail } from "../utils/assistant/volatileContext";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";

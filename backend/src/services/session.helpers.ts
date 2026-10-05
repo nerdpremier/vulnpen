@@ -48,6 +48,24 @@ export async function requireActiveSession(
 }
 
 /**
+ * Ownership-only check for handlers that stream or sanitize without needing
+ * the full active-session document (e.g. artifact download). Same 400 +
+ * null contract as requireActiveSession, one `_id` projection.
+ */
+export async function requireOwnedSession(
+  userId: string,
+  sessionId: string,
+  res: Response
+) {
+  const session = await SessionsModel.findOne({ sessionId, uid: userId }).select("_id");
+  if (!session) {
+    res.status(404).json({ message: "Session not found" });
+    return null;
+  }
+  return session;
+}
+
+/**
  * Resets a session's conversation context to a fresh state: messages drop
  * except the original (non-summary) system message, and all run counters go
  * back to zero. The one place that knows the reset payload — both the /clear

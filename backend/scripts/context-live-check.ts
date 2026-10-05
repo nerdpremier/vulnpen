@@ -15,9 +15,11 @@ import { buildSystemPrompt, buildVolatileWebAppPrompt } from "../src/utils/assis
 import {
   planCompaction,
   summarizeMessages,
+  COMPACTION_TUNING,
+} from "../src/services/compaction.service";
+import {
   messagesToOpenAI,
   estimatePromptTokens,
-  COMPACTION_TUNING,
   estimateToolSchemaTokens,
 } from "../src/services/context.service";
 import { toolRegistry } from "../src/tools/registry";

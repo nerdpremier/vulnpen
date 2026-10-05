@@ -22,7 +22,7 @@ import {
 } from "./web-security/session-plan-store";
 import { buildWebAppPentestReport, serializeFindingsForReport } from "./web-security/report.service";
 import { mapUnclassifiedVulnerabilities } from "./vulnerability.service";
-import { boundedConversationText } from "./context.service";
+import { boundedConversationText } from "./compaction.service";
 
 export interface SlashCommandDef {
   name: string;

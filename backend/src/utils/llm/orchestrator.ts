@@ -3,6 +3,7 @@ import { normalizeModelId } from "../modelMetadata";
 import { isHostOwner } from "../../services/host-owner.service";
 import { isSubscriptionProvider } from "../../services/subscription-inference.service";
 import { maybeRefreshOAuthToken } from "./provider-config";
+import { updateEnvVars } from "../envWriter";
 import type { ProviderConfig, ProviderType, ReasoningMode } from "./types";
 
 // ─── Orchestrator resolution ─────────────────────────────────────────
@@ -49,6 +50,17 @@ export async function getProvider(): Promise<ProviderConfig> {
 export function clearProviderCache(): void {
   cachedProvider = null;
   cacheTimestamp = 0;
+}
+
+/**
+ * The one way provider-relevant env changes land: write the .env file AND
+ * drop the provider cache, so a later getProvider() never serves a config
+ * built from the pre-update env. Callers that only change non-provider
+ * values (SSH, Burp RPC) may still use updateEnvVars directly.
+ */
+export function applyEnvUpdates(updates: Record<string, string>): void {
+  updateEnvVars(updates);
+  clearProviderCache();
 }
 
 // ─── Per-user model config ───────────────────────────────────────────
