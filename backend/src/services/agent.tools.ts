@@ -73,19 +73,67 @@ export interface ToolExecutionCallbacks {
   onInstallSuggestion?: (suggestion: { name: string; label: string; installCommand: string; size: string }) => void;
 }
 
-export interface ToolExecutionResult {
+/**
+ * The outcome of one tool call, as a discriminated union. The valid outcomes
+ * (parked for consent, blocked at the boundary, denied by review, executed)
+ * are branches of `kind` — not loosely-correlated optional flags the caller
+ * has to re-interpret. Every branch except `consent_required` carries a
+ * `result` that belongs in the transcript.
+ */
+export type ToolExecutionResult =
+  | ConsentRequiredOutcome
+  | BoundaryBlockedOutcome
+  | ApprovalDeniedOutcome
+  | ExecutedOutcome;
+
+interface ConsentRequiredOutcome {
+  kind: "consent_required";
   toolCallId: string;
   toolName: string;
-  result: ToolResult;
-  needsConsent: boolean;
   approvalReason?: string;
-  safetyBlock?: boolean;
+  safetyBlock: boolean;
   /** Thai reason/impact shown in the consent dialog. */
   safetyReason?: string;
   safetyImpact?: string;
   safetyKind?: SafetyKind;
+}
+
+interface BoundaryBlockedOutcome {
+  kind: "boundary_blocked";
+  toolCallId: string;
+  toolName: string;
+  result: ToolResult;
+  approvalReason: string;
+  safetyKind?: SafetyKind;
+}
+
+interface ApprovalDeniedOutcome {
+  kind: "approval_denied";
+  toolCallId: string;
+  toolName: string;
+  result: ToolResult;
+  approvalReason: string;
+}
+
+interface ExecutedOutcome {
+  kind: "executed";
+  toolCallId: string;
+  toolName: string;
+  result: ToolResult;
+  /**
+   * Set only when the AI reviewer passed the call. Unset (or false, on a
+   * boundary block) means "not an approval outcome", so the approval circuit
+   * breaker ignores the call.
+   */
   approvalReviewed?: boolean;
-  approvalDenied?: boolean;
+}
+
+export type ToolOutcomeWithResult = Exclude<ToolExecutionResult, { kind: "consent_required" }>;
+
+export function hasTranscriptResult(
+  tr: ToolExecutionResult,
+): tr is ToolOutcomeWithResult {
+  return tr.kind !== "consent_required";
 }
 
 function truncateOutput(output: string): string {
@@ -194,6 +242,32 @@ async function readinessRefusal(toolDef: ToolDefinition): Promise<string | undef
   }
 }
 
+/**
+ * The run-path half of the readiness seam: a tool whose external dependency is
+ * not configured refuses here instead of executing, and — critically — before
+ * the consent decision, so an unconfigured tool never collects an approval it
+ * could not honour. checkReady and the schema filter share the same source of
+ * truth, so a refusal here means the tool should never have been offered.
+ *
+ * Returns the refusal as a failed ToolResult after emitting start/done, or
+ * undefined when the tool is ready. Shared by the direct path and the
+ * consented path, which must refuse identically.
+ */
+async function refuseIfNotReady(
+  toolDef: ToolDefinition,
+  toolCallId: string,
+  toolName: string,
+  args: Record<string, any>,
+  callbacks: ToolExecutionCallbacks,
+): Promise<ToolResult | undefined> {
+  const notReady = await readinessRefusal(toolDef);
+  if (!notReady) return undefined;
+  const result: ToolResult = { output: notReady, exitCode: 1 };
+  callbacks.onToolStart(toolCallId, toolName, args);
+  callbacks.onToolDone(toolCallId, result);
+  return result;
+}
+
 export async function executeToolCall(
   sessionId: string,
   toolCall: ToolCallData,
@@ -210,10 +284,10 @@ export async function executeToolCall(
     const error = `Unknown tool: ${toolCall.name}`;
     callbacks.onToolError(toolCall.id, error);
     return {
+      kind: "executed",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
       result: { output: error, exitCode: 1 },
-      needsConsent: false,
     };
   }
 
@@ -229,23 +303,20 @@ export async function executeToolCall(
     const error = `Failed to parse tool arguments for '${toolCall.name}': ${detail}`;
     callbacks.onToolError(toolCall.id, error);
     return {
+      kind: "executed",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
       result: { output: error, exitCode: 1 },
-      needsConsent: false,
     };
   }
 
-  const notReady = await readinessRefusal(toolDef);
-  if (notReady) {
-    callbacks.onToolStart(toolCall.id, toolCall.name, args);
-    const result: ToolResult = { output: notReady, exitCode: 1 };
-    callbacks.onToolDone(toolCall.id, result);
+  const notReadyResult = await refuseIfNotReady(toolDef, toolCall.id, toolCall.name, args, callbacks);
+  if (notReadyResult) {
     return {
+      kind: "executed",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
-      result,
-      needsConsent: false,
+      result: notReadyResult,
     };
   }
 
@@ -266,10 +337,9 @@ export async function executeToolCall(
   if (needsConsent) {
     callbacks.onConsentRequired(toolCall.id, toolCall.name, args, safetyTriggered, approval.reason, safetyDetail);
     return {
+      kind: "consent_required",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
-      result: { output: "", exitCode: 0 },
-      needsConsent: true,
       approvalReason: approval.reason,
       safetyBlock: safetyTriggered,
       safetyReason: safetyDetail?.reason,
@@ -282,15 +352,12 @@ export async function executeToolCall(
     const output = pocBoundaryOutput(approval.reason);
     callbacks.onToolError(toolCall.id, output);
     return {
+      kind: "boundary_blocked",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
       result: { output, exitCode: 126 },
-      needsConsent: false,
       approvalReason: approval.reason,
-      safetyBlock: true,
       safetyKind: safetyDetail?.kind,
-      approvalReviewed: false,
-      approvalDenied: true,
     };
   }
 
@@ -300,22 +367,20 @@ export async function executeToolCall(
       "Do not retry the same action or bypass the review. Use a materially safer approach, or ask the user.";
     callbacks.onToolError(toolCall.id, output);
     return {
+      kind: "approval_denied",
       toolCallId: toolCall.id,
       toolName: toolCall.name,
       result: { output, exitCode: 126 },
-      needsConsent: false,
       approvalReason: approval.reason,
-      approvalReviewed: true,
-      approvalDenied: true,
     };
   }
 
   const { result, failed } = await runToolDefinition(toolDef, toolCall.id, toolCall.name, args, callbacks, ctx);
   return {
+    kind: "executed",
     toolCallId: toolCall.id,
     toolName: toolCall.name,
     result,
-    needsConsent: false,
     // An execution error is not an approval outcome: leave it unset so the
     // approval circuit breaker ignores the call.
     approvalReviewed: failed ? undefined : approval.reviewed,
@@ -366,11 +431,9 @@ export async function executeConsentedTool(
     return { output: `Unknown tool: ${toolName}`, exitCode: 1 };
   }
 
-  const notReady = await readinessRefusal(toolDef);
-  if (notReady) {
-    callbacks.onToolStart(toolCallId, toolName, args);
-    callbacks.onToolDone(toolCallId, { output: notReady, exitCode: 1 });
-    return { output: notReady, exitCode: 1 };
+  const notReadyResult = await refuseIfNotReady(toolDef, toolCallId, toolName, args, callbacks);
+  if (notReadyResult) {
+    return notReadyResult;
   }
 
   // Defence in depth: a destructive target action can never be executed, even if

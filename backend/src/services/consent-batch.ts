@@ -29,12 +29,12 @@ export function buildPendingConsentBatch(
 ): PendingConsentBatchItem[] {
   const callsById = new Map(toolCalls.map((call) => [call.id, call]));
   return results
-    .filter((result) => result.needsConsent)
+    .filter((result): result is Extract<ToolExecutionResult, { kind: "consent_required" }> => result.kind === "consent_required")
     .map((result) => ({
       toolCallId: result.toolCallId,
       toolName: result.toolName,
       arguments: parseToolArguments(callsById.get(result.toolCallId)?.arguments ?? "{}").args,
-      safetyBlock: result.safetyBlock ?? false,
+      safetyBlock: result.safetyBlock,
       approvalReason: result.approvalReason,
       safetyReason: result.safetyReason,
       safetyImpact: result.safetyImpact,

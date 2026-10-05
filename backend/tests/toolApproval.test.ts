@@ -240,18 +240,16 @@ test("consent batches retain every action, reason, arguments, and safety flag", 
   const batch = buildPendingConsentBatch(
     [
       {
+        kind: "consent_required",
         toolCallId: "one",
         toolName: "run_bash",
-        result: { output: "", exitCode: 0 },
-        needsConsent: true,
         approvalReason: "Writes outside the workspace.",
         safetyBlock: false,
       },
       {
+        kind: "consent_required",
         toolCallId: "two",
         toolName: "write_to_shell",
-        result: { output: "", exitCode: 0 },
-        needsConsent: true,
         approvalReason: "Potentially destructive command.",
         safetyBlock: true,
       },
@@ -321,8 +319,7 @@ test("a destructive command is blocked end to end without ever asking for consen
     false,
     "auto",
   );
-  assert.equal(result.needsConsent, false);
-  assert.equal(result.approvalDenied, true);
+  assert.equal(result.kind, "boundary_blocked");
   assert.equal(result.safetyKind, "destructive_target");
   assert.equal(consents.length, 0);
   assert.match(errors.join("\n"), /proof-of-concept boundary/);

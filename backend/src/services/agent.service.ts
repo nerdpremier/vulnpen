@@ -20,6 +20,8 @@ import {
   buildExecutionContext,
   ToolExecutionCallbacks,
   ToolExecutionResult,
+  ToolOutcomeWithResult,
+  hasTranscriptResult,
 } from "./agent.tools";
 import {
   buildPendingConsentBatch,
@@ -266,7 +268,7 @@ function createSseToolCallbacks(
   };
 }
 
-function toolResultToMessage(tr: ToolExecutionResult, turnIndex: number): AgentMessageDoc {
+function toolResultToMessage(tr: ToolOutcomeWithResult, turnIndex: number): AgentMessageDoc {
   return {
     id: uuidv4(),
     role: "tool",
@@ -286,6 +288,9 @@ function pushToolResultMessages(
   turnIndex: number,
 ): void {
   for (const tr of toolResults) {
+    // Consent-parked calls have no result yet; their transcript messages are
+    // written on the consent path (denial or consented execution).
+    if (!hasTranscriptResult(tr)) continue;
     const toolMsg = toolResultToMessage(tr, turnIndex);
     messages.push(toolMsg);
     newMessages.push(toolMsg);
@@ -646,16 +651,21 @@ export async function runAgentLoop(params: {
 
       let approvalCircuitOpen = false;
       for (const result of toolResults) {
-        if (!result.approvalReviewed) continue;
-        approvalCircuitOpen =
-          approvalRejections.record(result.approvalDenied === true) ||
-          approvalCircuitOpen;
+        // The circuit breaker counts only real approval outcomes: a review
+        // denial feeds it a rejection, an AI-reviewed execution an approval.
+        // Boundary blocks are not reviews — they are deterministic refusals —
+        // and unreviewed executions never enter the streak.
+        if (result.kind === "approval_denied") {
+          approvalCircuitOpen = approvalRejections.record(true) || approvalCircuitOpen;
+        } else if (result.kind === "executed" && result.approvalReviewed === true) {
+          approvalCircuitOpen = approvalRejections.record(false) || approvalCircuitOpen;
+        }
       }
 
-      const consentResults = toolResults.filter((r) => r.needsConsent);
+      const consentResults = toolResults.filter((r) => r.kind === "consent_required");
       if (consentResults.length > 0) {
         pushToolResultMessages(
-          toolResults.filter((tr) => !tr.needsConsent),
+          toolResults.filter(hasTranscriptResult),
           messages,
           newMessages,
           turnIndex,

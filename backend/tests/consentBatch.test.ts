@@ -10,10 +10,9 @@ import type { ToolCallData } from "../src/utils/llm/providers";
 
 function consentResult(id: string, name: string): ToolExecutionResult {
   return {
+    kind: "consent_required",
     toolCallId: id,
     toolName: name,
-    result: { output: "", exitCode: 0 },
-    needsConsent: true,
     safetyBlock: true,
     approvalReason: "destructive action",
     safetyReason: "เหตุผล",
