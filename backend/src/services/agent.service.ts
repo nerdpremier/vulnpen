@@ -75,6 +75,8 @@ import {
   assistantMessage,
   toolResultMessage,
   systemNoteMessage,
+  createRunBuffer,
+  RunBuffer,
 } from "./session-transcript";
 
 // ─── Build shell status context (injected after summarization) ──────
@@ -244,17 +246,14 @@ function toolResultToMessage(tr: ToolOutcomeWithResult, turnIndex: number): Agen
 
 function pushToolResultMessages(
   toolResults: ToolExecutionResult[],
-  messages: AgentMessageDoc[],
-  newMessages: AgentMessageDoc[],
+  runBuffer: RunBuffer,
   turnIndex: number,
 ): void {
   for (const tr of toolResults) {
     // Consent-parked calls have no result yet; their transcript messages are
     // written on the consent path (denial or consented execution).
     if (!hasTranscriptResult(tr)) continue;
-    const toolMsg = toolResultToMessage(tr, turnIndex);
-    messages.push(toolMsg);
-    newMessages.push(toolMsg);
+    runBuffer.add(toolResultToMessage(tr, turnIndex));
   }
 }
 
@@ -317,7 +316,11 @@ export async function runAgentLoop(params: {
     }
   }
 
-  let messages = [...session.messages];
+  const runBuffer = createRunBuffer(
+    sessionId,
+    [...session.messages],
+    () => !params.abortSignal?.aborted,
+  );
 
   // Refresh the system message on every turn so model assignments changed
   // in Settings are immediately visible to the orchestrator. The volatile
@@ -325,14 +328,13 @@ export async function runAgentLoop(params: {
   // from the session document below, so plan/finding mutations made by tools
   // mid-run reach the model without invalidating the prompt-cached static
   // prefix.
-  if (messages.length > 0 && messages[0].role === "system") {
-    messages[0] = await buildSystemMessage(sessionId, userId, envInfo);
+  if (runBuffer.transcript.length > 0 && runBuffer.transcript[0].role === "system") {
+    runBuffer.transcript[0] = await buildSystemMessage(sessionId, userId, envInfo);
   }
 
   const turnIndex = session.turnIndex;
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let iteration = 0;
-  const newMessages: AgentMessageDoc[] = [];
   let completedNormally = false;
   const approvalRejections = new ApprovalRejectionTracker();
 
@@ -346,16 +348,15 @@ export async function runAgentLoop(params: {
   ): Promise<void> => {
     sse.write("summarizing", summarizingEvent);
     const { summaryMessage, preservedMessages } = await contextBudget.compact(
-      messages,
+      runBuffer.transcript,
       {
         traceContext: { sessionId, userId },
         engagementState,
         toolSchemaTokens,
       },
     );
-    messages = preservedMessages;
-    await replaceMessages(sessionId, messages);
-    newMessages.length = 0;
+    runBuffer.replaceTranscript(preservedMessages);
+    await replaceMessages(sessionId, runBuffer.transcript);
     if (summaryMessage && opts.emitSummaryDone) {
       sse.write("summary_done", { summary: summaryMessage.content ?? "" });
     }
@@ -401,12 +402,8 @@ export async function runAgentLoop(params: {
       //
       // Sits at the top of the loop so it also covers iterations that ended via
       // `continue`; the final iteration is still flushed by the exit paths.
-      // Skipped after abort/clear: clearContext wipes the document and stale
-      // pre-clear messages must not be re-appended into the cleared session.
-      if (newMessages.length > 0 && !params.abortSignal?.aborted) {
-        await appendMessages(sessionId, newMessages);
-        newMessages.length = 0;
-      }
+      // flushIfLive skips after abort/clear — see the run buffer.
+      await runBuffer.flushIfLive();
 
       if (await isPaused(sessionId)) {
         await setAgentState(sessionId, "paused");
@@ -437,7 +434,7 @@ export async function runAgentLoop(params: {
         loadedTools: session.loadedTools ?? [],
       });
       const toolSchemaTokens = estimateToolSchemaTokens(tools);
-      const compaction = await contextBudget.plan(messages, toolSchemaTokens);
+      const compaction = await contextBudget.plan(runBuffer.transcript, toolSchemaTokens);
       if (compaction.shouldCompact) {
         await compactMessages(
           {
@@ -453,8 +450,7 @@ export async function runAgentLoop(params: {
 
         const shellStatusMsg = buildShellStatusMessage(shellManager, turnIndex);
         if (shellStatusMsg) {
-          messages.push(shellStatusMsg);
-          newMessages.push(shellStatusMsg);
+          runBuffer.add(shellStatusMsg);
         }
       }
 
@@ -465,14 +461,14 @@ export async function runAgentLoop(params: {
       // at the <volatile_system> marker, so this tail can change between
       // turns and tool-loop iterations without invalidating the prompt-cached
       // static prefix (~4.5k tokens) on Anthropic providers.
-      if (messages.length > 0 && messages[0].role === "system") {
+      if (runBuffer.transcript.length > 0 && runBuffer.transcript[0].role === "system") {
         const stateBlock = engagementState.isEmpty()
           ? ""
           : "\n" + engagementState.toPromptBlock();
         const volatileWebApp = await buildVolatileWebAppForSession(sessionId);
-        const sysContent = messages[0].content ?? "";
-        messages[0] = {
-          ...messages[0],
+        const sysContent = runBuffer.transcript[0].content ?? "";
+        runBuffer.transcript[0] = {
+          ...runBuffer.transcript[0],
           content: injectVolatileTail(
             sysContent,
             buildVolatileTail({ timezone: tz, stateBlock, webApp: volatileWebApp }),
@@ -480,13 +476,13 @@ export async function runAgentLoop(params: {
         };
       }
 
-      const openaiMessages = messagesToOpenAI(messages, orchestratorConfig.provider === "kimi");
+      const openaiMessages = messagesToOpenAI(runBuffer.transcript, orchestratorConfig.provider === "kimi");
 
       let assistantContent = "";
       let assistantReasoning = "";
       let assistantToolCalls: ToolCallData[] = [];
 
-      const { tags: traceTags, phase } = buildTraceTags("agent", messages, [
+      const { tags: traceTags, phase } = buildTraceTags("agent", runBuffer.transcript, [
         `session_id:${sessionId}`,
         `workspace_id:${session.workspaceId ?? "unknown"}`,
         `agent_role:main_orchestrator`,
@@ -568,8 +564,7 @@ export async function runAgentLoop(params: {
         },
         turnIndex,
       );
-      messages.push(assistantMsg);
-      newMessages.push(assistantMsg);
+      runBuffer.add(assistantMsg);
 
       if (result.finishReason === "length") {
         // The completion was truncated at the token limit, so the cached prompt
@@ -605,7 +600,7 @@ export async function runAgentLoop(params: {
             target: session.engagementContext?.target,
             scope: session.engagementContext?.scope,
           },
-          transcript: compactApprovalTranscript(messages),
+          transcript: compactApprovalTranscript(runBuffer.transcript),
         },
       );
 
@@ -626,8 +621,7 @@ export async function runAgentLoop(params: {
       if (consentResults.length > 0) {
         pushToolResultMessages(
           toolResults.filter(hasTranscriptResult),
-          messages,
-          newMessages,
+          runBuffer,
           turnIndex,
         );
 
@@ -635,7 +629,7 @@ export async function runAgentLoop(params: {
         // the consent-batch module; the loop only parks and streams it.
         const batch = buildPendingConsentBatch(consentResults, assistantToolCalls);
         sse.write("consent_required", consentRequiredEvent(batch));
-        await appendMessages(sessionId, newMessages);
+        await runBuffer.flush();
         await persistPendingConsent(sessionId, batch);
         sse.end();
         return;
@@ -646,9 +640,8 @@ export async function runAgentLoop(params: {
           { sessionId },
           { $inc: { "consentStats.circuitOpens": 1 } },
         );
-        pushToolResultMessages(toolResults, messages, newMessages, turnIndex);
-        await appendMessages(sessionId, newMessages);
-        newMessages.length = 0;
+        pushToolResultMessages(toolResults, runBuffer, turnIndex);
+        await runBuffer.flush();
         await setAgentState(sessionId, "idle");
         sse.write("error", {
           message:
@@ -658,7 +651,7 @@ export async function runAgentLoop(params: {
         return;
       }
 
-      pushToolResultMessages(toolResults, messages, newMessages, turnIndex);
+      pushToolResultMessages(toolResults, runBuffer, turnIndex);
 
       // The load_tools handler persists to the session document through the
       // same requestedDeferredNames parser applied here, so the in-memory
@@ -680,7 +673,7 @@ export async function runAgentLoop(params: {
       !completedNormally &&
       !params.abortSignal?.aborted;
 
-    await appendMessages(sessionId, newMessages);
+    await runBuffer.flush();
 
     if (params.abortSignal?.aborted) {
       await setAgentState(sessionId, "paused");
@@ -704,12 +697,10 @@ export async function runAgentLoop(params: {
     sse.end();
   } catch (err: any) {
     console.error("[agent] Loop error:", err);
-    // Skip the flush on abort/clear — the session document may have just been
-    // wiped by clearContext and must not be re-polluted with stale messages.
-    if (!params.abortSignal?.aborted) {
-      await appendMessages(sessionId, newMessages);
-    }
-    newMessages.length = 0;
+    // flushIfLive skips the flush on abort/clear — the session document may
+    // have just been wiped by clearContext and must not be re-polluted with
+    // stale messages.
+    await runBuffer.flushIfLive();
     const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
     await setAgentState(sessionId, isAbort ? "paused" : "idle");
     if (isAbort) {

@@ -119,6 +119,73 @@ export async function trackTokens(
   );
 }
 
+// ─── Run buffer ────────────────────────────────────────────────────────
+// One owner for the run's unflushed tail: the messages an agent run has
+// produced that have not yet reached Mongo. Before this seam the loop kept a
+// parallel `newMessages` array that every producer had to remember to push
+// into alongside the transcript (missing one compiles fine and silently
+// breaks either the model's view or the DB flush), and the flush protocol —
+// "append at every iteration boundary and turn-ending exit, but never
+// re-pollute a session that clearContext just wiped" — was copied across five
+// sites with hand-written abort guards.
+
+export interface RunBuffer {
+  /** The working transcript: what the model sees for the rest of this run. */
+  readonly transcript: AgentMessageDoc[];
+  /**
+   * Add messages to the transcript AND the unflushed tail — one call, both
+   * lists. The only way a run appends to the transcript.
+   */
+  add(...messages: AgentMessageDoc[]): void;
+  /**
+   * Swap in the post-compaction transcript and drop the tail: its messages
+   * were folded into the summary and are gone from the transcript.
+   */
+  replaceTranscript(messages: AgentMessageDoc[]): void;
+  /** Append the tail to Mongo and clear it. No-op when the tail is empty. */
+  flush(): Promise<void>;
+  /**
+   * flush(), but skipped while the run is aborting: clearContext wipes the
+   * session document, and stale pre-clear messages must not be re-appended
+   * into the cleared session. Used at iteration boundaries and on the error
+   * path; turn-ending exits (consent park, circuit open, normal end) flush
+   * unconditionally with flush().
+   */
+  flushIfLive(): Promise<void>;
+}
+
+export function createRunBuffer(
+  sessionId: string,
+  initialTranscript: AgentMessageDoc[],
+  isLive: () => boolean,
+): RunBuffer {
+  let transcript = initialTranscript;
+  let tail: AgentMessageDoc[] = [];
+
+  const flush = async (): Promise<void> => {
+    await appendMessages(sessionId, tail);
+    tail = [];
+  };
+
+  return {
+    get transcript() {
+      return transcript;
+    },
+    add(...messages) {
+      transcript.push(...messages);
+      tail.push(...messages);
+    },
+    replaceTranscript(messages) {
+      transcript = messages;
+      tail = [];
+    },
+    flush,
+    async flushIfLive() {
+      if (tail.length > 0 && isLive()) await flush();
+    },
+  };
+}
+
 // ─── Run-state reset ───────────────────────────────────────────────────
 
 /**
