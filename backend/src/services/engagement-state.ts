@@ -294,3 +294,50 @@ export class EngagementState {
     }
   }
 }
+
+// ─── Session bootstrap ──────────────────────────────────────────────
+
+/**
+ * Rebuild the in-memory engagement state from the persisted session document.
+ * Shared by the main agent loop and the consent path so every
+ * execution context can record state via update_engagement_state.
+ */
+export function engagementStateFromSession(session: any): EngagementState {
+  const engagementState = new EngagementState("pentest");
+  // Declared engagement boundary. Only the Target arms the scope gate; the free
+  // text below is what the gate then parses into the host allowlist, so a stray
+  // domain in the Scope prose widens the boundary instead of redefining it.
+  engagementState.declaredTarget = session?.engagementContext?.target ?? "";
+  engagementState.scope = [
+    session?.engagementContext?.target,
+    session?.engagementContext?.scope,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  engagementState.vulnerabilities = (session?.vulnerabilities ?? []).map(
+    (vulnerability: any) => ({
+      vulnerabilityId: vulnerability.vulnerabilityId,
+      fingerprint: vulnerability.fingerprint,
+      host: vulnerability.host,
+      service: vulnerability.service,
+      endpoint: vulnerability.endpoint,
+      title: vulnerability.title,
+      severity: vulnerability.severity,
+      likelihood: vulnerability.likelihood,
+      impactRating: vulnerability.impactRating,
+      cwe: vulnerability.cwe,
+      evidence: vulnerability.evidence,
+      stepsToReproduce: vulnerability.stepsToReproduce,
+      contextSummary: vulnerability.contextSummary,
+      impact: vulnerability.impact,
+      remediation: vulnerability.remediation,
+      exploited: vulnerability.exploited,
+      cve: vulnerability.cve,
+      status: vulnerability.status,
+      source: vulnerability.source,
+      createdAt: vulnerability.createdAt,
+      updatedAt: vulnerability.updatedAt,
+    }),
+  );
+  return engagementState;
+}

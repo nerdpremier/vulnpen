@@ -3,9 +3,8 @@ import {
   getCapabilityByName,
   getActiveBucketIds,
 } from "../../capabilities/registry";
-import { readEnvFile } from "../envWriter";
-import { getAssignedModels } from "../modelRegistryStore";
-import { SHELL_TOOL_NAMES } from "../../tools/names";
+import { SHELL_TOOL_NAMES, BURP_TOOL_NAMES, BROWSER_TOOL_NAMES } from "../../tools/names";
+import { VOLATILE_SYSTEM_MARKER } from "./volatileContext";
 import {
   WSTG_SOURCE,
   WSTG_VERSION,
@@ -46,6 +45,15 @@ export interface AgentPromptConfig {
     unmappedFindingCount?: number;
     owaspBreakdown?: Array<{ id: string; title: string; findings: number }>;
   };
+  /**
+   * Names of tools that failed their readiness check (derived once via
+   * getUnconfiguredToolNames — the same seam that filters the tool schemas).
+   * Sections advertising the Burp suite or the browser agent are only rendered
+   * when those tools are actually configured, so the prompt can never
+   * advertise an integration the schema filter drops (or vice versa).
+   * Omitted = assume everything is configured (direct callers / tests).
+   */
+  unconfiguredToolNames?: string[];
 }
 
 function buildWebAppSecuritySection(
@@ -93,7 +101,7 @@ ${engagementSection}Your primary discipline is web application security testing.
 Classify findings into the OWASP Top 10:2025 categories with \`map_finding_owasp\`; its description lists the valid category ids.
 
 ## Current plan and risk posture
-The WSTG test plan (coverage, recorded results, next cases), tracked findings and OWASP risk spread are re-injected every step inside the \`<volatile_system>\` block at the end of this prompt — work the plan from there.
+The WSTG test plan (coverage, recorded results, next cases), tracked findings and OWASP risk spread are re-injected every step inside the \`${VOLATILE_SYSTEM_MARKER}\` block at the end of this prompt — work the plan from there.
 </web_application_security_testing>\n`;
 }
 
@@ -168,10 +176,13 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
   - Also: /usr/share/wordlists/seclists/, /usr/share/wordlists/metasploit/, /usr/share/wordlists/wfuzz/`
     : "";
 
-  const env = readEnvFile();
-  const burpConfigured = !!env.BURP_RPC_HOST;
-  const browserConfigured =
-    env.MAGNITUDE_ENABLED === "true" && !!getAssignedModels().browser?.apiKey;
+  // Readiness comes from the tool definitions' own checkReady seam (via
+  // unconfiguredToolNames), not from re-reading the env file here: the prompt
+  // must agree with the schema filter and the run path, which already use
+  // that one source of truth. Omitted list = assume configured.
+  const unconfigured = new Set(config.unconfiguredToolNames ?? []);
+  const burpConfigured = !BURP_TOOL_NAMES.some((name) => unconfigured.has(name));
+  const browserConfigured = !unconfigured.has(BROWSER_TOOL_NAMES[0]);
   const webAppSection = buildWebAppSecuritySection(config, browserConfigured);
 
   let burpSection = "";

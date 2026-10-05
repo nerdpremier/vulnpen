@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from "uuid";
-import { Response } from "express";
 import SessionsModel, {
   AgentMessageDoc,
 } from "../models/Sessions/Sessions.model";
@@ -22,13 +21,14 @@ import {
   ToolExecutionCallbacks,
   ToolExecutionResult,
 } from "./agent.tools";
-import { planCompaction, summarizeMessages, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
+import { ContextBudget, messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
 import { buildSystemPrompt, buildVolatileWebAppPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/assistant/prompts";
+import { buildVolatileTail, injectVolatileTail } from "../utils/assistant/volatileContext";
 import { computeOwaspCoverage } from "../knowledge";
 import type { SessionVulnerabilityDoc } from "../models/Sessions/Sessions.model";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
-import { EngagementState } from "./engagement-state";
+import { engagementStateFromSession } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
 import { normalizeMaxAgentIterations } from "../utils/agentConfig";
@@ -53,56 +53,7 @@ import {
 
 // ─── SSE helpers ─────────────────────────────────────────────────────
 
-export interface SSEWriter {
-  write: (event: string, data: any) => void;
-  end: () => void;
-}
-
-export function createSSEWriter(res: Response): SSEWriter {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-    "X-Accel-Buffering": "no",
-  });
-
-  return {
-    write(event: string, data: any) {
-      try {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      } catch {
-        // client disconnected
-      }
-    },
-    end() {
-      try {
-        res.end();
-      } catch {
-        // already ended
-      }
-    },
-  };
-}
-
-/**
- * An SSEWriter with no client attached, for agent runs started by the server
- * rather than by a streaming request. The agent loop
- * already persists messages and state to the session document, so the UI picks
- * the run up from session history — these events simply have nowhere to go.
- *
- * `error` events are logged, since with no client there is otherwise no trace
- * of why a detached run died.
- */
-export function createDetachedSSEWriter(label: string): SSEWriter {
-  return {
-    write(event: string, data: any) {
-      if (event === "error") {
-        console.error(`[agent:detached:${label}] ${data?.message ?? JSON.stringify(data)}`);
-      }
-    },
-    end() {},
-  };
-}
+import type { SSEWriter } from "../utils/sse";
 
 // ─── Message persistence ─────────────────────────────────────────────
 
@@ -171,17 +122,38 @@ function buildShellStatusMessage(shellManager: ShellManager, turnIndex: number):
 
 // ─── Build system message for a session ──────────────────────────────
 
+async function loadSessionPromptFacts(sessionId: string): Promise<{
+  engagement: { target: string; scope: string };
+  webAppSecurity: NonNullable<AgentPromptConfig["webAppSecurity"]>;
+}> {
+  const session = await SessionsModel.findOne({ sessionId })
+    .select("workspaceId engagementContext webAppTestPlan vulnerabilities")
+    .lean();
+  const storedVulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
+  const owaspCoverage = computeOwaspCoverage(storedVulnerabilities);
+  return {
+    engagement: {
+      target: session?.engagementContext?.target ?? "",
+      scope: session?.engagementContext?.scope ?? "",
+    },
+    webAppSecurity: {
+      testPlan: (session?.webAppTestPlan as any) ?? null,
+      findingCount: owaspCoverage.total,
+      unmappedFindingCount: owaspCoverage.unmapped,
+      owaspBreakdown: owaspCoverage.byOwasp.filter((row) => row.findings > 0),
+    },
+  };
+}
+
 async function buildAgentPromptConfig(
   sessionId: string,
   userId: string,
   envInfo?: BoxEnvInfo,
 ): Promise<AgentPromptConfig> {
   const user = await UserModel.findById(userId);
-  const session = await SessionsModel.findOne({ sessionId })
-    .select("workspaceId engagementContext webAppTestPlan vulnerabilities")
-    .lean();
   const now = new Date();
-  const promptConfig: AgentPromptConfig = {
+  const { engagement, webAppSecurity } = await loadSessionPromptFacts(sessionId);
+  return {
     sessionId,
     installedCapabilities: user?.configs?.installedCapabilities ?? [],
     selectedCapabilities: user?.configs?.capabilities ?? [],
@@ -189,39 +161,39 @@ async function buildAgentPromptConfig(
     currentDay: now.toLocaleDateString("en-US", { weekday: "long" }),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     envInfo,
-    engagement: {
-      target: session?.engagementContext?.target ?? "",
-      scope: session?.engagementContext?.scope ?? "",
-    },
+    // Same readiness seam the schema filter uses, so the prompt can never
+    // advertise a tool the model is not actually offered.
+    unconfiguredToolNames: await getUnconfiguredToolNames(),
+    engagement,
+    webAppSecurity,
   };
+}
 
-  const storedVulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-  const owaspCoverage = computeOwaspCoverage(storedVulnerabilities);
-  promptConfig.webAppSecurity = {
-    testPlan: (session?.webAppTestPlan as any) ?? null,
-    findingCount: owaspCoverage.total,
-    unmappedFindingCount: owaspCoverage.unmapped,
-    owaspBreakdown: owaspCoverage.byOwasp.filter((row) => row.findings > 0),
-  };
-
-  return promptConfig;
+/**
+ * Re-render the volatile web-app part (WSTG plan + OWASP risk posture) from
+ * the session document. Called EVERY tool-loop iteration: update_case and
+ * add_vulnerability persist through session-plan-store and the vulnerability
+ * tools, so the session snapshot the loop holds in memory goes stale the
+ * moment a tool mutates the plan — rendering from the document keeps the
+ * model's plan view in step with what the tools report.
+ */
+async function buildVolatileWebAppForSession(sessionId: string): Promise<string> {
+  const { engagement, webAppSecurity } = await loadSessionPromptFacts(sessionId);
+  return buildVolatileWebAppPrompt({ sessionId, engagement, webAppSecurity });
 }
 
 async function buildSystemMessage(
   sessionId: string,
   userId: string,
   envInfo?: BoxEnvInfo,
-): Promise<{ sysMsg: AgentMessageDoc; volatileWebApp: string }> {
+): Promise<AgentMessageDoc> {
   const promptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
   return {
-    sysMsg: {
-      id: `sys_${sessionId}`,
-      role: "system",
-      content: buildSystemPrompt(promptConfig),
-      timestamp: new Date(),
-      turnIndex: 0,
-    },
-    volatileWebApp: buildVolatileWebAppPrompt(promptConfig),
+    id: `sys_${sessionId}`,
+    role: "system",
+    content: buildSystemPrompt(promptConfig),
+    timestamp: new Date(),
+    turnIndex: 0,
   };
 }
 
@@ -377,45 +349,40 @@ export async function runAgentLoop(params: {
 
   // Refresh the system message on every turn so model assignments changed
   // in Settings are immediately visible to the orchestrator. The volatile
-  // web-app part (plan render + risk posture) is captured alongside: it
-  // changes with plan/finding mutations and is re-injected inside the
-  // <volatile_system> tail below instead of the static prompt, keeping the
-  // prompt-cached static prefix warm.
-  let volatileWebApp = "";
+  // web-app part (plan render + risk posture) is re-rendered per iteration
+  // from the session document below, so plan/finding mutations made by tools
+  // mid-run reach the model without invalidating the prompt-cached static
+  // prefix.
   if (messages.length > 0 && messages[0].role === "system") {
-    const { sysMsg, volatileWebApp: webAppPart } = await buildSystemMessage(sessionId, userId, envInfo);
-    messages[0] = sysMsg;
-    volatileWebApp = webAppPart;
+    messages[0] = await buildSystemMessage(sessionId, userId, envInfo);
   }
 
   const turnIndex = session.turnIndex;
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let iteration = 0;
-  let lastPromptTokens: number | undefined;
   const newMessages: AgentMessageDoc[] = [];
   let completedNormally = false;
   const approvalRejections = new ApprovalRejectionTracker();
+  const contextBudget = new ContextBudget();
 
   // Shared by the proactive path and the finishReason === "length" path. The
-  // cached-prompt reset inside is the invariant that once caused the re-summary
-  // loop: keeping the pre-summary number made the next iteration measure a
-  // prompt that no longer existed, so it summarized again immediately.
+  // cached-prompt reset lives inside ContextBudget.compact — that invariant is
+  // what once caused the re-summary loop.
   const compactMessages = async (
     summarizingEvent: Record<string, unknown>,
     toolSchemaTokens: number,
     opts: { emitSummaryDone?: boolean } = {},
   ): Promise<void> => {
     sse.write("summarizing", summarizingEvent);
-    const { summaryMessage, preservedMessages, projectedPromptTokens } =
-      await summarizeMessages(
-        messages,
-        { sessionId, userId },
+    const { summaryMessage, preservedMessages } = await contextBudget.compact(
+      messages,
+      {
+        traceContext: { sessionId, userId },
         engagementState,
         toolSchemaTokens,
-      );
+      },
+    );
     messages = preservedMessages;
-    // Reset the cached prompt size to the POST-compaction projection.
-    lastPromptTokens = projectedPromptTokens;
     await replaceMessages(sessionId, messages);
     newMessages.length = 0;
     if (summaryMessage && opts.emitSummaryDone) {
@@ -436,7 +403,7 @@ export async function runAgentLoop(params: {
       })
     : undefined;
 
-  const engagementState = buildEngagementState(session);
+  const engagementState = engagementStateFromSession(session);
 
   const executionCtx = buildExecutionContext({
     sessionId,
@@ -494,7 +461,7 @@ export async function runAgentLoop(params: {
         loadedTools: session.loadedTools ?? [],
       });
       const toolSchemaTokens = estimateToolSchemaTokens(tools);
-      const compaction = await planCompaction(messages, lastPromptTokens, toolSchemaTokens);
+      const compaction = await contextBudget.plan(messages, toolSchemaTokens);
       if (compaction.shouldCompact) {
         await compactMessages(
           {
@@ -516,30 +483,24 @@ export async function runAgentLoop(params: {
       }
 
       // Inject the volatile system tail — current time plus the structured
-      // engagement state — after the static prompt. anthropicParams splits
-      // requests at the <volatile_system> marker, so this tail can change
-      // between turns and tool-loop iterations without invalidating the
-      // prompt-cached static prefix (~4.5k tokens) on Anthropic providers.
+      // engagement state plus the WSTG plan and risk posture (re-rendered
+      // from the session document, so mid-run plan/finding mutations are
+      // visible) — after the static prompt. anthropicParams splits requests
+      // at the <volatile_system> marker, so this tail can change between
+      // turns and tool-loop iterations without invalidating the prompt-cached
+      // static prefix (~4.5k tokens) on Anthropic providers.
       if (messages.length > 0 && messages[0].role === "system") {
         const stateBlock = engagementState.isEmpty()
           ? ""
           : "\n" + engagementState.toPromptBlock();
-        const now = new Date();
-        const time = now.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        });
-        const volatileBlock =
-          `<volatile_system>\n<run_clock>Current time: ${time} ${tz}</run_clock>${stateBlock}\n${volatileWebApp}\n</volatile_system>`;
+        const volatileWebApp = await buildVolatileWebAppForSession(sessionId);
         const sysContent = messages[0].content ?? "";
-        const markerStart = sysContent.indexOf("<volatile_system>");
         messages[0] = {
           ...messages[0],
-          content:
-            markerStart !== -1
-              ? sysContent.slice(0, markerStart) + volatileBlock
-              : sysContent + "\n\n" + volatileBlock,
+          content: injectVolatileTail(
+            sysContent,
+            buildVolatileTail({ timezone: tz, stateBlock, webApp: volatileWebApp }),
+          ),
         };
       }
 
@@ -602,19 +563,20 @@ export async function runAgentLoop(params: {
       assistantToolCalls = result.toolCalls;
 
       if (result.usage) {
-        lastPromptTokens = result.usage.prompt_tokens ?? 0;
+        const promptTokens = result.usage.prompt_tokens ?? 0;
+        contextBudget.observe(promptTokens);
 
         await trackTokens(
           sessionId,
-          lastPromptTokens,
+          promptTokens,
           result.usage.completion_tokens ?? 0,
           result.usage.total_tokens ?? 0,
         );
 
         const contextLimit = getModelContextLimit(orchestratorConfig.model);
         sse.write("token_usage", {
-          totalTokens: lastPromptTokens,
-          promptTokens: lastPromptTokens,
+          totalTokens: promptTokens,
+          promptTokens,
           completionTokens: result.usage.completion_tokens ?? 0,
           contextLimit,
           iteration,
@@ -839,8 +801,7 @@ export async function initAndRun(params: {
   }
 
   if (session.messages.length === 0) {
-    const { sysMsg } = await buildSystemMessage(sessionId, userId);
-    session.messages.push(sysMsg);
+    session.messages.push(await buildSystemMessage(sessionId, userId));
   }
 
   const userMsg: AgentMessageDoc = {
@@ -857,51 +818,6 @@ export async function initAndRun(params: {
   sse.write("user_message_ack", { id: userMsg.id });
 
   await runAgentLoop({ sessionId, userId, sse, abortSignal });
-}
-
-// ─── Engagement state bootstrap ──────────────────────────────────────
-
-/**
- * Rebuild the in-memory engagement state from the persisted session document.
- * Shared by the main agent loop and the consent path so every
- * execution context can record state via update_engagement_state.
- */
-export function buildEngagementState(session: any): EngagementState {
-  const engagementState = new EngagementState("pentest");
-  // Declared engagement boundary. Only the Target arms the scope gate; the free
-  // text below is what the gate then parses into the host allowlist, so a stray
-  // domain in the Scope prose widens the boundary instead of redefining it.
-  engagementState.declaredTarget = session?.engagementContext?.target ?? "";
-  engagementState.scope = [
-    session?.engagementContext?.target,
-    session?.engagementContext?.scope,
-  ]
-    .filter(Boolean)
-    .join(" ");
-  engagementState.vulnerabilities = (session?.vulnerabilities ?? []).map((vulnerability: any) => ({
-    vulnerabilityId: vulnerability.vulnerabilityId,
-    fingerprint: vulnerability.fingerprint,
-    host: vulnerability.host,
-    service: vulnerability.service,
-    endpoint: vulnerability.endpoint,
-    title: vulnerability.title,
-    severity: vulnerability.severity,
-    likelihood: vulnerability.likelihood,
-    impactRating: vulnerability.impactRating,
-    cwe: vulnerability.cwe,
-    evidence: vulnerability.evidence,
-    stepsToReproduce: vulnerability.stepsToReproduce,
-    contextSummary: vulnerability.contextSummary,
-    impact: vulnerability.impact,
-    remediation: vulnerability.remediation,
-    exploited: vulnerability.exploited,
-    cve: vulnerability.cve,
-    status: vulnerability.status,
-    source: vulnerability.source,
-    createdAt: vulnerability.createdAt,
-    updatedAt: vulnerability.updatedAt,
-  }));
-  return engagementState;
 }
 
 // ─── Handle consent response and resume ──────────────────────────────
@@ -964,7 +880,7 @@ export async function handleConsent(params: {
     shellManager,
     userId,
     abortSignal,
-    engagementState: buildEngagementState(session),
+    engagementState: engagementStateFromSession(session),
   });
 
   const callbacks = createSseToolCallbacks(sse);

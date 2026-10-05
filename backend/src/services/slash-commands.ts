@@ -1,5 +1,5 @@
 import SessionsModel from "../models/Sessions/Sessions.model";
-import type { SSEWriter } from "./agent.service";
+import type { SSEWriter } from "../utils/sse";
 import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { sessionLifecycle } from "./session.lifecycle";

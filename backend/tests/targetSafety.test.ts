@@ -11,7 +11,7 @@ import {
 } from "../src/utils/consentDetail";
 import { EngagementState } from "../src/services/engagement-state";
 
-// Mirrors buildEngagementState: the Target arms the gate, the joined free text
+// Mirrors engagementStateFromSession: the Target arms the gate, the joined free text
 // is what the gate parses into the allowlist.
 function ctx(declaredTarget: string, scopeText = "") {
   const state = new EngagementState();

@@ -4,8 +4,8 @@ import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
 import { requireActiveSession, resetSessionContext } from "../services/session.helpers";
+import { createSSEWriter } from "../utils/sse";
 import {
-  createSSEWriter,
   initAndRun,
   handleConsent,
   runAgentLoop,
@@ -23,7 +23,7 @@ import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { resolveSessionFile } from "../services/artifacts.service";
 import { getProvider } from "../utils/llm/providers";
 import { sessionLifecycle } from "../services/session.lifecycle";
-import type { SSEWriter } from "../services/agent.service";
+import type { SSEWriter } from "../utils/sse";
 import {
   getCapabilityByName,
   getInstallCommandForOS,

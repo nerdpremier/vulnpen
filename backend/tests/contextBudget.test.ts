@@ -59,6 +59,7 @@ import {
   COMPACTION_TUNING,
   selectPreservedWindow,
   estimateToolSchemaTokens,
+  ContextBudget,
 } from "../src/services/context.service";
 
 function turn(i: number, chars: number): AgentMessageDoc {
@@ -230,5 +231,41 @@ test("planCompaction prices the caller-supplied tool-schema cost", async () => {
   assert.ok(
     heavy.promptTokens - base.promptTokens >= 40_000,
     "the schema cost must move the full-prompt estimate",
+  );
+});
+// ─── ContextBudget ─────────────────────────────────────────────────────
+// The compaction state machine (cached prompt size + the summarize/reset
+// invariant) now lives in one object; these pin its contract.
+
+test("ContextBudget prices the plan with the provider-reported prompt size", async () => {
+  const budget = new ContextBudget();
+  const msgs: AgentMessageDoc[] = [
+    doc({ id: "sys", role: "system", content: "system " + "S".repeat(2_000) }),
+  ];
+  const est = estimatePromptTokens(msgs);
+  const unobserved = await budget.plan(msgs, 0);
+  assert.equal(unobserved.promptTokens, est, "without an observation the estimate stands alone");
+
+  budget.observe(50_000);
+  const observed = await budget.plan(msgs, 0);
+  assert.equal(observed.promptTokens, 50_000, "the provider number is ground truth and wins");
+});
+
+test("ContextBudget.compact resets the cached prompt size to the post-compaction projection", async () => {
+  const budget = new ContextBudget();
+  budget.observe(50_000);
+  const msgs: AgentMessageDoc[] = [
+    doc({ id: "sys", role: "system", content: "system " + "S".repeat(2_000) }),
+  ];
+  // Nothing to summarize -> the projection is the estimate of the same list,
+  // and no summarizer LLM call is needed to exercise the reset.
+  const result = await budget.compact(msgs, { toolSchemaTokens: 0 });
+  assert.equal(result.projectedPromptTokens, estimatePromptTokens(msgs));
+
+  const plan = await budget.plan(msgs, 0);
+  assert.equal(
+    plan.promptTokens,
+    estimatePromptTokens(msgs),
+    "the stale pre-compaction provider number must not survive a compaction",
   );
 });

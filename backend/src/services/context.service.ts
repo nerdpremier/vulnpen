@@ -292,6 +292,53 @@ export const COMPACTION_TUNING = {
   SUMMARY_TOKEN_ESTIMATE,
 } as const;
 
+/**
+ * Per-run owner of the compaction state machine: the cached prompt size and
+ * the summarize/reset invariant live HERE, not in the agent loop. The
+ * invariant that once caused the re-summary loop — resetting the cached prompt
+ * size to the POST-compaction projection, so the next iteration never measures
+ * a prompt that no longer exists — is enforced inside compact(), where it can
+ * be tested without Mongo, SSE, or a live LLM.
+ */
+export class ContextBudget {
+  private lastPromptTokens?: number;
+
+  /** Ground-truth prompt size reported by the provider after each call. */
+  observe(promptTokens: number): void {
+    this.lastPromptTokens = promptTokens;
+  }
+
+  /** Decide whether this iteration must compact (see planCompaction). */
+  plan(
+    messages: AgentMessageDoc[],
+    toolSchemaTokens: number,
+  ): Promise<CompactionPlan> {
+    return planCompaction(messages, this.lastPromptTokens, toolSchemaTokens);
+  }
+
+  /**
+   * Run the summarization and reset the cached prompt size to the
+   * post-compaction projection.
+   */
+  async compact(
+    messages: AgentMessageDoc[],
+    opts: {
+      traceContext?: { sessionId?: string; userId?: string };
+      engagementState?: EngagementState;
+      toolSchemaTokens?: number;
+    } = {},
+  ): Promise<CompactionResult> {
+    const result = await summarizeMessages(
+      messages,
+      opts.traceContext,
+      opts.engagementState,
+      opts.toolSchemaTokens,
+    );
+    this.lastPromptTokens = result.projectedPromptTokens;
+    return result;
+  }
+}
+
 const FALLBACK_SUMMARIZE_PROMPT = `You are a penetration test engagement summarizer. Your job is to compress a conversation history into a dense summary that preserves all important context for continuing the engagement.
 
 Include in your summary:

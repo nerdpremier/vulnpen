@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import type Anthropic from "@anthropic-ai/sdk";
 import { parseToolArguments } from "../toolArguments";
+import { splitVolatileTail } from "../assistant/volatileContext";
 
 /**
  * Builders for Anthropic native Messages API requests.
@@ -107,10 +108,10 @@ export function openaiToAnthropicMessages(
   for (const m of messages) {
     if (m.role === "system") {
       const text = typeof m.content === "string" ? m.content : "";
-      const marker = text.indexOf("<volatile_system>");
-      if (marker !== -1) {
-        system += text.slice(0, marker);
-        volatileSystem += text.slice(marker);
+      const { staticPrefix, volatileTail } = splitVolatileTail(text);
+      if (volatileTail) {
+        system += staticPrefix;
+        volatileSystem += volatileTail;
       } else {
         system += text + "\n";
       }
