@@ -95,6 +95,14 @@ model, API key) is configured. Declared per tool by `checkReady` in its
 filter, the run path and the prompt builder all consume that one seam — never
 re-derive readiness from env reads elsewhere.
 
+**Orchestrator resolution** — "which model orchestrates for this user", one
+verb in `utils/llm/providers.ts` (`resolveOrchestrator`): the assigned
+orchestrator (verified, host-owner-restricted) or the env default, returned
+as a ready `ProviderConfig` plus its reasoning mode, fresh on every call.
+The per-user invocation path never re-derives the fallback chain, the
+verification check, or the reasoning-mode cast; `getProvider` remains only
+for the global env default (budget math without a user context).
+
 **Consent batch** — the group of tool calls parked when the approval gate
 stops a turn (`pendingConsent` on the session document, `consentStats` for the
 counters). Owned by `services/consent-batch.ts`: the batch shape
