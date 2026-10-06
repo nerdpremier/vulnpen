@@ -125,20 +125,60 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.userMessage {
+.userMessageWrap {
+  display: flex;
+  flex-direction: column;
   align-self: flex-end;
+  align-items: flex-end;
   max-width: 100%;
-  background: var(--accent-bg, #1a3a5c);
-  border: 1px solid var(--accent-border, #2a5a8c);
-  border-radius: 12px 12px 4px 12px;
-  padding: 0.75rem 1rem;
-  color: var(--primary-text, #fff);
+  min-width: 0;
+}
+
+.userMessage {
+  max-width: 100%;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--moon-line-1, rgba(255, 255, 255, 0.09));
+  border-radius: 14px;
+  padding: 0.7rem 1rem;
+  color: var(--primary-text, #ddd);
   font-size: 0.875rem;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: break-word;
   min-width: 0;
+}
+
+.userMessageActions {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.2rem 0.35rem 0;
+}
+
+.userMessageAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--moon-text-dim, #777);
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: var(--primary-text);
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.userMessageWrap:hover .userMessageAction,
+.userMessageAction:focus-visible {
+  opacity: 1;
 }
 
 .assistantMessage {

@@ -279,7 +279,7 @@ input:-webkit-autofill:active {
   background: transparent;
   /* Translucent-white border, the canonical outline pill. */
   border: 1px solid var(--moon-accent-24);
-  color: var(--moon-text-dim);
+  color: var(--moon-text);
 
   &:not(:disabled):not(.ant-btn-disabled) {
     &:hover,
@@ -1127,6 +1127,18 @@ textarea.ant-input {
   .ant-modal-confirm-content {
     color: var(--moon-text-dim);
     font-size: 0.84rem;
+  }
+}
+
+/* Confirm popups carry custom ok backgrounds (danger red etc.), so the
+   accent-ink primary rule does not apply — keep their text white. */
+.appConfirmPopUp {
+  .ant-btn-primary {
+    color: #fff !important;
+
+    .anticon {
+      color: #fff !important;
+    }
   }
 }
 

@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { BulbOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
+import {
+  BulbOutlined,
+  CheckOutlined,
+  CopyOutlined,
+  DownOutlined,
+  RightOutlined,
+} from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import ReactMarkdown from "react-markdown";
 import styles from "@/styles/components/Chat.module.scss";
@@ -130,6 +136,35 @@ function areMessagePropsEqual(prev, next) {
   return true;
 }
 
+/** A user turn: the soft neutral bubble plus a quiet copy action under it. */
+function UserMessageBubble({ content }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(content ?? "");
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className={styles.userMessageWrap}>
+      <div className={styles.userMessage}>{content}</div>
+      <div className={styles.userMessageActions}>
+        <button
+          type="button"
+          className={styles.userMessageAction}
+          title={copied ? "Copied" : "Copy message"}
+          onClick={copy}
+        >
+          {copied ? <CheckOutlined /> : <CopyOutlined />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const ChatMessage = React.memo(function ChatMessage({ message, toolIndex, sessionId }) {
   const { role, content, streaming, isError, isSummary, toolCalls, reasoning, reasoningStreaming, burpMeta } = message;
 
@@ -165,7 +200,7 @@ const ChatMessage = React.memo(function ChatMessage({ message, toolIndex, sessio
     }
     return (
       <div className={styles.message}>
-        <div className={styles.userMessage}>{content}</div>
+        <UserMessageBubble content={content} />
       </div>
     );
   }

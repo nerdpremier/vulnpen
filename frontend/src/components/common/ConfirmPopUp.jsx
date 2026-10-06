@@ -6,7 +6,9 @@ export const useConfirmPopUp = () => {
 
   return (props) => {
     modal.confirm({
-      className: props.className,
+      className: ["appConfirmPopUp", props.className]
+        .filter(Boolean)
+        .join(" "),
       title: props.title,
       content: props.content,
       icon: props.icon ?? (
@@ -27,7 +29,7 @@ export const useConfirmPopUp = () => {
         style: {
           background: "rgba(255, 255, 255, 0.05)",
           borderColor: "rgba(255, 255, 255, 0.14)",
-          color: "rgba(255, 255, 255, 0.75)",
+          color: "var(--moon-text)",
           borderRadius: "8px",
         },
       },
