@@ -11,6 +11,7 @@ import {
   runAgentLoop,
 } from "../services/agent.service";
 import { setAgentState, setPaused } from "../services/agent-state.service";
+import { pump } from "../services/web-security/run-queue.service";
 import {
   reserveAbortController,
   releaseAbortController,
@@ -33,12 +34,17 @@ import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
 
 // Every agent run exit path goes through this: release the controller slot and
 // arm the idle timer so ShellManagers (SSH connections, local shells) are torn
-// down after 30 idle minutes instead of leaking until process restart.
+// down after 30 idle minutes instead of leaking until process restart. A freed
+// slot is also the queue's cue: any UI-launched WSTG run waiting in line starts
+// here, whether the slot was held by chat, resume, consent or another run.
 function releaseAfterRun(sessionId: string, abortCtrl: AbortController): void {
   releaseAbortController(sessionId, abortCtrl);
   if (sessionLifecycle.hasShellManager(sessionId)) {
     sessionLifecycle.scheduleDestroy(sessionId);
   }
+  pump(sessionId).catch((err) =>
+    console.error(`[agent] run queue pump failed for ${sessionId}:`, err),
+  );
 }
 
 /**
@@ -89,6 +95,30 @@ async function withAgentRun(
   } finally {
     releaseAfterRun(sessionId, abortCtrl);
   }
+}
+
+/**
+ * Messages the chat page shows: everything except UI-launched WSTG runs. A
+ * run is stamped with channel "run"; runs from before that field existed are
+ * recognised by their "[WSTG run …]" instruction marker and stay hidden until
+ * the next chat message re-opens the transcript.
+ */
+function withoutRunTranscript(
+  messages: Array<{ role: string; content?: string | null; channel?: string }>,
+): typeof messages {
+  const visible: typeof messages = [];
+  let inRun = false;
+  for (const message of messages) {
+    if (message.role === "user") {
+      inRun = (message.content ?? "").startsWith("[WSTG run ");
+      if (!inRun) visible.push(message);
+      continue;
+    }
+    if (message.channel === "run") continue; // stamped run rows
+    if (inRun) continue; // legacy run rows: between the marker and the next chat message
+    visible.push(message);
+  }
+  return visible;
 }
 
 export const createSession = async (req: Request, res: Response) => {
@@ -275,7 +305,10 @@ export const getHistory = async (req: Request, res: Response) => {
     const contextTokens = latestTokenSnapshot?.promptTokens ?? 0;
 
     return res.status(200).json({
-      messages: session.messages,
+      // UI-launched WSTG runs write to their own transcript channel; the chat
+      // page never shows them — their activity lives on the case page. The
+      // marker walk also hides runs created before the channel existed.
+      messages: withoutRunTranscript(session.messages ?? []),
       agentState: session.agentState,
       turnIndex: session.turnIndex,
       pendingConsent: session.pendingConsent ?? null,

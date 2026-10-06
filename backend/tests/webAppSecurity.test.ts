@@ -19,8 +19,13 @@ import {
   nextTestsToRun,
   removeCase,
   removeCases,
+  buildRunInstruction,
   updateTestCase,
 } from "../src/services/web-security/test-plan.service";
+import {
+  buildResultSummary,
+  sliceRunActivity,
+} from "../src/services/web-security/run-queue.service";
 import type { WebAppTestPlanDoc } from "../src/models/Sessions/Sessions.model";
 import { mapFindingToOwaspTop10 } from "../src/services/web-security/owasp-mapping.service";
 import { buildWebAppPentestReport } from "../src/services/web-security/report.service";
@@ -426,8 +431,14 @@ test("the report draft is complete enough to hand to a reviewer", () => {
       title: "Unauthenticated SQL injection in product search",
       target: "shop.example.test",
       endpoint: "GET https://shop.example.test/api/products?q=",
-      likelihood: 3,
-      impactRating: 3,
+      av: "N",
+      ac: "L",
+      pr: "N",
+      ui: "N",
+      s: "U",
+      c: "H",
+      i: "H",
+      a: "H",
       cwe: "CWE-89",
       wstgId: "WSTG-INPV-05",
       evidence: "q=' returned SQLSTATE syntax error.",
@@ -453,7 +464,7 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   });
 
   assert.equal(report.stats.totalFindings, 2);
-  assert.equal(report.stats.bySeverity.high, 1);
+  assert.equal(report.stats.bySeverity.critical, 1);
   assert.equal(report.stats.exploited, 1);
   assert.equal(report.stats.unmapped, 1);
   assert.equal(report.stats.coverage.executed, 2);
@@ -468,13 +479,8 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   for (const heading of [
     "# Shop review — Web Application Penetration Testing Report (draft)",
     "## 1. Introduction",
-    "### 1.1 Version control",
-    "### 1.2 Table of contents",
-    "### 1.3 Test team",
-    "### 1.4 Engagement details",
-    "### 1.5 Disclaimer",
-    "### 1.6 Timeline",
-    "### 1.7 Standards and references applied",
+    "### 1.1 Engagement details",
+    "### 1.2 Disclaimer",
     "## 2. Executive summary",
     "## 3. Scope, methodology and limitations",
     "## 4. Risk summary",
@@ -484,19 +490,29 @@ test("the report draft is complete enough to hand to a reviewer", () => {
     "## 8. OWASP Top 10:2025 mapping",
     "## 9. Recommendations",
     "## 10. Appendix A — Test case inventory",
-    "## 11. Appendix B - Risk rating methodology",
+    "## 11. Appendix B - Risk rating methodology (CVSS v3.0)",
     "## 12. Appendix C - Glossary and references",
   ]) {
     assert.ok(markdown.includes(heading), `missing heading: ${heading}`);
   }
+
+  assert.ok(!markdown.includes("Version control"), "the version-control boilerplate is gone");
+  assert.ok(!markdown.includes("Table of contents"), "the static table of contents is gone");
 
   assert.match(markdown, /F-001 — Unauthenticated SQL injection in product search/);
   assert.match(markdown, /A05:2025 Injection/);
   assert.match(markdown, /WSTG-INPV-05/);
   assert.match(markdown, /Unmapped/);
   assert.match(markdown, /OWASP WSTG v4\.2/);
-  assert.ok(!/CVSS/.test(markdown), "CVSS is gone from the report");
-  assert.match(markdown, /Risk \(likelihood x impact, equal weight\) \| high/);
+  assert.ok(
+    markdown.includes("| CVSS v3.0 base score | 9.8 (critical) |"),
+    "the computed CVSS base score is reported",
+  );
+  assert.ok(
+    markdown.includes("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"),
+    "the vector string is reported so the score is reproducible",
+  );
+  assert.ok(!/likelihood x impact/.test(markdown), "the retired risk matrix is gone from the report");
   assert.match(markdown, /Use parameterised queries\./);
   assert.match(markdown, /2 of 97 planned WSTG test cases were executed/);
 });
@@ -759,4 +775,83 @@ test("ticking no category plans no catalogue cases", () => {
 
   // Unknown codes plan nothing rather than everything.
   assert.equal(createTestPlan({ categories: ["NOPE"] }).plan.cases.length, 0);
+});
+// ─── Nessus-style UI runs ─────────────────────────────────────────────
+
+test("buildRunInstruction frames the run with a marker, boundary and case detail", () => {
+  const plan = createTestPlan({ target: "https://app.example.com", testIds: ["WSTG-INFO-02"] }).plan;
+  const testCase = findPlanCase(plan, "WSTG-INFO-02")!;
+
+  const single = buildRunInstruction("run-1", [testCase], {
+    target: plan.target,
+    scope: "https://app.example.com only",
+  });
+  assert.ok(single.startsWith("[WSTG run run-1]"), "the marker opens the message");
+  assert.ok(single.includes("1 WSTG test case against https://app.example.com"));
+  assert.ok(single.includes("Scope boundary: https://app.example.com only"));
+  assert.ok(single.includes(`### WSTG-INFO-02 — ${testCase.title}`));
+  assert.ok(single.includes(`- Objective: ${testCase.objective}`));
+  assert.ok(single.includes(`- How to test: ${testCase.howToTest}`));
+  assert.ok(single.includes(`- Expected evidence: ${testCase.evidenceExpectation}`));
+  assert.ok(single.includes(`- Tools: ${testCase.tools.join(", ")}`));
+  assert.ok(single.includes("without waiting for confirmation"));
+
+  const plan2 = createTestPlan({ target: "https://app.example.com", testIds: ["WSTG-INFO-02", "WSTG-INFO-03"] }).plan;
+  const cases = ["WSTG-INFO-02", "WSTG-INFO-03"].map((id) => findPlanCase(plan2, id)!);
+  const multi = buildRunInstruction("run-2", cases);
+  assert.ok(multi.includes("2 WSTG test cases against the engagement target"));
+  assert.ok(!multi.includes("Scope boundary:"), "no scope line when the plan has none");
+});
+
+test("sliceRunActivity cuts one run's transcript between run markers", () => {
+  const message = (id: string, role: any, content: string | null): any => ({
+    id,
+    role,
+    content,
+    timestamp: new Date(),
+  });
+
+  const messages = [
+    message("m0", "user", "some earlier chat message"),
+    message("m1", "assistant", "earlier answer"),
+    message("m2", "system", "volatile system note"),
+    message("m3", "user", "[WSTG run run-a] Execute the following 1 WSTG test case"),
+    message("m4", "assistant", "thinking about INFO-02"),
+    message("m5", "tool", "tool output"),
+    message("m6", "user", "[WSTG run run-b] Execute the following 1 WSTG test case"),
+    message("m7", "assistant", "next run's activity"),
+  ];
+
+  const sliceA = sliceRunActivity(messages, "run-a");
+  assert.deepEqual(
+    sliceA.map((m) => m.id),
+    ["m4", "m5"],
+    "run-a spans its marker until run-b's marker; the instruction itself and system rows never appear",
+  );
+
+  const sliceB = sliceRunActivity(messages, "run-b");
+  assert.deepEqual(
+    sliceB.map((m) => m.id),
+    ["m7"],
+    "the newest run runs to the end of the transcript, instruction excluded",
+  );
+
+  assert.deepEqual(sliceRunActivity(messages, "run-z"), [], "an unknown run has no slice");
+});
+
+test("buildResultSummary counts the run's cases the way the history row shows them", () => {
+  const summary = buildResultSummary(
+    ["WSTG-INFO-02", "WSTG-INFO-03", "WSTG-INFO-04", "WSTG-INFO-05"],
+    [
+      { testId: "WSTG-INFO-02", status: "passed" },
+      { testId: "WSTG-INFO-03", status: "failed" },
+      { testId: "WSTG-INFO-04", status: "blocked" },
+    ],
+  );
+  assert.deepEqual(summary!.counts, { passed: 1, failed: 1, blocked: 1, other: 1 });
+  assert.equal(summary!.perCase.find((c) => c.testId === "WSTG-INFO-05")!.status, "not_started");
+
+  // A run with no plan left (plan deleted mid-flight) degrades to not_started.
+  const orphan = buildResultSummary(["WSTG-INFO-02"], null);
+  assert.deepEqual(orphan!.counts, { passed: 0, failed: 0, blocked: 0, other: 1 });
 });

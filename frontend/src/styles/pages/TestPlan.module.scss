@@ -1264,3 +1264,643 @@
     border-color: var(--moon-accent-solid);
   }
 }
+
+/* ============================================================================
+   TEST CASE DETAIL PAGE (/test-plan/[testId]) reuses the vulnerability detail
+   styles (Vulnerabilities.module.scss) so both detail pages read the same.
+   Only the page-specific scaffolding lives here.
+   ========================================================================== */
+
+// Top row of the detail header: back link on the left, actions on the right.
+.caseDetailTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+// The status control on the detail page reads as a deliberate pill, not a
+// naked text field: dark surface, round cap, quiet arrow. The box itself is
+// tinted by the status colour (see the .pill* classes) so it reads at a glance.
+.scoreSelect {
+  width: 100%;
+
+  :global(.ant-select-selector) {
+    display: flex;
+    align-items: center;
+    height: 32px !important;
+    padding: 0 30px 0 13px !important;
+    background: color-mix(in srgb, var(--pill, #9a9a9a) 10%, #131313) !important;
+    border: 1px solid color-mix(in srgb, var(--pill, #9a9a9a) 40%, transparent) !important;
+    border-radius: 999px !important;
+    transition: border-color 0.12s ease;
+  }
+
+  &:hover :global(.ant-select-selector) {
+    border-color: color-mix(in srgb, var(--pill, #9a9a9a) 70%, transparent) !important;
+  }
+
+  // antd 5.29 nests the label in .ant-select-selection-wrap, whose own height
+  // is content-sized — centring there can never be the pill's centre. Anchor
+  // the wrap to the pill instead and let it centre the label. Both wrap and
+  // item carry antd's 3.2px bottom margin, which is exactly the off-centre
+  // offset seen on the pill — zero it.
+  :global(.ant-select-selection-wrap) {
+    position: absolute !important;
+    inset: 0 30px 0 13px !important;
+    display: flex !important;
+    align-items: center !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+  }
+
+  :global(.ant-select-selection-item) {
+    position: static !important;
+    display: block;
+    margin: 0 !important;
+    line-height: 1 !important;
+    font-size: 0.78rem;
+    color: var(--pill, #d7d7d7);
+  }
+
+  :global(.ant-select-arrow) {
+    right: 10px;
+    top: 50% !important;
+    transform: translateY(-50%);
+    margin-top: 0;
+    color: var(--secondary-text);
+  }
+}
+
+// Per-status tint for the pill above, one custom property each.
+.pillIdle { --pill: #9a9a9a; }
+.pillActive { --pill: #58a6ff; }
+.pillPassed { --pill: #7ee787; }
+.pillFailed { --pill: #ff5c5c; }
+.pillBlocked { --pill: #ff9f43; }
+
+// The options menu must follow the dark page, not antd's white default.
+.statusDropdown {
+  background: #101010 !important;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+
+  :global(.ant-select-item) {
+    margin: 2px 4px;
+    border-radius: 7px;
+    color: #d7d7d7;
+  }
+
+  :global(.ant-select-item-option-active) {
+    background: #1d1d1d !important;
+  }
+
+  :global(.ant-select-item-empty) {
+    color: #777;
+  }
+}
+
+// Wider, roomier stat boxes than the vulnerability page's 3-up grid — a
+// dropdown and a link pill need breathing room that 76px columns can't give.
+.caseScoreGrid {
+  grid-template-columns: repeat(2, minmax(150px, 200px));
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.75rem 1rem !important;
+  }
+
+  // The vulnerability page's `.scoreGrid div` padding also lands on antd's
+  // internal Select divs, shoving the pill out of its wrapper. Reset it.
+  :global(.ant-select) {
+    padding: 0 !important;
+  }
+
+  // The findings pill is a link; kill the browser underline the vuln styles
+  // never see, and let its own pill styling carry it.
+  a {
+    text-decoration: none;
+  }
+}
+
+// Colour accents for the detail body's cards — a quiet severity-style palette:
+// each card gets a left bar and matching heading in its own hue.
+.tone_purple { --tone: var(--moon-accent); }
+.tone_blue { --tone: #58a6ff; }
+.tone_green { --tone: #7ee787; }
+.tone_orange { --tone: #ff9f43; }
+.tone_yellow { --tone: #f5d76e; }
+.tone_gray { --tone: #9a9a9a; }
+
+.tone_purple { --tone: var(--moon-accent); }
+.tone_blue { --tone: #58a6ff; }
+.tone_green { --tone: #7ee787; }
+.tone_orange { --tone: #ff9f43; }
+.tone_yellow { --tone: #f5d76e; }
+.tone_gray { --tone: #9a9a9a; }
+.tone_red { --tone: #ff5c5c; }
+
+// ─── Nessus-style runs on the case detail page ────────────────────────
+
+.caseHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.activeRunBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: #58a6ff;
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.35);
+}
+
+.runsSection {
+  margin: 1.1rem 0 1.5rem;
+}
+
+// One card, divider-separated rows — the same visual language as the
+// Details report document.
+.runList {
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  overflow: hidden;
+}
+
+.runsCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.25rem;
+  border-bottom: 1px solid var(--moon-line-1);
+}
+
+.runsTitle {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #888);
+}
+
+.runsCount {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  color: var(--primary-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--moon-line-2);
+}
+
+.runRowWrap {
+  border-bottom: 1px solid var(--moon-line-1);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.runRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem 1.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--primary-text);
+  font: inherit;
+
+  &:hover {
+    background: var(--moon-surface-2);
+  }
+}
+
+.runRowOpen {
+  background: var(--moon-surface-2);
+}
+
+.runStatusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.runToneQueued {
+  color: #9a9a9a;
+  background: rgba(154, 154, 154, 0.12);
+  border: 1px solid rgba(154, 154, 154, 0.35);
+}
+
+.runToneRunning {
+  color: #58a6ff;
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.35);
+}
+
+.runToneCompleted {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.1);
+  border: 1px solid rgba(126, 231, 135, 0.35);
+}
+
+.runToneFailed {
+  color: #ff5c5c;
+  background: rgba(255, 92, 92, 0.1);
+  border: 1px solid rgba(255, 92, 92, 0.35);
+}
+
+.runToneCancelled {
+  color: #9a9a9a;
+  background: rgba(154, 154, 154, 0.08);
+  border: 1px solid rgba(154, 154, 154, 0.25);
+}
+
+.runQueuedNote {
+  font-size: 0.78rem;
+  color: var(--moon-text-mute, #888);
+  white-space: nowrap;
+}
+
+.runProgress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.runProgressTrack {
+  display: inline-block;
+  width: clamp(80px, 22%, 220px);
+  height: 6px;
+  border-radius: 999px;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+  overflow: hidden;
+}
+
+.runProgressFill {
+  display: block;
+  height: 100%;
+  background: #58a6ff;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.runProgressText {
+  font-size: 0.78rem;
+  color: var(--moon-text-mute, #888);
+  white-space: nowrap;
+}
+
+.runResult {
+  flex: 1 1 180px;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--primary-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--moon-text-mute, #888);
+  white-space: nowrap;
+}
+
+.runRowTail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--moon-text-mute, #888);
+}
+
+.runActivityWrap {
+  position: relative;
+}
+
+.runLiveBadge {
+  position: absolute;
+  top: 0.6rem;
+  right: 1rem;
+  z-index: 2;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #888);
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-2);
+}
+
+.activityStream {
+  background: var(--primary-bg);
+}
+
+.activityMessages {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0.9rem 1.25rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.activityEmpty {
+  margin: 0;
+  padding: 1.5rem 0;
+  text-align: center;
+  color: var(--moon-text-mute, #888);
+  font-size: 0.85rem;
+}
+
+.findingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.findingItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+// (Case page view tabs are styled further below, inside the hero block.)
+
+@keyframes runDotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+
+// ─── Case detail page: hero header + continuous report document ───────
+
+.caseHero {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.4rem 1.6rem 0;
+  background:
+    linear-gradient(
+      160deg,
+      var(--moon-surface-2) 0%,
+      var(--moon-surface-1) 100%
+    );
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+.caseHeroTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.caseHeroBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.caseBadges {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.caseIdPill {
+  padding: 0.18rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--moon-accent, #7ee787);
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-accent-24);
+}
+
+.caseCategoryChip {
+  padding: 0.18rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--moon-text-mute, #888);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--moon-line-2);
+}
+
+.caseHeroTitle {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--primary-text);
+}
+
+.caseLead {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--moon-text-mute, #999);
+}
+
+.caseMetaRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  margin-top: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.caseMetaTile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 150px;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--moon-radius-md, 10px);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--moon-line-1);
+}
+
+.caseMetaTileWide {
+  flex: 1 1 240px;
+}
+
+.caseMetaLabel {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--moon-text-dim, #777);
+}
+
+.caseFindingsValue {
+  font-size: 0.88rem;
+  color: var(--primary-text);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.caseToolPills {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.caseToolPill {
+  padding: 0.14rem 0.55rem;
+  border-radius: 999px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  color: var(--primary-text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--moon-line-2);
+}
+
+// Tabs sit inside the hero, aligned with its padding.
+.viewTabs {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.35rem -1.6rem 0;
+  padding: 0 1.6rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.viewTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1rem;
+  margin-bottom: -1px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--moon-text-mute, #888);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--primary-text);
+  }
+}
+
+.viewTabActive {
+  color: var(--primary-text);
+  border-bottom-color: var(--moon-accent, #58a6ff);
+}
+
+.viewTabDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #58a6ff;
+  box-shadow: 0 0 6px rgba(88, 166, 255, 0.9);
+  animation: runDotPulse 1.4s ease-in-out infinite;
+}
+
+// ─── The report document: one card, divider-separated sections ────────
+
+.caseDoc {
+  margin-top: 1.1rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  overflow: hidden;
+}
+
+.caseDocSection {
+  padding: 1rem 1.5rem 1.15rem;
+  border-bottom: 1px solid var(--moon-line-1);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.caseDocLabel {
+  margin: 0 0 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tone, var(--moon-text-mute, #888));
+}
+
+.caseDocBody {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--primary-text);
+  white-space: pre-wrap;
+}
+
+.caseDocMuted {
+  color: var(--moon-text-mute, #888);
+}
+
+.runsEmpty {
+  padding: 1.4rem 1.25rem;
+  font-size: 0.88rem;
+  color: var(--moon-text-mute, #888);
+}
+
+// The run row is a width:100% <button> with padding — without border-box the
+// padding overflows the card and the whole monitor pokes past the page edge.
+.runsSection,
+.runsSection *,
+.caseDoc,
+.caseDoc * {
+  box-sizing: border-box;
+}
+
+// The case page owns its breathing room: the borrowed .detailPage has none,
+// so hero/cards used to sit flush against the viewport edge.
+.casePage {
+  padding: 1.5rem 1.8rem 2rem;
+}

@@ -48,13 +48,20 @@ export function createSSEWriter(res: Response): SSEWriter {
  * the run up from session history — these events simply have nowhere to go.
  *
  * `error` events are logged, since with no client there is otherwise no trace
- * of why a detached run died.
+ * of why a detached run died; an optional onError hook lets the caller record
+ * the failure (e.g. on the run's own history record).
  */
-export function createDetachedSSEWriter(label: string): SSEWriter {
+export function createDetachedSSEWriter(
+  label: string,
+  onError?: (message: string) => void,
+): SSEWriter {
   return {
     write(event: SseEventName, data: SseEventMap[SseEventName]) {
       if (event === "error") {
-        console.error(`[agent:detached:${label}] ${(data as { message?: string })?.message ?? JSON.stringify(data)}`);
+        const message =
+          (data as { message?: string })?.message ?? JSON.stringify(data);
+        console.error(`[agent:detached:${label}] ${message}`);
+        onError?.(message);
       }
     },
     end() {},

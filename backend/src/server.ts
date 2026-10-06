@@ -17,6 +17,7 @@ import { vpnRoutes } from "./routes/vpn.routes";
 import { vncRoutes } from "./routes/vnc.routes";
 import { burpRoutes } from "./routes/burp.routes";
 import { workspaceRoutes } from "./routes/workspace.routes";
+import { wopiRoutes } from "./routes/wopi.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
 import { setupShellWebSocket } from "./services/shell.socket";
@@ -214,6 +215,7 @@ const initializeApp = async () => {
     app.use("/api/infra", vncRoutes);
     app.use("/api/burp", burpRoutes);
     app.use("/api/workspace", workspaceRoutes);
+    app.use("/api/wopi", wopiRoutes);
 
     app.use(function (err: any, _req: any, res: any, _next: any) {
       if (err instanceof multer.MulterError) {
@@ -250,6 +252,11 @@ const initializeApp = async () => {
     if (modified > 0) {
       console.log(`[startup] Reset ${modified} session(s) from "running" to "idle"`);
     }
+
+    // A restart interrupts detached WSTG runs mid-flight; fail those records
+    // and re-arm any run that was still waiting in the queue.
+    const { recoverStaleRuns } = await import("./services/web-security/run-queue.service");
+    await recoverStaleRuns();
 
     startupReady = true;
     httpServer.listen(port, () => {

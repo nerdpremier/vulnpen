@@ -7,17 +7,19 @@ import { getSessionHistory } from "@/services/agent.service";
 
 export default function AgentStreamConnector({ sessionId }) {
   const store = useAgentStreamStore;
-  const initRef = useRef(null);
+  const loadingRef = useRef(false);
+  // Runs launched outside the chat (the case page) flag history stale in the
+  // store; subscribing to the flag makes this connector refetch when that
+  // happens, so the chat never shows a transcript missing those messages.
+  const historyLoaded = useAgentStreamStore(
+    (state) => state.sessions[sessionId]?.historyLoaded ?? false,
+  );
 
   useEffect(() => {
     if (!sessionId) return;
-    if (initRef.current === sessionId) return;
-    initRef.current = sessionId;
-
     store.getState().getOrCreate(sessionId);
-
-    const sess = store.getState().getSession(sessionId);
-    if (sess && sess.historyLoaded) return;
+    if (historyLoaded || loadingRef.current) return;
+    loadingRef.current = true;
 
     getSessionHistory(sessionId)
       .then((data) => {
@@ -42,8 +44,11 @@ export default function AgentStreamConnector({ sessionId }) {
           });
         }
       })
-      .catch(() => {});
-  }, [sessionId, store]);
+      .catch(() => {})
+      .finally(() => {
+        loadingRef.current = false;
+      });
+  }, [sessionId, store, historyLoaded]);
 
   useEffect(() => {
     const onContextCleared = (e) => {

@@ -84,11 +84,57 @@ export function elideToolResult(content: string, isStale: boolean): string {
 /** Render tool-call arguments: stale ones collapse to a head+tail stub. */
 export function elideToolCallArgs(args: string, isStale: boolean): string {
   if (!isStale || args.length <= STALE_TOOL_CALL_ARGS_CHARS) return args;
-  return (
-    args.slice(0, Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2)) +
-    ` ... [older tool-call arguments elided from context] ` +
-    args.slice(-Math.floor(STALE_TOOL_CALL_ARGS_CHARS / 2))
-  );
+  // The stub must stay VALID JSON: upstreams parse tool-call arguments and
+  // reject the whole request with "invalid request error" when the elision
+  // marker breaks the string mid-object (seen on Novita via OpenRouter).
+  try {
+    const stubbed = JSON.stringify(stubJsonValues(JSON.parse(args), ELIDED_ARG_VALUE_CHARS));
+    if (stubbed.length <= STALE_TOOL_CALL_ARGS_CHARS * 4) return stubbed;
+  } catch {
+    // args were not valid JSON — fall through to the flat stub below.
+  }
+  return JSON.stringify({
+    note: `older tool-call arguments (${args.length} chars) elided from context`,
+  });
+}
+
+/** Per-string ceiling inside a stubbed arguments object. */
+const ELIDED_ARG_VALUE_CHARS = 80;
+
+/**
+ * Shrink long strings and long arrays inside a parsed arguments object,
+ * keeping the key structure the model wrote: it can still see WHICH
+ * parameters it passed and roughly what they held, without re-sending a 5k
+ * char scan dump.
+ */
+function stubJsonValues(value: unknown, cap: number): unknown {
+  if (typeof value === "string") {
+    if (value.length <= cap) return value;
+    const half = Math.floor(cap / 2);
+    return (
+      value.slice(0, half) +
+      ` …[${value.length - cap} chars elided from context]… ` +
+      value.slice(-half)
+    );
+  }
+  if (Array.isArray(value)) {
+    if (JSON.stringify(value).length <= cap) return value;
+    // Head+tail items with an elision marker — still a JSON array.
+    const elided = value.length - 3;
+    return [
+      stubJsonValues(value[0], cap),
+      `…[${elided} items elided from context]…`,
+      stubJsonValues(value[value.length - 1], cap),
+    ];
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = stubJsonValues(inner, cap);
+    }
+    return out;
+  }
+  return value;
 }
 
 /** Assistant messages from this index on may replay their reasoning_content. */
@@ -114,9 +160,11 @@ export function estimateMessageTokens(m: AgentMessageDoc, index: number, total: 
     chars = Math.min(chars, toolResultCap(isStale));
   } else if (m.role === "assistant" && m.toolCalls?.length) {
     for (const tc of m.toolCalls) {
-      // Mirrors elideToolCallArgs: stale args collapse to a head+tail stub,
+      // Mirrors elideToolCallArgs: stale args collapse to a JSON-valid stub,
       // fresh args pass through whole.
-      chars += isStale ? Math.min(tc.arguments.length, STALE_TOOL_CALL_ARGS_CHARS) : tc.arguments.length;
+      chars += isStale
+        ? Math.min(tc.arguments.length, elideToolCallArgs(tc.arguments, true).length)
+        : tc.arguments.length;
     }
   }
   // +1 token per capped message approximates the elision marker text.

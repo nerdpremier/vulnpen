@@ -72,3 +72,28 @@ test("Kimi reasoning replay is limited to the recent window", () => {
     "older reasoning is dropped",
   );
 });
+
+test("elided stale tool-call arguments stay valid JSON", async () => {
+  const { elideToolCallArgs } = await import("../src/services/context.service");
+
+  const bigArgs = JSON.stringify({
+    client: "OWASP Juice Shop (engagement target)",
+    endpoints: Array.from({ length: 40 }, (_, i) => `/api/Products/${i}`),
+    notes: "x".repeat(800),
+  });
+
+  const stubbed = elideToolCallArgs(bigArgs, true);
+  assert.notEqual(stubbed, bigArgs, "stale args must actually shrink");
+  const parsed = JSON.parse(stubbed); // throws if the stub broke the JSON
+  assert.equal(parsed.client, "OWASP Juice Shop (engagement target)");
+  assert.equal(parsed.endpoints[0], "/api/Products/0", "array heads survive the stub");
+  assert.ok(String(parsed.endpoints[1]).includes("elided"), "long arrays collapse to a marker");
+  assert.ok(stubbed.length < bigArgs.length / 2, "the stub still saves most of the payload");
+
+  // Non-JSON input must not come back as a broken half-string either.
+  const flat = elideToolCallArgs("not json at all ".repeat(30), true);
+  assert.doesNotThrow(() => JSON.parse(flat));
+
+  // Fresh args pass through untouched.
+  assert.equal(elideToolCallArgs(bigArgs, false), bigArgs);
+});

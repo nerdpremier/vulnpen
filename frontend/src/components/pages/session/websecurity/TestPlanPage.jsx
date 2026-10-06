@@ -16,10 +16,8 @@ import {
   Spin,
 } from "antd";
 import {
-  CopyOutlined,
   DeleteOutlined,
   DownOutlined,
-  DownloadOutlined,
   EditOutlined,
   FileTextOutlined,
   MoreOutlined,
@@ -28,10 +26,7 @@ import {
   RightOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
-  getReportDraft,
   getTestPlan,
   removeTestCase,
   removeTestCases,
@@ -45,16 +40,7 @@ import styles from "@/styles/pages/TestPlan.module.scss";
 import { ProgressRing } from "@/components/common/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { summarise, groupCases, matchesFilters, caseCarriesWork, OTHER_GROUP } from "@/utils/testPlan.mjs";
-
-const STATUS_OPTIONS = [
-  { value: "not_started", label: "Not started" },
-  { value: "in_progress", label: "In progress" },
-  { value: "passed", label: "Passed" },
-  { value: "failed", label: "Failed" },
-  { value: "blocked", label: "Blocked" },
-  { value: "skipped", label: "Skipped" },
-];
+import { summarise, groupCases, matchesFilters, caseCarriesWork, OTHER_GROUP, STATUS_OPTIONS } from "@/utils/testPlan.mjs";
 
 /** Colour the one status control by what it says, so no second status column is needed. */
 const STATUS_TONE = {
@@ -96,11 +82,9 @@ export default function TestPlanPage({ sessionId }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [groupOverrides, setGroupOverrides] = useState(() => new Map());
-  const [expandedCase, setExpandedCase] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [setupOpen, setSetupOpen] = useState(false);
   const [editingCase, setEditingCase] = useState(null);
-  const [reportOpen, setReportOpen] = useState(false);
 
   // A finding deep-links here as ?case=WSTG-ATHN-01. The request is read from the
   // URL and held as derived state, so opening the plan never needs a sync effect:
@@ -277,12 +261,6 @@ export default function TestPlanPage({ sessionId }) {
     onError: (error) => message.error(apiErrorMessage(error, "Could not remove the cases")),
   });
 
-  const reportMutation = useMutation((id) => getReportDraft(id), {
-    onSuccess: () => setReportOpen(true),
-    onError: (error) =>
-      message.error(apiErrorMessage(error, "Could not generate the report draft")),
-  });
-
   const setGroupOpen = (targets, open) => {
     setGroupOverrides((previous) => {
       const next = new Map(previous);
@@ -355,6 +333,9 @@ export default function TestPlanPage({ sessionId }) {
       title: testCase.title,
       objective: testCase.objective,
       howToTest: testCase.howToTest,
+      evidenceExpectation: testCase.evidenceExpectation,
+      tools: (testCase.tools ?? []).join(", "),
+      observations: testCase.observations,
       notes: testCase.notes,
     });
   };
@@ -366,32 +347,17 @@ export default function TestPlanPage({ sessionId }) {
       title: values.title?.trim(),
       objective: values.objective?.trim() || undefined,
       howToTest: values.howToTest?.trim() || undefined,
+      evidenceExpectation: values.evidenceExpectation?.trim() || undefined,
+      tools:
+        typeof values.tools === "string"
+          ? values.tools
+              .split(",")
+              .map((tool) => tool.trim())
+              .filter(Boolean)
+          : undefined,
+      observations: values.observations?.trim() || undefined,
       notes: values.notes?.trim() || undefined,
     });
-  };
-
-  const report = reportMutation.data?.report;
-  const copyReport = async () => {
-    if (!report?.markdown) return;
-    try {
-      await navigator.clipboard.writeText(report.markdown);
-      message.success("Report markdown copied");
-    } catch {
-      message.error("Could not copy to the clipboard");
-    }
-  };
-
-  const downloadReport = () => {
-    if (!report?.markdown) return;
-    const blob = new Blob([report.markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = report.fileName || "web-app-pentest-report.md";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
   };
 
   if (planQuery.isLoading) {
@@ -430,8 +396,7 @@ export default function TestPlanPage({ sessionId }) {
           <Button
             icon={<FileTextOutlined />}
             disabled={!plan}
-            loading={reportMutation.isLoading}
-            onClick={() => reportMutation.mutate(sessionId)}
+            onClick={() => router.push(`/session/${sessionId}/report`)}
           >
             Report
           </Button>
@@ -663,7 +628,7 @@ export default function TestPlanPage({ sessionId }) {
                                   />
                                 </th>
                                 <th>Test case</th>
-                                <th>Objective</th>
+                                <th>Title</th>
                                 <th>Result</th>
                                 <th>Findings</th>
                                 <th />
@@ -671,14 +636,10 @@ export default function TestPlanPage({ sessionId }) {
                             </thead>
                             <tbody>
                                 {group.matches.map((testCase) => {
-                                  const isOpen =
-                                    (expandedCase ?? focusCaseId) ===
-                                    testCase.testId;
                                   const isFocused =
                                     focusCaseId === testCase.testId;
                                   const selected = activeSelectedIds.has(testCase.testId);
                                   const rowClass = [
-                                    isOpen ? styles.rowOpen : "",
                                     selected ? styles.rowSelected : "",
                                     isFocused ? styles.rowFocused : "",
                                   ]
@@ -687,43 +648,34 @@ export default function TestPlanPage({ sessionId }) {
                                   const findings = testCase.linkedVulnerabilityIds?.length ?? 0;
 
                                   return (
-                                    <React.Fragment key={testCase.testId}>
-                                      <tr
-                                        id={`case-${testCase.testId}`}
-                                        className={rowClass || undefined}
-                                        onClick={() => {
-                                          // Collapsing the deep-linked case also
-                                          // releases the focus, so it does not
-                                          // spring back open.
-                                          if (isFocused) setFocusDismissed(true);
-                                          setExpandedCase(
-                                            isOpen ? null : testCase.testId,
-                                          );
-                                        }}
-                                      >
-                                        <td onClick={(event) => event.stopPropagation()}>
-                                          <Checkbox
-                                            checked={selected}
-                                            onChange={() => toggleSelected(testCase.testId)}
-                                          />
-                                        </td>
-                                        <td>
-                                          <span className={styles.caseCode}>{testCase.testId}</span>
-                                          <span className={styles.caseSection}>
-                                            {testCase.section || "hand added"}
-                                          </span>
-                                          {!catalogueIds.has(testCase.testId) && (
-                                            <span className={styles.customTag}>custom</span>
-                                          )}
-                                        </td>
-                                        <td>
-                                          <strong className={styles.caseTitle}>
-                                            {testCase.title}
-                                          </strong>
-                                          <span className={styles.caseObjective}>
-                                            {testCase.objective}
-                                          </span>
-                                        </td>
+                                    <tr
+                                      key={testCase.testId}
+                                      id={`case-${testCase.testId}`}
+                                      className={rowClass || undefined}
+                                      onClick={() => {
+                                        // Collapsing the deep-linked case also
+                                        // releases the focus, so it does not
+                                        // spring back open.
+                                        if (isFocused) setFocusDismissed(true);
+                                        router.push(
+                                          `/session/${sessionId}/test-plan/${testCase.testId}`,
+                                        );
+                                      }}
+                                    >
+                                      <td onClick={(event) => event.stopPropagation()}>
+                                        <Checkbox
+                                          checked={selected}
+                                          onChange={() => toggleSelected(testCase.testId)}
+                                        />
+                                      </td>
+                                      <td>
+                                        <span className={styles.caseCode}>{testCase.testId}</span>
+                                      </td>
+                                      <td>
+                                        <strong className={styles.caseTitle}>
+                                          {testCase.title}
+                                        </strong>
+                                      </td>
                                         <td onClick={(event) => event.stopPropagation()}>
                                           <Select
                                             size="small"
@@ -804,60 +756,20 @@ export default function TestPlanPage({ sessionId }) {
                                           </Dropdown>
                                         </td>
                                       </tr>
-                                      {isOpen && (
-                                        <tr className={styles.detailRow}>
-                                          <td colSpan={6}>
-                                            <div className={styles.detailGrid}>
-                                              <div>
-                                                <h4>Method</h4>
-                                                <p>{testCase.howToTest || "Not described."}</p>
-                                              </div>
-                                              <div>
-                                                <h4>Expected evidence</h4>
-                                                <p>
-                                                  {testCase.evidenceExpectation || "Not described."}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <h4>Tools</h4>
-                                                <p>{(testCase.tools ?? []).join(", ") || "-"}</p>
-                                              </div>
-                                              <div className={styles.detailWide}>
-                                                <h4>Observations recorded</h4>
-                                                <p>
-                                                  {testCase.observations || "Nothing recorded yet."}
-                                                </p>
-                                                {testCase.notes && (
-                                                  <p className={styles.muted}>
-                                                    Notes: {testCase.notes}
-                                                  </p>
-                                                )}
-                                                {findings > 0 && (
-                                                  <p className={styles.muted}>
-                                                    Linked findings:{" "}
-                                                    {testCase.linkedVulnerabilityIds.join(", ")}
-                                                  </p>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </>
-      )}
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
 
       {setupOpen && (
         <PlanSetupModal
@@ -869,39 +781,6 @@ export default function TestPlanPage({ sessionId }) {
           onSaved={invalidate}
         />
       )}
-
-      <Modal
-        open={reportOpen}
-        onCancel={() => setReportOpen(false)}
-        width={980}
-        title={report?.title ?? "Draft report"}
-        footer={[
-          <Button key="copy" icon={<CopyOutlined />} onClick={copyReport}>
-            Copy markdown
-          </Button>,
-          <Button key="download" icon={<DownloadOutlined />} onClick={downloadReport}>
-            Download .md
-          </Button>,
-          <Button key="close" type="primary" onClick={() => setReportOpen(false)}>
-            Close
-          </Button>,
-        ]}
-      >
-        {report && (
-          <div className={styles.reportMeta}>
-            <span>{report.fileName}</span>
-            <span>{report.stats?.totalFindings ?? 0} findings</span>
-            <span>
-              {report.stats?.coverage?.executed ?? 0}/{report.stats?.coverage?.total ?? 0} WSTG
-              cases executed
-            </span>
-            <span>{report.stats?.unmapped ?? 0} unmapped</span>
-          </div>
-        )}
-        <div className={styles.reportBody}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{report?.markdown ?? ""}</ReactMarkdown>
-        </div>
-      </Modal>
 
       <Modal
         open={Boolean(editingCase)}
@@ -929,6 +808,19 @@ export default function TestPlanPage({ sessionId }) {
           </Form.Item>
           <Form.Item label="How to test" name="howToTest">
             <Input.TextArea rows={4} />
+          </Form.Item>
+          <Form.Item label="Expected evidence" name="evidenceExpectation">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item
+            label="Tools"
+            name="tools"
+            extra="Comma separated — tools containing “burp” display as a single burp pill"
+          >
+            <Input placeholder="curl, nmap, burp" />
+          </Form.Item>
+          <Form.Item label="Observations recorded" name="observations">
+            <Input.TextArea rows={3} />
           </Form.Item>
           <Form.Item label="Notes" name="notes">
             <Input.TextArea rows={3} />

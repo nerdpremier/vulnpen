@@ -124,6 +124,24 @@ export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
     });
   },
 
+  /**
+   * A run launched outside the chat (the case page's Nessus-style runs)
+   * appends messages on the server; drop the loaded flag so the chat page
+   * refetches history instead of showing a stale transcript.
+   */
+  markHistoryStale: (sessionId) => {
+    set((state) => {
+      const s = state.sessions[sessionId];
+      if (!s || !s.historyLoaded) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...s, historyLoaded: false },
+        },
+      };
+    });
+  },
+
   loadHistory: (sessionId, historyMessages) => {
     set((state) => {
       const s = state.sessions[sessionId];

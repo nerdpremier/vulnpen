@@ -202,6 +202,8 @@ export async function runAgentLoop(params: {
   userId: string;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
+  /** Stamp all messages this run flushes with a transcript channel. */
+  channel?: string;
 }): Promise<void> {
   const { sessionId, userId, sse } = params;
 
@@ -246,6 +248,7 @@ export async function runAgentLoop(params: {
     sessionId,
     [...session.messages],
     () => !wasSessionClearedSince(sessionId, runStartedAt),
+    params.channel,
   );
 
   // Refresh the system message on every turn so model assignments changed
@@ -612,8 +615,10 @@ export async function initAndRun(params: {
   userMessage: string;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
+  /** Transcript channel for this whole turn (e.g. "run" for UI-launched runs). */
+  channel?: string;
 }): Promise<void> {
-  const { sessionId, userId, userMessage: userMessageText, sse, abortSignal } = params;
+  const { sessionId, userId, userMessage: userMessageText, sse, abortSignal, channel } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
@@ -624,11 +629,12 @@ export async function initAndRun(params: {
 
   const userMsg = await beginTurn(session, userMessageText, {
     ensureSystemMessage: () => buildSystemMessage(sessionId, userId),
+    channel,
   });
 
   sse.write("user_message_ack", { id: userMsg.id });
 
-  await runAgentLoop({ sessionId, userId, sse, abortSignal });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel });
 }
 
 // ─── Handle consent response and resume ──────────────────────────────

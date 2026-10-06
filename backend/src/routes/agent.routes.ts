@@ -24,14 +24,22 @@ import {
   getVulnerability,
 } from "../controllers/vulnerability.controller";
 import {
+  cancelTestRun,
   generateTestPlan,
   getOwaspCoverage,
   getReport,
   getTestPlan,
+  getTestRunDetail,
+  getTestRuns,
+  launchTestRun,
+  openReportWord,
+  downloadReportDocxFile,
+  exportReportPdf,
   mapVulnerability,
   remapAllVulnerabilities,
   removeTestCase,
   removeTestCases,
+  stopTestRun,
   updateTestCaseStatus,
 } from "../controllers/web-security.controller";
 
@@ -59,7 +67,15 @@ router.post("/session/:sessionId/test-plan", [verifySess], generateTestPlan);
 router.patch("/session/:sessionId/test-plan/cases/:testId", [verifySess], updateTestCaseStatus);
 router.delete("/session/:sessionId/test-plan/cases/:testId", [verifySess], removeTestCase);
 router.post("/session/:sessionId/test-plan/cases/remove", [verifySess], removeTestCases);
+router.post("/session/:sessionId/test-plan/run", [verifySess], launchTestRun);
+router.get("/session/:sessionId/test-plan/runs", [verifySess], getTestRuns);
+router.get("/session/:sessionId/test-plan/runs/:runId", [verifySess], getTestRunDetail);
+router.post("/session/:sessionId/test-plan/runs/:runId/stop", [verifySess], stopTestRun);
+router.delete("/session/:sessionId/test-plan/runs/:runId", [verifySess], cancelTestRun);
 router.get("/session/:sessionId/report", [verifySess], getReport);
+router.post("/session/:sessionId/report/word", [verifySess], openReportWord);
+router.get("/session/:sessionId/report/docx", [verifySess], downloadReportDocxFile);
+router.get("/session/:sessionId/report/pdf", [verifySess], exportReportPdf);
 router.get("/session/:sessionId/owasp-top10", [verifySess], getOwaspCoverage);
 router.get("/session/:sessionId/files/:filename", [verifySess], getSessionFile);
 router.post("/delete-session", [verifySess], deleteSession);

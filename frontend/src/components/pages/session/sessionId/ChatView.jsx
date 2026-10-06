@@ -15,6 +15,7 @@ import IterationLimitBanner from "./IterationLimitBanner";
 import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
+import { buildToolIndex } from "@/utils/toolIndex.mjs";
 import { useQueryClient } from "react-query";
 
 export default function ChatView({ sessionId }) {
@@ -239,25 +240,11 @@ export default function ChatView({ sessionId }) {
   // ChatMessage used to scan the whole list (twice per rendered message, on
   // every streaming frame), which made long sessions quadratic. The index also
   // lets tool results render inline inside their parent assistant block.
-  const { toolIndex, visibleMessages } = useMemo(() => {
-    const outputs = new Map();
-    const callIds = new Set();
-    const args = new Map();
-    for (const m of messages) {
-      if (m.role === "assistant" && m.toolCalls) {
-        for (const tc of m.toolCalls) {
-          callIds.add(tc.id);
-          if (tc.arguments != null) args.set(tc.id, tc.arguments);
-        }
-      } else if (m.role === "tool" && m.toolCallId) {
-        outputs.set(m.toolCallId, m);
-      }
-    }
-    const visible = messages.filter(
-      (m) => m.role !== "tool" || !callIds.has(m.toolCallId),
-    );
-    return { toolIndex: { outputs, callIds, args }, visibleMessages: visible };
-  }, [messages]);
+  // The builder is shared with the case page's run activity stream.
+  const { toolIndex, visibleMessages } = useMemo(
+    () => buildToolIndex(messages),
+    [messages],
+  );
 
   const isEmpty = messages.length === 0 && !historyLoading;
 

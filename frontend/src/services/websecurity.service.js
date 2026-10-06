@@ -72,12 +72,45 @@ export const remapAllVulnerabilities = async (sessionId) => {
   return res.data;
 };
 
-// --- Draft report ---------------------------------------------------
+// --- Report (LibreOffice / Collabora) --------------------------------
 
-export const getReportDraft = async (sessionId) => {
-  const res = await apiClient.get(`/agent/session/${sessionId}/report`);
+export const getWordEditorUrl = async (sessionId) => {
+  const res = await apiClient.post(`/agent/session/${sessionId}/report/word`);
+  return res.data;
+};
+// --- Nessus-style runs (launch WSTG cases from the web UI) ------------
+
+/** Queue one or more cases for the agent to execute, one run at a time. */
+export const runTestCases = async ({ sessionId, testIds }) => {
+  const res = await apiClient.post(`/agent/session/${sessionId}/test-plan/run`, {
+    testIds,
+  });
   return res.data;
 };
 
-export const downloadReportDraftUrl = (sessionId) =>
-  `/agent/session/${sessionId}/report?download=1`;
+export const getTestRuns = async (sessionId) => {
+  const res = await apiClient.get(`/agent/session/${sessionId}/test-plan/runs`);
+  return res.data;
+};
+
+/** One run plus its activity feed — polled while the run is live. */
+export const getTestRunDetail = async (sessionId, runId) => {
+  const res = await apiClient.get(
+    `/agent/session/${sessionId}/test-plan/runs/${runId}`,
+  );
+  return res.data;
+};
+
+export const stopTestRun = async (sessionId, runId) => {
+  const res = await apiClient.post(
+    `/agent/session/${sessionId}/test-plan/runs/${runId}/stop`,
+  );
+  return res.data;
+};
+
+export const cancelTestRun = async (sessionId, runId) => {
+  const res = await apiClient.delete(
+    `/agent/session/${sessionId}/test-plan/runs/${runId}`,
+  );
+  return res.data;
+};

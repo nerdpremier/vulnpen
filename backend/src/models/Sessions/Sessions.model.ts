@@ -27,6 +27,8 @@ export interface AgentMessageDoc {
   timestamp: Date;
   turnIndex: number;
   isSummary?: boolean;
+  /** Transcript channel — undefined = main chat, "run" = a UI-launched WSTG run. */
+  channel?: string;
 }
 
 export interface PendingConsentToolCall {
@@ -154,6 +156,37 @@ export interface WebAppTestPlanDoc {
   createdAt: Date;
   updatedAt: Date;
 }
+
+/** Lifecycle of one Nessus-style execution of a set of WSTG cases. */
+export type WebAppRunStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface WebAppRunCaseResult {
+  testId: string;
+  status: WstgTestStatus;
+}
+
+export interface WebAppRunDoc {
+  runId: string;
+  testIds: string[];
+  label: string;
+  status: WebAppRunStatus;
+  triggeredBy: "ui";
+  queuedAt: Date;
+  startedAt?: Date;
+  finishedAt?: Date;
+  durationMs?: number;
+  /** Snapshot of every case's status when the run settled. */
+  resultSummary?: {
+    perCase: WebAppRunCaseResult[];
+    counts: { passed: number; failed: number; blocked: number; other: number };
+  };
+  error?: string;
+}
 export interface SessionVulnerabilityDoc {
   vulnerabilityId: string;
   fingerprint: string;
@@ -161,7 +194,7 @@ export interface SessionVulnerabilityDoc {
   host: string;
   service?: string;
   endpoint?: string;
-  severity: "info" | "low" | "medium" | "high";
+  severity: "info" | "low" | "medium" | "high" | "critical";
   cwe?: string;
   cve?: string;
   description?: string;
@@ -186,9 +219,23 @@ export interface SessionVulnerabilityDoc {
   owaspMappedAt?: Date;
   /** How the OWASP mapping was decided: official, curated, tester or model. */
   owaspProvenance?: string;
-  /** Likelihood factor for the WSTG risk matrix: 1 = low, 2 = medium, 3 = high. */
+  /** CVSS v3.0 base metrics (FIRST spec) the model rated, with the score the
+   *  system computed from them. Severity always follows the score. */
+  cvss?: {
+    av: "N" | "A" | "L" | "P";
+    ac: "L" | "H";
+    pr: "N" | "L" | "H";
+    ui: "N" | "R";
+    s: "U" | "C";
+    c: "N" | "L" | "H";
+    i: "N" | "L" | "H";
+    a: "N" | "L" | "H";
+    score: number;
+    vector: string;
+  };
+  /** Legacy WSTG risk-matrix factors (1–3) kept only for findings recorded
+   *  before the CVSS v3.0 rating replaced the likelihood x impact matrix. */
   likelihood?: number;
-  /** Impact factor for the WSTG risk matrix: 1 = low, 2 = medium, 3 = high. */
   impactRating?: number;
   chatMessages: VulnerabilityChatMessageDoc[];
   /** Browser screenshots attached to this finding (filenames served via /agent/session/:id/files/:name). */
@@ -229,6 +276,9 @@ export interface SessionDoc extends mongoose.Document {
   vulnerabilities?: SessionVulnerabilityDoc[];
   vulnerabilityBackfillVersion?: number;
   webAppTestPlan?: WebAppTestPlanDoc;
+  /** Nessus-style run history: every launch of WSTG cases from the web UI,
+   *  persisted so runs (including queued ones) survive reload and restart. */
+  webAppRuns?: WebAppRunDoc[];
   /** Snapshot of the engagement state module (hosts, services, credentials,
    *  shells, implants, key discoveries, files, approaches, next steps) — how
    *  those categories survive across runs. Written only by EngagementState. */
@@ -261,6 +311,13 @@ const AgentMessageSchema = new Schema(
     timestamp: { type: Date, default: Date.now },
     turnIndex: { type: Number, default: 0 },
     isSummary: { type: Boolean, default: false },
+    /**
+     * Transcript channel: undefined = the main chat; "run" = produced by a
+     * Nessus-style WSTG run launched from the web UI. Run messages stay in the
+     * model's context but are filtered out of the chat page's history feed —
+     * the run's activity is watched on the case page, not in the chat.
+     */
+    channel: { type: String },
   },
   { _id: false },
 );
@@ -387,6 +444,38 @@ const WebAppTestPlanSchema = new Schema(
   },
   { _id: false },
 );
+
+const WebAppRunSchema = new Schema(
+  {
+    runId: { type: String, required: true },
+    testIds: { type: [String], default: [] },
+    label: { type: String, default: "" },
+    status: {
+      type: String,
+      enum: ["queued", "running", "completed", "failed", "cancelled"],
+      default: "queued",
+    },
+    triggeredBy: { type: String, default: "ui" },
+    queuedAt: { type: Date, default: Date.now },
+    startedAt: { type: Date },
+    finishedAt: { type: Date },
+    durationMs: { type: Number },
+    resultSummary: {
+      type: {
+        perCase: [{ testId: String, status: String }],
+        counts: {
+          passed: { type: Number, default: 0 },
+          failed: { type: Number, default: 0 },
+          blocked: { type: Number, default: 0 },
+          other: { type: Number, default: 0 },
+        },
+      },
+      default: undefined,
+    },
+    error: { type: String },
+  },
+  { _id: false },
+);
 const SessionVulnerabilitySchema = new Schema(
   {
     vulnerabilityId: { type: String, required: true },
@@ -426,6 +515,21 @@ const SessionVulnerabilitySchema = new Schema(
     owaspRationale: { type: String },
     owaspMappedAt: { type: Date },
     owaspProvenance: { type: String },
+    cvss: {
+      type: {
+        av: { type: String, enum: ["N", "A", "L", "P"] },
+        ac: { type: String, enum: ["L", "H"] },
+        pr: { type: String, enum: ["N", "L", "H"] },
+        ui: { type: String, enum: ["N", "R"] },
+        s: { type: String, enum: ["U", "C"] },
+        c: { type: String, enum: ["N", "L", "H"] },
+        i: { type: String, enum: ["N", "L", "H"] },
+        a: { type: String, enum: ["N", "L", "H"] },
+        score: { type: Number },
+        vector: { type: String },
+      },
+      _id: false,
+    },
     likelihood: { type: Number },
     impactRating: { type: Number },
     chatMessages: { type: [VulnerabilityChatMessageSchema], default: [] },
@@ -542,6 +646,10 @@ const SessionSchema = new Schema({
   webAppTestPlan: {
     type: WebAppTestPlanSchema,
     default: undefined,
+  },
+  webAppRuns: {
+    type: [WebAppRunSchema],
+    default: [],
   },
   // Engagement state snapshot — owned and written by the EngagementState
   // module (services/engagement-state.ts); no other code touches this field.

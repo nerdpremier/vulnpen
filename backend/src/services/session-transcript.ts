@@ -128,12 +128,13 @@ export async function trackTokens(
 export async function beginTurn(
   session: SessionDoc,
   text: string,
-  opts: { ensureSystemMessage?: () => Promise<AgentMessageDoc> } = {},
+  opts: { ensureSystemMessage?: () => Promise<AgentMessageDoc>; channel?: string } = {},
 ): Promise<AgentMessageDoc> {
   if (session.messages.length === 0 && opts.ensureSystemMessage) {
     session.messages.push(await opts.ensureSystemMessage());
   }
   const userMsg = userMessage(text, session.turnIndex);
+  if (opts.channel) userMsg.channel = opts.channel;
   session.messages.push(userMsg);
   session.turnIndex += 1;
   await session.save();
@@ -211,12 +212,17 @@ export function createRunBuffer(
   sessionId: string,
   initialTranscript: AgentMessageDoc[],
   isLive: () => boolean,
+  /** Stamp every flushed message with a transcript channel (e.g. "run"). */
+  channel?: string,
 ): RunBuffer {
   let transcript = initialTranscript;
   let tail: AgentMessageDoc[] = [];
 
   const flush = async (): Promise<void> => {
-    await appendMessages(sessionId, tail);
+    await appendMessages(
+      sessionId,
+      channel ? tail.map((m) => (m.channel ? m : { ...m, channel })) : tail,
+    );
     tail = [];
   };
 

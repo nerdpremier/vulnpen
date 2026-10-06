@@ -86,6 +86,8 @@ export interface UpdateTestCasePatch {
   title?: string;
   objective?: string;
   howToTest?: string;
+  evidenceExpectation?: string;
+  tools?: string[];
   status?: unknown;
   notes?: string;
   observations?: string;
@@ -515,6 +517,11 @@ export function updateTestCase(
     title: patch.title?.trim() || current.title,
     objective: patch.objective !== undefined ? patch.objective : current.objective,
     howToTest: patch.howToTest !== undefined ? patch.howToTest : current.howToTest,
+    evidenceExpectation:
+      patch.evidenceExpectation !== undefined
+        ? patch.evidenceExpectation
+        : current.evidenceExpectation,
+    tools: patch.tools !== undefined ? patch.tools : current.tools,
     status,
     notes: patch.notes ?? current.notes,
     observations: patch.observations ?? current.observations,
@@ -666,6 +673,59 @@ export function nextTestsToRun(
   return plan.cases
     .filter((testCase) => testCase.status === "not_started")
     .slice(0, limit);
+}
+
+/**
+ * The user message that drives a UI-launched run (the Nessus-style "Run" on
+ * the case page). Persisted as a normal user message, so the chat transcript
+ * records who asked for what; the `[WSTG run <runId>]` marker lets the UI
+ * slice the transcript into per-run activity feeds.
+ */
+export function buildRunInstruction(
+  runId: string,
+  cases: SessionTestCaseDoc[],
+  options?: { target?: string; scope?: string },
+): string {
+  const target = options?.target || "the engagement target";
+  const lines: string[] = [
+    `[WSTG run ${runId}] Execute the following ${cases.length} WSTG test case${
+      cases.length === 1 ? "" : "s"
+    } against ${target}.`,
+  ];
+
+  if (options?.scope) {
+    lines.push(
+      `Scope boundary: ${options.scope}. Never send anything to a host that is not in scope.`,
+    );
+  }
+
+  lines.push(
+    "",
+    "Work through the cases in the order given, one at a time. For each case:",
+    "1. Actually perform the test with the available tools, following its How to test.",
+    "2. Record what you did and what you saw in the case observations.",
+    "3. Update the case with the wstg_test_plan tool:",
+    "   - passed / failed only with concrete evidence; a failed case must link the finding (vulnerabilityId);",
+    "   - blocked with the concrete reason why the test could not run;",
+    "   - skipped only when the test genuinely does not apply to this target.",
+    "4. Move on to the next case without waiting for confirmation.",
+    "",
+    "If a tool needs approval (consent), request it and continue once approved.",
+    "",
+    "Cases:",
+  );
+
+  for (const testCase of cases) {
+    lines.push("", `### ${testCase.testId} — ${testCase.title}`);
+    if (testCase.objective) lines.push(`- Objective: ${testCase.objective}`);
+    if (testCase.howToTest) lines.push(`- How to test: ${testCase.howToTest}`);
+    if (testCase.evidenceExpectation) {
+      lines.push(`- Expected evidence: ${testCase.evidenceExpectation}`);
+    }
+    if (testCase.tools?.length) lines.push(`- Tools: ${testCase.tools.join(", ")}`);
+  }
+
+  return lines.join("\n");
 }
 
 function statusGlyph(status: WstgTestStatus): string {
