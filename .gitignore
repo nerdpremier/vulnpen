@@ -30,9 +30,11 @@ ssh-keys/
 /.claude/
 /.codex-tmp/
 /tmp-work/
+/.freebuff/
 
 # ── Generated deliverables (decks, reports) ──
 /output/
+/backend/reports/
 
 # Academic paper build - never publish to the repository
 paper-build/
