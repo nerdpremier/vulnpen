@@ -5,6 +5,16 @@
 /** Group key for cases that do not belong to one of the twelve WSTG categories. */
 export const OTHER_GROUP = "OTHER";
 
+/** The result values a case status control offers, shared by the plan table and the detail page. */
+export const STATUS_OPTIONS = [
+  { value: "not_started", label: "Not started" },
+  { value: "in_progress", label: "In progress" },
+  { value: "passed", label: "Passed" },
+  { value: "failed", label: "Failed" },
+  { value: "blocked", label: "Blocked" },
+  { value: "skipped", label: "Skipped" },
+];
+
 // Status strings as stored on a case, mapped to the camelCase buckets the UI
 // reads. Kept as an explicit table because testCase.status ("in_progress")
 // does not match the bucket keys ("inProgress") — looking them up as one word
