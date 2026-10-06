@@ -8,25 +8,25 @@
  * WSTG references and the OWASP Top 10:2025 mapping are computed here rather
  * than invented by a model.
  *
- * Structure follows the WSTG v4.2 Reporting guidance (section 5): Introduction
- * (version control, table of contents, team, scope, limitations, timeline,
- * disclaimer), Executive summary, Findings (summary + details) and appendices
- * (methodology, risk-rating explanations, test-case inventory). The engagement
- * phases, the risk-rating method (likelihood x impact) and the report structure
- * all come from the WSTG itself, so the report answers to one guide.
+ * Structure follows the WSTG v4.2 Reporting guidance (section 5), trimmed to
+ * what a draft needs: a single engagement-details block plus disclaimer, the
+ * executive summary, scope and methodology, risk and findings summaries,
+ * detailed findings, coverage, mapping and recommendations, and the appendices
+ * (test-case inventory, risk-rating methodology, glossary). The engagement
+ * phases and the report structure come from the WSTG itself; the risk rating is
+ * the FIRST CVSS v3.0 base score (the model rates the eight base metrics, the
+ * score and severity band are computed here), so the report answers to one
+ * guide and one scoring standard.
  */
 
 import {
-  OWASP_TOP10_2025,
   WSTG_SOURCE,
   WSTG_VERSION,
   computeOwaspCoverage,
   getOwaspCategory,
   getWstgTest,
   normalizeOwaspTop10Id,
-  wstgRiskRating,
 } from "../../knowledge";
-export { wstgRiskRating };
 import type { OwaspTop10Id } from "../../knowledge";
 import type {
   SessionVulnerabilityDoc,
@@ -35,11 +35,12 @@ import type {
 import { mapFindingToOwaspTop10, normalizeCwe } from "./owasp-mapping.service";
 import { computeCoverage, TEST_PLAN_SOURCE } from "./test-plan.service";
 
-export type Severity = "high" | "medium" | "low" | "info";
+export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
-const SEVERITY_ORDER: Severity[] = ["high", "medium", "low", "info"];
+const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
 
 const SEVERITY_RANK: Record<Severity, number> = {
+  critical: 5,
   high: 4,
   medium: 3,
   low: 2,
@@ -86,11 +87,8 @@ export interface ReportFindingsRow {
   relatedOwasp: OwaspTop10Id[];
   /** official | curated | tester | model */
   owaspProvenance?: string;
-  /** Likelihood and impact factors (1-3 scale) that feed the risk matrix. */
-  likelihood?: number;
-  impactRating?: number;
-  /** Risk from the likelihood x impact matrix in Appendix B. */
-  riskRating?: "high" | "medium" | "low";
+  /** CVSS v3.0 base score the system computed from the eight rated metrics. */
+  cvss?: { score: number; vector: string };
 }
 
 export interface ReportStats {
@@ -202,9 +200,9 @@ export function buildReportFindings(
       mappingRationale: vulnerability.owaspRationale || mapping.rationale,
       relatedOwasp: mapping.related,
       owaspProvenance: vulnerability.owaspProvenance || mapping.provenance,
-      likelihood: vulnerability.likelihood,
-      impactRating: vulnerability.impactRating,
-      riskRating: wstgRiskRating(vulnerability.likelihood, vulnerability.impactRating),
+      cvss: vulnerability.cvss
+        ? { score: vulnerability.cvss.score, vector: vulnerability.cvss.vector }
+        : undefined,
     };
   });
 }
@@ -221,8 +219,7 @@ export function serializeFindingsForReport(
     id: v.vulnerabilityId,
     title: v.title,
     severity: v.severity,
-    likelihood: v.likelihood,
-    impactRating: v.impactRating,
+    cvss: v.cvss ? { score: v.cvss.score, vector: v.cvss.vector } : undefined,
     cwe: v.cwe,
     cve: v.cve,
     host: v.host,
@@ -288,82 +285,46 @@ function owaspTitle(id?: OwaspTop10Id): string {
   return `${id} ${getOwaspCategory(id)?.title ?? ""}`.trim();
 }
 
-function introductionSection(options: ReportOptions, stats: ReportStats): string[] {
+function introductionSection(options: ReportOptions): string[] {
   const generatedAt = options.generatedAt ?? new Date();
+  const rows = [
+    `| Client | ${tableCell(options.client ?? "Not specified")} |`,
+    `| Target | ${tableCell(options.target ?? "Not specified")} |`,
+    `| Engagement type | ${tableCell(options.testType ?? "Grey-box web application penetration test")} |`,
+    `| Testing window | ${tableCell(options.testingWindow ?? formatDate(generatedAt))} |`,
+    `| Tester | ${tableCell(options.tester ?? "Not specified")} |`,
+    `| Classification | ${tableCell(options.classification ?? "Confidential")} |`,
+  ];
+  if (options.session.createdAt) {
+    rows.push(`| Session created | ${formatDate(options.session.createdAt)} |`);
+  }
+  rows.push(`| Report generated | ${formatDate(generatedAt)} |`);
+  if (options.version) {
+    rows.push(`| Report version | ${tableCell(options.version)} |`);
+  }
+  rows.push(
+    `| Standards applied | OWASP WSTG v${WSTG_VERSION} (methodology, risk rating, report structure), OWASP Top 10:2025 (risk mapping), CWE (weakness classification) |`,
+  );
+
   return [
     "## 1. Introduction",
     "",
-    "### 1.1 Version control",
-    "",
-    "| Version | Description | Date | Author |",
-    "| --- | --- | --- | --- |",
-    `| ${tableCell(options.version ?? "1.0 (draft)")} | ${options.version ? "Updated draft" : "Initial report (draft)"} | ${formatDate(generatedAt)} | ${tableCell(options.tester ?? "Not specified")} |`,
-    "",
-    "### 1.2 Table of contents",
-    "",
-    "- 1. Introduction",
-    "- 2. Executive summary",
-    "- 3. Scope, methodology and limitations",
-    "- 4. Risk summary",
-    "- 5. Findings summary",
-    "- 6. Detailed findings",
-    "- 7. WSTG v" + WSTG_VERSION + " test coverage",
-    "- 8. OWASP Top 10:2025 mapping",
-    "- 9. Recommendations",
-    "- 10. Appendix A - Test case inventory",
-    "- 11. Appendix B - Risk rating methodology",
-    "- 12. Appendix C - Glossary and references",
-    "",
-    "### 1.3 Test team",
-    "",
-    "| Name | Role | Qualifications |",
-    "| --- | --- | --- |",
-    `| ${tableCell(options.tester ?? "Not specified")} | Lead tester | OWASP WSTG v${WSTG_VERSION} methodology; web application penetration testing |`,
-    "",
-    "### 1.4 Engagement details",
+    "### 1.1 Engagement details",
     "",
     "| Field | Value |",
     "| --- | --- |",
-    `| Report title | ${tableCell(options.session.name)} — Web Application Penetration Test |`,
-    `| Client | ${tableCell(options.client ?? "Not specified")} |`,
-    `| Target | ${tableCell(options.target ?? "Not specified")} |`,
-    `| Scope | ${tableCell(options.scope ?? "Not specified")} |`,
-    `| Engagement type | ${tableCell(options.testType ?? "Grey-box web application penetration test")} |`,
-    `| Testing window | ${tableCell(options.testingWindow ?? formatDate(generatedAt))} |`,
-    `| Standards applied | OWASP WSTG v${WSTG_VERSION} (methodology, risk rating, report structure), OWASP Top 10:2025 (risk mapping), CWE (weakness classification) |`,
-    `| Assessment session | ${tableCell(options.session.name)} (${tableCell(options.session.sessionId)}) |`,
-    `| Tester | ${tableCell(options.tester ?? "Not specified")} |`,
-    `| Report version | ${tableCell(options.version ?? "1.0 (draft)")} |`,
-    `| Classification | ${tableCell(options.classification ?? "Confidential")} |`,
-    `| Generated | ${generatedAt.toISOString()} |`,
-    `| Status | DRAFT — generated from session evidence; review before delivery |`,
-    `| Findings | ${stats.totalFindings} (${severityCountsLine(stats)}) |`,
+    ...rows,
     "",
-    "### 1.5 Disclaimer",
+    "### 1.2 Disclaimer",
     "",
     "This test is a point-in-time assessment; the environment may have changed since it was run. There is no guarantee that every possible security issue has been identified, or that new vulnerabilities have not since been discovered. This report is a guiding document, not a warranty of the state of the systems tested.",
-    "",
-    "### 1.6 Timeline",
-    "",
-    "| Milestone | Date |",
-    "| --- | --- |",
-    `| Engagement session created | ${formatDate(options.session.createdAt)} |`,
-    `| Report generated | ${generatedAt.toISOString()} |`,
-    "",
-    "### 1.7 Standards and references applied",
-    "",
-    `- OWASP Web Security Testing Guide v${WSTG_VERSION} - methodology, risk rating and report structure (${WSTG_SOURCE})`,
-    "- OWASP WSTG v4.2 Reporting guidance (https://wstg.owasp.org/v4.2/5-Reporting/)",
-    "- OWASP Risk Rating Methodology - the likelihood x impact matrix, with the two factors carrying equal weight (https://owasp.org/www-project-risk-rating-methodology/)",
-    "- OWASP Top 10:2025 - risk vocabulary (https://owasp.org/Top10/2025/)",
-    "- CWE - weakness classification (https://cwe.mitre.org/)",
     "",
   ];
 }
 
 function executiveSummarySection(options: ReportOptions, findings: ReportFindingsRow[], stats: ReportStats): string[] {
   const lines: string[] = ["## 2. Executive summary", ""];
-  const highCount = stats.bySeverity.high;
+  const urgentCount = stats.bySeverity.critical + stats.bySeverity.high;
 
   lines.push(
     `A web application security assessment of ${options.target || options.session.name} was performed using the OWASP Web Security Testing Guide v${WSTG_VERSION}. ${stats.totalFindings} security finding(s) were recorded (${severityCountsLine(stats)}).`,
@@ -377,14 +338,14 @@ function executiveSummarySection(options: ReportOptions, findings: ReportFinding
     lines.push("");
   }
 
-  if (highCount > 0) {
+  if (urgentCount > 0) {
     lines.push(
-      `The engagement identified ${highCount} high severity issue(s). These should be treated as release-blocking until remediated or formally accepted.`,
+      `The engagement identified ${urgentCount} critical or high severity issue(s). These should be treated as release-blocking until remediated or formally accepted.`,
     );
     lines.push("");
   } else if (stats.totalFindings > 0) {
     lines.push(
-      "No high severity issues were identified within the tested scope. The remaining findings are medium, low or informational and indicate hardening opportunities.",
+      "No critical or high severity issues were identified within the tested scope. The remaining findings are medium, low or informational and indicate hardening opportunities.",
     );
     lines.push("");
   }
@@ -394,7 +355,7 @@ function executiveSummarySection(options: ReportOptions, findings: ReportFinding
     lines.push("**Principal findings**", "");
     for (const finding of top) {
       lines.push(
-        `- **F-${String(finding.index).padStart(3, "0")} ${finding.title}** (${finding.severity}${finding.riskRating ? `, risk ${finding.riskRating}` : ""}) — ${finding.host}${finding.endpoint ? ` ${finding.endpoint}` : ""}. ${owaspTitle(finding.owaspTop10)}.`,
+        `- **F-${String(finding.index).padStart(3, "0")} ${finding.title}** (${finding.severity}${finding.cvss ? `, CVSS v3.0 base score ${finding.cvss.score}` : ""}) — ${finding.host}${finding.endpoint ? ` ${finding.endpoint}` : ""}. ${owaspTitle(finding.owaspTop10)}.`,
       );
     }
     lines.push("");
@@ -455,7 +416,7 @@ function scopeAndMethodologySection(options: ReportOptions, findings: ReportFind
   }
 
   lines.push(
-    "### 3.4 Assumptions and limitations",
+    `### ${options.engagementNotes ? "3.4" : "3.3"} Assumptions and limitations`,
     "",
     options.limitations ||
       "Findings are limited to the scope, credentials and time window available for this assessment. Untested or blocked test cases are recorded in section 7 and represent unverified risk rather than confirmed absence of a vulnerability.",
@@ -502,7 +463,7 @@ function findingsSummarySection(findings: ReportFindingsRow[]): string[] {
   const lines: string[] = [
     "## 5. Findings summary",
     "",
-    "| ID | Severity | Risk | Title | Affected asset | WSTG | OWASP Top 10:2025 | Status |",
+    "| ID | Severity | CVSS v3.0 | Title | Affected asset | WSTG | OWASP Top 10:2025 | Status |",
     "| --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   if (!findings.length) {
@@ -510,7 +471,7 @@ function findingsSummarySection(findings: ReportFindingsRow[]): string[] {
   }
   for (const finding of findings) {
     lines.push(
-      `| F-${String(finding.index).padStart(3, "0")} | ${finding.severity}${finding.exploited ? " (exploited)" : ""} | ${finding.riskRating ?? "—"} | ${tableCell(finding.title)} | ${tableCell(finding.host)}${finding.endpoint ? `<br>${tableCell(finding.endpoint)}` : ""} | ${finding.wstgId ?? "—"} | ${owaspTitle(finding.owaspTop10)} | ${finding.status} |`,
+      `| F-${String(finding.index).padStart(3, "0")} | ${finding.severity}${finding.exploited ? " (exploited)" : ""} | ${finding.cvss ? `${finding.cvss.score}` : "—"} | ${tableCell(finding.title)} | ${tableCell(finding.host)}${finding.endpoint ? `<br>${tableCell(finding.endpoint)}` : ""} | ${finding.wstgId ?? "—"} | ${owaspTitle(finding.owaspTop10)} | ${finding.status} |`,
     );
   }
   lines.push("");
@@ -522,7 +483,12 @@ function detailedFindingsSection(
   vulnerabilities: SessionVulnerabilityDoc[],
 ): string[] {
   const byId = new Map(vulnerabilities.map((vulnerability) => [vulnerability.vulnerabilityId, vulnerability]));
-  const lines: string[] = ["## 6. Detailed findings", ""];
+  const lines: string[] = [
+    "## 6. Detailed findings",
+    "",
+    "*Evidence below is redacted for secrets, tokens, keys and card-like numbers before it enters the report (WSTG Reporting: mask sensitive data). Verify the redaction before delivery.*",
+    "",
+  ];
 
   if (!findings.length) {
     lines.push(
@@ -543,12 +509,11 @@ function detailedFindingsSection(
 
     lines.push(`| Affected asset | ${tableCell(finding.host)}${finding.endpoint ? ` — ${tableCell(finding.endpoint)}` : vulnerability?.service ? ` — ${tableCell(vulnerability.service)}` : ""} |`);
     lines.push(`| CWE | ${finding.cwe ?? "Not recorded"} |`);
-    // 1-3 scale: 1 = low, 2 = medium, 3 = high. See Appendix B for the matrix.
-    const factor = (n?: number) => (n === 3 ? "high" : n === 2 ? "medium" : n === 1 ? "low" : "not recorded");
+    // The score was computed from the eight CVSS v3.0 base metrics; see
+    // Appendix B for the methodology.
     lines.push(
-      `| Likelihood | ${factor(finding.likelihood)}${finding.likelihood != null ? ` (${finding.likelihood}/3)` : ""} |`,
-      `| Impact | ${factor(finding.impactRating)}${finding.impactRating != null ? ` (${finding.impactRating}/3)` : ""} |`,
-      `| Risk (likelihood x impact, equal weight) | ${finding.riskRating ?? "Not rated"} |`,
+      `| CVSS v3.0 base score | ${finding.cvss ? `${finding.cvss.score} (${finding.severity})` : "Not rated"} |`,
+      `| CVSS vector | ${finding.cvss ? tableCell(finding.cvss.vector) : "Not rated — all eight base metrics must be recorded"} |`,
     );
     if (vulnerability?.cve) lines.push(`| CVE | ${tableCell(vulnerability.cve)} |`);
     lines.push(`| OWASP Top 10:2025 | ${owaspTitle(finding.owaspTop10)}${finding.relatedOwasp.length ? ` (also related: ${finding.relatedOwasp.join(", ")})` : ""} |`);
@@ -577,10 +542,6 @@ function detailedFindingsSection(
     lines.push("```text");
     lines.push(maskSensitive((vulnerability?.evidence || "No raw evidence was captured.").trim()));
     lines.push("```", "");
-    lines.push(
-      "> Evidence is redacted for secrets, tokens, keys and card-like numbers before it enters the report (WSTG Reporting: mask sensitive data). Verify the redaction before delivery.",
-      "",
-    );
 
     if (vulnerability?.stepsToReproduce?.length) {
       lines.push("**Steps to reproduce**", "");
@@ -687,25 +648,13 @@ function owaspMappingSection(stats: ReportStats): string[] {
   const lines: string[] = [
     "## 8. OWASP Top 10:2025 mapping",
     "",
-    'The OWASP Top 10:2025 mapping is recorded on the findings themselves (section 6). A finding is only classified when the evidence supports a category; findings with no well-fitting category are listed as "Unmapped" rather than forced into one.',
+    'The OWASP Top 10:2025 mapping is recorded on the findings themselves (section 6) and counted per category in section 4.2. A finding is only classified when the evidence supports a category; findings with no well-fitting category are listed as "Unmapped" rather than forced into one. Categories with no findings are omitted here.',
     "",
-    "| Category | Findings | Notable WSTG tests |",
-    "| --- | --- | --- |",
   ];
-
-  for (const category of OWASP_TOP10_2025) {
-    const findings = stats.byOwasp.find((entry) => entry.id === category.id)?.findings ?? 0;
-    const tests = (category.wstgFocus ?? []).slice(0, 4).join(", ") || "—";
-    lines.push(`| ${category.id} ${category.title} | ${findings} | ${tests} |`);
-  }
-  if (stats.unmapped > 0) {
-    lines.push(`| Unmapped | ${stats.unmapped} | Add a CWE or WSTG test reference to classify — or leave unmapped when nothing fits |`);
-  }
-  lines.push("");
 
   const affected = stats.byOwasp.filter((entry) => entry.findings > 0);
   if (affected.length) {
-    lines.push("### 8.1 Programme-level guidance for the categories present", "");
+    lines.push("Programme-level guidance for the categories present:", "");
     for (const entry of affected) {
       const category = getOwaspCategory(entry.id);
       if (!category) continue;
@@ -730,7 +679,7 @@ function recommendationsSection(
     byId.get(finding.id)?.remediation || "No remediation recorded — define one before delivery.";
 
   const groups: Array<{ title: string; severities: Severity[] }> = [
-    { title: "### 9.1 Immediate (within 7 days)", severities: ["high"] },
+    { title: "### 9.1 Immediate (within 7 days)", severities: ["critical", "high"] },
     { title: "### 9.2 Short term (within 30 days)", severities: ["medium"] },
     { title: "### 9.3 Hardening backlog (next release cycle)", severities: ["low", "info"] },
   ];
@@ -740,8 +689,8 @@ function recommendationsSection(
     const rows = findings.filter((finding) => group.severities.includes(finding.severity));
     if (!rows.length) {
       lines.push(
-        group.severities.includes("high")
-          ? "- No high severity findings are outstanding."
+        group.severities.includes("critical")
+          ? "- No critical or high severity findings are outstanding."
           : "- Nothing outstanding in this band.",
       );
     }
@@ -788,20 +737,34 @@ function appendixSection(plan?: WebAppTestPlanDoc | null): string[] {
   }
 
   lines.push(
-    "## 11. Appendix B - Risk rating methodology",
+    "## 11. Appendix B - Risk rating methodology (CVSS v3.0)",
     "",
-    "Risk is rated from two factors, as the WSTG Reporting guidance asks for: the likelihood (or exploitability) of the issue, and its impact. Each factor is recorded on a three-point scale, 1 = low, 2 = medium, 3 = high. The two factors carry equal weight and are combined with the matrix below to give the severity — a declared severity word is never accepted on its own.",
+    "The engagement follows the WSTG Reporting guidance (OWASP WSTG v" + WSTG_VERSION + ") for what a finding must record; the severity rating itself is the Common Vulnerability Scoring System version 3.0, as published by FIRST. The tester rates the eight base metrics — Attack Vector (AV), Attack Complexity (AC), Privileges Required (PR), User Interaction (UI), Scope (S), Confidentiality (C), Integrity (I) and Availability (A) — and the base score is computed from them with the FIRST equation. A declared severity word is never accepted on its own; severity always follows the computed score. Only the Base Score group is used: Temporal and Environmental metrics are out of scope for this report.",
     "",
-    "| Likelihood | Impact: Low | Impact: Medium | Impact: High |",
-    "| --- | --- | --- | --- |",
-    "| High (3) | Low | Medium | High |",
-    "| Medium (2) | Low | Medium | Medium |",
-    "| Low (1) | Low | Low | Low |",
-    "",
-    "Findings are labelled Low, Medium or High from the matrix, or Informational when the factors have not been rated yet. Severity always follows the recorded factors: the tester rates likelihood and impact, the matrix decides.",
-    "",
-    "| Risk | Response |",
+    "| Metric | Values |",
     "| --- | --- |",
+    "| Attack Vector (AV) | Network (N), Adjacent (A), Local (L), Physical (P) |",
+    "| Attack Complexity (AC) | Low (L), High (H) |",
+    "| Privileges Required (PR) | None (N), Low (L), High (H) |",
+    "| User Interaction (UI) | None (N), Required (R) |",
+    "| Scope (S) | Unchanged (U), Changed (C) |",
+    "| Confidentiality (C) | None (N), Low (L), High (H) |",
+    "| Integrity (I) | None (N), Low (L), High (H) |",
+    "| Availability (A) | None (N), Low (L), High (H) |",
+    "",
+    "The vector string recorded on each finding (for example `CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H`) makes every rating reproducible: entering it into the official calculator at https://www.first.org/cvss/calculator/3.0 returns exactly the score and severity printed in this report.",
+    "",
+    "| Base score | Qualitative severity |",
+    "| --- | --- |",
+    "| 0.0 | None — recorded as Informational |",
+    "| 0.1 – 3.9 | Low |",
+    "| 4.0 – 6.9 | Medium |",
+    "| 7.0 – 8.9 | High |",
+    "| 9.0 – 10.0 | Critical |",
+    "",
+    "| Severity | Response |",
+    "| --- | --- |",
+    "| Critical | Remediate urgently, out of the normal cycle; treat as an active exposure until fixed. |",
     "| High | Remediate urgently on the current cycle; treat as an active exposure until fixed. |",
     "| Medium | Remediate on a planned cycle. |",
     "| Low | Harden opportunistically. |",
@@ -814,6 +777,7 @@ function appendixSection(plan?: WebAppTestPlanDoc | null): string[] {
     "| WSTG | OWASP Web Security Testing Guide — the test methodology applied here. |",
     "| WSTG ID | Identifier of a single WSTG test case, e.g. WSTG-INPV-05. |",
     "| OWASP Top 10:2025 | OWASP's 2025 awareness list of the ten most critical web application security risks. |",
+    "| CVSS v3.0 | Common Vulnerability Scoring System version 3.0 (FIRST) — the base score the severity of each finding is computed from. |",
     "| CWE | Common Weakness Enumeration identifier for the underlying weakness class. |",
     "| IDOR | Insecure Direct Object Reference — accessing objects by manipulating identifiers. |",
     "| SSRF | Server-Side Request Forgery — the server fetches a URL controlled by the attacker. |",
@@ -824,6 +788,8 @@ function appendixSection(plan?: WebAppTestPlanDoc | null): string[] {
     `- OWASP Web Security Testing Guide v${WSTG_VERSION}: ${WSTG_SOURCE}`,
     "- OWASP Top 10:2025: https://owasp.org/Top10/2025/",
     "- OWASP WSTG v4.2 Reporting guidance: https://wstg.owasp.org/v4.2/5-Reporting/",
+    "- CVSS v3.0 specification: https://www.first.org/cvss/v3.0/specification-document",
+    "- CVSS v3.0 calculator: https://www.first.org/cvss/calculator/3.0",
     "- CWE: https://cwe.mitre.org/",
     "",
     "---",
@@ -850,11 +816,11 @@ export function buildWebAppPentestReport(options: ReportOptions): WebAppPentestR
   const markdown = [
     `# ${title}`,
     "",
-    `*Draft generated ${generatedAt.toISOString()} from session \`${options.session.sessionId}\` using ${TEST_PLAN_SOURCE} and the OWASP Top 10:2025.*`,
+    `*Draft generated ${formatDate(generatedAt)} from session evidence using ${TEST_PLAN_SOURCE} and the OWASP Top 10:2025. Review before delivery.*`,
     "",
     "---",
     "",
-    ...introductionSection(resolved, stats),
+    ...introductionSection(resolved),
     ...executiveSummarySection(resolved, findings, stats),
     ...scopeAndMethodologySection(resolved, findings),
     ...riskSummarySection(findings, stats),

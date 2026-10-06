@@ -41,10 +41,10 @@ const updateEngagementState: ToolDefinition = {
       data: {
         type: "object",
         description:
-          "Action-specific data. add_vulnerability: title, host/target, endpoint, likelihood + impactRating " +
-          "(1-3 — the system derives severity), evidence, stepsToReproduce, " +
-          "impact, remediation, exploited; wstgId = producing test case; omit owaspTop10/CWE unless " +
-          "confident. A destructive capability proved without carrying it out is exploited=false, stated " +
+          "Action-specific data. add_vulnerability: title, host/target, endpoint, the eight CVSS v3.0 base " +
+          "metrics (av, ac, pr, ui, s, c, i, a — the system computes the base score and severity), evidence, " +
+          "stepsToReproduce, impact, remediation, exploited; wstgId = producing test case; omit owaspTop10/CWE " +
+          "unless confident. A destructive capability proved without carrying it out is exploited=false, stated " +
           "in impact. add_key_discovery: title and/or description. remove_finding: vulnerability_id.",
         properties: {
           // Shared fields. Keeping these explicit prevents models from
@@ -88,15 +88,48 @@ const updateEngagementState: ToolDefinition = {
             description:
               "Screenshot filenames exactly as browser_action reported them — attach only when the page itself is the evidence.",
           },
-          likelihood: {
-            type: "number",
-            enum: [1, 2, 3],
-            description: "1 = low, 2 = medium, 3 = high.",
+          // CVSS v3.0 base metrics (https://www.first.org/cvss/calculator/3.0).
+          // The model rates the eight metrics; the score, vector and severity
+          // band are computed by the system, never declared by the model.
+          av: {
+            type: "string",
+            enum: ["N", "A", "L", "P"],
+            description: "Attack Vector: Network (remotely exploitable), Adjacent, Local or Physical.",
           },
-          impactRating: {
-            type: "number",
-            enum: [1, 2, 3],
-            description: "1 = low, 2 = medium, 3 = high (worst realistic business damage).",
+          ac: {
+            type: "string",
+            enum: ["L", "H"],
+            description: "Attack Complexity: Low (no specialised conditions) or High.",
+          },
+          pr: {
+            type: "string",
+            enum: ["N", "L", "H"],
+            description: "Privileges Required: None, Low (basic user) or High (admin/root).",
+          },
+          ui: {
+            type: "string",
+            enum: ["N", "R"],
+            description: "User Interaction: None or Required (victim must act).",
+          },
+          s: {
+            type: "string",
+            enum: ["U", "C"],
+            description: "Scope: Unchanged or Changed (impact spills into other components).",
+          },
+          c: {
+            type: "string",
+            enum: ["N", "L", "H"],
+            description: "Confidentiality impact: None, Low or High.",
+          },
+          i: {
+            type: "string",
+            enum: ["N", "L", "H"],
+            description: "Integrity impact: None, Low or High.",
+          },
+          a: {
+            type: "string",
+            enum: ["N", "L", "H"],
+            description: "Availability impact: None, Low or High.",
           },
         },
         additionalProperties: true,

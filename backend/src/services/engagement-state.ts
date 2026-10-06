@@ -49,7 +49,8 @@ export interface Vulnerability {
   service?: string;
   endpoint?: string;
   title: string;
-  severity: "high" | "medium" | "low" | "info";
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  cvss?: { score: number; vector: string };
   likelihood?: number;
   impactRating?: number;
   cwe?: string;
@@ -218,9 +219,7 @@ export class EngagementState {
         const exploited = v.exploited ? "EXPLOITED" : "not yet exploited";
         const cve = v.cve ? ` (${v.cve})` : "";
         const scoring = [
-          v.likelihood != null && v.impactRating != null
-            ? `risk L${v.likelihood}xI${v.impactRating} (equal weight)`
-            : "",
+          v.cvss ? `CVSS v3.0 base score ${v.cvss.score} (${v.cvss.vector})` : "not rated",
           v.cwe ?? "",
         ].filter(Boolean).join(", ");
         sections.push(
@@ -474,6 +473,9 @@ export function engagementStateFromSession(
       endpoint: vulnerability.endpoint,
       title: vulnerability.title,
       severity: vulnerability.severity,
+      cvss: vulnerability.cvss
+        ? { score: vulnerability.cvss.score, vector: vulnerability.cvss.vector }
+        : undefined,
       likelihood: vulnerability.likelihood,
       impactRating: vulnerability.impactRating,
       cwe: vulnerability.cwe,

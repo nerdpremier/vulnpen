@@ -49,8 +49,79 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  backend:
+    container_name: vulnpen-backend
+    build: ./backend
+    cap_add:
+      - NET_ADMIN
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/vulnpen
+      REDIS_URL: redis://redis:6379
+      CODEX_HOME: /root/.codex
+      SSH_CONFIG_FILE: /root/.ssh/config
+      WORKSPACE_DIR: /kali-data/workspaces
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali}"
+      # backend/.env carries the host-facing addresses (localhost:<published
+      # port>); inside the compose network the kali service is reached by name.
+      SSH_HOST: kali
+      SSH_PORT: "22"
+      VNC_HOST: kali
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - ./kali-data:/kali-data
+      - backend-data:/srv/data
+      - ./backend/.env:/srv/data/.env
+      - ./backend/model-registry.json:/srv/data/model-registry.json
+      - ./config.toml:/srv/data/config.toml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      kali:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+
+  juice-shop:
+    container_name: vulnpen-juice-shop
+    image: bkimminich/juice-shop:latest
+    ports:
+      - "127.0.0.1:4000:3000"
+    restart: unless-stopped
+
+  # LibreOffice in the browser — the report is opened/edited here like Word.
+  # The backend (host dev mode) is reachable via host.docker.internal; point
+  # COLLABORA_URL / WOPI_PUBLIC_BASE on the backend elsewhere to change that.
+  collabora:
+    container_name: vulnpen-collabora
+    image: collabora/code:latest
+    environment:
+      - aliasgroup1=http://host.docker.internal:8080.*
+      - username=admin
+      - password=${COLLABORA_PASSWORD:-vulnpen-admin}
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:net.post_allow.host[0]=.+ --o:frame_ancestors=localhost:3000
+    cap_add:
+      - MKNOD
+    ports:
+      - "127.0.0.1:9980:9980"
+    restart: unless-stopped
+
 volumes:
   mongodb-data:
     driver: local
   redis-data:
+    driver: local
+  backend-data:
     driver: local

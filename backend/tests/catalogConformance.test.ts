@@ -2,7 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   OWASP_TOP10_2025,
-  wstgRiskRating,
+  cvssBaseScore,
+  cvssVectorString,
+  cvssQualitativeRating,
+  normalizeCvssBaseMetrics,
+  parseCvssVector,
+  severityFromCvssScore,
+  type CvssBaseMetrics,
 } from "../src/knowledge";
 import { toolRegistry } from "../src/tools/registry";
 import {
@@ -89,8 +95,14 @@ test("the report follows the WSTG Reporting structure and cites its sources", ()
     title: "SQL injection in product search",
     host: "shop.example.test",
     endpoint: "GET /api/products?q=",
-    likelihood: 3,
-    impactRating: 3,
+    av: "N",
+    ac: "L",
+    pr: "N",
+    ui: "N",
+    s: "U",
+    c: "H",
+    i: "H",
+    a: "H",
     cwe: "CWE-89",
     wstgId: "WSTG-INPV-05",
     description: "The q parameter is concatenated into a SQL query.",
@@ -101,7 +113,8 @@ test("the report follows the WSTG Reporting structure and cites its sources", ()
     remediation: "Use parameterised queries.",
     exploited: true,
   });
-  assert.equal(vulnerability.severity, "high", "3x3 on the matrix is high");
+  assert.equal(vulnerability.severity, "critical", "9.8 on the CVSS v3.0 scale is critical");
+  assert.equal(vulnerability.cvss?.score, 9.8);
 
   const report = buildWebAppPentestReport({
     session: { sessionId: "s1", name: "Example engagement", createdAt: new Date("2026-01-01T00:00:00Z") },
@@ -112,15 +125,10 @@ test("the report follows the WSTG Reporting structure and cites its sources", ()
 
   const headings = [
     "## 1. Introduction",
-    "### 1.1 Version control",
-    "### 1.2 Table of contents",
-    "### 1.3 Test team",
-    "### 1.4 Engagement details",
-    "### 1.5 Disclaimer",
-    "### 1.6 Timeline",
-    "### 1.7 Standards and references applied",
+    "### 1.1 Engagement details",
+    "### 1.2 Disclaimer",
     "## 2. Executive summary",
-    "## 11. Appendix B - Risk rating methodology",
+    "## 11. Appendix B - Risk rating methodology (CVSS v3.0)",
     "## 12. Appendix C - Glossary and references",
   ];
   for (const heading of headings) {
@@ -128,34 +136,89 @@ test("the report follows the WSTG Reporting structure and cites its sources", ()
   }
 
   assert.ok(report.markdown.includes("WSTG Reporting guidance"), "WSTG Reporting is cited");
-  assert.ok(report.markdown.includes("OWASP Risk Rating Methodology"), "risk rating is cited");
-  assert.ok(!report.markdown.includes("CVSS"), "CVSS is not used anywhere in the report");
+  assert.ok(report.markdown.includes("https://www.first.org/cvss/calculator/3.0"), "the FIRST calculator is cited");
   assert.ok(!report.markdown.includes("Hunter2"), "the secret is masked in the report");
   assert.ok(/password=\[REDACTED\]/i.test(report.markdown), "the masked secret is present");
   assert.ok(report.findings[0].owaspProvenance, "the finding records a mapping provenance");
-  assert.ok(report.markdown.includes("| Likelihood | high (3/3) |"), "likelihood factor is reported");
-  assert.ok(report.markdown.includes("equal weight"), "the report states the factors carry equal weight");
+  assert.ok(report.markdown.includes("| CVSS v3.0 base score | 9.8 (critical) |"), "the base score is reported");
+  assert.ok(
+    report.markdown.includes("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"),
+    "the vector string is reported so the score is reproducible",
+  );
 });
 
-test("business risk follows the documented risk matrix bands", () => {
-  assert.equal(wstgRiskRating(3, 3), "high");
-  assert.equal(wstgRiskRating(3, 2), "medium");
-  assert.equal(wstgRiskRating(3, 1), "low");
-  assert.equal(wstgRiskRating(2, 3), "medium");
-  assert.equal(wstgRiskRating(2, 2), "medium");
-  assert.equal(wstgRiskRating(2, 1), "low");
-  assert.equal(wstgRiskRating(1, 3), "low");
-  assert.equal(wstgRiskRating(1, 1), "low");
-  assert.equal(wstgRiskRating(undefined, undefined), undefined);
+// Reference vectors from the FIRST CVSS v3.0 specification / calculator
+// (https://www.first.org/cvss/calculator/3.0). If these drift, the equation
+// implementation is wrong, not the catalogue.
+const BASE_METRICS: CvssBaseMetrics = {
+  av: "N", ac: "L", pr: "N", ui: "N", s: "U", c: "H", i: "H", a: "H",
+};
+
+test("the base score equation reproduces the FIRST calculator", () => {
+  assert.equal(cvssBaseScore(BASE_METRICS), 9.8, "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H is 9.8");
+  assert.equal(
+    cvssBaseScore({ ...BASE_METRICS, s: "C" }),
+    10.0,
+    "scope-changed full impact is 10.0",
+  );
+  assert.equal(
+    cvssBaseScore({ ...BASE_METRICS, ac: "H" }),
+    8.1,
+    "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H is 8.1",
+  );
+  assert.equal(
+    cvssBaseScore({ ...BASE_METRICS, av: "L", pr: "L", c: "H", i: "N", a: "N" }),
+    5.5,
+    "AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N is 5.5",
+  );
+  assert.equal(
+    cvssBaseScore({ ...BASE_METRICS, av: "P", ac: "H", pr: "H", ui: "R", c: "N", i: "N", a: "N" }),
+    0.0,
+    "no impact is 0.0",
+  );
+});
+
+test("the severity bands follow the FIRST qualitative ratings", () => {
+  assert.equal(cvssQualitativeRating(0), "none");
+  assert.equal(cvssQualitativeRating(3.9), "low");
+  assert.equal(cvssQualitativeRating(4), "medium");
+  assert.equal(cvssQualitativeRating(6.9), "medium");
+  assert.equal(cvssQualitativeRating(7), "high");
+  assert.equal(cvssQualitativeRating(8.9), "high");
+  assert.equal(cvssQualitativeRating(9), "critical");
+  assert.equal(severityFromCvssScore(0), "info", "CVSS None maps to the informational band");
+  assert.equal(severityFromCvssScore(9.8), "critical");
+});
+
+test("metric normalization accepts complete ratings only", () => {
+  const full = normalizeCvssBaseMetrics({ av: "n", attackVector: undefined, ac: "L", pr: "N", ui: "R", s: "C", c: "L", i: "L", a: "N" });
+  assert.ok(full, "a complete rating (case-insensitive) normalizes");
+  assert.deepEqual(full, { av: "N", ac: "L", pr: "N", ui: "R", s: "C", c: "L", i: "L", a: "N" });
+  assert.equal(normalizeCvssBaseMetrics({ av: "N", ac: "L" }), undefined, "a partial rating is never scored");
+  assert.equal(normalizeCvssBaseMetrics({ av: "X", ac: "L", pr: "N", ui: "N", s: "U", c: "H", i: "H", a: "H" }), undefined);
+  assert.equal(
+    parseCvssVector("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")?.a,
+    "H",
+    "the full vector string parses",
+  );
+  assert.equal(parseCvssVector("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")?.c, "H");
+  assert.equal(parseCvssVector("not a vector"), undefined);
+  assert.equal(
+    cvssVectorString(normalizeCvssBaseMetrics({ av: "N", ac: "L", pr: "N", ui: "N", s: "U", c: "H", i: "H", a: "H" }!)),
+    "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+  );
 });
 
 test("the engagement phase vocabulary is WSTG-only in the tool schema", () => {
   const properties = (toolRegistry.get("update_engagement_state")!.parameters as any).properties;
   const dataProperties = properties.data.properties;
-  assert.ok(dataProperties.likelihood, "likelihood is a schema field");
-  assert.ok(dataProperties.impactRating, "impactRating is a schema field");
+  for (const metric of ["av", "ac", "pr", "ui", "s", "c", "i", "a"]) {
+    assert.ok(dataProperties[metric], `${metric} is a schema field`);
+  }
+  assert.ok(!dataProperties.likelihood, "the legacy likelihood factor is gone");
+  assert.ok(!dataProperties.impactRating, "the legacy impactRating factor is gone");
   assert.ok(!dataProperties.severity, "severity is not declarable any more");
-  assert.ok(!dataProperties.cvssScore && !dataProperties.cvssVector, "CVSS fields are gone");
+  assert.ok(!dataProperties.cvssScore && !dataProperties.cvssVector, "the score is computed, never declared");
   assert.ok(!dataProperties.asvsRequirement, "ASVS is gone");
   assert.ok(!dataProperties.apiRisk, "API Top 10 is gone");
   assert.ok(

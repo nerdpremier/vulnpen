@@ -18,7 +18,7 @@ import { getTestPlan } from "@/services/websecurity.service";
 import styles from "@/styles/pages/Vulnerabilities.module.scss";
 import { AnimatedContent, EmptyState, StatTile } from "@/components/common/ui";
 
-const SEVERITY_ORDER = { high: 4, medium: 3, low: 2, info: 1 };
+const SEVERITY_ORDER = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
 
 function SeverityBadge({ severity }) {
   const value = severity || "info";
@@ -200,6 +200,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
             aria-label="Filter by severity"
             options={[
               { value: "all", label: "All severities" },
+              { value: "critical", label: "Critical" },
               { value: "high", label: "High" },
               { value: "medium", label: "Medium" },
               { value: "low", label: "Low" },
@@ -269,7 +270,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
                   <th scope="col">Severity</th>
                   <th scope="col">Finding</th>
                   <th scope="col">Affected asset</th>
-                  <th scope="col">Risk (L×I)</th>
+                  <th scope="col">CVSS v3.0</th>
                   <th scope="col">Classification</th>
                   <th scope="col">Test case</th>
                   <th scope="col">OWASP Top 10:2025</th>
@@ -320,8 +321,8 @@ export default function VulnerabilitiesPage({ sessionId }) {
                       </span>
                     </td>
                     <td>
-                      {item.likelihood != null && item.impactRating != null
-                        ? `L${item.likelihood} × I${item.impactRating}`
+                      {item.cvss?.score != null
+                        ? `${item.cvss.score} (${item.cvss.vector})`
                         : "not rated"}
                     </td>
                     <td>{item.cwe || item.cve || "none"}</td>

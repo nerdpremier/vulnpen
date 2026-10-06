@@ -20,7 +20,15 @@ import type {
   WstgTest,
 } from "./types";
 import { WSTG_CATEGORIES, WSTG_SOURCE, WSTG_TESTS, WSTG_VERSION } from "./wstg-v42";
-import { wstgRiskRating } from "./risk-matrix";
+import {
+  computeCvssBase,
+  cvssBaseScore,
+  cvssQualitativeRating,
+  cvssVectorString,
+  normalizeCvssBaseMetrics,
+  parseCvssVector,
+  severityFromCvssScore,
+} from "./cvss";
 
 export {
   OWASP_TOP10_2025,
@@ -33,7 +41,24 @@ export {
   WSTG_TESTS,
   WSTG_VERSION,
 };
-export { wstgRiskRating };
+export {
+  computeCvssBase,
+  cvssBaseScore,
+  cvssQualitativeRating,
+  cvssVectorString,
+  normalizeCvssBaseMetrics,
+  parseCvssVector,
+  severityFromCvssScore,
+};
+export type {
+  AttackVector,
+  AttackComplexity,
+  PrivilegesRequired,
+  UserInteraction,
+  Scope as CvssScope,
+  CiaImpact,
+  CvssBaseMetrics,
+} from "./cvss";
 export type {
   OwaspTop10Category,
   OwaspTop10Id,
