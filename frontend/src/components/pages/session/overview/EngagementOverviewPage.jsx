@@ -29,6 +29,7 @@ import {
   scanScopeLabel,
 } from "@/utils/scans.mjs";
 import { findingsBySeverity } from "@/utils/findings.mjs";
+import { scansKey, testPlanKey } from "@/utils/scanQueryKeys.mjs";
 import styles from "@/styles/pages/Overview.module.scss";
 
 /**
@@ -90,12 +91,12 @@ export default function EngagementOverviewPage({ sessionId }) {
     { enabled: !!sessionId, refetchInterval: 10000, retry: false },
   );
   const planQuery = useQuery(
-    ["test-plan", sessionId],
+    testPlanKey(sessionId),
     () => getTestPlan(sessionId),
     { enabled: !!sessionId, retry: false },
   );
 
-  const scansQuery = useQuery(["scans", sessionId], () => getScans(sessionId), {
+  const scansQuery = useQuery(scansKey(sessionId), () => getScans(sessionId), {
     enabled: !!sessionId,
     retry: false,
     // One list drives every scan surface; it only has to poll while moving.

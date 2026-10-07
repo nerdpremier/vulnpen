@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "react-query";
-import { Alert, App, Button, Input, Modal, Radio, Select } from "antd";
+import { Alert, Button, Input, Modal, Radio, Select } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
-import { launchScan } from "@/services/websecurity.service";
-import { useAgentStreamStore } from "@/store/agentStream.store";
 import { ColumnChart } from "@/components/common/ui";
-import { apiErrorMessage } from "@/utils/apiError";
-import { resolveScanSelection } from "@/utils/scans.mjs";
+import {
+  resolveScanSelection,
+  scanCasesByCategory,
+} from "@/utils/scans.mjs";
+import useScanMutations from "@/hooks/useScanMutations";
 import styles from "@/styles/pages/TestPlan.module.scss";
 import detail from "@/styles/pages/ScanDetail.module.scss";
 
@@ -61,8 +61,6 @@ export default function ScanLauncherModal({
   onClose,
   onLaunched,
 }) {
-  const { message } = App.useApp();
-  const queryClient = useQueryClient();
   const planCases = useMemo(() => plan?.cases ?? [], [plan]);
 
   const [name, setName] = useState(
@@ -85,35 +83,17 @@ export default function ScanLauncherModal({
   );
 
   /* The selection drawn: which WSTG categories this scan is about to touch, and
-     how much of each. The sentence above it stays for the exact count. */
-  const selectionByCategory = useMemo(() => {
-    const pickedIds = new Set(testIds);
-    const map = new Map();
-    for (const testCase of planCases) {
-      if (!pickedIds.has(testCase.testId)) continue;
-      const key = testCase.categoryCode || "OTHER";
-      map.set(key, (map.get(key) ?? 0) + 1);
-    }
-    return [...map.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([key, value]) => ({ key, label: key, value }));
-  }, [planCases, testIds]);
+     how much of each — the same category counts the scope line uses. The
+     sentence above it stays for the exact count. */
+  const selectionByCategory = useMemo(
+    () =>
+      [...scanCasesByCategory(planCases, testIds).entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([key, value]) => ({ key, label: key, value })),
+    [planCases, testIds],
+  );
 
-  const launch = useMutation(launchScan, {
-    onSuccess: (data) => {
-      message.success(
-        data.position > 1
-          ? `Scan queued — position ${data.position}`
-          : "Scan launched — results land here as the agent works",
-      );
-      queryClient.invalidateQueries(["scans", sessionId]);
-      // The scan writes its own transcript channel; the chat page reloads its
-      // stale store the next time it is opened.
-      useAgentStreamStore.getState().markHistoryStale?.(sessionId);
-      onLaunched?.(data.run);
-    },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not launch the scan")),
-  });
+  const launch = useScanMutations(sessionId).launch;
 
   const cannotLaunch = testIds.length === 0 || launch.isLoading;
 
@@ -126,7 +106,17 @@ export default function ScanLauncherModal({
       okText="Launch scan"
       okButtonProps={{ disabled: cannotLaunch, icon: <PlayCircleOutlined /> }}
       confirmLoading={launch.isLoading}
-      onOk={() => launch.mutate({ sessionId, testIds, label: name.trim(), policy })}
+      onOk={() =>
+        launch.mutate({
+          testIds,
+          label: name.trim(),
+          policy,
+          onLaunched: (run) => {
+            onClose?.();
+            onLaunched?.(run);
+          },
+        })
+      }
     >
       <div className={styles.scanLauncher}>
         <label className={styles.scanField}>

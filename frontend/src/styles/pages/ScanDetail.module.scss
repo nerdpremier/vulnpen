@@ -1,16 +1,360 @@
 @import "@/styles/variables";
 
 /* ============================================================================
-   SCAN DETAIL - the shape of one run
-   A run used to open as a column of pills, counters and sentences. These are
-   the shapes that replaced the sentences: a readout band, a completion dial, a
-   composition donut, a per-case strip and the category ranking.
-
-   Everything here is layout only - colour comes from the `--moon-*` tokens and
-   the chart kit's `tone_*` classes, both owned elsewhere.
+   SCAN DETAIL - the shape of one run, read the way Tenable reads a report
+   The scan's name over counted tabs; the tab's table on the left; one sidebar
+   that stays with every tab (Scan Details + the severity donut). Everything
+   here is layout only - colour comes from the `--moon-*` tokens, the chart
+   kit's `tone_*` classes and the vulnerabilities page's severity chips.
    ========================================================================== */
 
-/* ---- Readout band --------------------------------------------------------- */
+/* ---- Report header --------------------------------------------------------- */
+.reportHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 1.1rem;
+}
+
+.reportTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.reportActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reportTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.reportTitle {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--moon-text);
+  min-width: 0;
+}
+
+.reportTag {
+  padding: 0.14rem 0.55rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+}
+
+/* ---- Counted tabs -----------------------------------------------------------
+   The number rides on the tab, not in the table — the one move that makes a
+   report readable before any row is read. */
+.reportTabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+  border-bottom: 1px solid var(--moon-line-1);
+}
+
+.reportTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.85rem 0.55rem;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--moon-text-mute);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color var(--moon-dur-1) var(--moon-ease-out),
+    border-color var(--moon-dur-1) var(--moon-ease-out);
+
+  &:hover {
+    color: var(--moon-text);
+  }
+
+  @include focus-ring(2px);
+}
+
+.reportTabActive {
+  color: var(--moon-text);
+  border-bottom-color: var(--moon-accent);
+}
+
+.reportTabCount {
+  min-width: 1.15rem;
+  padding: 0.02rem 0.32rem;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-3);
+  color: var(--moon-text-mute);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.64rem;
+  line-height: 1.5;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The live dot replaces a count the poll would have to keep re-counting. */
+.reportTabLive {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--moon-info);
+  box-shadow: 0 0 0 3px var(--moon-info-bg);
+  animation: reportTabPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes reportTabPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@include reduced-motion {
+  .reportTabLive {
+    animation: none;
+  }
+}
+
+/* ---- The report shape: table left, sidebar right ---------------------------- */
+.reportLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  align-items: start;
+  gap: 1.1rem;
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.reportMain {
+  min-width: 0;
+}
+
+.reportAside {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+
+  @include responsive(laptop1) {
+    grid-row: auto;
+  }
+}
+
+.reportCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.95rem 1rem 1.05rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  box-shadow: var(--moon-inner-top);
+}
+
+.reportCardTitle {
+  margin: 0;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--moon-line-1);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--moon-text);
+}
+
+.reportCardEmpty {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--moon-text-mute);
+}
+
+.reportFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.reportFact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+
+  dt {
+    flex: none;
+    font-size: 0.76rem;
+    color: var(--moon-text-mute);
+  }
+
+  dd {
+    margin: 0;
+    min-width: 0;
+    font-size: 0.78rem;
+    color: var(--moon-text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.reportProgress {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.reportDonut {
+  display: flex;
+  justify-content: center;
+}
+
+/* ---- Report tables (the Findings and Remediations tabs) --------------------
+   The shared scan table is a fixed three-column shape; the report's tables
+   count their columns differently, so they own their grid here. */
+.reportTableHead,
+.reportTableRow {
+  display: grid;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1.25rem;
+}
+
+.reportTableHead {
+  border-bottom: 1px solid var(--moon-line-1);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #888);
+}
+
+.reportTableRow {
+  border-bottom: 1px solid var(--moon-line-1);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+/* Sev | CVSS | Finding | Category — the vulnerabilities read. */
+.findingsCols {
+  grid-template-columns: 92px 56px minmax(0, 1fr) 88px;
+}
+
+/* Action | Findings | Cases — the remediations read. */
+.remediationCols {
+  grid-template-columns: minmax(0, 1fr) 80px 80px;
+}
+
+/* ---- Findings table cells ---------------------------------------------------- */
+.findingCvss {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--moon-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.findingCategory {
+  font-size: 0.74rem;
+  color: var(--moon-text-mute);
+  white-space: nowrap;
+}
+
+/* ---- Remediations table cells ------------------------------------------------- */
+.remediationRow {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.remediationText {
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--moon-text);
+  @include truncate(2);
+}
+
+.remediationCount {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--moon-text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Per-case findings strip (the Nessus host bar) ---------------------------- */
+.caseFindings {
+  display: flex;
+  width: 100%;
+  max-width: 15rem;
+  height: 1.25rem;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.caseFindingsSeg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-accent-ink, #fff);
+
+  /* Solid blocks, Nessus's severity palette, darkened enough that a white
+     number stays readable on the yellow and the blue. */
+  &[data-severity="critical"] {
+    background: var(--moon-critical, #a41623);
+  }
+
+  &[data-severity="high"] {
+    background: var(--moon-high, #d64545);
+  }
+
+  &[data-severity="medium"] {
+    background: var(--moon-medium, #e09f3e);
+  }
+
+  &[data-severity="low"] {
+    background: var(--moon-low, #90a8c4);
+  }
+
+  &[data-severity="info"] {
+    background: color-mix(in srgb, var(--moon-info, #5b8ecb) 78%, transparent);
+  }
+
+  & + & {
+    margin-left: 1px;
+  }
+}
+
+.caseNoFindings {
+  font-size: 0.74rem;
+  color: var(--moon-text-faint);
+}
+
+/* ---- Readout band (kept for surfaces that still use it) ----------------------- */
 .kpis {
   margin: 0.25rem 0 1.1rem;
 }

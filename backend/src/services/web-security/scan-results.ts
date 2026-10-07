@@ -78,22 +78,33 @@ export interface QueuePosition {
 export interface RunListItem extends WebAppRunDoc {
   position?: number;
   active: boolean;
+  /** Severity histogram of the findings the run's cases link, for the list row. */
+  findingCounts?: FindingCounts;
+  /** The record's policy, normalized (pre-policy records read unattended). */
+  policy: WebAppRunPolicy;
 }
 
 /**
- * A record plus its queue position, counted the way the user counts it: behind
- * the scan already executing. `queued: position > 1` therefore means the same
- * thing here as it does in the launch response.
+ * Where a run sits in the queue, counted the way the user counts it: behind
+ * the scan already executing. Both the launch response and the decorated list
+ * read through this one rule, so a launch never answers "position 1" about a
+ * scan the list calls "#2".
+ */
+export function queuePosition(runId: string, state: QueuePosition): number {
+  return (state.activeRunId ? 1 : 0) + state.queue.indexOf(runId) + 1;
+}
+
+/**
+ * A record plus its queue position (and its policy, normalized once) — what
+ * the UI needs to draw a row without re-deriving either.
  */
 export function decorateRun(run: WebAppRunDoc, state: QueuePosition): RunListItem {
-  const ahead = state.activeRunId ? 1 : 0;
   return {
     ...run,
+    policy: runPolicy(run),
     active: run.runId === state.activeRunId,
     position:
-      run.status === "queued"
-        ? ahead + state.queue.indexOf(run.runId) + 1
-        : undefined,
+      run.status === "queued" ? queuePosition(run.runId, state) : undefined,
   };
 }
 
@@ -115,6 +126,41 @@ export interface RunFindingRow {
   title: string;
   severity: string;
   testId?: string;
+  /** CVSS v3.0 base score, when the finding was rated. */
+  cvssScore?: number;
+  /** The fix the finding recommends; groups into the Remediations view. */
+  remediation?: string;
+}
+
+/** The severity histogram the scans list shows per row, Nessus-style. */
+export interface FindingCounts {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+}
+
+const FINDING_SEVERITIES: readonly (keyof FindingCounts)[] = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+];
+
+/**
+ * Count a scan's findings by severity. A severity the vocabulary does not know
+ * still has to land somewhere the row shows, so it counts as info rather than
+ * silently vanishing from the total.
+ */
+export function findingCounts(findings: RunFindingRow[]): FindingCounts {
+  const counts: FindingCounts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const finding of findings) {
+    const severity = (finding.severity ?? "").trim().toLowerCase() as keyof FindingCounts;
+    if (FINDING_SEVERITIES.includes(severity)) counts[severity] += 1;
+    else counts.info += 1;
+  }
+  return counts;
 }
 
 /**
@@ -212,8 +258,32 @@ export function runFindings(
         title: finding?.title ?? findingId,
         severity: finding?.severity ?? "info",
         testId: testCase.testId,
+        cvssScore: finding?.cvss?.score,
+        remediation: finding?.remediation,
       });
     }
   }
   return rows;
+}
+
+/** The results one scan produced, joined once for any view that reads them. */
+export interface RunResults {
+  cases: RunCaseRow[];
+  findings: RunFindingRow[];
+  findingCounts: FindingCounts;
+}
+
+/**
+ * The list row and the detail page read the same three shapes — the scan's
+ * case rows, the findings those cases link, and the severity histogram over
+ * those findings — so the join lives here and neither endpoint re-derives it.
+ */
+export function joinRunResults(
+  run: Pick<WebAppRunDoc, "testIds">,
+  planCases: SessionTestCaseDoc[] | null,
+  vulnerabilities: SessionVulnerabilityDoc[] | null,
+): RunResults {
+  const cases = runCaseRows(run.testIds ?? [], planCases);
+  const findings = runFindings(cases, vulnerabilities);
+  return { cases, findings, findingCounts: findingCounts(findings) };
 }

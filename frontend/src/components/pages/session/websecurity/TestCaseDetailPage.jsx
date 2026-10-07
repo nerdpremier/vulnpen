@@ -14,16 +14,16 @@ import {
 import {
   getTestPlan,
   getScans,
-  launchScan,
   updateTestCase,
 } from "@/services/websecurity.service";
 import { getVulnerabilities } from "@/services/agent.service";
-import { useAgentStreamStore } from "@/store/agentStream.store";
 import { apiErrorMessage } from "@/utils/apiError";
 import vStyles from "@/styles/pages/Vulnerabilities.module.scss";
 import styles from "@/styles/pages/TestPlan.module.scss";
 import { STATUS_OPTIONS, summarise } from "@/utils/testPlan.mjs";
-import { activeScanForCase, isScanLive } from "@/utils/scans.mjs";
+import { testPlanKey } from "@/utils/scanQueryKeys.mjs";
+import { activeScanForCase, isScanLive, isUnrunCase } from "@/utils/scans.mjs";
+import useScanMutations from "@/hooks/useScanMutations";
 import { CaseMatrix, PageShell, PageState } from "@/components/common/ui";
 import CaseScanList, { caseScansQueryKey } from "../scans/CaseScanList";
 
@@ -100,7 +100,7 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
   const scans = scansQuery.data?.runs ?? [];
   const scanLive = scans.some(isScanLive);
 
-  const planQuery = useQuery(["test-plan", sessionId], () => getTestPlan(sessionId), {
+  const planQuery = useQuery(testPlanKey(sessionId), () => getTestPlan(sessionId), {
     refetchInterval: scanLive ? 4000 : false,
   });
   const plan = planQuery.data?.plan ?? null;
@@ -117,9 +117,7 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
     );
   }, [plan, testCase]);
 
-  const remainingInCategory = categoryCases.filter(
-    (one) => one.status === "not_started" || one.status === "in_progress",
-  );
+  const remainingInCategory = categoryCases.filter(isUnrunCase);
 
   // The chapter's own name and outcome, for the strip under the case header.
   // Both come from the plan query this page already runs.
@@ -144,28 +142,23 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
   }, [vulnerabilitiesQuery.data, testCase]);
 
   const invalidate = () => {
-    queryClient.invalidateQueries(["test-plan", sessionId]);
+    queryClient.invalidateQueries(testPlanKey(sessionId));
     queryClient.invalidateQueries(["case-scans", sessionId]);
   };
 
   // Launching never opens a chat: the case page hands the work to a scan and
-  // follows it to the scan's own page, where the results land.
-  const launchMutation = useMutation(launchScan, {
-    onSuccess: (data) => {
-      message.success(
-        data.queued
-          ? `Scan queued — position ${data.position}`
-          : "Scan launched — its results land on the scan page",
-      );
-      queryClient.invalidateQueries(["case-scans", sessionId]);
-      // The sidebar and the scans page read this key, and the sidebar only
-      // starts polling once it knows a scan is live — so a launch has to say so.
-      queryClient.invalidateQueries(["scans", sessionId]);
-      useAgentStreamStore.getState().markHistoryStale?.(sessionId);
-      if (data.run?.runId) router.push(`/session/${sessionId}/scans/${data.run.runId}`);
-    },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not start the scan")),
-  });
+  // follows it to the scan's own page, where the results land. The shared
+  // mutation owns the toasts and the scans/plan invalidation; this page adds
+  // its own slice of the history (every case-scans query) and the hop.
+  const { launch: launchScanMutation } = useScanMutations(sessionId);
+  const launchFromCase = (payload) =>
+    launchScanMutation.mutate({
+      ...payload,
+      onLaunched: (run) => {
+        queryClient.invalidateQueries(caseScansQueryKey(sessionId, testCase.testId));
+        if (run?.runId) router.push(`/session/${sessionId}/scans/${run.runId}`);
+      },
+    });
 
   const statusMutation = useMutation(updateTestCase, {
     onSuccess: (data) => {
@@ -268,10 +261,9 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
     {
       key: "category",
       label: `Scan whole category — ${testCase.categoryCode} (${categoryCases.length} cases)`,
-      disabled: launchMutation.isLoading,
+      disabled: launchScanMutation.isLoading,
       onClick: () =>
-        launchMutation.mutate({
-          sessionId,
+        launchFromCase({
           testIds: categoryCases.map((one) => one.testId),
           label: `${testCase.categoryCode} — whole category`,
           policy: "unattended",
@@ -280,10 +272,9 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
     {
       key: "remaining",
       label: `Scan remaining in category (${remainingInCategory.length} not executed)`,
-      disabled: launchMutation.isLoading || remainingInCategory.length === 0,
+      disabled: launchScanMutation.isLoading || remainingInCategory.length === 0,
       onClick: () =>
-        launchMutation.mutate({
-          sessionId,
+        launchFromCase({
           testIds: remainingInCategory.map((one) => one.testId),
           label: `${testCase.categoryCode} — remaining`,
           policy: "unattended",
@@ -308,10 +299,9 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
             <Button
               type="primary"
               icon={<PlayCircleOutlined />}
-              loading={launchMutation.isLoading}
+              loading={launchScanMutation.isLoading}
               onClick={() =>
-                launchMutation.mutate({
-                  sessionId,
+                launchFromCase({
                   testIds: [testCase.testId],
                   label: `${testCase.testId} — ${testCase.title}`,
                   policy: "unattended",

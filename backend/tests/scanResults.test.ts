@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import {
   buildResultSummary,
   decorateRun,
+  findingCounts,
   isRunMarker,
+  joinRunResults,
   normalizeRunLabel,
+  queuePosition,
   runCaseRows,
   runFindings,
   runMarker,
@@ -80,6 +83,32 @@ test("decorateRun places a record in the queue the way the user counts it", () =
   );
 });
 
+test("decorateRun normalizes the policy so no surface re-derives the default", () => {
+  const state = { activeRunId: null, queue: [] };
+  assert.equal(
+    decorateRun(run({ runId: "r1", status: "completed", policy: "supervised" }) as any, state)
+      .policy,
+    "supervised",
+  );
+  // A pre-policy record reads as unattended, once, at the projection.
+  assert.equal(
+    decorateRun(run({ runId: "r1", status: "completed" }) as any, state).policy,
+    "unattended",
+  );
+  assert.equal(
+    decorateRun(run({ runId: "r1", status: "completed", policy: "unattended" }) as any, state)
+      .policy,
+    "unattended",
+  );
+});
+
+test("queuePosition is the launch response's and the list's one counting rule", () => {
+  const state = { activeRunId: "running-1", queue: ["queued-1", "queued-2"] };
+  assert.equal(queuePosition("queued-1", state), 2);
+  assert.equal(queuePosition("queued-2", state), 3);
+  assert.equal(queuePosition("running-1", state), 1);
+});
+
 test("the run marker has one format, and the slice reads exactly that", () => {
   assert.equal(runMarker("abc"), "[WSTG run abc]");
   assert.equal(isRunMarker("[WSTG run abc] Execute ..."), true);
@@ -129,9 +158,60 @@ test("runFindings lists each finding once, with the case that carries it", () =>
   ] as any);
 
   assert.deepEqual(findings, [
-    { vulnerabilityId: "v1", title: "Info leak", severity: "medium", testId: "WSTG-INFO-01" },
-    { vulnerabilityId: "v2", title: "v2", severity: "info", testId: "WSTG-INFO-01" },
+    { vulnerabilityId: "v1", title: "Info leak", severity: "medium", testId: "WSTG-INFO-01", cvssScore: undefined, remediation: undefined },
+    { vulnerabilityId: "v2", title: "v2", severity: "info", testId: "WSTG-INFO-01", cvssScore: undefined, remediation: undefined },
   ]);
+});
+
+test("runFindings carries the CVSS score and the remediation the finding was given", () => {
+  const cases = runCaseRows(["WSTG-INFO-01"], [
+    { testId: "WSTG-INFO-01", status: "failed", linkedVulnerabilityIds: ["v1"] },
+  ] as any);
+  const findings = runFindings(cases, [
+    {
+      vulnerabilityId: "v1",
+      title: "TLS misconfigured",
+      severity: "high",
+      cvss: { score: 7.5 },
+      remediation: "Disable TLS 1.0.",
+    },
+  ] as any);
+
+  assert.deepEqual(findings, [
+    {
+      vulnerabilityId: "v1",
+      title: "TLS misconfigured",
+      severity: "high",
+      testId: "WSTG-INFO-01",
+      cvssScore: 7.5,
+      remediation: "Disable TLS 1.0.",
+    },
+  ]);
+});
+
+test("findingCounts histograms the severities a scan produced", () => {
+  assert.deepEqual(findingCounts([]), { critical: 0, high: 0, medium: 0, low: 0, info: 0 });
+  assert.deepEqual(
+    findingCounts([
+      { vulnerabilityId: "v1", title: "", severity: "critical" },
+      { vulnerabilityId: "v2", title: "", severity: "CRITICAL" },
+      { vulnerabilityId: "v3", title: "", severity: "high" },
+      { vulnerabilityId: "v4", title: "", severity: "medium" },
+      { vulnerabilityId: "v5", title: "", severity: "low" },
+      { vulnerabilityId: "v6", title: "", severity: "info" },
+    ] as any),
+    { critical: 2, high: 1, medium: 1, low: 1, info: 1 },
+  );
+});
+
+test("findingCounts keeps an unknown severity visible instead of dropping it", () => {
+  assert.deepEqual(
+    findingCounts([
+      { vulnerabilityId: "v1", title: "", severity: "" },
+      { vulnerabilityId: "v2", title: "", severity: "severe" },
+    ] as any),
+    { critical: 0, high: 0, medium: 0, low: 0, info: 2 },
+  );
 });
 
 test("sliceRunActivity cuts one run out of the shared transcript", () => {
@@ -171,5 +251,48 @@ test("buildResultSummary counts settled cases the Nessus way", () => {
       { testId: "WSTG-INFO-03", status: "blocked" },
     ],
     counts: { passed: 1, failed: 0, blocked: 1, other: 1 },
+  });
+});
+
+test("joinRunResults is the one join the list and the detail page read", () => {
+  const planCases = [
+    {
+      testId: "WSTG-INFO-01",
+      title: "Conduct search engine discovery",
+      categoryCode: "INFO",
+      status: "failed",
+      linkedVulnerabilityIds: ["v1"],
+    },
+  ];
+  const vulnerabilities = [
+    { vulnerabilityId: "v1", title: "Info leak", severity: "medium" },
+  ];
+
+  const results = joinRunResults(
+    { testIds: ["WSTG-INFO-01", "WSTG-INFO-09"] },
+    planCases as any,
+    vulnerabilities as any,
+  );
+  assert.deepEqual(
+    results.cases.map((row) => row.testId),
+    ["WSTG-INFO-01", "WSTG-INFO-09"],
+  );
+  assert.deepEqual(
+    results.findings.map((row) => row.vulnerabilityId),
+    ["v1"],
+  );
+  assert.deepEqual(results.findingCounts, {
+    critical: 0,
+    high: 0,
+    medium: 1,
+    low: 0,
+    info: 0,
+  });
+
+  // A run with no cases joins to empty results, not to an error.
+  assert.deepEqual(joinRunResults({ testIds: [] }, null, null), {
+    cases: [],
+    findings: [],
+    findingCounts: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
   });
 });

@@ -3,26 +3,36 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "react-query";
-import { App, Button, Input, Select, Tooltip } from "antd";
+import { useQuery } from "react-query";
+import { Button, Input, Tooltip } from "antd";
 import {
   DeleteOutlined,
   PlayCircleOutlined,
+  RedoOutlined,
   ReloadOutlined,
   SearchOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import { deleteScan, getScans, getTestPlan, stopScan } from "@/services/websecurity.service";
+import { getScans, getTestPlan } from "@/services/websecurity.service";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import { PageHeader, PageShell, PageState, TimelineChart } from "@/components/common/ui";
-import { apiErrorMessage } from "@/utils/apiError";
+import { SEVERITY_LEVELS } from "@/utils/findings.mjs";
+import { scansKey, testPlanKey } from "@/utils/scanQueryKeys.mjs";
+import useScanMutations from "@/hooks/useScanMutations";
 import {
   countScanCases,
   formatAgo,
   formatDuration,
+  formatStamp,
   isScanLive,
+  isUnrunCase,
   scanCaseStatuses,
+  scanFailureGroups,
+  scanFindingTotal,
+  scanFolderCounts,
+  scanMatchesNeedle,
   scanName,
+  scanPolicy,
   scanScopeLabel,
   scanStartedAt,
   scanStatusTone,
@@ -32,9 +42,17 @@ import { SCAN_STATUS_LABEL, ScanProgressBar } from "./ScanStatus";
 import ScanLauncherModal from "./ScanLauncherModal";
 import styles from "@/styles/pages/Scans.module.scss";
 
-/** Worst news last, so the option list reads like the history it filters. */
-const STATUS_FILTERS = [
-  { value: "all", label: "All statuses" },
+/**
+ * The session's scans, laid out the way Tenable's scans page is: a folder rail
+ * on the left, one table behind it that carries every scan — the live ones
+ * show their progress in the row, like Nessus does — and a New scan button
+ * that opens the case picker. The engine behind the table is the session's AI
+ * agent working the plan's cases; the page never prompts for it.
+ */
+
+/** The folder rail: one folder per status the history can hold. */
+const FOLDERS = [
+  { value: "all", label: "My Scans" },
   { value: "running", label: "Running" },
   { value: "queued", label: "Queued" },
   { value: "completed", label: "Completed" },
@@ -51,6 +69,13 @@ const CASE_OUTCOME = {
   in_progress: { label: "in progress", tone: "info" },
   not_started: { label: "not run", tone: "mute" },
 };
+
+const SEVERITY_LABEL = new Map(
+  SEVERITY_LEVELS.map((level) => [level.key, level.label]),
+);
+
+/** The severity columns the findings cell shows, highest risk first. */
+const FINDING_COLUMNS = ["critical", "high", "medium", "low"];
 
 /**
  * What the scan's cases did.
@@ -117,23 +142,48 @@ function ScanCases({ scan, planCases }) {
 }
 
 /**
- * The session's scans - the page is the list.
- *
- * A scan that is still moving gets its own card at the top of that list, with
- * the progress bar and the Stop button on it; a settled scan is one row. What
- * the rows deliberately do *not* carry is the failure text: twelve runs that
- * died of the same rate limit printed that same sentence twelve times and
- * buried everything else, so identical reasons are counted once, above the
- * list, and the row says only that the run stopped.
+ * The findings column, Nessus's "Vulnerabilities Found": one coloured number
+ * per severity. Zeroes stay visible but faint, so the columns line up across
+ * rows instead of reflowing as counts appear.
  */
+function ScanFindings({ scan }) {
+  const counts = scan.findingCounts ?? null;
+
+  if (!counts || scanFindingTotal(scan) === 0) {
+    return (
+      <span className={styles.findingsEmpty} title="No findings linked yet">
+        —
+      </span>
+    );
+  }
+
+  const shown = counts.info
+    ? [...FINDING_COLUMNS, "info"]
+    : FINDING_COLUMNS;
+
+  return (
+    <span className={styles.findings} aria-label={`${scanFindingTotal(scan)} findings`}>
+      {shown.map((key) => (
+        <span
+          key={key}
+          className={styles.finding}
+          data-tone={key}
+          data-zero={!(counts[key] ?? 0) || undefined}
+          title={`${SEVERITY_LABEL.get(key) ?? key}: ${counts[key] ?? 0}`}
+        >
+          {counts[key] ?? 0}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export default function ScansPage({ sessionId }) {
   const router = useRouter();
-  const { message } = App.useApp();
   const confirmPopUp = useConfirmPopUp();
-  const queryClient = useQueryClient();
   const [launcherOpen, setLauncherOpen] = useState(false);
 
-  const scansQuery = useQuery(["scans", sessionId], () => getScans(sessionId), {
+  const scansQuery = useQuery(scansKey(sessionId), () => getScans(sessionId), {
     refetchInterval: (data) =>
       (data?.runs ?? []).some(isScanLive) ? 2000 : false,
   });
@@ -141,9 +191,11 @@ export default function ScansPage({ sessionId }) {
   // The plan is the live source of per-case status, so the list polls it too
   // while a scan runs — otherwise every progress bar freezes at page-open.
   const planLive = (scansQuery.data?.runs ?? []).some(isScanLive);
-  const planQuery = useQuery(["test-plan", sessionId], () => getTestPlan(sessionId), {
-    refetchInterval: planLive ? 4000 : false,
-  });
+  const planQuery = useQuery(
+    testPlanKey(sessionId),
+    () => getTestPlan(sessionId),
+    { refetchInterval: planLive ? 4000 : false },
+  );
 
   const plan = planQuery.data?.plan ?? null;
   const planCases = useMemo(() => plan?.cases ?? [], [plan]);
@@ -156,110 +208,36 @@ export default function ScansPage({ sessionId }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [needle, setNeedle] = useState("");
 
-  const byStatus = useMemo(() => {
-    const counts = new Map();
-    for (const scan of scans) {
-      counts.set(scan.status, (counts.get(scan.status) ?? 0) + 1);
-    }
-    return counts;
-  }, [scans]);
+  const byStatus = useMemo(() => scanFolderCounts(scans), [scans]);
 
-  /* Only the statuses this history actually contains, each with its count: an
-     option that can only ever return nothing is a dead end in a filter. */
-  const filterOptions = useMemo(
+  const visibleScans = useMemo(
     () =>
-      STATUS_FILTERS.filter(
-        (option) => option.value === "all" || byStatus.get(option.value),
-      ).map((option) => ({
-        value: option.value,
-        label:
-          option.value === "all"
-            ? `${option.label} (${scans.length})`
-            : `${option.label} (${byStatus.get(option.value)})`,
-      })),
-    [byStatus, scans.length],
+      scans.filter(
+        (scan) =>
+          (statusFilter === "all" || scan.status === statusFilter) &&
+          scanMatchesNeedle(scan, needle, planCases),
+      ),
+    [scans, statusFilter, needle, planCases],
   );
 
-  /* The reasons, counted. Two runs that died of the same sentence are one line;
-     a run that died of its own reason still gets its line, with a count of one. */
-  const failureGroups = useMemo(() => {
-    const groups = new Map();
-    for (const scan of scans) {
-      if (scan.status !== "failed" && scan.status !== "cancelled") continue;
-      const reason = (scan.error ?? "").trim();
-      const key = reason || "The run stopped without recording a reason.";
-      groups.set(key, (groups.get(key) ?? 0) + 1);
-    }
-    return [...groups.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([reason, count]) => ({ reason, count }));
-  }, [scans]);
+  const filtersActive = Boolean(needle.trim());
+  const clearFilters = () => setNeedle("");
 
+  /* The reasons, counted once in scans.mjs: the notice says why runs stopped,
+     and how many of them it happened to. */
+  const failureGroups = useMemo(() => scanFailureGroups(scans), [scans]);
   const stoppedEarly = failureGroups.reduce(
     (total, group) => total + group.count,
     0,
   );
 
-  const visibleScans = useMemo(() => {
-    const query = needle.trim().toLowerCase();
-    return scans.filter((scan) => {
-      if (statusFilter !== "all" && scan.status !== statusFilter) return false;
-      if (!query) return true;
-      return [scanName(scan, planCases), scan.error, scan.status, ...(scan.testIds ?? [])]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query));
-    });
-  }, [scans, statusFilter, needle, planCases]);
-
-  const live = useMemo(() => visibleScans.filter(isScanLive), [visibleScans]);
-  const settled = useMemo(
-    () => visibleScans.filter((scan) => !isScanLive(scan)),
-    [visibleScans],
-  );
-
-  const filtersActive = statusFilter !== "all" || Boolean(needle.trim());
-  const clearFilters = () => {
-    setStatusFilter("all");
-    setNeedle("");
-  };
-
-  /* The band's label is the one place the page would otherwise call a queued
-     scan "running". */
-  const liveLabel = useMemo(() => {
-    if (!live.length) return "";
-    const running = live.filter((scan) => scan.status === "running").length;
-    if (running === live.length) {
-      return live.length === 1 ? "Running now" : `${live.length} running now`;
-    }
-    if (running === 0) {
-      return live.length === 1 ? "Queued" : `${live.length} queued`;
-    }
-    return `${running} running · ${live.length - running} queued`;
-  }, [live]);
-
-  const notExecuted = planCases.filter(
-    (testCase) => testCase.status === "not_started" || testCase.status === "in_progress",
-  );
-
   const invalidate = () => {
-    queryClient.invalidateQueries(["scans", sessionId]);
-    queryClient.invalidateQueries(["test-plan", sessionId]);
+    scansQuery.refetch();
+    planQuery.refetch();
   };
 
-  const stopMutation = useMutation((runId) => stopScan(sessionId, runId), {
-    onSuccess: invalidate,
-    onError: (error) => message.error(apiErrorMessage(error, "Could not stop the scan")),
-  });
-
-  const deleteMutation = useMutation((runId) => deleteScan(sessionId, runId), {
-    onSuccess: (_data, runId) => {
-      // Drop the detail cache too: a settled scan's poll has stopped, so a
-      // Browser-Back to it would otherwise re-render the deleted record.
-      queryClient.removeQueries(["scan", sessionId, runId]);
-      invalidate();
-    },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not delete the scan")),
-  });
+  const { stop: stopMutation, remove: deleteMutation, launch: rerunMutation } =
+    useScanMutations(sessionId);
 
   const openScan = (runId) => router.push(`/session/${sessionId}/scans/${runId}`);
   const scanHref = (runId) => `/session/${sessionId}/scans/${runId}`;
@@ -279,8 +257,7 @@ export default function ScansPage({ sessionId }) {
    */
   const confirmStop = (scan) => {
     const counts = countScanCases(scanCaseStatuses(scan, planCases));
-    const settledCount = counts.total - counts.notExecuted;
-    const remaining = counts.total - settledCount;
+    const remaining = counts.notExecuted;
     confirmPopUp({
       title: `Stop “${scanName(scan, planCases)}”?`,
       content: remaining
@@ -290,6 +267,17 @@ export default function ScansPage({ sessionId }) {
       onOk: () => stopMutation.mutateAsync(scan.runId),
     });
   };
+
+  const runAgain = (scan) =>
+    rerunMutation.mutate({
+      testIds: scan.testIds,
+      label: `${scanName(scan, planCases)} (retest)`,
+      policy: scanPolicy(scan),
+      sourceRunId: scan.runId,
+      onLaunched: (run) => {
+        if (run?.runId) openScan(run.runId);
+      },
+    });
 
   const header = (
     <PageHeader
@@ -370,7 +358,8 @@ export default function ScansPage({ sessionId }) {
   }
 
   if (!scans.length) {
-    const caseCount = notExecuted.length || planCases.length;
+    const caseCount =
+      planCases.filter(isUnrunCase).length || planCases.length;
     return shell(
       <PageState
         state="empty"
@@ -391,75 +380,14 @@ export default function ScansPage({ sessionId }) {
     );
   }
 
-  /** A scan that is still moving: its progress is the page's live element. */
-  const renderLive = (scan) => {
-    const startedAt = scanStartedAt(scan);
-    const queued = scan.status === "queued";
-    const where = queued
-      ? scan.position > 1
-        ? `#${scan.position} in the queue`
-        : "waiting to start"
-      : startedAt
-        ? `started ${formatAgo(startedAt)}`
-        : "started";
-
-    return (
-      <div key={scan.runId} className={styles.liveCard}>
-        <div className={styles.liveTop}>
-          {/* The card owns the state here: the border of a pill inside a
-              bordered card is a box in a box, and the LED plus the word below
-              already say which state this is. */}
-          <span
-            className={styles.liveDot}
-            data-state={queued ? "queued" : "running"}
-            aria-hidden="true"
-          />
-          <Link href={scanHref(scan.runId)} className={styles.liveName}>
-            {scanName(scan, planCases)}
-          </Link>
-          <span className={styles.liveSpacer} />
-          <Button size="small" onClick={() => openScan(scan.runId)}>
-            Open
-          </Button>
-          <Tooltip title="Stop this scan">
-            <Button
-              size="small"
-              danger
-              icon={<StopOutlined />}
-              aria-label={`Stop ${scanName(scan, planCases)}`}
-              loading={
-                stopMutation.isLoading && stopMutation.variables === scan.runId
-              }
-              onClick={() => confirmStop(scan)}
-            />
-          </Tooltip>
-        </div>
-
-        <ScanProgressBar
-          testIds={scan.testIds}
-          planCases={planCases}
-          since={scan.startedAt}
-        />
-
-        <div className={styles.liveMeta}>
-          <span className={styles.liveState} data-state={queued ? "queued" : "running"}>
-            {queued ? "Queued" : "Running"}
-          </span>
-          <span className={styles.liveMetaDot} aria-hidden="true" />
-          <span>{scanScopeLabel(scan, planCases)}</span>
-          <span className={styles.liveMetaDot} aria-hidden="true" />
-          <span>{where}</span>
-        </div>
-      </div>
-    );
-  };
-
   /**
-   * One settled scan: the case it ran (its own name), what that case did, how
-   * the run ended, and when. The name is the real link; the row click is a
-   * mouse shortcut that stands down for anything interactive inside it.
+   * One scan, one row — the way Nessus draws its history. A live scan stays in
+   * this table: its status cell carries the progress bar (or the queue slot),
+   * and its action is Stop. A settled one carries Run again and Delete.
    */
   const renderRow = (scan) => {
+    const live = isScanLive(scan);
+    const queued = scan.status === "queued";
     const startedAt = scanStartedAt(scan);
     const caseCount = (scan.testIds ?? []).length;
     /* The category line earns its place only when there is more than one case:
@@ -471,6 +399,7 @@ export default function ScansPage({ sessionId }) {
       <div
         key={scan.runId}
         className={styles.row}
+        data-live={live || undefined}
         onClick={(event) => {
           if (event.target.closest("a, button")) return;
           openScan(scan.runId);
@@ -489,13 +418,29 @@ export default function ScansPage({ sessionId }) {
 
         <ScanCases scan={scan} planCases={planCases} />
 
-        <span
-          className={styles.runState}
-          data-tone={scanStatusTone(scan.status)}
-        >
-          <span className={styles.runDot} aria-hidden="true" />
-          {SCAN_STATUS_LABEL[scan.status] ?? scan.status}
+        <span className={styles.stateCell}>
+          <span
+            className={styles.runState}
+            data-tone={scanStatusTone(scan.status)}
+          >
+            <span className={styles.runDot} aria-hidden="true" />
+            {SCAN_STATUS_LABEL[scan.status] ?? scan.status}
+          </span>
+          {queued && (
+            <span className={styles.queueNote}>
+              {scan.position > 1 ? `#${scan.position} in the queue` : "waiting to start"}
+            </span>
+          )}
+          {scan.status === "running" && (
+            <ScanProgressBar
+              testIds={scan.testIds}
+              planCases={planCases}
+              since={scan.startedAt}
+            />
+          )}
         </span>
+
+        <ScanFindings scan={scan} />
 
         <span className={styles.when}>
           <span
@@ -510,127 +455,165 @@ export default function ScansPage({ sessionId }) {
         </span>
 
         <span className={styles.rowActions}>
-          <Tooltip title="Delete this scan">
-            <button
-              type="button"
-              className={styles.deleteBtn}
-              aria-label={`Delete ${scanName(scan, planCases)}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                confirmDelete(scan);
-              }}
-            >
-              <DeleteOutlined />
-            </button>
-          </Tooltip>
+          {live ? (
+            <Tooltip title="Stop this scan">
+              <button
+                type="button"
+                className={styles.iconBtn}
+                data-variant="stop"
+                aria-label={`Stop ${scanName(scan, planCases)}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  confirmStop(scan);
+                }}
+              >
+                <StopOutlined />
+              </button>
+            </Tooltip>
+          ) : (
+            <>
+              <Tooltip title="Run these cases again">
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  aria-label={`Run ${scanName(scan, planCases)} again`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    runAgain(scan);
+                  }}
+                >
+                  <RedoOutlined />
+                </button>
+              </Tooltip>
+              <Tooltip title="Delete this scan">
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  data-variant="danger"
+                  aria-label={`Delete ${scanName(scan, planCases)}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    confirmDelete(scan);
+                  }}
+                >
+                  <DeleteOutlined />
+                </button>
+              </Tooltip>
+            </>
+          )}
         </span>
       </div>
     );
   };
 
   return shell(
-    <section className={styles.list} aria-label="Scan history">
-      <div className={styles.bar}>
-        <span className={styles.barTitle}>
-          Scans
-          <span className={styles.count}>{scans.length}</span>
-          {filtersActive && (
-            <span className={styles.barNote}>{visibleScans.length} matching</span>
-          )}
-        </span>
-        <span className={styles.barSpacer} />
-        {scans.length > 1 && (
-          <>
-            <Input
-              prefix={<SearchOutlined />}
-              placeholder="Search scan, case or error"
-              value={needle}
-              onChange={(event) => setNeedle(event.target.value)}
-              allowClear
-              className={styles.search}
-              aria-label="Search scans"
-            />
-            <Select
-              value={statusFilter}
-              onChange={setStatusFilter}
-              className={styles.filter}
-              aria-label="Filter scans by status"
-              options={filterOptions}
-            />
-            {filtersActive && (
-              <Button size="small" type="text" onClick={clearFilters}>
-                Clear
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-
-      {timeline.rows.length > 1 && (
-        <div className={styles.timelinePanel} aria-label="Recent scan activity">
-          <div className={styles.timelineHeading}>
-            <span>RECENT RUNS</span>
-            <span>Last {timeline.rows.length} of {scans.length} · all statuses</span>
-          </div>
-          <TimelineChart
-            items={timeline.rows.map((row) => ({
-              ...row,
-              description: `${row.title} · started ${new Date(row.start).toLocaleString()} · span ${formatDuration(row.end - row.start)}`,
-            }))}
-            startLabel={new Date(timeline.start).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-            endLabel={new Date(timeline.end).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-          />
-        </div>
-      )}
-
-      {/* Same sentence, counted once. The row keeps the fact that it stopped;
-          this says why, and how many runs it happened to. */}
-      {failureGroups.length > 0 && (
-        <div className={styles.notice}>
-          <span className={styles.noticeLabel}>
-            {stoppedEarly} of {scans.length} runs stopped before finishing
-          </span>
-          {failureGroups.map((group) => (
-            <span
-              key={group.reason}
-              className={styles.noticeRow}
-              title={group.reason}
+    <div className={styles.layout}>
+      <nav className={styles.folders} aria-label="Scan folders">
+        {FOLDERS.map((folder) => {
+          const count =
+            folder.value === "all"
+              ? scans.length
+              : byStatus.get(folder.value) ?? 0;
+          return (
+            <button
+              key={folder.value}
+              type="button"
+              className={styles.folder}
+              data-active={statusFilter === folder.value || undefined}
+              aria-current={statusFilter === folder.value ? "page" : undefined}
+              onClick={() => setStatusFilter(folder.value)}
             >
-              <span className={styles.noticeCount}>{group.count}×</span>
-              <span className={styles.noticeText}>{group.reason}</span>
+              <span className={styles.folderLabel}>{folder.label}</span>
+              <span className={styles.folderCount}>{count}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <section className={styles.panel} aria-label="Scan history">
+        <div className={styles.bar}>
+          <span className={styles.barTitle}>
+            {statusFilter === "all" ? "All scans" : SCAN_STATUS_LABEL[statusFilter]}
+            <span className={styles.count}>{visibleScans.length}</span>
+            {filtersActive && (
+              <span className={styles.barNote}>{scans.length} total</span>
+            )}
+          </span>
+          <span className={styles.barSpacer} />
+          <Input
+            prefix={<SearchOutlined />}
+            placeholder="Search scan, case or error"
+            value={needle}
+            onChange={(event) => setNeedle(event.target.value)}
+            allowClear
+            className={styles.search}
+            aria-label="Search scans"
+          />
+          {filtersActive && (
+            <Button size="small" type="text" onClick={clearFilters}>
+              Clear
+            </Button>
+          )}
+        </div>
+
+        {timeline.rows.length > 1 && (
+          <div className={styles.timelinePanel} aria-label="Recent scan activity">
+            <div className={styles.timelineHeading}>
+              <span>RECENT RUNS</span>
+              <span>Last {timeline.rows.length} of {scans.length} · all statuses</span>
+            </div>
+            <TimelineChart
+              items={timeline.rows.map((row) => ({
+                ...row,
+                description: `${row.title} · started ${new Date(row.start).toLocaleString()} · span ${formatDuration(row.end - row.start)}`,
+              }))}
+              startLabel={formatStamp(timeline.start)}
+              endLabel={formatStamp(timeline.end)}
+            />
+          </div>
+        )}
+
+        {/* Same sentence, counted once. The row keeps the fact that it stopped;
+            this says why, and how many runs it happened to. */}
+        {failureGroups.length > 0 && (
+          <div className={styles.notice}>
+            <span className={styles.noticeLabel}>
+              {stoppedEarly} of {scans.length} runs stopped before finishing
             </span>
-          ))}
-        </div>
-      )}
+            {failureGroups.map((group) => (
+              <span
+                key={group.reason}
+                className={styles.noticeRow}
+                title={group.reason}
+              >
+                <span className={styles.noticeCount}>{group.count}×</span>
+                <span className={styles.noticeText}>{group.reason}</span>
+              </span>
+            ))}
+          </div>
+        )}
 
-      {live.length > 0 && (
-        <div className={styles.liveBlock} aria-live="polite">
-          <span className={styles.liveLabel}>{liveLabel}</span>
-          {live.map(renderLive)}
-        </div>
-      )}
-
-      {settled.length > 0 && (
-        <>
+        <div className={styles.table}>
           <div className={styles.head} aria-hidden="true">
             <span>Scan</span>
             <span>Cases</span>
-            <span>Run</span>
-            <span>Started</span>
+            <span>Status</span>
+            <span>Findings</span>
+            <span>Last executed</span>
             <span />
           </div>
-          {settled.map(renderRow)}
-        </>
-      )}
-
-      {visibleScans.length === 0 && (
-        <div className={styles.noMatch}>
-          <p>No scan matches these filters.</p>
-          <Button size="small" onClick={clearFilters}>
-            Clear filters
-          </Button>
+          {visibleScans.map(renderRow)}
         </div>
-      )}
-    </section>,
+
+        {visibleScans.length === 0 && (
+          <div className={styles.noMatch}>
+            <p>No scan matches this folder{filtersActive ? " and search" : ""}.</p>
+            <Button size="small" onClick={clearFilters}>
+              Clear search
+            </Button>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

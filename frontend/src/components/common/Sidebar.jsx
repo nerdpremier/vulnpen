@@ -18,6 +18,7 @@ import {
 } from "react-icons/fi";
 import { HiOutlineChevronLeft } from "react-icons/hi";
 import { isScanLive } from "@/utils/scans.mjs";
+import { scansKey, testPlanKey } from "@/utils/scanQueryKeys.mjs";
 import styles from "@/styles/pages/Session.module.scss";
 
 /**
@@ -75,8 +76,6 @@ const GROUPS = [
   },
 ];
 
-const LIVE_SCAN_STATES = ["queued", "running"];
-
 const Sidebar = ({ sessionId, workspaceId }) => {
   const pathname = usePathname();
   const base = `/session/${sessionId}`;
@@ -90,7 +89,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     { enabled: !!sessionId, refetchInterval: 10000, retry: false },
   );
   const { data: testPlanData } = useQuery(
-    ["test-plan", sessionId],
+    testPlanKey(sessionId),
     () => getTestPlan(sessionId),
     { enabled: !!sessionId, refetchInterval: 15000, retry: false },
   );
@@ -100,7 +99,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     { enabled: !!sessionId, refetchInterval: 5000, retry: false },
   );
   const { data: scansData } = useQuery(
-    ["scans", sessionId],
+    scansKey(sessionId),
     () => getScans(sessionId),
     {
       enabled: !!sessionId,
@@ -113,9 +112,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   );
 
   const coverage = testPlanData?.coverage;
-  const liveScans = (scansData?.runs ?? []).filter((scan) =>
-    LIVE_SCAN_STATES.includes(scan.status),
-  ).length;
+  const liveScans = (scansData?.runs ?? []).filter(isScanLive).length;
   const vulnerabilities = vulnerabilitiesData?.total ?? 0;
   const agentRunning = sessionInfo?.agentState === "running";
 

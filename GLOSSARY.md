@@ -288,9 +288,12 @@ The agent's gates are never bypassed by either policy: a destructive action
 against the target is still refused outright.
 
 `scan-results.ts` owns every pure projection the scan pages read: `selectRuns`
-(the history a view shows), `decorateRun` (its queue position and liveness),
-`runCaseRows`/`runFindings` (the results a scan produced), `sliceRunActivity`
-plus the `[WSTG run <runId>]` marker itself (`runMarker`/`isRunMarker`, which
+(the history a view shows), `decorateRun` (its queue position — through
+`queuePosition`, the one counting rule the launch response also answers with —
+its liveness, and its policy, normalized so no surface re-derives the
+pre-policy default), `joinRunResults` (the case rows, findings and severity
+histogram the list and the detail page both read), `sliceRunActivity` plus the
+`[WSTG run <runId>]` marker itself (`runMarker`/`isRunMarker`, which
 `buildRunInstruction` renders), and `runPolicy`/`normalizeRunLabel`. All of it
 is what the tests exercise. One deliberate exception to "one copy of a result":
 a settled scan keeps the plan statuses it recorded (`resultSummary`, written by
@@ -298,6 +301,19 @@ a settled scan keeps the plan statuses it recorded (`resultSummary`, written by
 rewrite itself when a later scan changes a case — the plan stays the live truth
 and the detail page's progress reads it, scoped to the cases this scan touched
 (`updatedAt >= startedAt`, so a re-test does not open at 100%).
+
+On the frontend the same discipline holds: `utils/scans.mjs` is the pure
+vocabulary (what a scan is called, whether it is live via `isScanLive` — the
+one predicate every poll, badge and animation keys off — its scope line,
+folder counts, failure groups, search, and the case selection rules
+`resolveScanSelection`/`isUnrunCase`), and `hooks/useScanMutations.js` owns the
+mutation seam: launch, stop and delete go through it, and
+`invalidateScanCaches` is the one cache-coherence policy (the scan detail poll,
+the list and the test plan all go stale after any scan write; a deleted scan's
+detail cache is removed outright; a launch also marks the chat history stale).
+Query keys come from `utils/scanQueryKeys.mjs` (`scansKey`, `scanKey`,
+`testPlanKey`) — never hand-build a `["scans", sessionId]` literal, and never
+write a second launch/stop/delete `useMutation` with its own invalidation set.
 
 ## Web surface
 

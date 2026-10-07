@@ -41,6 +41,7 @@ import { PageState } from "@/components/common/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { summarise, groupCases, matchesFilters, caseCarriesWork, STATUS_OPTIONS } from "@/utils/testPlan.mjs";
+import { testPlanKey } from "@/utils/scanQueryKeys.mjs";
 
 /** Colour the one status control by what it says, so no second status column is needed. */
 const STATUS_TONE = {
@@ -178,7 +179,7 @@ export default function TestPlanPage({ sessionId }) {
   const [focusDismissed, setFocusDismissed] = useState(false);
   const focusCaseId = focusDismissed ? "" : requestedCaseId;
 
-  const planQuery = useQuery(["test-plan", sessionId], () => getTestPlan(sessionId));
+  const planQuery = useQuery(testPlanKey(sessionId), () => getTestPlan(sessionId));
 
   // The engagement boundary is captured when the session is created; the setup
   // screen edits those same values, so it starts from them instead of blank.
@@ -295,7 +296,7 @@ export default function TestPlanPage({ sessionId }) {
   const allExpanded = groups.length > 0 && groups.every(isGroupOpen);
 
   const invalidate = () => {
-    queryClient.invalidateQueries(["test-plan", sessionId]);
+    queryClient.invalidateQueries(testPlanKey(sessionId));
     // Setup writes the engagement boundary too, so the cached values the modal
     // starts from have to be refreshed alongside the plan.
     queryClient.invalidateQueries(["session-info", sessionId]);

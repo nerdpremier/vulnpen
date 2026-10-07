@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import { useQuery } from "react-query";
 import { getScanDetail } from "@/services/websecurity.service";
 import { buildToolIndex } from "@/utils/toolIndex.mjs";
+import { scanKey } from "@/utils/scanQueryKeys.mjs";
+import { isScanLive } from "@/utils/scans.mjs";
 
 /**
  * One scan's detail: its record, its joined results and the transcript slice
@@ -14,14 +16,12 @@ import { buildToolIndex } from "@/utils/toolIndex.mjs";
  */
 export default function useScanActivity(sessionId, runId, { enabled = true } = {}) {
   const query = useQuery(
-    ["scan", sessionId, runId],
+    scanKey(sessionId, runId),
     () => getScanDetail(sessionId, runId),
     {
       enabled: enabled && !!sessionId && !!runId,
-      refetchInterval: (data) => {
-        const status = data?.run?.status;
-        return status === "queued" || status === "running" ? 2000 : false;
-      },
+      // What "live" means is the scan predicate's job, not this hook's.
+      refetchInterval: (data) => (isScanLive(data?.run) ? 2000 : false),
       refetchIntervalInBackground: true,
     },
   );
@@ -33,8 +33,7 @@ export default function useScanActivity(sessionId, runId, { enabled = true } = {
     [detail],
   );
 
-  const status = detail?.run?.status ?? null;
-  const live = status === "queued" || status === "running";
+  const live = isScanLive(detail?.run);
 
   return {
     run: detail?.run ?? null,

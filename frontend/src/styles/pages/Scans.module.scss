@@ -2,16 +2,114 @@
 
 /* ============================================================================
    SCANS
-   The page is the list. One card holds the toolbar, the count of reasons the
-   runs stopped, the scans that are still moving (as cards, because their
-   progress is the live element on the page) and one row per settled scan.
+   The page is the list, laid out the way Tenable's scans page is: a folder
+   rail on the left (one folder per status), and one table behind it that
+   carries every scan — the live ones show their progress inside the row,
+   where Nessus puts it, instead of on separate cards above the history.
 
-   The two shapes a result takes are decided by the data, not by taste: one case
-   is a word, two or more are a proportion bar. `ScanStatus.jsx` keeps the atoms
-   several surfaces share - the lifecycle pill, the progress bar - and this
-   sheet owns the list itself.
+   The two shapes a case result takes are decided by the data, not by taste:
+   one case is a word, two or more are a proportion bar. `ScanStatus.jsx` keeps
+   the atoms several surfaces share - the lifecycle pill, the progress bar -
+   and this sheet owns the list itself.
    ========================================================================== */
 
+/* ---- The Nessus shape: folders on the left, the table beside them --------- */
+.layout {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+
+  @include responsive(tablet2) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.folders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.45rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+
+  /* Narrow screens: the rail becomes a row of chips above the table. */
+  @include responsive(tablet2) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+}
+
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--moon-radius-sm);
+  background: transparent;
+  color: var(--moon-text-dim);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--moon-dur-1) var(--moon-ease-out),
+    color var(--moon-dur-1) var(--moon-ease-out);
+
+  &:hover {
+    background: var(--moon-surface-3);
+    color: var(--moon-text);
+  }
+
+  &[data-active] {
+    background: var(--moon-accent-08);
+    border-color: var(--moon-line-2);
+    color: var(--moon-text);
+    font-weight: 600;
+  }
+
+  @include focus-ring(2px);
+
+  @include responsive(tablet2) {
+    width: auto;
+    padding: 0.3rem 0.55rem;
+  }
+}
+
+.folderLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  @include truncate(1);
+}
+
+.folderCount {
+  flex: none;
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.64rem;
+  text-align: center;
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-3);
+  border-radius: var(--moon-radius-pill);
+
+  [data-active] & {
+    color: var(--moon-text);
+  }
+}
+
+.panel {
+  overflow: hidden;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+/* Legacy alias while other surfaces still import the old class name. */
 .list {
   overflow: hidden;
   background: var(--moon-surface-1);
@@ -136,61 +234,8 @@
   @include truncate(1);
 }
 
-/* ---- Scans that are still moving ----------------------------------------- */
-.liveBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.85rem 1.15rem 0.95rem;
-  background: var(--moon-surface-2);
-  border-bottom: 1px solid var(--moon-line-1);
-
-  @include responsive(tablet3) {
-    padding: 0.7rem 0.85rem 0.8rem;
-  }
-}
-
-.liveLabel {
-  @include eyebrow;
-  font-size: 0.56rem;
-}
-
-.liveCard {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  min-width: 0;
-  padding: 0.8rem 0.95rem 0.85rem;
-  background: var(--moon-surface-1);
-  border: 1px solid var(--moon-line-2);
-  border-radius: var(--moon-radius-md);
-}
-
-.liveTop {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-/* A shape, not a word: the pill beside it already says which state this is. */
-.liveDot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--moon-info);
-  box-shadow: 0 0 0 3px var(--moon-info-bg);
-  animation: livePulse 1.6s ease-in-out infinite;
-
-  &[data-state="queued"] {
-    background: var(--moon-text-faint);
-    box-shadow: none;
-    animation: none;
-  }
-}
-
+/* ---- Live rows live inside the table now ---------------------------------
+   The pulse below is what still moves: the status dot of a running scan. */
 @keyframes livePulse {
   0%,
   100% {
@@ -202,63 +247,16 @@
 }
 
 @include reduced-motion {
-  .liveDot {
+  .row .runDot {
     animation: none;
   }
 }
 
-.liveName {
-  min-width: 0;
-  font-size: 0.92rem;
-  color: var(--moon-text);
-  text-decoration: none;
-  @include truncate(1);
-
-  &:hover {
-    color: var(--moon-accent);
-  }
-
-  @include focus-ring(2px);
-}
-
-.liveSpacer {
-  flex: 1 1 auto;
-}
-
-.liveMeta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  min-width: 0;
-  font-size: 0.72rem;
-  color: var(--moon-text-mute);
-}
-
-/* One word, tinted: the LED beside the name carries the motion, this carries
-   the name of the state without turning the meta line into two typefaces. */
-.liveState {
-  font-size: 0.72rem;
-  color: var(--moon-info);
-
-  &[data-state="queued"] {
-    color: var(--moon-text-faint);
-  }
-}
-
-.liveMetaDot {
-  flex: none;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--moon-line-3);
-}
-
-/* ---- Settled scans: one row each ----------------------------------------- */
+/* ---- The table: one row per scan, live ones included ---------------------- */
 .head,
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(150px, 1fr) 108px 104px 40px;
+  grid-template-columns: minmax(0, 1.9fr) minmax(140px, 1fr) 148px 100px 104px 72px;
   align-items: center;
   gap: 0.85rem;
   padding: 0.7rem 1.15rem;
@@ -297,7 +295,8 @@
     grid-template-areas:
       "identity actions"
       "cases    cases"
-      "run      when";
+      "run      when"
+      "findings findings";
     row-gap: 0.5rem;
     padding: 0.75rem 0.85rem;
 
@@ -310,13 +309,18 @@
       grid-area: cases;
     }
 
-    .runState {
+    .stateCell {
       grid-area: run;
     }
 
     .when {
       grid-area: when;
       align-items: flex-end;
+    }
+
+    .findings,
+    .findingsEmpty {
+      grid-area: findings;
     }
 
     .rowActions {
@@ -458,7 +462,73 @@
   }
 }
 
-/* ---- Run state: a dot and a word, not a boxed pill per row --------------- */
+/* ---- Findings column: Nessus's Vulnerabilities Found ----------------------
+   One coloured number per severity, highest risk first. Zeroes stay visible
+   but faint so the columns line up across rows. */
+.findings {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 0;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.finding {
+  color: var(--tone, var(--moon-text-dim));
+  font-weight: 600;
+
+  /* A zero is still shown — the columns line up across rows — but it steps
+     back so the row's actual news reads first. */
+  &[data-zero] {
+    opacity: 0.4;
+  }
+
+  &[data-tone="critical"] {
+    --tone: var(--moon-danger);
+  }
+
+  &[data-tone="high"] {
+    --tone: var(--moon-high);
+  }
+
+  &[data-tone="medium"] {
+    --tone: var(--moon-warning);
+  }
+
+  &[data-tone="low"] {
+    --tone: var(--moon-info);
+  }
+
+  &[data-tone="info"] {
+    --tone: var(--moon-text-faint);
+    font-weight: 400;
+  }
+}
+
+.findingsEmpty {
+  font-size: 0.78rem;
+  color: var(--moon-text-faint);
+}
+
+/* ---- Status cell: the word, plus the motion a live scan carries ---------- */
+.stateCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* The queued slot ("#2 in the queue") under the word. */
+.queueNote {
+  font-size: 0.68rem;
+  color: var(--moon-text-faint);
+}
+
+/* A running scan's dot is the only thing on the page that pulses: the row
+   itself stays still, the way the rest of the table does. */
 .runState {
   display: inline-flex;
   align-items: center;
@@ -470,6 +540,10 @@
 
   &[data-tone="info"] {
     --tone: var(--moon-info);
+
+    .runDot {
+      animation: livePulse 1.6s ease-in-out infinite;
+    }
   }
 
   &[data-tone="success"] {
@@ -518,9 +592,12 @@
 .rowActions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.3rem;
 }
 
-.deleteBtn {
+/* The row's hover actions: run again, stop, delete. Same shape for all, the
+   variant decides the colour the pointer summons. */
+.iconBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -538,9 +615,19 @@
 
   &:hover,
   &:focus-visible {
-    color: var(--moon-danger);
-    background: var(--moon-danger-bg);
-    border-color: var(--moon-danger-line);
+    color: var(--moon-text);
+    background: var(--moon-surface-3);
+    border-color: var(--moon-line-2);
+  }
+
+  &[data-variant="danger"],
+  &[data-variant="stop"] {
+    &:hover,
+    &:focus-visible {
+      color: var(--moon-danger);
+      background: var(--moon-danger-bg);
+      border-color: var(--moon-danger-line);
+    }
   }
 
   &:focus-visible {

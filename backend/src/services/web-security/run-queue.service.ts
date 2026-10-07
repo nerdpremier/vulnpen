@@ -34,9 +34,9 @@ import type { ToolExecutionMode } from "../../models/User/User.model";
 import {
   buildResultSummary,
   decorateRun,
+  joinRunResults,
   normalizeRunLabel,
-  runCaseRows,
-  runFindings,
+  queuePosition,
   runPolicy,
   selectRuns,
   sliceRunActivity,
@@ -168,13 +168,12 @@ export async function enqueueRun(input: EnqueueRunInput): Promise<EnqueueRunResu
   state.userId = input.userId;
   await pump(input.sessionId);
 
-  // The same counting rule the list uses (see scan-results.decorateRun), so a
+  // The same counting rule the list uses (scan-results.queuePosition), so a
   // launch never answers "position 1" about a scan the list calls "#2".
-  const ahead = state.activeRunId ? 1 : 0;
   return {
     ok: true,
     run,
-    position: ahead + state.queue.indexOf(run.runId) + 1,
+    position: queuePosition(run.runId, state),
   };
 }
 
@@ -466,13 +465,33 @@ export async function deleteRun(sessionId: string, runId: string): Promise<boole
 
 // ─── Reads for the UI ─────────────────────────────────────────────────
 
-/** All runs, newest first, with the live queue position filled in. */
+/** All runs, newest first, with the live queue position and the findings each
+    scan's cases link, so the list row carries its severity counts. */
 export async function listRuns(
   sessionId: string,
   filter: RunListFilter = {},
 ): Promise<RunListItem[]> {
-  const [runs, state] = [await loadRuns(sessionId), stateFor(sessionId)];
-  return selectRuns(runs, filter).map((run) => decorateRun(run, state));
+  const session = await SessionsModel.findOne({ sessionId })
+    .select("webAppRuns webAppTestPlan vulnerabilities")
+    .lean();
+  if (!session) return [];
+
+  const runs = (session.webAppRuns as WebAppRunDoc[] | undefined) ?? [];
+  const state = stateFor(sessionId);
+  const plan = session.webAppTestPlan as
+    | { cases?: SessionTestCaseDoc[] }
+    | undefined;
+  const vulnerabilities =
+    (session.vulnerabilities as SessionVulnerabilityDoc[] | undefined) ?? null;
+
+  return selectRuns(runs, filter).map((run) => {
+    const { findingCounts: counts } = joinRunResults(
+      run,
+      plan?.cases ?? null,
+      vulnerabilities,
+    );
+    return { ...decorateRun(run, state), findingCounts: counts };
+  });
 }
 
 export interface ParkedRunContext {
@@ -558,9 +577,9 @@ export async function getRunDetail(
   );
 
   const plan = session.webAppTestPlan as { cases?: SessionTestCaseDoc[] } | undefined;
-  const cases = runCaseRows(record?.testIds ?? [], plan?.cases ?? null);
-  const findings = runFindings(
-    cases,
+  const { cases, findings } = joinRunResults(
+    record ?? { testIds: [] },
+    plan?.cases ?? null,
     (session.vulnerabilities as SessionVulnerabilityDoc[] | undefined) ?? null,
   );
 

@@ -5,11 +5,22 @@ import {
   countScanCases,
   formatAgo,
   formatDuration,
+  formatStamp,
+  isScanLive,
+  isUnrunCase,
   resolveScanSelection,
   scanActivity,
   scanCaseStatuses,
+  scanCasesByCategory,
+  scanFailureGroups,
+  scanFindingsByCase,
+  scanFindingTotal,
+  scanFolderCounts,
+  scanMatchesNeedle,
   scanName,
+  scanPolicy,
   scanProgress,
+  scanRemediations,
   scanScopeLabel,
   scanTimeline,
 } from "./scans.mjs";
@@ -231,4 +242,175 @@ test("scanActivity counts scans into the day they started, oldest day first", ()
   assert.deepEqual(scanActivity(scans, { days: 4, now }), [0, 1, 0, 2]);
   assert.deepEqual(scanActivity(undefined, { days: 3, now }), [0, 0, 0]);
   assert.deepEqual(scanActivity(scans, { days: 1, now }), [2]);
+});
+
+test("scanFindingTotal sums the severity histogram the list row reports", () => {
+  assert.equal(
+    scanFindingTotal({ findingCounts: { critical: 1, high: 2, medium: 0, low: 1, info: 3 } }),
+    7,
+  );
+  assert.equal(scanFindingTotal({ findingCounts: null }), 0);
+  // A row that predates the histogram, or a scan with no findings at all.
+  assert.equal(scanFindingTotal({}), 0);
+  // A partial histogram (missing buckets) still adds up instead of going NaN.
+  assert.equal(scanFindingTotal({ findingCounts: { critical: 2 } }), 2);
+});
+
+test("scanFindingsByCase buckets a scan's findings by the case that carries them", () => {
+  const findings = [
+    { testId: "WSTG-INFO-01", severity: "high" },
+    { testId: "WSTG-INFO-01", severity: "medium" },
+    { testId: "WSTG-INFO-01", severity: "weird" },
+    { testId: "WSTG-ATHN-02", severity: "critical" },
+    { severity: "high" },
+  ];
+  const byCase = scanFindingsByCase(findings);
+  assert.deepEqual(byCase.get("WSTG-INFO-01"), {
+    total: 3,
+    counts: { critical: 0, high: 1, medium: 1, low: 0, info: 1 },
+  });
+  assert.deepEqual(byCase.get("WSTG-ATHN-02").counts.critical, 1);
+  // A finding with no case lands nowhere: the strip is per case.
+  assert.equal(byCase.size, 2);
+  assert.equal(scanFindingsByCase([]).size, 0);
+});
+
+test("scanRemediations groups the distinct fixes, worst news first", () => {
+  const findings = [
+    { testId: "WSTG-ATHN-01", severity: "high", remediation: "Serve over HTTPS." },
+    { testId: "WSTG-INFO-09", severity: "critical", remediation: " Enforce authentication. " },
+    { testId: "WSTG-INFO-09", severity: "medium", remediation: "Enforce authentication." },
+    { testId: "WSTG-INPV-05", severity: "low", remediation: "" },
+  ];
+  const rows = scanRemediations(findings);
+  assert.deepEqual(
+    rows.map((row) => [row.action, row.vulns, row.cases, row.worst]),
+    [
+      ["Enforce authentication.", 2, 1, "critical"],
+      ["Serve over HTTPS.", 1, 1, "high"],
+      ["No remediation recorded", 1, 1, "low"],
+    ],
+  );
+  assert.deepEqual(scanRemediations([]), []);
+});
+
+test("isUnrunCase names the one set every 'scan what is left' surface means", () => {
+  assert.equal(isUnrunCase({ status: "not_started" }), true);
+  assert.equal(isUnrunCase({ status: "in_progress" }), true);
+  assert.equal(isUnrunCase({ status: "passed" }), false);
+  assert.equal(isUnrunCase({ status: "skipped" }), false);
+  assert.equal(isUnrunCase(undefined), false);
+});
+
+test("scanPolicy reads the pre-policy default as unattended", () => {
+  assert.equal(scanPolicy({}), "unattended");
+  assert.equal(scanPolicy({ policy: undefined }), "unattended");
+  assert.equal(scanPolicy({ policy: "unattended" }), "unattended");
+  assert.equal(scanPolicy({ policy: "supervised" }), "supervised");
+  assert.equal(scanPolicy(null), "unattended");
+});
+
+test("scanCasesByCategory counts a scan's cases per WSTG category, in id order", () => {
+  const planCases = [
+    { testId: "WSTG-INFO-01", categoryCode: "INFO" },
+    { testId: "WSTG-INFO-02", categoryCode: "INFO" },
+    { testId: "WSTG-ATHN-01", categoryCode: "ATHN" },
+  ];
+  const byCategory = scanCasesByCategory(planCases, [
+    "WSTG-ATHN-01",
+    "WSTG-INFO-01",
+    "WSTG-INFO-02",
+    "WSTG-GONE-01",
+  ]);
+  assert.deepEqual([...byCategory.entries()], [
+    ["ATHN", 1],
+    ["INFO", 2],
+  ]);
+  // A case the plan no longer holds is not counted; unknown codes are still
+  // categories.
+  assert.deepEqual(
+    [...scanCasesByCategory([{ testId: "a" }], ["a"]).entries()],
+    [["OTHER", 1]],
+  );
+  assert.deepEqual([...scanCasesByCategory(null, ["a"]).entries()], []);
+});
+
+test("scanFailureGroups counts why the history's scans stopped", () => {
+  const scans = [
+    { status: "failed", error: "Target refused the connection." },
+    { status: "cancelled", error: " Target refused the connection. " },
+    { status: "cancelled", error: "Stopped by the operator." },
+    { status: "failed", error: "" },
+    { status: "failed" },
+    { status: "completed" },
+    { status: "running" },
+  ];
+  assert.deepEqual(scanFailureGroups(scans), [
+    { reason: "Target refused the connection.", count: 2 },
+    { reason: "The run stopped without recording a reason.", count: 2 },
+    { reason: "Stopped by the operator.", count: 1 },
+  ]);
+  // Same count, alphabetical tiebreak; empty history is not an error.
+  assert.deepEqual(
+    scanFailureGroups([
+      { status: "failed", error: "b" },
+      { status: "failed", error: "a" },
+    ]),
+    [
+      { reason: "a", count: 1 },
+      { reason: "b", count: 1 },
+    ],
+  );
+  assert.deepEqual(scanFailureGroups([]), []);
+});
+
+test("scanFolderCounts gives the rail one number per status", () => {
+  const counts = scanFolderCounts([
+    { status: "running" },
+    { status: "completed" },
+    { status: "completed" },
+    { status: "failed" },
+  ]);
+  assert.equal(counts.get("running"), 1);
+  assert.equal(counts.get("completed"), 2);
+  assert.equal(counts.get("failed"), 1);
+  assert.equal(counts.get("queued"), undefined);
+  assert.equal(scanFolderCounts(null).size, 0);
+});
+
+test("scanMatchesNeedle searches name, error, status and case ids", () => {
+  const planCases = [{ testId: "WSTG-INFO-02", title: "Fingerprint Web Server" }];
+  const scan = {
+    status: "failed",
+    error: "Target refused the connection.",
+    testIds: ["WSTG-INFO-02"],
+  };
+
+  assert.equal(scanMatchesNeedle(scan, "", planCases), true);
+  assert.equal(scanMatchesNeedle(scan, "  ", planCases), true);
+  assert.equal(scanMatchesNeedle(scan, "juice", planCases), false, "no name, no match");
+  assert.equal(
+    scanMatchesNeedle({ ...scan, label: "Juice Shop baseline" }, "JUICE", planCases),
+    true,
+  );
+  assert.equal(scanMatchesNeedle(scan, "refused", planCases), true);
+  assert.equal(scanMatchesNeedle(scan, "failed", planCases), true);
+  assert.equal(scanMatchesNeedle(scan, "fingerprint", planCases), true);
+  assert.equal(scanMatchesNeedle(null, "x", planCases), false);
+});
+
+test("formatStamp prints the short stamp the scan surfaces share", () => {
+  const at = new Date(2026, 1, 14, 14, 5).getTime();
+  assert.equal(formatStamp(at), new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+  assert.equal(formatStamp(null), "—");
+  assert.equal(formatStamp(0), "—");
+  assert.equal(formatStamp(undefined), "—");
+});
+
+test("isScanLive is the one predicate for 'still moving'", () => {
+  assert.equal(isScanLive({ status: "queued" }), true);
+  assert.equal(isScanLive({ status: "running" }), true);
+  assert.equal(isScanLive({ status: "completed" }), false);
+  assert.equal(isScanLive({}), false);
+  assert.equal(isScanLive(null), false);
 });
