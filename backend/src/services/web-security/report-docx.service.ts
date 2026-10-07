@@ -346,7 +346,6 @@ function reportSignature(session: {
   const vulns = (session.vulnerabilities ?? []).map((v) => [
     v.vulnerabilityId,
     v.title,
-    v.status,
     v.severity,
     v.cvss?.score,
     v.cvss?.vector,

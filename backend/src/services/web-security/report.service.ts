@@ -80,7 +80,6 @@ export interface ReportFindingsRow {
   wstgId?: string;
   owaspTop10?: OwaspTop10Id;
   owaspConfidence?: string;
-  status: string;
   exploited: boolean;
   cwe?: string;
   mappingRationale: string;
@@ -194,7 +193,6 @@ export function buildReportFindings(
       wstgId: wstg?.id ?? vulnerability.wstgId,
       owaspTop10: mapping.primary,
       owaspConfidence: stored ? "high" : mapping.confidence,
-      status: vulnerability.status,
       exploited: !!vulnerability.exploited,
       cwe: normalizeCwe(vulnerability.cwe) || undefined,
       mappingRationale: vulnerability.owaspRationale || mapping.rationale,
@@ -232,7 +230,6 @@ export function serializeFindingsForReport(
     impact: v.impact,
     remediation: v.remediation,
     exploited: v.exploited,
-    status: v.status,
   }));
 }
 
@@ -463,15 +460,15 @@ function findingsSummarySection(findings: ReportFindingsRow[]): string[] {
   const lines: string[] = [
     "## 5. Findings summary",
     "",
-    "| ID | Severity | CVSS v3.0 | Title | Affected asset | WSTG | OWASP Top 10:2025 | Status |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| ID | Severity | CVSS v3.0 | Title | Affected asset | WSTG | OWASP Top 10:2025 |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
   ];
   if (!findings.length) {
-    lines.push("| — | — | — | No findings were recorded in this session | — | — | — | — |");
+    lines.push("| — | — | — | No findings were recorded in this session | — | — | — |");
   }
   for (const finding of findings) {
     lines.push(
-      `| F-${String(finding.index).padStart(3, "0")} | ${finding.severity}${finding.exploited ? " (exploited)" : ""} | ${finding.cvss ? `${finding.cvss.score}` : "—"} | ${tableCell(finding.title)} | ${tableCell(finding.host)}${finding.endpoint ? `<br>${tableCell(finding.endpoint)}` : ""} | ${finding.wstgId ?? "—"} | ${owaspTitle(finding.owaspTop10)} | ${finding.status} |`,
+      `| F-${String(finding.index).padStart(3, "0")} | ${finding.severity}${finding.exploited ? " (exploited)" : ""} | ${finding.cvss ? `${finding.cvss.score}` : "—"} | ${tableCell(finding.title)} | ${tableCell(finding.host)}${finding.endpoint ? `<br>${tableCell(finding.endpoint)}` : ""} | ${finding.wstgId ?? "—"} | ${owaspTitle(finding.owaspTop10)} |`,
     );
   }
   lines.push("");
@@ -521,7 +518,6 @@ function detailedFindingsSection(
     lines.push(
       `| WSTG v${WSTG_VERSION} reference | ${wstg ? `${wstg.id} (${wstg.section}) ${wstg.title}` : finding.wstgId ?? "No WSTG test case linked — link the finding to the case that produced it"} |`,
     );
-    lines.push(`| Status | ${finding.status} |`);
     lines.push("");
 
     lines.push("**Description**", "");

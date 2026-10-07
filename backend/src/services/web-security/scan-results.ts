@@ -114,7 +114,6 @@ export interface RunFindingRow {
   vulnerabilityId: string;
   title: string;
   severity: string;
-  status: string;
   testId?: string;
 }
 
@@ -212,7 +211,6 @@ export function runFindings(
         vulnerabilityId: findingId,
         title: finding?.title ?? findingId,
         severity: finding?.severity ?? "info",
-        status: finding?.status ?? "open",
         testId: testCase.testId,
       });
     }

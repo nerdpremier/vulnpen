@@ -61,7 +61,6 @@ export interface Vulnerability {
   remediation?: string;
   exploited: boolean;
   cve?: string;
-  status: "open" | "confirmed" | "remediated" | "accepted";
   source: string;
   createdAt: Date;
   updatedAt: Date;
@@ -486,7 +485,6 @@ export function engagementStateFromSession(
       remediation: vulnerability.remediation,
       exploited: vulnerability.exploited,
       cve: vulnerability.cve,
-      status: vulnerability.status,
       source: vulnerability.source,
       createdAt: vulnerability.createdAt,
       updatedAt: vulnerability.updatedAt,

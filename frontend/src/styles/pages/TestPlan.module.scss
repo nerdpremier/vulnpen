@@ -715,61 +715,62 @@
   flex-wrap: wrap;
 }
 
-/* ---- Coverage readout ---- */
-/* The dial and the counters on the left, the ten chapters on one radar on the
-   right: "how far along" and "where is it thin" are two shapes, not two
-   paragraphs. */
+/* One overview of outcome proportions; the per-chapter bars below locate gaps. */
 .coverage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1.5rem;
   margin-bottom: 0.9rem;
-  padding: 1.1rem 1.25rem;
-  background: linear-gradient(
-    150deg,
-    var(--moon-surface-2) 0%,
-    var(--moon-surface-1) 100%
-  );
+  padding: 1.15rem 1.25rem;
+  background: linear-gradient(145deg, var(--moon-surface-2), var(--moon-surface-1));
   border: 1px solid var(--moon-line-1);
   border-radius: var(--moon-radius-lg);
   box-shadow: var(--moon-inner-top);
+}
 
-  @include responsive(laptop1) {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
+.outcomeHeading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+
+  h2 {
+    margin: 0.3rem 0 0;
+    font-size: 1.08rem;
+    font-weight: 500;
+    color: var(--moon-text);
   }
 }
 
-.coverageReadout {
+.outcomeTotal {
+  font-size: 0.8rem;
+  color: var(--moon-text-mute);
+  font-variant-numeric: tabular-nums;
+
+  strong { font-size: 1.4rem; font-weight: 500; color: var(--moon-text); }
+}
+
+.outcomeTrack {
   display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  width: 100%;
-  min-width: 0;
-
-  @include responsive(mobile4) {
-    flex-direction: column;
-    align-items: stretch;
-  }
+  height: 24px;
+  overflow: hidden;
+  background: var(--moon-surface-3);
+  border-radius: var(--moon-radius-pill);
 }
 
-.coverageStrip {
-  flex: 1 1 auto;
+.outcomeSegment {
   min-width: 0;
+  background: var(--seg, var(--moon-surface-3));
+  border-right: 2px solid var(--moon-surface-1);
+
+  &:last-child { border-right: 0; }
 }
 
-.coverageRadar {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
-}
+.segUnstarted { --seg: var(--moon-line-3); }
 
-.coverageRadarLabel {
-  @include eyebrow;
-  font-size: 0.56rem;
+.outcomeHint {
+  margin: 0.75rem 0 0;
+  color: var(--moon-text-mute);
+  font-size: 0.72rem;
 }
 
 /* The status filter: it sits between the coverage card and the plan card, so
@@ -806,6 +807,22 @@
     border-color: var(--moon-line-3);
     background: var(--moon-surface-2);
   }
+}
+
+.chipSwatch {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--swatch);
+
+  &[data-status="passed"] { --swatch: var(--moon-success); }
+  &[data-status="failed"] { --swatch: var(--moon-danger); }
+  &[data-status="blocked"] { --swatch: var(--moon-high); }
+  &[data-status="in_progress"] { --swatch: var(--moon-info); }
+  &[data-status="skipped"] { --swatch: var(--moon-text-faint); }
+  &[data-status="not_started"] { --swatch: var(--moon-line-3); }
 }
 
 .chipActive {

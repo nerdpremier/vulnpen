@@ -125,12 +125,12 @@ test("runFindings lists each finding once, with the case that carries it", () =>
     ] as any,
   );
   const findings = runFindings(cases, [
-    { vulnerabilityId: "v1", title: "Info leak", severity: "medium", status: "open" },
+    { vulnerabilityId: "v1", title: "Info leak", severity: "medium" },
   ] as any);
 
   assert.deepEqual(findings, [
-    { vulnerabilityId: "v1", title: "Info leak", severity: "medium", status: "open", testId: "WSTG-INFO-01" },
-    { vulnerabilityId: "v2", title: "v2", severity: "info", status: "open", testId: "WSTG-INFO-01" },
+    { vulnerabilityId: "v1", title: "Info leak", severity: "medium", testId: "WSTG-INFO-01" },
+    { vulnerabilityId: "v2", title: "v2", severity: "info", testId: "WSTG-INFO-01" },
   ]);
 });
 

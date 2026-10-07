@@ -11,30 +11,23 @@ import {
   PlayCircleOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import {
-  FiActivity,
-  FiAlertTriangle,
-  FiCheckCircle,
-  FiClock,
-} from "react-icons/fi";
 import { getScans, getTestPlan } from "@/services/websecurity.service";
 import { getSessionInfo, getVulnerabilities } from "@/services/agent.service";
 import {
-  BarList,
   CaseMatrix,
   PageHeader,
   PageShell,
   PageState,
   ProgressRing,
-  RadarChart,
-  SeverityBar,
-  StatStrip,
-  StatTile,
-  TimelineChart,
 } from "@/components/common/ui";
 import ScanLauncherModal from "@/components/pages/session/scans/ScanLauncherModal";
 import { ScanStatusPill } from "@/components/pages/session/scans/ScanStatus";
-import { isScanLive, scanActivity, scanName, scanProgress, scanScopeLabel, scanTimeline } from "@/utils/scans.mjs";
+import {
+  isScanLive,
+  scanName,
+  scanProgress,
+  scanScopeLabel,
+} from "@/utils/scans.mjs";
 import { findingsBySeverity } from "@/utils/findings.mjs";
 import styles from "@/styles/pages/Overview.module.scss";
 
@@ -78,12 +71,7 @@ function EngagementChips({ target, scope, agentState }) {
   );
 }
 
-/** Days of scan history drawn as the spark on the Scans tile. */
-const SPARK_DAYS = 14;
-/** Runs drawn on the activity timeline - the recent shape, not the archive. */
-const TIMELINE_RUNS = 8;
-
-/** "12 Mar, 14:05" - short enough to sit under a chart as an axis caption. */
+/** "6 Oct, 11:36" - compact stamp for a scan row. */
 const shortStamp = (value) =>
   new Date(value).toLocaleString(undefined, {
     month: "short",
@@ -129,9 +117,14 @@ export default function EngagementOverviewPage({ sessionId }) {
     [vulnQuery.data],
   );
 
-  const liveScan = scans.find(isScanLive) ?? null;
-  const latestScan = liveScan ?? scans[0] ?? null;
-  const topFindings = findings.ranked.slice(0, 5);
+  /* The card lists only what a reader must act on first: critical and high.
+     The full inventory lives one click away in the findings table. */
+  const topFindings = findings.ranked.filter(
+    (finding) => ["critical", "high"].includes(String(finding.severity).toLowerCase()),
+  );
+  const liveScan = scans.find(isScanLive);
+  const featuredScan = liveScan ?? scans[0];
+  const remaining = coverage ? coverage.notStarted + coverage.inProgress : 0;
 
   /* The plan's cases, grouped the way the coverage rows are ordered, so the
      grid and the plan page count the categories in the same sequence. */
@@ -158,50 +151,6 @@ export default function EngagementOverviewPage({ sessionId }) {
         cells: byCategory.get(key),
       }));
   }, [plan, coverage]);
-
-  /* The same ten chapters the plan orders by, on one shape: the outline is the
-     answer to "where is this engagement thin?", which ten separate rows ask the
-     reader to reconstruct.
-     The axis label is the four-letter chapter code, not the full name: ten
-     "Information Gathering"-length labels do not fit around a 244px dial, and
-     the case grid below carries the same codes. */
-  const coverageAxes = useMemo(
-    () =>
-      (coverage?.byCategory ?? []).map((row) => ({
-        key: row.key,
-        label: row.key,
-        value: row.executed,
-        max: row.total,
-      })),
-    [coverage],
-  );
-
-  /* Findings per host: the map of where this target is actually hurt. */
-  const hostBars = useMemo(() => {
-    const counts = new Map();
-    for (const finding of findings.ranked) {
-      const host = finding.host || finding.endpoint || "unattributed";
-      counts.set(host, (counts.get(host) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([host, value]) => ({ key: host, label: host, value, tone: "accent" }));
-  }, [findings]);
-
-  /* Scans per day for the last fortnight - a trend line needs no sentence. */
-  const scanSpark = useMemo(
-    () => scanActivity(scans, { days: SPARK_DAYS }),
-    [scans],
-  );
-
-  /* When the recent runs happened and how long each took: gaps, duration and
-     which run died are all readable without opening a single scan. */
-  const timeline = useMemo(
-    () => scanTimeline(scans, { limit: TIMELINE_RUNS, planCases: plan?.cases ?? [] }),
-    [scans, plan],
-  );
-  const scanTimelineRows = timeline.rows;
 
   const header = (
     <PageHeader
@@ -338,50 +287,8 @@ export default function EngagementOverviewPage({ sessionId }) {
     );
   }
 
-  const remaining = coverage.notStarted + coverage.inProgress;
-  // The tile says which severity actually leads the engagement, not just
-  // whether anything reached critical.
-  const leadingLevel = findings.levels.find((level) => level.count > 0) ?? null;
-
   return shell(
     <>
-      <StatStrip className={styles.strip}>
-        <StatTile
-          label="Cases executed"
-          icon={<FiCheckCircle />}
-          value={coverage.executed}
-          total={coverage.total}
-          /* No "% of the plan" hint: the coverage dial two lines below prints
-             exactly that percentage. */
-        />
-        <StatTile
-          label="Findings"
-          icon={<FiAlertTriangle />}
-          value={findings.total}
-          tone={findings.levels[0]?.count ? "danger" : "neutral"}
-          hint={
-            leadingLevel
-              ? `${leadingLevel.count} ${leadingLevel.label.toLowerCase()}`
-              : "nothing recorded"
-          }
-        />
-        <StatTile
-          label="Scans"
-          icon={<FiActivity />}
-          value={scans.length}
-          spark={scans.length ? scanSpark : undefined}
-          hint={liveScan ? "one running now" : "last 14 days"}
-        />
-        <StatTile
-          label="Not executed"
-          icon={<FiClock />}
-          value={remaining}
-          total={coverage.total}
-          tone={remaining > 0 ? "warning" : "success"}
-          hint={remaining > 0 ? "work left in the plan" : "plan fully settled"}
-        />
-      </StatStrip>
-
       <div className={styles.grid}>
         <section className={styles.card}>
           <header className={styles.cardHead}>
@@ -395,17 +302,21 @@ export default function EngagementOverviewPage({ sessionId }) {
             <ProgressRing
               value={coverage.executed}
               total={coverage.total}
-              caption="CASES"
-              showPercent
+              caption="executed"
             />
-            {/* The plan's ten WSTG chapters as one outline, then one square per
-                case below it: the shape says where the engagement is thin, the
-                squares say which cases are missing. */}
-            <RadarChart
-              axes={coverageAxes}
-              size={244}
-              label="Cases executed per WSTG category"
-            />
+            <div className={styles.coverageCallout}>
+              <span className={styles.calloutNumber}>{remaining}</span>
+              <span className={styles.calloutLabel}>cases still need a result</span>
+              {remaining > 0 && (
+                <button
+                  type="button"
+                  className={styles.inlineAction}
+                  onClick={() => setLauncherOpen(true)}
+                >
+                  Scan remaining cases <ArrowRightOutlined />
+                </button>
+              )}
+            </div>
           </div>
 
           <CaseMatrix
@@ -433,25 +344,22 @@ export default function EngagementOverviewPage({ sessionId }) {
             </Link>
           </header>
 
-          <SeverityBar levels={findings.levels} />
-
-          {/* Where the findings actually are. The severity bar says how bad;
-              this says where to look first. */}
-          {hostBars.length > 1 && (
-            <div className={styles.hostBars}>
-              <span className={styles.subLabel}>By host</span>
-              <BarList items={hostBars} />
-            </div>
-          )}
+          <div className={styles.priorityReadout}>
+            <span className={styles.priorityNumber}>{topFindings.length}</span>
+            <span>
+              critical or high · {findings.total} findings in all
+            </span>
+          </div>
 
           {topFindings.length === 0 ? (
             <p className={styles.factMuted}>
-              Nothing recorded yet. Findings land here as scans and the agent
-              report them.
+              {findings.total > 0
+                ? `${findings.total} lower-priority finding${findings.total === 1 ? "" : "s"}; see the full risk breakdown.`
+                : "No findings recorded yet. Findings appear when scans or the agent report them."}
             </p>
           ) : (
             <ul className={styles.findingList}>
-              {topFindings.map((finding) => (
+              {topFindings.slice(0, 3).map((finding) => (
                 <li key={finding.vulnerabilityId} className={styles.findingItem}>
                   <span
                     className={`${styles.severityDot} ${styles[`dot_${String(finding.severity).toLowerCase()}`] ?? ""}`}
@@ -469,83 +377,51 @@ export default function EngagementOverviewPage({ sessionId }) {
         </section>
       </div>
 
-      {/* The scan of the moment gets the whole width: squeezed into half a page
-          its status, identity, progress and action crowded each other. */}
       <section className={styles.card}>
         <header className={styles.cardHead}>
-          <h2 className={styles.cardTitle}>
-            {liveScan ? "Running now" : "Latest scan"}
-          </h2>
+          <h2 className={styles.cardTitle}>Scans</h2>
           <Link className={styles.cardLink} href={`/session/${sessionId}/scans`}>
             Scan history <ArrowRightOutlined />
           </Link>
         </header>
 
-        {!latestScan ? (
+        {!featuredScan ? (
           <p className={styles.factMuted}>
-            Never scanned. A scan runs the cases you pick against{" "}
-            {plan?.target || "the target"} without further input.
+            No scans yet. Launch one to start testing {plan?.target || "the target"}.
           </p>
         ) : (
-          <div className={styles.scanRow}>
-            <ScanStatusPill status={latestScan.status} />
-            <span className={styles.scanIdentity}>
+          <div className={styles.scanFeature}>
+            <div className={styles.scanFeatureMain}>
+              <span className={styles.scanFeatureLabel}>
+                {featuredScan.status === "queued"
+                  ? "Waiting in queue"
+                  : liveScan ? "Running now" : "Most recent run"}
+              </span>
               <Link
                 className={styles.scanName}
-                href={`/session/${sessionId}/scans/${latestScan.runId}`}
+                href={`/session/${sessionId}/scans/${featuredScan.runId}`}
               >
-                {scanName(latestScan, plan?.cases ?? [])}
+                {scanName(featuredScan, plan?.cases ?? [])}
               </Link>
               <span className={styles.scanMeta}>
-                {scanScopeLabel(latestScan, plan?.cases ?? [])}
-                {latestScan.startedAt
-                  ? ` · started ${new Date(latestScan.startedAt).toLocaleString()}`
-                  : ""}
+                {scanScopeLabel(featuredScan, plan?.cases ?? [])}
+                {featuredScan.startedAt ? ` · ${shortStamp(featuredScan.startedAt)}` : ""}
               </span>
-            </span>
-            {isScanLive(latestScan) && (
+            </div>
+            <ScanStatusPill status={featuredScan.status} />
+            {featuredScan.status === "running" && (
               <span className={styles.scanProgress}>
-                {scanProgress(
-                  latestScan.testIds,
-                  plan?.cases ?? [],
-                  { since: latestScan.startedAt },
-                ).percent}
-                %
+                {scanProgress(featuredScan.testIds, plan?.cases ?? [], {
+                  since: featuredScan.startedAt,
+                }).percent}% tested
               </span>
             )}
             <Link
               className={styles.scanOpen}
-              href={`/session/${sessionId}/scans/${latestScan.runId}`}
+              href={`/session/${sessionId}/scans/${featuredScan.runId}`}
             >
-              {isScanLive(latestScan) ? "Watch" : "Open"} <ArrowRightOutlined />
+              {featuredScan.status === "running" ? "Watch run" : "View run"} <ArrowRightOutlined />
             </Link>
-          </div>
-        )}
-
-        {remaining > 0 && (
-          <p className={styles.nextStep}>
-            <strong>{remaining}</strong> case{remaining === 1 ? "" : "s"} still
-            need a result.{" "}
-            <button
-              type="button"
-              className={styles.inlineAction}
-              onClick={() => setLauncherOpen(true)}
-            >
-              Scan them
-            </button>
-          </p>
-        )}
-
-        {/* The recent runs on one axis: gaps, duration and which one died are
-            all visible without opening a single scan. */}
-        {scanTimelineRows.length > 1 && (
-          <div className={styles.activity}>
-            <span className={styles.subLabel}>Recent runs</span>
-            <TimelineChart
-              items={scanTimelineRows}
-              startLabel={timeline.start ? shortStamp(timeline.start) : undefined}
-              endLabel={timeline.end ? shortStamp(timeline.end) : undefined}
-            />
           </div>
         )}
       </section>

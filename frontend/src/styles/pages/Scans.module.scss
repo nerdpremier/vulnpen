@@ -73,6 +73,29 @@
   min-width: 9.5rem;
 }
 
+/* Duration and gaps across recent runs — the history below owns exact records. */
+.timelinePanel {
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--moon-line-1);
+  background: var(--moon-surface-2);
+
+  @include responsive(tablet3) {
+    padding: 0.8rem 0.85rem;
+  }
+}
+
+.timelineHeading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  color: var(--moon-text-mute);
+  font-size: 0.68rem;
+
+  span:first-child { @include eyebrow; font-size: 0.58rem; }
+}
+
 /* ---- Why the runs stopped, counted once ---------------------------------- */
 .notice {
   display: flex;

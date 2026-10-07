@@ -216,7 +216,6 @@ export interface SessionVulnerabilityDoc {
   impact?: string;
   remediation?: string;
   exploited: boolean;
-  status: "open" | "confirmed" | "remediated" | "accepted";
   source: string;
   /** OWASP WSTG v4.2 test case that produced this finding, e.g. "WSTG-INPV-05". */
   wstgId?: string;
@@ -516,11 +515,6 @@ const SessionVulnerabilitySchema = new Schema(
     impact: { type: String },
     remediation: { type: String },
     exploited: { type: Boolean, default: false },
-    status: {
-      type: String,
-      enum: ["open", "confirmed", "remediated", "accepted"],
-      default: "confirmed",
-    },
     source: { type: String, default: "agent" },
     wstgId: { type: String },
     wstgTitle: { type: String },

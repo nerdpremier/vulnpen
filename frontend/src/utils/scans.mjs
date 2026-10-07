@@ -163,7 +163,8 @@ export function scanScopeLabel(scan, planCases) {
     const code = testCase.categoryCode || "OTHER";
     byCategory.set(code, (byCategory.get(code) ?? 0) + 1);
   }
-  if (!known) return `${ids.length} case${ids.length === 1 ? "" : "s"}`;
+  if (!known)
+    return `${ids.length} case${ids.length === 1 ? "" : "s"}`;
   return [...byCategory.entries()]
     .map(([code, count]) => `${code} ×${count}`)
     .join(" · ");

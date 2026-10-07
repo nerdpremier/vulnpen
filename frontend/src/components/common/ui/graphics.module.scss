@@ -179,14 +179,14 @@
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 6px;
+  gap: 3px;
   margin-top: 7px;
 }
 
 .columnLabel {
   @include eyebrow;
-  font-size: 0.58rem;
-  letter-spacing: 0.04em;
+  font-size: 0.56rem;
+  letter-spacing: 0.03em;
   text-align: center;
   @include truncate(1);
 }

@@ -37,13 +37,7 @@ import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import PlanSetupModal from "./PlanSetupModal";
 import ScanLauncherModal from "../scans/ScanLauncherModal";
 import styles from "@/styles/pages/TestPlan.module.scss";
-import {
-  PageState,
-  ProgressRing,
-  RadarChart,
-  StatStrip,
-  StatTile,
-} from "@/components/common/ui";
+import { PageState } from "@/components/common/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { summarise, groupCases, matchesFilters, caseCarriesWork, STATUS_OPTIONS } from "@/utils/testPlan.mjs";
@@ -277,22 +271,6 @@ export default function TestPlanPage({ sessionId }) {
       (filter) => ({ ...filter, count: counts[filter.value] }),
     );
   }, [coverage]);
-
-  /**
-   * The ten WSTG chapters as radar axes: executed cases against the cases the
-   * chapter holds. `byCategory` already arrives in WSTG order, so the shape
-   * reads the same way the catalogue does.
-   */
-  const categoryAxes = useMemo(
-    () =>
-      (coverage?.byCategory ?? []).map((row) => ({
-        key: row.key,
-        label: row.key,
-        value: row.executed,
-        max: row.total,
-      })),
-    [coverage],
-  );
 
   /**
    * Open when the user opened it; open while a filter is on, so matches are visible; otherwise
@@ -554,50 +532,38 @@ export default function TestPlanPage({ sessionId }) {
 
       {plan && coverage && (
         <>
-          {/* The readout: how much of the plan is settled (dial + counters) and
-              where it is thin (the ten chapters on one radar). The sentence
-              that used to spell the four counters out is gone; the chips below
-              are the filter, so they stay. */}
-          <section className={styles.coverage} aria-label="Plan coverage">
-            <div className={styles.coverageReadout}>
-              <ProgressRing
-                value={coverage.executed}
-                total={coverage.total}
-                tone={coverage.failed ? "warning" : "accent"}
-                caption="Executed"
-                size={116}
-                thickness={7}
-                showPercent
-              />
-              <StatStrip className={styles.coverageStrip}>
-                <StatTile
-                  label="Executed"
-                  value={coverage.executed}
-                  total={coverage.total}
-                  hint={`${coverage.percentExecuted}% of the plan`}
-                />
-                <StatTile label="Passed" value={coverage.passed} tone="success" />
-                <StatTile
-                  label="Failed"
-                  value={coverage.failed}
-                  tone={coverage.failed ? "danger" : "neutral"}
-                />
-                <StatTile
-                  label="Blocked"
-                  value={coverage.blocked}
-                  tone={coverage.blocked ? "warning" : "neutral"}
-                />
-              </StatStrip>
+          {/* The proportions live here; the chapters below show where work is thin. */}
+          <section className={styles.coverage} aria-label="Plan outcomes">
+            <div className={styles.outcomeHeading}>
+              <div>
+                <span className={styles.eyebrow}>PLAN OUTCOMES</span>
+                <h2>Every case, one result</h2>
+              </div>
+              <span className={styles.outcomeTotal}>
+                <strong>{coverage.executed}</strong> / {coverage.total} executed
+              </span>
             </div>
-
-            <div className={styles.coverageRadar}>
-              <span className={styles.coverageRadarLabel}>Coverage by chapter</span>
-              <RadarChart
-                axes={categoryAxes}
-                size={286}
-                label="Cases executed per WSTG chapter"
-              />
+            <div
+              className={styles.outcomeTrack}
+              role="img"
+              aria-label={CATEGORY_SEGMENTS.map((segment) =>
+                `${coverage[segment.key] ?? 0} ${SEGMENT_LABEL[segment.key]}`,
+              ).join(", ")}
+            >
+              {CATEGORY_SEGMENTS.filter((segment) => coverage[segment.key] > 0).map(
+                (segment) => (
+                  <span
+                    key={segment.key}
+                    className={`${styles.outcomeSegment} ${styles[segment.tone || "segUnstarted"]}`}
+                    style={{ flexGrow: coverage[segment.key] }}
+                    title={`${coverage[segment.key]} ${SEGMENT_LABEL[segment.key]}`}
+                  />
+                ),
+              )}
             </div>
+            <p className={styles.outcomeHint}>
+              Select a result below to inspect its cases; open a chapter for the detail.
+            </p>
           </section>
 
           <div className={styles.chips}>
@@ -612,6 +578,9 @@ export default function TestPlanPage({ sessionId }) {
                   handleStatusFilter(chip.value === statusFilter ? "all" : chip.value)
                 }
               >
+                {chip.value !== "all" && (
+                  <span className={styles.chipSwatch} data-status={chip.value} aria-hidden="true" />
+                )}
                 {chip.label}
                 <b>{chip.count}</b>
               </button>

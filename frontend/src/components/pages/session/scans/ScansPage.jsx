@@ -14,7 +14,7 @@ import {
 } from "@ant-design/icons";
 import { deleteScan, getScans, getTestPlan, stopScan } from "@/services/websecurity.service";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
-import { PageHeader, PageShell, PageState } from "@/components/common/ui";
+import { PageHeader, PageShell, PageState, TimelineChart } from "@/components/common/ui";
 import { apiErrorMessage } from "@/utils/apiError";
 import {
   countScanCases,
@@ -26,6 +26,7 @@ import {
   scanScopeLabel,
   scanStartedAt,
   scanStatusTone,
+  scanTimeline,
 } from "@/utils/scans.mjs";
 import { SCAN_STATUS_LABEL, ScanProgressBar } from "./ScanStatus";
 import ScanLauncherModal from "./ScanLauncherModal";
@@ -147,6 +148,10 @@ export default function ScansPage({ sessionId }) {
   const plan = planQuery.data?.plan ?? null;
   const planCases = useMemo(() => plan?.cases ?? [], [plan]);
   const scans = useMemo(() => scansQuery.data?.runs ?? [], [scansQuery.data]);
+  const timeline = useMemo(
+    () => scanTimeline(scans, { limit: 8, planCases }),
+    [scans, planCases],
+  );
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [needle, setNeedle] = useState("");
@@ -560,6 +565,23 @@ export default function ScansPage({ sessionId }) {
           </>
         )}
       </div>
+
+      {timeline.rows.length > 1 && (
+        <div className={styles.timelinePanel} aria-label="Recent scan activity">
+          <div className={styles.timelineHeading}>
+            <span>RECENT RUNS</span>
+            <span>Last {timeline.rows.length} of {scans.length} · all statuses</span>
+          </div>
+          <TimelineChart
+            items={timeline.rows.map((row) => ({
+              ...row,
+              description: `${row.title} · started ${new Date(row.start).toLocaleString()} · span ${formatDuration(row.end - row.start)}`,
+            }))}
+            startLabel={new Date(timeline.start).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            endLabel={new Date(timeline.end).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          />
+        </div>
+      )}
 
       {/* Same sentence, counted once. The row keeps the fact that it stopped;
           this says why, and how many runs it happened to. */}

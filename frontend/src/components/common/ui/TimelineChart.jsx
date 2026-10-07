@@ -42,6 +42,7 @@ const TimelineChart = ({
             key={row.key ?? `${row.label}-${index}`}
             className={styles.timelineRow}
             role="listitem"
+            aria-label={row.description ?? row.title ?? row.label}
           >
             <span className={styles.timelineLabel}>{row.label}</span>
             <span className={styles.timelineTrack}>

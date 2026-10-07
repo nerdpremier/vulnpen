@@ -6,19 +6,11 @@ import { useQuery } from "react-query";
 import { Input, Select } from "antd";
 import { SearchOutlined, RightOutlined } from "@ant-design/icons";
 import Link from "next/link";
-import {
-  FiAlertOctagon,
-  FiAlertTriangle,
-  FiTarget,
-  FiHelpCircle,
-  FiCrosshair,
-} from "react-icons/fi";
+import { FiAlertTriangle } from "react-icons/fi";
 import { getVulnerabilities } from "@/services/agent.service";
-import { getTestPlan } from "@/services/websecurity.service";
 import styles from "@/styles/pages/Vulnerabilities.module.scss";
 import {
   AnimatedContent,
-  BarList,
   ColumnChart,
   DonutChart,
   EmptyState,
@@ -26,24 +18,21 @@ import {
   PageShell,
   PageState,
   SeverityBar,
-  Sparkline,
   SpotlightCard,
-  StatStrip,
-  StatTile,
 } from "@/components/common/ui";
 import {
-  SEVERITY_LEVELS,
   compareBySeverity,
   findingsBySeverity,
-  severityRank,
 } from "@/utils/findings.mjs";
 
-/** CVSS v3.0 base-score bands, the same cut points the severity ramp uses. */
+/** CVSS v3.0 base-score bands, the same cut points the severity ramp uses.
+    The axis reads the full band name; the numeric span lives in the tooltip. */
 const CVSS_BANDS = [
-  { key: "low", label: "0.1–3.9", tone: "low", min: 0.1, max: 4 },
-  { key: "medium", label: "4.0–6.9", tone: "medium", min: 4, max: 7 },
-  { key: "high", label: "7.0–8.9", tone: "high", min: 7, max: 9 },
-  { key: "critical", label: "9.0–10", tone: "critical", min: 9, max: 10.1 },
+  { key: "none", axis: "0.0", label: "0.0 (None)", tone: "mute", min: 0, max: 0.1 },
+  { key: "low", axis: "low", label: "0.1–3.9", tone: "low", min: 0.1, max: 4 },
+  { key: "medium", axis: "medium", label: "4.0–6.9", tone: "medium", min: 4, max: 7 },
+  { key: "high", axis: "high", label: "7.0–8.9", tone: "high", min: 7, max: 9 },
+  { key: "critical", axis: "critical", label: "9.0–10", tone: "critical", min: 9, max: 10.1 },
 ];
 
 /** The score the system computed, or null when the finding carries none. */
@@ -55,12 +44,6 @@ function cvssScoreOf(item) {
 function SeverityBadge({ severity }) {
   const value = severity || "info";
   return <span className={`${styles.severity} ${styles[value]}`}>{value}</span>;
-}
-
-function formatDate(value) {
-  if (!value) return "n/a";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "n/a" : date.toLocaleString();
 }
 
 export default function VulnerabilitiesPage({ sessionId }) {
@@ -79,34 +62,12 @@ export default function VulnerabilitiesPage({ sessionId }) {
     [data?.vulnerabilities],
   );
 
-  // Reuses the query the session rail already keeps warm: it carries the WSTG
-  // catalogue, so a finding can name the category it came from.
-  const { data: planData } = useQuery(
-    ["test-plan", sessionId],
-    () => getTestPlan(sessionId),
-    { enabled: !!sessionId, retry: false },
-  );
-  const categoryNames = useMemo(() => {
-    const map = new Map();
-    for (const category of planData?.catalog?.categories ?? []) {
-      map.set(category.code, category.name);
-    }
-    return map;
-  }, [planData]);
-
-  /** "ATHN" -> "Authentication Testing" when the catalogue is available. */
-  const categoryLabel = (code) => (code ? categoryNames.get(code) ?? code : "");
-
-  const testPlanHref = (testId) =>
-    `/session/${sessionId}/test-plan?case=${encodeURIComponent(testId)}`;
-
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return vulnerabilities
       .filter((item) => severity === "all" || item.severity === severity)
       .filter((item) => {
         if (owaspFilter === "all") return true;
-        if (owaspFilter === "unmapped") return !item.owaspTop10;
         return item.owaspTop10 === owaspFilter;
       })
       .filter((item) => {
@@ -135,15 +96,6 @@ export default function VulnerabilitiesPage({ sessionId }) {
       });
   }, [vulnerabilities, search, severity, owaspFilter]);
 
-  const counts = useMemo(
-    () => ({
-      high: vulnerabilities.filter((item) => item.severity === "high").length,
-      exploited: vulnerabilities.filter((item) => item.exploited).length,
-      unmapped: vulnerabilities.filter((item) => !item.owaspTop10).length,
-    }),
-    [vulnerabilities],
-  );
-
   /* ---- The summary band: shapes over the same list the table shows --------
      These read the whole engagement, not the filtered view: a summary that
      redraws itself every keystroke stops being a reference. */
@@ -152,6 +104,8 @@ export default function VulnerabilitiesPage({ sessionId }) {
     [vulnerabilities],
   );
 
+  /* Scored findings per band only. Unrated findings stay off the chart — they
+     carry no score to bin, and one grey "none" tower dwarfed real bands. */
   const scoreBands = useMemo(() => {
     const scored = vulnerabilities.filter((item) => cvssScoreOf(item) != null);
     const bands = CVSS_BANDS.map((band) => {
@@ -161,23 +115,13 @@ export default function VulnerabilitiesPage({ sessionId }) {
       }).length;
       return {
         key: band.key,
-        label: band.label,
+        label: band.axis,
         tone: band.tone,
         value,
         title: `CVSS ${band.label}: ${value} finding${value === 1 ? "" : "s"}`,
       };
     });
-    const unrated = vulnerabilities.length - scored.length;
-    return [
-      ...bands,
-      {
-        key: "unrated",
-        label: "not rated",
-        tone: "mute",
-        value: unrated,
-        title: `${unrated} finding${unrated === 1 ? "" : "s"} with no CVSS base score`,
-      },
-    ];
+    return bands;
   }, [vulnerabilities]);
 
   const exploitation = useMemo(
@@ -198,62 +142,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
     [vulnerabilities],
   );
 
-  /* When the engagement found things, as a series. The span is bucketed into at
-     most 14 equal slots instead of a fixed 14-day window, so an engagement that
-     ran over two months still shows its own shape rather than one spike and a
-     row of zeroes. */
-  const discovery = useMemo(() => {
-    const day = 86_400_000;
-    const stamps = vulnerabilities
-      .map((item) => new Date(item.createdAt).getTime())
-      .filter((value) => Number.isFinite(value));
-    if (stamps.length < 2) return null;
-
-    const first = Math.min(...stamps);
-    const last = Math.max(...stamps);
-    const buckets = Math.max(2, Math.min(14, Math.round((last - first) / day) + 1));
-    const width = (last - first + 1) / buckets;
-    const series = new Array(buckets).fill(0);
-    for (const stamp of stamps) {
-      const index = Math.min(buckets - 1, Math.floor((stamp - first) / width));
-      series[index] += 1;
-    }
-
-    const spanDays = Math.round((last - first) / day) + 1;
-    return {
-      series,
-      scope: spanDays <= 1 ? "one day" : `${spanDays} days`,
-    };
-  }, [vulnerabilities]);
-
-  /* Ranked by volume, tinted by the worst severity recorded on that asset, so
-     "four findings here" and "four low findings here" are different rows. */
-  const busiestAssets = useMemo(() => {
-    const byHost = new Map();
-    for (const item of vulnerabilities) {
-      const key = item.host || "unknown";
-      const entry =
-        byHost.get(key) ?? { key, label: key, value: 0, worst: SEVERITY_LEVELS.length };
-      entry.value += 1;
-      entry.worst = Math.min(entry.worst, severityRank(item.severity));
-      byHost.set(key, entry);
-    }
-    return [...byHost.values()]
-      .sort((a, b) => b.value - a.value || a.worst - b.worst)
-      .slice(0, 5)
-      .map((entry) => {
-        const worst = SEVERITY_LEVELS[entry.worst];
-        return {
-          key: entry.key,
-          label: entry.label,
-          value: entry.value,
-          tone: worst?.key ?? "mute",
-          hint: `${entry.label}: ${entry.value} finding${
-            entry.value === 1 ? "" : "s"
-          } · worst ${worst?.label.toLowerCase() ?? "unknown"}`,
-        };
-      });
-  }, [vulnerabilities]);
+  const unratedCount = vulnerabilities.filter((item) => cvssScoreOf(item) == null).length;
 
   const owaspOptions = useMemo(() => {
     const seen = new Map();
@@ -267,7 +156,6 @@ export default function VulnerabilitiesPage({ sessionId }) {
       ...Array.from(seen.entries())
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([value, label]) => ({ value, label: `${value} ${label}`.trim() })),
-      { value: "unmapped", label: "Unmapped" },
     ];
   }, [vulnerabilities]);
 
@@ -284,108 +172,53 @@ export default function VulnerabilitiesPage({ sessionId }) {
       <PageHeader
         eyebrow="Engagement"
         title="Vulnerabilities"
-        description="Every finding in this engagement, highest severity first."
       />
 
-      <StatStrip className={styles.metrics} aria-label="Finding summary">
-        <StatTile
-          label="Total"
-          value={vulnerabilities.length}
-          icon={<FiCrosshair />}
-          active={severity === "all"}
-          onClick={() => setSeverity("all")}
-        />
-        <StatTile
-          label="High"
-          value={counts.high}
-          tone="warning"
-          icon={<FiAlertOctagon />}
-          active={severity === "high"}
-          onClick={() => setSeverity("high")}
-        />
-        <StatTile
-          label="Exploited"
-          value={counts.exploited}
-          tone="success"
-          icon={<FiTarget />}
-          hint="Confirmed by the agent"
-        />
-        <StatTile
-          label="Unmapped OWASP"
-          value={counts.unmapped}
-          tone={counts.unmapped ? "warning" : "neutral"}
-          icon={<FiHelpCircle />}
-          active={owaspFilter === "unmapped"}
-          onClick={() =>
-            setOwaspFilter(owaspFilter === "unmapped" ? "all" : "unmapped")
-          }
-        />
-      </StatStrip>
-
-      {/* Five shapes over the same list the table shows: the mix, where it sits
-          on the CVSS scale, whether it was proven, when it arrived and where it
-          lives. Nothing appears until there is something to draw. */}
+      {/* Three complementary views: severity, rated CVSS scores and proof of
+          exploitation. The detailed finding inventory lives below. */}
       {vulnerabilities.length > 0 && (
         <section className={styles.summaryBand} aria-label="Finding overview">
           <AnimatedContent delay={0} className={styles.summaryCell}>
             <SpotlightCard glare className={styles.summaryCard}>
               <h2 className={styles.summaryTitle}>Severity mix</h2>
-              <SeverityBar levels={severityLevels} />
+              <div className={styles.summaryBody}>
+                <SeverityBar levels={severityLevels} />
+              </div>
             </SpotlightCard>
           </AnimatedContent>
 
           <AnimatedContent delay={70} className={styles.summaryCell}>
             <SpotlightCard glare className={styles.summaryCard}>
               <h2 className={styles.summaryTitle}>CVSS v3.0 base score</h2>
-              <ColumnChart
-                data={scoreBands}
-                height={78}
-                label="Findings per CVSS v3.0 base score band"
-              />
+              <div className={styles.summaryBody}>
+                <ColumnChart
+                  data={scoreBands}
+                  height={104}
+                  label="Rated findings per CVSS v3.0 base score band"
+                />
+                {unratedCount > 0 && (
+                  <span className={styles.summaryFootnote}>
+                    {unratedCount} not rated · excluded from score bands
+                  </span>
+                )}
+              </div>
             </SpotlightCard>
           </AnimatedContent>
 
           <AnimatedContent delay={140} className={styles.summaryCell}>
             <SpotlightCard glare className={styles.summaryCard}>
               <h2 className={styles.summaryTitle}>Exploitation</h2>
-              <DonutChart
-                segments={exploitation}
-                size={112}
-                thickness={13}
-                centerValue={vulnerabilities.length}
-                centerLabel="findings"
-                legend="inline"
-              />
-            </SpotlightCard>
-          </AnimatedContent>
-
-          <AnimatedContent delay={210} className={styles.summaryCell}>
-            <SpotlightCard glare className={styles.summaryCard}>
-              <h2 className={styles.summaryTitle}>
-                Discovery
-                {discovery && (
-                  <span className={styles.summaryScope}>{discovery.scope}</span>
-                )}
-              </h2>
-              {discovery ? (
-                <Sparkline
-                  values={discovery.series}
-                  tone="accent"
-                  height={62}
-                  label={`Findings discovered over ${discovery.scope}`}
+              <div className={styles.summaryBody}>
+                <DonutChart
+                  segments={exploitation}
+                  size={118}
+                  thickness={14}
+                  centerValue={vulnerabilities.length}
+                  centerLabel="findings"
+                  legend="inline"
+                  className={styles.donutCentered}
                 />
-              ) : (
-                <p className={styles.summaryEmpty}>
-                  Not enough dated findings to plot a trend yet.
-                </p>
-              )}
-            </SpotlightCard>
-          </AnimatedContent>
-
-          <AnimatedContent delay={280} className={styles.summaryCell}>
-            <SpotlightCard glare className={styles.summaryCard}>
-              <h2 className={styles.summaryTitle}>Busiest assets</h2>
-              <BarList items={busiestAssets} />
+              </div>
             </SpotlightCard>
           </AnimatedContent>
         </section>
@@ -395,7 +228,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
         <div className={styles.toolbar}>
           <Input
             prefix={<SearchOutlined />}
-            placeholder="Search title, asset, CWE or CVE"
+            placeholder="Search findings"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             allowClear
@@ -419,14 +252,10 @@ export default function VulnerabilitiesPage({ sessionId }) {
           <Select
             value={owaspFilter}
             onChange={setOwaspFilter}
-            className={styles.filter}
+            className={styles.filterWide}
             aria-label="Filter by OWASP category"
             options={owaspOptions}
           />
-          <span className={styles.toolbarSpacer} />
-          <span className={styles.resultCount}>
-            {filtered.length} shown
-          </span>
           {hasFilters && (
             <button
               type="button"
@@ -479,13 +308,9 @@ export default function VulnerabilitiesPage({ sessionId }) {
                 <tr>
                   <th scope="col">Severity</th>
                   <th scope="col">Finding</th>
-                  <th scope="col">Affected asset</th>
                   <th scope="col">CVSS v3.0</th>
-                  <th scope="col">Classification</th>
-                  <th scope="col">Test case</th>
+                  <th scope="col">Exploitation</th>
                   <th scope="col">OWASP Top 10:2025</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Updated</th>
                   <th scope="col" aria-label="Open" />
                 </tr>
               </thead>
@@ -525,42 +350,25 @@ export default function VulnerabilitiesPage({ sessionId }) {
                       </span>
                     </td>
                     <td>
-                      <span className={styles.asset}>
-                        {item.host || "unknown"}
-                      </span>
-                      <span className={styles.assetMeta}>
-                        {item.endpoint || item.service || "none recorded"}
-                      </span>
-                    </td>
-                    <td>
                       {item.cvss?.score != null
                         ? `${item.cvss.score} (${item.cvss.vector})`
                         : "not rated"}
                     </td>
-                    <td>{item.cwe || item.cve || "none"}</td>
                     <td>
-                      {item.wstgId ? (
-                        <Link
-                          href={testPlanHref(item.wstgId)}
-                          className={styles.wstgLink}
-                          title={
-                            item.wstgTitle
-                              ? `${item.wstgId} - ${item.wstgTitle}`
-                              : item.wstgId
-                          }
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          <span className={styles.wstgRef}>{item.wstgId}</span>
-                          <span className={styles.wstgCategory}>
-                            {categoryLabel(item.wstgCategory) ||
-                              item.wstgTitle ||
-                              "Test plan"}
-                          </span>
-                        </Link>
-                      ) : (
-                        <span className={styles.unmapped}>No test case</span>
-                      )}
+                      <span
+                        className={
+                          item.exploited
+                            ? `${styles.exploitBadge} ${styles.exploited}`
+                            : `${styles.exploitBadge} ${styles.unverified}`
+                        }
+                        title={
+                          item.exploited
+                            ? "Confirmed by the agent"
+                            : "Seen by the agent, not yet proven exploitable"
+                        }
+                      >
+                        {item.exploited ? "Exploited" : "Unverified"}
+                      </span>
                     </td>
                     <td>
                       {item.owaspTop10 ? (
@@ -578,12 +386,6 @@ export default function VulnerabilitiesPage({ sessionId }) {
                       ) : (
                         <span className={styles.unmapped}>Unmapped</span>
                       )}
-                    </td>
-                    <td>
-                      <span className={styles.status}>{item.status}</span>
-                    </td>
-                    <td className={styles.updated}>
-                      {formatDate(item.updatedAt)}
                     </td>
                     <td>
                       <RightOutlined

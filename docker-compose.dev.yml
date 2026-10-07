@@ -96,7 +96,10 @@ services:
 
   juice-shop:
     container_name: vulnpen-juice-shop
-    image: bkimminich/juice-shop:latest
+    build:
+      context: ../juice-shop
+      dockerfile: ../ProjectZ/juice-shop-local.Dockerfile
+    image: projectz-juice-shop-local:20.2.0
     ports:
       - "127.0.0.1:4000:3000"
     restart: unless-stopped
