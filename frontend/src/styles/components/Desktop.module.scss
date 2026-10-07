@@ -1,0 +1,142 @@
+@import "@/styles/variables";
+
+/* ============================================================================
+   DESKTOP (VNC)
+   Same shape as the report editor: the iframe takes every pixel the header does
+   not, which only works if the shell's inner wrapper is part of the flex column
+   (a block wrapper caps the frame at its own min-height).
+   ========================================================================== */
+.desktopPage {
+  display: flex;
+  flex-direction: column;
+
+  /* Nested so the flex chain wins over `.pageInner` whatever order the bundler
+     emits the modules in. */
+  .desktopInner {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: none;
+    padding-bottom: 1.25rem;
+  }
+}
+
+/* The session readout, one band above the frame. Only the spacing is local —
+   the frame, the dividers and the wrapping belong to `StatStrip`. */
+.readout {
+  margin-bottom: 0.55rem;
+}
+
+/* A live dot drawn in the tile's own tone (`currentColor`), so the same span
+   works in the Link tile and in the status pill above the frame. The ring only
+   travels while something is still settling (`pulseDotSeeking`); a settled link
+   keeps the ring, still. */
+.pulseDot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    opacity: 0.4;
+  }
+}
+
+.pulseDotSeeking::after {
+  animation: desktopPulse 1.8s var(--moon-ease-out) infinite;
+}
+
+@keyframes desktopPulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* Sits above the frame rather than over it: a hint that could cover a desktop
+   that did load is worse than a hint that lingers. */
+.frameHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  align-self: flex-start;
+  margin: 0 0 0.55rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-2);
+  color: var(--moon-text-mute);
+  font-size: 0.75rem;
+}
+
+.frame {
+  flex: 1 1 auto;
+  /* A floor, not a target: a shorter window makes the shell scroll. */
+  min-height: 320px;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  overflow: hidden;
+  background: var(--moon-surface-2);
+}
+
+/* Until the desktop paints its first frame the iframe is an empty rectangle.
+   The sweep says "something is coming" without covering the frame for good:
+   it never takes pointer events, so a viewer that loads late is still usable. */
+.frameLoading {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 32%,
+      var(--moon-accent-08) 50%,
+      transparent 68%
+    );
+    background-size: 220% 100%;
+    animation: desktopSweep 1.7s linear infinite;
+  }
+}
+
+@keyframes desktopSweep {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -130% 0;
+  }
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@include reduced-motion {
+  .pulseDot::after {
+    animation: none;
+    opacity: 0.3;
+  }
+
+  .frameLoading::after {
+    animation: none;
+    background: none;
+  }
+}

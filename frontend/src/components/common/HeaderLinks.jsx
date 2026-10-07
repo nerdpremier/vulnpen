@@ -76,6 +76,11 @@ const HeaderLinks = ({
 
   const resolvedSessionName = sessionName || sessionInfo?.name || null;
   const resolvedWorkspace = workspaceName || sessionInfo?.workspaceName || null;
+  // The crumb names and links the engagement's parent workspace, so it is
+  // navigation rather than decoration.
+  const workspaceHref = sessionInfo?.workspaceId
+    ? `/workspace/${sessionInfo.workspaceId}`
+    : null;
 
   const accountMenu = {
     items: [
@@ -103,9 +108,17 @@ const HeaderLinks = ({
         <div className={styles.headerLeft}>
           {sessionId ? (
             <div className={styles.sessionContext}>
-              <span className={styles.sessionCrumb}>
-                {resolvedWorkspace ? `Workspace / ${resolvedWorkspace}` : "Session"}
-              </span>
+              {workspaceHref ? (
+                <Link href={workspaceHref} className={styles.sessionCrumb}>
+                  {resolvedWorkspace
+                    ? `Workspace / ${resolvedWorkspace}`
+                    : "Workspace"}
+                </Link>
+              ) : (
+                <span className={styles.sessionCrumb}>
+                  {resolvedWorkspace ? `Workspace / ${resolvedWorkspace}` : "Engagement"}
+                </span>
+              )}
               {resolvedSessionName && (
                 <span className={styles.sessionName} title={sessionId}>
                   {resolvedSessionName}

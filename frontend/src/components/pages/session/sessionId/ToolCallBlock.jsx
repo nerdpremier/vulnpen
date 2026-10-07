@@ -44,6 +44,7 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
     () => (message.content?.length ?? 0) > LONG_OUTPUT_COLLAPSE_AT,
   );
   const [copied, setCopied] = useState(false);
+  const [outputCopied, setOutputCopied] = useState(false);
   const outputRef = useRef(null);
 
   const { toolName, args, content, streaming, exitCode, files } = message;
@@ -112,6 +113,26 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
       : cleanedContent
     : null;
 
+  /**
+   * Copy the *whole* output, not the tail the panel shows. Output is the
+   * evidence a pentester keeps (hashes, nmap, raw responses), and until now the
+   * only copy affordance on the block copied the command or the code preview —
+   * never the result.
+   */
+  const handleCopyOutput = useCallback(
+    (event) => {
+      event.stopPropagation();
+      if (!cleanedContent) return;
+      copyText(cleanedContent)
+        .then(() => {
+          setOutputCopied(true);
+          setTimeout(() => setOutputCopied(false), 1500);
+        })
+        .catch(() => {});
+    },
+    [cleanedContent, copyText],
+  );
+
   return (
     <div className={styles.toolCallBlock}>
       <div
@@ -136,7 +157,7 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
           <button
             className={`${styles.toolCallCopyBtn} ${copied ? styles.copied : ""}`}
             onClick={handleCopy}
-            title={copied ? "Copied!" : "Copy code"}
+            title={copied ? "Copied!" : hasCode ? "Copy the code" : "Copy the command"}
           >
             {copied ? <CheckOutlined /> : <CopyOutlined />}
           </button>
@@ -201,9 +222,7 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
       )}
 
       {displayContent && (
-        <div
-          className={`${styles.toolCallOutputSection} ${outputCollapsed ? styles.outputCollapsed : ""}`}
-        >
+        <div className={styles.toolCallOutputSection}>
           <div
             className={styles.toolCallOutputHeader}
             onClick={(e) => {
@@ -224,6 +243,15 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message, sessionId }) 
                   : `${outputLines.toLocaleString()} lines`}
               </span>
             )}
+            <button
+              type="button"
+              className={`${styles.toolCallCopyBtn} ${outputCopied ? styles.copied : ""}`}
+              onClick={handleCopyOutput}
+              aria-label="Copy output"
+              title={outputCopied ? "Copied!" : "Copy the full output"}
+            >
+              {outputCopied ? <CheckOutlined /> : <CopyOutlined />}
+            </button>
           </div>
           {!outputCollapsed && (
             <div className={styles.toolCallOutput} ref={outputRef}>

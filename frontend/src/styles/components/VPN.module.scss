@@ -5,7 +5,7 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background: var(--primary-bg);
+  background: var(--moon-surface-1);
 }
 
 // ── Header ──────────────────────────────────────────────────────────────────
@@ -15,9 +15,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--moon-line-1);
   flex-shrink: 0;
-  background: var(--secondary-bg);
+  background: var(--moon-surface-1);
 }
 
 .headerLeft {
@@ -30,16 +30,22 @@
   margin: 0;
   font-size: 0.8rem;
   font-weight: 400;
-  color: var(--primary-text);
+  color: var(--moon-text);
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
 }
 
+.headerIcon {
+  margin-right: 6px;
+  vertical-align: middle;
+  color: var(--moon-text-mute);
+}
+
 .headerSubtitle {
   margin: 0;
   font-size: 0.68rem;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
 }
 
 .headerRight {
@@ -56,8 +62,13 @@
   padding: 1rem;
 }
 
+/* The readout band. Spacing only: `StatStrip` owns the frame and dividers. */
+.readout {
+  margin-bottom: 1.1rem;
+}
+
 .sectionTitle {
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-size: 0.7rem;
   font-weight: 400;
   margin-bottom: 0.6rem;
@@ -80,15 +91,15 @@
 }
 
 .card {
-  background: var(--secondary-bg);
-  border: 1px solid var(--border-subtle);
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
 
 .cardActive {
-  background: rgba(16, 202, 0, 0.04);
-  border: 1px solid rgba(16, 202, 0, 0.35);
+  background: var(--moon-success-bg);
+  border: 1px solid var(--moon-success-line);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
@@ -114,38 +125,125 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+}
+
+.cardName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--moon-text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cardMeta {
   margin-top: 0.35rem;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-size: 0.7rem;
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  min-width: 0;
+}
+
+.cardMetaFile {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cardMetaDot {
   opacity: 0.4;
 }
 
+/* The tun interface reads as a reading, not as a word in a sentence. */
+.cardMetaChip {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-2);
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  font-size: 0.65rem;
+  color: var(--moon-text-dim);
+}
+
 .cardMetaIp {
-  color: var(--vulnpen-green, #10ca00);
+  color: var(--moon-success);
+  font-variant-numeric: tabular-nums;
 }
 
-.tagConnected {
-  margin: 0;
-  font-size: 0.65rem;
-  line-height: 1.4;
+/* ---- Tunnel state: a dot in the state's colour, pulsing while live ------- */
+.stateChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-2);
+  color: var(--moon-text-mute);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.tagIdle {
-  margin: 0;
-  font-size: 0.65rem;
-  line-height: 1.4;
-  background: var(--border-subtle) !important;
-  border: none !important;
-  color: var(--secondary-text) !important;
+.stateDot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.state_connected {
+  color: var(--moon-success);
+  border-color: var(--moon-success-line);
+  background: var(--moon-success-bg);
+
+  .stateDot::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    animation: vpnPulse 1.8s var(--moon-ease-out) infinite;
+  }
+}
+
+.state_idle {
+  color: var(--moon-text-mute);
+}
+
+.state_unknown {
+  color: var(--moon-warning);
+  border-color: var(--moon-warning-line);
+  background: var(--moon-warning-bg);
+}
+
+@keyframes vpnPulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.loadingState {
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.emptyHint {
+  color: var(--moon-text-dim);
+  font-size: 0.75rem;
 }
 
 .actionGroup {
@@ -153,16 +251,13 @@
   gap: 0.5rem;
 }
 
-.warningBanner {
-  margin-top: 1rem;
-  padding: 0.6rem 1rem;
-  border-radius: 6px;
-  background: rgba(255, 196, 12, 0.08);
-  border: 1px solid rgba(255, 196, 12, 0.25);
-  color: #ffc40c;
-  font-size: 0.75rem;
-}
-
 .emptyState {
   padding: 2.5rem 0;
+}
+
+@include reduced-motion {
+  .state_connected .stateDot::after {
+    animation: none;
+    opacity: 0.3;
+  }
 }

@@ -14,6 +14,11 @@ export default function AgentStreamConnector({ sessionId }) {
   const historyLoaded = useAgentStreamStore(
     (state) => state.sessions[sessionId]?.historyLoaded ?? false,
   );
+  // Bumped by the chat's "retry" action after a failed read: `historyLoaded`
+  // never became true, so it cannot signal a re-attempt on its own.
+  const historyRetry = useAgentStreamStore(
+    (state) => state.sessions[sessionId]?.historyRetry ?? 0,
+  );
 
   useEffect(() => {
     if (!sessionId) return;
@@ -44,11 +49,22 @@ export default function AgentStreamConnector({ sessionId }) {
           });
         }
       })
-      .catch(() => {})
+      .catch((error) => {
+        // A failed transcript read is not an empty session: record why so the
+        // chat can offer a retry instead of an innocent-looking empty state.
+        store
+          .getState()
+          .setHistoryError(
+            sessionId,
+            error?.response?.data?.message ||
+              error?.message ||
+              "The transcript could not be loaded.",
+          );
+      })
       .finally(() => {
         loadingRef.current = false;
       });
-  }, [sessionId, store, historyLoaded]);
+  }, [sessionId, store, historyLoaded, historyRetry]);
 
   useEffect(() => {
     const onContextCleared = (e) => {

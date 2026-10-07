@@ -1,5 +1,5 @@
-﻿import styles from "@/styles/pages/WorkspaceDetail.module.scss";
-import { message, Tooltip, Input, Form } from "antd";
+import styles from "@/styles/pages/WorkspaceDetail.module.scss";
+import { message, Tooltip, Input, Form, Button } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import {
   PlusOutlined,
@@ -7,6 +7,7 @@ import {
   PlayCircleOutlined,
 } from "@ant-design/icons";
 import Loader from "@/components/common/loader/Loader";
+import Link from "next/link";
 import { useSelector } from "react-redux";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useState, useMemo, useCallback } from "react";
@@ -25,7 +26,9 @@ import {
   AnimatedContent,
   EmptyState,
   MoonBackdrop,
+  PageState,
   ShinyText,
+  StatStrip,
   StatTile,
 } from "@/components/common/ui";
 
@@ -34,6 +37,14 @@ const STATE_DOT = {
   idle: { color: "var(--moon-text-mute)", label: "Idle" },
   paused: { color: "var(--moon-warning)", label: "Paused" },
   waiting_consent: { color: "var(--moon-warning)", label: "Waiting" },
+};
+
+/** Agent spend in the unit a reader can compare at a glance. */
+const formatTokens = (value) => {
+  const tokens = Number(value) || 0;
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
+  return String(tokens);
 };
 
 const WorkspaceDetailPage = ({ workspaceId }) => {
@@ -45,7 +56,12 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   const [showNewSession, setShowNewSession] = useState(false);
   const [newSessionForm] = Form.useForm();
 
-  const { data: workspace, isLoading } = useQuery(
+  const {
+    data: workspace,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery(
     ["workspace-detail", workspaceId],
     () => getWorkspaceDetail(workspaceId),
     { enabled: !!user && !!workspaceId, refetchInterval: 8000 }
@@ -114,7 +130,38 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     );
   }, [sessions]);
 
+  /* The bar under each row is scaled against the busiest session, so the column
+     reads as one chart and the largest bar is always full width. */
+  const maxTokens = useMemo(
+    () =>
+      sessions.reduce(
+        (top, session) => Math.max(top, session.totalTokens || 0),
+        0
+      ),
+    [sessions]
+  );
+
   const isPentest = workspace?.type === "pentest";
+
+  // A failed read used to fall into the `!workspace` branch and spin a
+  // full-screen loader forever: no message, no retry, no way back.
+  if (isError) {
+    return (
+      <div className={styles.container}>
+        <PageState
+          state="error"
+          title="Could not load this workspace"
+          description="Its sessions and target are unchanged. Retry, or go back to the workspace list."
+          onRetry={() => refetch()}
+          actions={
+            <Button type="text" onClick={() => router.push("/dashboard")}>
+              All workspaces
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   if (!user || isLoading || !workspace) {
     return <Loader />;
@@ -157,7 +204,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
             </PrimaryButton>
           </div>
 
-          <div className={styles.heroStats}>
+          <StatStrip className={styles.heroStats}>
             <StatTile label="Sessions" value={sessions.length} />
             <StatTile
               label="Running"
@@ -176,7 +223,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
               value={stateCounts.idle}
               icon={<FiActivity />}
             />
-          </div>
+          </StatStrip>
         </div>
       </section>
 
@@ -192,7 +239,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           <EmptyState
             icon={<PlayCircleOutlined />}
             title="No sessions yet"
-            description="A session is one engagement workspace: the orchestrator, its shells, the WSTG test plan and the findings it records."
+            description="One engagement: its orchestrator, its shells, the WSTG plan and the findings it records."
             actions={
               <PrimaryButton
                 purpleFilled
@@ -209,6 +256,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
               <span>Session</span>
               <span>Status</span>
               <span>Created</span>
+              <span>Tokens</span>
               <span className={styles.sessionActionCol}>Actions</span>
             </div>
             {sessions.map((session, index) => {
@@ -224,12 +272,14 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
                       ? styles.sessionTableRowRunning
                       : ""
                   }`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => router.push(`/session/${session.sessionId}`)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter")
-                      router.push(`/session/${session.sessionId}`);
+                  /* The row is a link to the session, not an anchor element: it
+                     carries two buttons, and a button inside an <a> is neither
+                     valid markup nor reachable. The name below is the real link
+                     (keyboard and middle-click path); a click anywhere else on
+                     the row follows it, unless it landed on a control. */
+                  onClick={(event) => {
+                    if (event.target.closest("a, button")) return;
+                    router.push(`/session/${session.sessionId}`);
                   }}
                 >
                   <span className={styles.sessionNameCell}>
@@ -240,9 +290,12 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
                           style={{ background: stateInfo.color }}
                         />
                       </Tooltip>
-                      <span className={styles.sessionNameText}>
+                      <Link
+                        className={styles.sessionNameText}
+                        href={`/session/${session.sessionId}`}
+                      >
                         {session.name}
-                      </span>
+                      </Link>
                     </span>
                     {session.description && (
                       <span className={styles.sessionDescInline}>
@@ -261,6 +314,39 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
                   </span>
                   <span className={styles.sessionDateCol}>
                     {moment(session.createdAt).format("MMM D, YYYY")}
+                  </span>
+                  {/* One bar per row, scaled against the busiest session: the
+                      column reads as a chart of where the agent worked. The
+                      figure beside it is the accessible value, so the bar
+                      itself stays decorative. */}
+                  <span className={styles.sessionTokens}>
+                    {maxTokens > 0 ? (
+                      <>
+                        <span
+                          className={styles.tokenTrack}
+                          aria-hidden="true"
+                          title={`${(session.totalTokens || 0).toLocaleString()} tokens`}
+                        >
+                          <span
+                            className={`${styles.tokenFill} ${
+                              session.agentState === "running"
+                                ? styles.tokenFillLive
+                                : ""
+                            }`}
+                            style={{
+                              width: `${Math.round(
+                                ((session.totalTokens || 0) / maxTokens) * 100
+                              )}%`,
+                            }}
+                          />
+                        </span>
+                        <span className={styles.tokenValue}>
+                          {formatTokens(session.totalTokens || 0)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className={styles.tokenValue}>—</span>
+                    )}
                   </span>
                   <span
                     className={styles.sessionActionCol}

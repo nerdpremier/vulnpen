@@ -1,0 +1,558 @@
+@import "@/styles/variables";
+
+/* ============================================================================
+   Lunar Monochrome - DATA GRAPHICS
+   The chart kit. Every shape here is inline SVG or CSS grid, so a graph
+   inherits the palette, the type scale and the global reduced-motion rule
+   without a charting runtime, a <canvas> pass or a resize observer.
+
+   Conventions
+     * `tone` arrives as a prop and lands as `--tone` (section I); every fill,
+       stroke, glow and tint reads `var(--tone)`, so one palette drives all
+     * geometry arrives as props and leaves as inline styles or custom
+       properties (`--chart-h`, `--bar-h`)
+     * a chart's numbers live in the shape; surrounding text only labels it
+
+   Sections
+     I.   Tones             N. RadarChart
+     J.   Sparkline         O. GaugeArc
+     K.   ColumnChart       P. TimelineChart
+     L.   BarList           Q. Shared legend
+     M.   DonutChart
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   I. TONES
+   Severity keys (critical/high/medium/low/info) and outcome keys
+   (success/warning/danger/info/accent/mute) share one namespace: a caller
+   passes whatever the data calls itself and gets the right hue.
+   -------------------------------------------------------------------------- */
+.tone_critical {
+  --tone: var(--moon-critical);
+}
+
+.tone_high {
+  --tone: var(--moon-high);
+}
+
+.tone_medium {
+  --tone: var(--moon-medium);
+}
+
+.tone_low {
+  --tone: var(--moon-low);
+}
+
+.tone_info {
+  --tone: var(--moon-info);
+}
+
+.tone_accent {
+  --tone: var(--moon-accent);
+}
+
+.tone_success {
+  --tone: var(--moon-success);
+}
+
+.tone_warning {
+  --tone: var(--moon-warning);
+}
+
+.tone_danger {
+  --tone: var(--moon-danger);
+}
+
+.tone_mute {
+  --tone: var(--moon-text-faint);
+}
+
+/* ---------------------------------------------------------------------------
+   J. SPARKLINE
+   A trend in ~24px of height. Stretched with preserveAspectRatio="none" and
+   drawn with vector-effect="non-scaling-stroke", so the line stays 1.5px at
+   any width without measuring the container.
+   -------------------------------------------------------------------------- */
+.spark {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: var(--spark-h, 44px);
+  min-width: 0;
+  /* `color` drives the area gradient (currentColor); the stroke reads --tone. */
+  color: var(--tone, var(--moon-accent));
+}
+
+.sparkSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sparkLine {
+  fill: none;
+  stroke: var(--tone, var(--moon-accent));
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* One point (or none) is not a trend: keep the slot, draw a rule. */
+.sparkEmpty {
+  display: block;
+  height: 1px;
+  margin-top: calc(var(--spark-h, 44px) / 2);
+  background: var(--moon-line-1);
+}
+
+/* ---------------------------------------------------------------------------
+   K. COLUMN CHART
+   One column per category. The value sits in the band above its own bar, so
+   the eye never has to travel to a legend to read a height.
+   -------------------------------------------------------------------------- */
+.columnChart {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.columns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  height: var(--chart-h, 96px);
+  /* Room for the tallest column's value label. */
+  padding-top: 1.3rem;
+  box-sizing: content-box;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.columnTrack {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 3px;
+}
+
+.columnBar {
+  width: 100%;
+  height: var(--bar-h, 0%);
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--tone, var(--moon-accent));
+  transition: height var(--moon-dur-4) var(--moon-ease-out),
+    filter var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.columnValue {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bar-h, 0%) + 3px);
+  text-align: center;
+  font-size: 0.6rem;
+  line-height: 1.1;
+  color: var(--moon-text-mute);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.column:hover .columnBar {
+  filter: brightness(1.35);
+}
+
+.column:hover .columnValue {
+  color: var(--moon-text);
+}
+
+.columnLabels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.columnLabel {
+  @include eyebrow;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  @include truncate(1);
+}
+
+/* ---------------------------------------------------------------------------
+   L. BAR LIST
+   Ranked horizontal bars: label, proportion, count. The workhorse for "top N"
+   panels, where a column chart would run out of width.
+   -------------------------------------------------------------------------- */
+.barList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.barLabel {
+  font-size: 0.74rem;
+  color: var(--moon-text-dim);
+  @include truncate(1);
+}
+
+.barTrack {
+  height: 6px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-3);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  width: var(--bar-w, 0%);
+  border-radius: var(--moon-radius-pill);
+  background: var(--tone, var(--moon-accent));
+  transition: width var(--moon-dur-4) var(--moon-ease-out);
+}
+
+.barValue {
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.barRow:hover .barLabel {
+  color: var(--moon-text);
+}
+
+/* ---------------------------------------------------------------------------
+   M. DONUT CHART
+   A part-of-whole split with its total in the hole - the one place a pie beats
+   a bar, because the hole carries the number the segments add up to.
+   -------------------------------------------------------------------------- */
+.donutWrap {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.donut {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.donutSvg {
+  display: block;
+  animation: chartDraw var(--moon-dur-4) var(--moon-ease-out) both;
+}
+
+.donutTrack {
+  stroke: var(--moon-surface-3);
+}
+
+.donutSeg {
+  stroke: var(--tone, var(--moon-accent));
+  transition: stroke-dashoffset var(--moon-dur-4) var(--moon-ease-out),
+    stroke-dasharray var(--moon-dur-4) var(--moon-ease-out);
+}
+
+.donutCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.donutValue {
+  font-size: 1.35rem;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  color: var(--moon-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.donutLabel {
+  @include eyebrow;
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+}
+
+/* ---------------------------------------------------------------------------
+   N. RADAR CHART
+   Coverage across the WSTG categories: ten axes on one shape, which a bar
+   chart can only show as ten separate readings.
+   -------------------------------------------------------------------------- */
+.radar {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.radarGrid {
+  fill: none;
+  stroke: var(--moon-line-1);
+  stroke-width: 1;
+}
+
+.radarSpoke {
+  stroke: var(--moon-line-1);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.radarShape {
+  fill: var(--moon-accent-14, rgba(255, 255, 255, 0.12));
+  stroke: var(--moon-accent);
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+  animation: chartDraw var(--moon-dur-4) var(--moon-ease-out) both;
+}
+
+.radarVertex {
+  fill: var(--moon-text);
+  stroke: var(--moon-void);
+  stroke-width: 1;
+}
+
+.radarLabel {
+  fill: var(--moon-text-dim);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.radarLabelValue {
+  fill: var(--moon-text-mute);
+  font-size: 0.56rem;
+  letter-spacing: 0;
+}
+
+/* A single axis can be called out (the one under the cursor). */
+.radarAxisHot .radarLabel {
+  fill: var(--moon-text);
+}
+
+/* ---------------------------------------------------------------------------
+   O. GAUGE ARC
+   A single score with a ceiling - risk, confidence, a CVSS vector. Half a
+   dial: the flat edge is where the number goes.
+   -------------------------------------------------------------------------- */
+.gauge {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.gaugeTrack {
+  stroke: var(--moon-surface-3);
+}
+
+.gaugeValue {
+  stroke: var(--tone, var(--moon-accent));
+  transition: stroke-dashoffset var(--moon-dur-4) var(--moon-ease-out);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--tone, var(--moon-accent)) 40%, transparent));
+}
+
+.gaugeCenter {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.15rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.gaugeValueText {
+  font-size: 1.6rem;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  color: var(--moon-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.gaugeLabel {
+  @include eyebrow;
+  font-size: 0.54rem;
+  letter-spacing: 0.12em;
+}
+
+/* ---------------------------------------------------------------------------
+   P. TIMELINE CHART
+   When things happened, on one shared axis. Each row is a labelled track with
+   the span drawn as a bar - the shape a scan history wants.
+   -------------------------------------------------------------------------- */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.timelineRow {
+  display: grid;
+  grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.timelineLabel {
+  font-size: 0.72rem;
+  color: var(--moon-text-dim);
+  @include truncate(1);
+}
+
+.timelineTrack {
+  position: relative;
+  display: block;
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--moon-line-1) 1px,
+    transparent 1px
+  );
+  background-size: 25% 100%;
+  min-width: 0;
+}
+
+.timelineBar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: var(--bar-x, 0%);
+  width: var(--bar-w, 0%);
+  min-width: 3px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--tone, var(--moon-accent));
+  transition: left var(--moon-dur-4) var(--moon-ease-out),
+    width var(--moon-dur-4) var(--moon-ease-out);
+}
+
+.timelineRow:hover .timelineBar {
+  filter: brightness(1.35);
+}
+
+.timelineAxis {
+  display: grid;
+  grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+  gap: 0.6rem;
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+.timelineAxisTrack {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Q. SHARED LEGEND
+   A donut or a bar list states its own key: one swatch, one name, one count.
+   -------------------------------------------------------------------------- */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.legendInline {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+
+  .legendItem {
+    display: inline-flex;
+    gap: 0.35rem;
+  }
+}
+
+.legendItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+  color: var(--moon-text-dim);
+  min-width: 0;
+}
+
+.legendSwatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--tone, var(--moon-accent));
+}
+
+.legendLabel {
+  @include truncate(1);
+}
+
+.legendItem b {
+  font-weight: 600;
+  color: var(--moon-text);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.legendZero {
+  opacity: 0.5;
+}
+
+/* A trend line tucked inside a StatTile: quiet, no frame of its own. */
+.statSpark {
+  margin-top: 0.15rem;
+  opacity: 0.85;
+}
+
+/* The whole kit's entrance: fade and settle once, no looping motion. */
+@keyframes chartDraw {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

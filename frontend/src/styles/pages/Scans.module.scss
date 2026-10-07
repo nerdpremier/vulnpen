@@ -1,0 +1,541 @@
+@import "../_variables";
+
+/* ============================================================================
+   SCANS
+   The page is the list. One card holds the toolbar, the count of reasons the
+   runs stopped, the scans that are still moving (as cards, because their
+   progress is the live element on the page) and one row per settled scan.
+
+   The two shapes a result takes are decided by the data, not by taste: one case
+   is a word, two or more are a proportion bar. `ScanStatus.jsx` keeps the atoms
+   several surfaces share - the lifecycle pill, the progress bar - and this
+   sheet owns the list itself.
+   ========================================================================== */
+
+.list {
+  overflow: hidden;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+/* ---- Toolbar: the count, the search and the status filter ---------------- */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 1.15rem;
+  border-bottom: 1px solid var(--moon-line-1);
+
+  @include responsive(tablet3) {
+    padding: 0.65rem 0.85rem;
+  }
+}
+
+.barTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--moon-text);
+}
+
+.count {
+  min-width: 1.4rem;
+  padding: 0.05rem 0.4rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 400;
+  text-align: center;
+  color: var(--moon-text-mute);
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+}
+
+/* Only while a filter is on: the total is already on the chip beside it. */
+.barNote {
+  font-size: 0.7rem;
+  color: var(--moon-text-faint);
+}
+
+.barSpacer {
+  flex: 1 1 auto;
+}
+
+.search {
+  max-width: 19rem;
+}
+
+.filter {
+  min-width: 9.5rem;
+}
+
+/* ---- Why the runs stopped, counted once ---------------------------------- */
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 1.15rem 0.8rem;
+  border-bottom: 1px solid var(--moon-line-1);
+
+  @include responsive(tablet3) {
+    padding: 0.7rem 0.85rem;
+  }
+}
+
+.noticeLabel {
+  @include eyebrow;
+  font-size: 0.58rem;
+}
+
+.noticeRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.76rem;
+  color: var(--moon-text-dim);
+}
+
+.noticeCount {
+  flex: none;
+  min-width: 1.9rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  color: var(--moon-danger);
+}
+
+.noticeText {
+  min-width: 0;
+  @include truncate(1);
+}
+
+/* ---- Scans that are still moving ----------------------------------------- */
+.liveBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 1.15rem 0.95rem;
+  background: var(--moon-surface-2);
+  border-bottom: 1px solid var(--moon-line-1);
+
+  @include responsive(tablet3) {
+    padding: 0.7rem 0.85rem 0.8rem;
+  }
+}
+
+.liveLabel {
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+.liveCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.8rem 0.95rem 0.85rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-md);
+}
+
+.liveTop {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* A shape, not a word: the pill beside it already says which state this is. */
+.liveDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--moon-info);
+  box-shadow: 0 0 0 3px var(--moon-info-bg);
+  animation: livePulse 1.6s ease-in-out infinite;
+
+  &[data-state="queued"] {
+    background: var(--moon-text-faint);
+    box-shadow: none;
+    animation: none;
+  }
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@include reduced-motion {
+  .liveDot {
+    animation: none;
+  }
+}
+
+.liveName {
+  min-width: 0;
+  font-size: 0.92rem;
+  color: var(--moon-text);
+  text-decoration: none;
+  @include truncate(1);
+
+  &:hover {
+    color: var(--moon-accent);
+  }
+
+  @include focus-ring(2px);
+}
+
+.liveSpacer {
+  flex: 1 1 auto;
+}
+
+.liveMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+}
+
+/* One word, tinted: the LED beside the name carries the motion, this carries
+   the name of the state without turning the meta line into two typefaces. */
+.liveState {
+  font-size: 0.72rem;
+  color: var(--moon-info);
+
+  &[data-state="queued"] {
+    color: var(--moon-text-faint);
+  }
+}
+
+.liveMetaDot {
+  flex: none;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--moon-line-3);
+}
+
+/* ---- Settled scans: one row each ----------------------------------------- */
+.head,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(150px, 1fr) 108px 104px 40px;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 1.15rem;
+}
+
+.head {
+  @include tableHead;
+
+  /* The rows become two-line cards here, so the column labels would point at
+     the wrong cells. Every value in them names itself. */
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.row {
+  width: 100%;
+  border-bottom: 1px solid var(--moon-line-1);
+  cursor: pointer;
+  color: var(--moon-text);
+  /* The row answers to the pointer; the name inside it is the real link. */
+  text-decoration: none;
+  transition: background var(--moon-dur-1) var(--moon-ease-out);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover,
+  &:focus-within {
+    @include tableRowHover;
+  }
+
+  @include responsive(tablet3) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "identity actions"
+      "cases    cases"
+      "run      when";
+    row-gap: 0.5rem;
+    padding: 0.75rem 0.85rem;
+
+    .identity {
+      grid-area: identity;
+    }
+
+    .cases,
+    .outcome {
+      grid-area: cases;
+    }
+
+    .runState {
+      grid-area: run;
+    }
+
+    .when {
+      grid-area: when;
+      align-items: flex-end;
+    }
+
+    .rowActions {
+      grid-area: actions;
+    }
+  }
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.name {
+  min-width: 0;
+  font-size: 0.86rem;
+  color: var(--moon-text);
+  /* No underline, here or on hover: the row's own tint already says which line
+     the pointer is on, and a rule under one run of a clickable row reads as a
+     second, narrower target. */
+  text-decoration: none;
+  @include truncate(1);
+
+  &:hover {
+    color: var(--moon-accent);
+  }
+
+  @include focus-ring(2px);
+}
+
+.scope {
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  color: var(--moon-text-mute);
+  @include truncate(1);
+}
+
+/* ---- The cases column: a word, or a split -------------------------------- */
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--tone, var(--moon-text-mute));
+
+  &[data-tone="success"] {
+    --tone: var(--moon-success);
+  }
+
+  &[data-tone="danger"] {
+    --tone: var(--moon-danger);
+  }
+
+  &[data-tone="high"] {
+    --tone: var(--moon-high);
+  }
+
+  &[data-tone="info"] {
+    --tone: var(--moon-info);
+  }
+
+  &[data-tone="mute"] {
+    --tone: var(--moon-text-mute);
+  }
+}
+
+.outcomeDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone, var(--moon-text-mute));
+}
+
+.cases {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.caseTrack {
+  display: flex;
+  width: 100%;
+  max-width: 15rem;
+  height: 5px;
+  border-radius: var(--moon-radius-pill);
+  /* The remainder is the track: work this scan never reached. */
+  background: var(--moon-surface-3);
+  overflow: hidden;
+}
+
+.caseSeg {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  background: var(--tone, transparent);
+
+  &[data-tone="success"] {
+    --tone: var(--moon-success);
+  }
+
+  &[data-tone="danger"] {
+    --tone: var(--moon-danger);
+  }
+
+  &[data-tone="high"] {
+    --tone: var(--moon-high);
+  }
+
+  &[data-tone="mute"] {
+    --tone: var(--moon-text-faint);
+  }
+
+  &[data-tone="none"] {
+    --tone: transparent;
+  }
+
+  & + & {
+    margin-left: 1px;
+  }
+}
+
+.caseWords {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  min-width: 0;
+  font-size: 0.71rem;
+  color: var(--moon-text-mute);
+
+  b {
+    font-weight: 600;
+    color: var(--moon-text);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---- Run state: a dot and a word, not a boxed pill per row --------------- */
+.runState {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.76rem;
+  color: var(--tone, var(--moon-text-mute));
+  white-space: nowrap;
+
+  &[data-tone="info"] {
+    --tone: var(--moon-info);
+  }
+
+  &[data-tone="success"] {
+    --tone: var(--moon-success);
+  }
+
+  &[data-tone="danger"] {
+    --tone: var(--moon-danger);
+  }
+
+  &[data-tone="warning"] {
+    --tone: var(--moon-warning);
+  }
+
+  &[data-tone="mute"] {
+    --tone: var(--moon-text-mute);
+  }
+}
+
+.runDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone, var(--moon-text-mute));
+}
+
+.when {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.whenTop {
+  font-size: 0.76rem;
+  color: var(--moon-text-dim);
+}
+
+.whenSub {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  color: var(--moon-text-faint);
+}
+
+.rowActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--moon-radius-xs);
+  background: transparent;
+  color: var(--moon-text-faint);
+  cursor: pointer;
+  transition: color var(--moon-dur-2) var(--moon-ease-out),
+    background var(--moon-dur-2) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--moon-danger);
+    background: var(--moon-danger-bg);
+    border-color: var(--moon-danger-line);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+/* ---- Filters that matched nothing ---------------------------------------- */
+.noMatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 2.2rem 1.15rem;
+  color: var(--moon-text-mute);
+  font-size: 0.85rem;
+
+  p {
+    margin: 0;
+  }
+}

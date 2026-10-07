@@ -6,7 +6,7 @@
 
 VulnPen is T-NET IT Solution's AI assistant for web application security testing. It plans and executes the OWASP WSTG v4.2 catalogue against a target, records the evidence, maps every finding to the OWASP Top 10:2025 and drafts the web application penetration testing report to the WSTG Reporting structure (version control, team, scope, limitations, timeline, disclaimer, findings and appendices). A Kali attack box provides the tooling; you describe the target and it works the plan. Progress is tracked per WSTG test case, and every finding is scored with the WSTG likelihood x impact risk matrix (the two factors carry equal weight) — severity is always derived from the matrix, never declared.
 
-For authorised testing only — see [the acceptable use policy](frontend/src/app/terms/page.js) and the disclaimer at the end of this file.
+For authorised testing only — see the disclaimer at the end of this file.
 
 ## What It Does
 

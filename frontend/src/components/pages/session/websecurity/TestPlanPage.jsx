@@ -1,9 +1,8 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
-  Alert,
   App,
   Button,
   Checkbox,
@@ -13,7 +12,6 @@ import {
   Input,
   Modal,
   Select,
-  Spin,
 } from "antd";
 import {
   DeleteOutlined,
@@ -21,6 +19,7 @@ import {
   EditOutlined,
   FileTextOutlined,
   MoreOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
   UpOutlined,
   RightOutlined,
@@ -36,11 +35,18 @@ import { getSessionInfo } from "@/services/agent.service";
 import { apiErrorMessage } from "@/utils/apiError";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import PlanSetupModal from "./PlanSetupModal";
+import ScanLauncherModal from "../scans/ScanLauncherModal";
 import styles from "@/styles/pages/TestPlan.module.scss";
-import { ProgressRing } from "@/components/common/ui";
+import {
+  PageState,
+  ProgressRing,
+  RadarChart,
+  StatStrip,
+  StatTile,
+} from "@/components/common/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { summarise, groupCases, matchesFilters, caseCarriesWork, OTHER_GROUP, STATUS_OPTIONS } from "@/utils/testPlan.mjs";
+import { summarise, groupCases, matchesFilters, caseCarriesWork, STATUS_OPTIONS } from "@/utils/testPlan.mjs";
 
 /** Colour the one status control by what it says, so no second status column is needed. */
 const STATUS_TONE = {
@@ -62,14 +68,95 @@ const FILTERS = [
   { value: "skipped", label: "Skipped" },
 ];
 
-function CoverageBar({ value, tone }) {
-  const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+/**
+ * The engagement boundary as chips. It used to be a sentence that repeated the
+ * target and the scope in prose; the two facts are labels, so they are badges.
+ */
+function PlanChips({ target, scope }) {
+  if (!target && !scope) return null;
   return (
-    <span className={styles.bar}>
-      <span
-        className={`${styles.barFill} ${tone ? styles[tone] : ""}`}
-        style={{ width: `${clamped}%` }}
-      />
+    <div className={styles.scopeChips}>
+      {target && (
+        <span className={styles.scopeChip}>
+          <span className={styles.scopeChipLabel}>Target</span>
+          <span className={styles.scopeChipValue} title={target}>
+            {target}
+          </span>
+        </span>
+      )}
+      {scope && (
+        <span className={styles.scopeChip}>
+          <span className={styles.scopeChipLabel}>Scope</span>
+          <span className={styles.scopeChipValue} title={scope}>
+            {scope}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* One segment per outcome; the remainder of the track is what the category has
+   not reached yet. Selected by key, so the tone map cannot drift from the
+   legend the rest of the product uses. */
+const CATEGORY_SEGMENTS = [
+  { key: "passed", tone: "segPassed" },
+  { key: "failed", tone: "segFailed" },
+  { key: "blocked", tone: "segBlocked" },
+  { key: "inProgress", tone: "segActive" },
+  { key: "skipped", tone: "segSkipped" },
+  { key: "notStarted", tone: "" },
+];
+
+const SEGMENT_LABEL = {
+  passed: "passed",
+  failed: "failed",
+  blocked: "blocked",
+  inProgress: "in progress",
+  skipped: "skipped",
+  notStarted: "not started",
+};
+
+/**
+ * A category's outcome as one proportional bar.
+ *
+ * The header used to carry a plain fill bar plus "8 failed" / "2 blocked"
+ * pills; the bar said how much was done, the pills said how it went, and the
+ * two had to be read together. One segmented bar carries both, and the counts
+ * stay available by tooltip and to a screen reader.
+ */
+function CategoryBar({ code, name, summary }) {
+  const segments = CATEGORY_SEGMENTS.map((segment) => ({
+    ...segment,
+    value: summary[segment.key] ?? 0,
+  })).filter((segment) => segment.value > 0);
+
+  const title = `${code ? `${code} — ` : ""}${name}: ${summary.executed}/${
+    summary.total
+  } settled — ${segments
+    .map((segment) => `${segment.value} ${SEGMENT_LABEL[segment.key]}`)
+    .join(", ")}`;
+
+  return (
+    <span
+      className={styles.groupBar}
+      role="img"
+      aria-label={title}
+      title={title}
+    >
+      {summary.total === 0 ? (
+        <span className={styles.groupSegEmpty} />
+      ) : (
+        segments.map((segment) => (
+          <span
+            key={segment.key}
+            className={[styles.groupSeg, segment.tone ? styles[segment.tone] : ""]
+              .filter(Boolean)
+              .join(" ")}
+            style={{ flexGrow: segment.value }}
+          />
+        ))
+      )}
     </span>
   );
 }
@@ -84,6 +171,8 @@ export default function TestPlanPage({ sessionId }) {
   const [groupOverrides, setGroupOverrides] = useState(() => new Map());
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [setupOpen, setSetupOpen] = useState(false);
+  // The cases the selection bar wants to scan; null = launcher closed.
+  const [scanSelection, setScanSelection] = useState(null);
   const [editingCase, setEditingCase] = useState(null);
 
   // A finding deep-links here as ?case=WSTG-ATHN-01. The request is read from the
@@ -188,6 +277,22 @@ export default function TestPlanPage({ sessionId }) {
       (filter) => ({ ...filter, count: counts[filter.value] }),
     );
   }, [coverage]);
+
+  /**
+   * The ten WSTG chapters as radar axes: executed cases against the cases the
+   * chapter holds. `byCategory` already arrives in WSTG order, so the shape
+   * reads the same way the catalogue does.
+   */
+  const categoryAxes = useMemo(
+    () =>
+      (coverage?.byCategory ?? []).map((row) => ({
+        key: row.key,
+        label: row.key,
+        value: row.executed,
+        max: row.total,
+      })),
+    [coverage],
+  );
 
   /**
    * Open when the user opened it; open while a filter is on, so matches are visible; otherwise
@@ -362,8 +467,8 @@ export default function TestPlanPage({ sessionId }) {
 
   if (planQuery.isLoading) {
     return (
-      <div className={styles.fullState}>
-        <Spin />
+      <div className={styles.page}>
+        <PageState state="loading" rows={5} />
       </div>
     );
   }
@@ -373,15 +478,11 @@ export default function TestPlanPage({ sessionId }) {
         <div>
           <span className={styles.eyebrow}>OWASP WSTG v{catalog?.version ?? "4.2"}</span>
           <h1>Web Application Security Testing</h1>
-          <p className={styles.headerContext}>
-            {plan ? (
-              [plan.target, plan.scope].filter(Boolean).join("  ·  ")
-            ) : engagement?.target ? (
-              `${engagement.target}${engagement.scope ? `  ·  ${engagement.scope}` : ""} - no plan yet`
-            ) : (
-              `The ${catalog?.totalTests ?? 97} WSTG v4.2 cases, ready to scope to this engagement.`
-            )}
-          </p>
+          {/* The plan's own boundary when it exists, the session's before that. */}
+          <PlanChips
+            target={plan?.target || engagement?.target}
+            scope={plan?.scope || engagement?.scope}
+          />
         </div>
         <div className={styles.headerActions}>
           <Button
@@ -390,7 +491,22 @@ export default function TestPlanPage({ sessionId }) {
             loading={planQuery.isFetching}
             onClick={() => planQuery.refetch()}
           />
-          <Button type="primary" icon={<SettingOutlined />} onClick={() => setSetupOpen(true)}>
+          <Button
+            icon={<PlayCircleOutlined />}
+            disabled={!plan}
+            title="Launch and follow scans of this plan"
+            onClick={() => router.push(`/session/${sessionId}/scans`)}
+          >
+            Scans
+          </Button>
+          <Button
+            type="primary"
+            icon={<SettingOutlined />}
+            // Never open setup on a plan we could not read: the modal would
+            // start from an empty selection and save over the real one.
+            disabled={planQuery.isError || planQuery.isLoading}
+            onClick={() => setSetupOpen(true)}
+          >
             {plan ? "Plan setup" : "Set up plan"}
           </Button>
           <Button
@@ -403,73 +519,104 @@ export default function TestPlanPage({ sessionId }) {
         </div>
       </header>
 
-      {planQuery.isError && (
-        <Alert type="error" showIcon message="Could not load the WSTG test plan" />
-      )}
-
-      {!plan && (
-        <section className={styles.emptyState}>
-          <h2>No test plan yet</h2>
-          <p>
-            Pick the WSTG categories this engagement covers and the plan is built from the catalogue,
-            with the target and scope recorded alongside it.
-          </p>
-          <Button type="primary" icon={<SettingOutlined />} onClick={() => setSetupOpen(true)}>
-            Set up the test plan
-          </Button>
-        </section>
-      )}
+      {/*
+        A failed read is not an empty plan. The old markup painted an Alert and
+        still offered "Set up the test plan", which opens the setup modal with
+        no plan loaded — every catalogue case pre-ticked and no drop warning —
+        so one failed refresh could silently widen a scoped plan to all 97
+        cases. The two states are now mutually exclusive.
+      */}
+      {planQuery.isError ? (
+        <PageState
+          state="error"
+          title="Could not load the WSTG test plan"
+          description="Retry before opening plan setup: rebuilding from here would replace the case selection."
+          onRetry={() => planQuery.refetch()}
+        />
+      ) : planQuery.isSuccess && !plan ? (
+        <PageState
+          state="empty"
+          title="No test plan yet"
+          description={`Pick the WSTG chapters this engagement covers and the plan is built from the ${
+            catalog?.totalTests ?? 97
+          }-case catalogue, with the target and scope recorded alongside it.`}
+          actions={
+            <Button
+              type="primary"
+              icon={<SettingOutlined />}
+              onClick={() => setSetupOpen(true)}
+            >
+              Set up the test plan
+            </Button>
+          }
+        />
+      ) : null}
 
       {plan && coverage && (
         <>
-          <section className={styles.progress}>
-            <div className={styles.progressSummary}>
+          {/* The readout: how much of the plan is settled (dial + counters) and
+              where it is thin (the ten chapters on one radar). The sentence
+              that used to spell the four counters out is gone; the chips below
+              are the filter, so they stay. */}
+          <section className={styles.coverage} aria-label="Plan coverage">
+            <div className={styles.coverageReadout}>
               <ProgressRing
                 value={coverage.executed}
                 total={coverage.total}
                 tone={coverage.failed ? "warning" : "accent"}
                 caption="Executed"
-                size={108}
+                size={116}
                 thickness={7}
+                showPercent
               />
-              <div className={styles.progressText}>
-                <span className={styles.progressPercent}>
-                  {coverage.percentExecuted}% complete
-                </span>
-                <span className={styles.progressMeta}>
-                  {coverage.executed} of {coverage.total} cases executed
-                  {coverage.failed > 0 ? ` - ${coverage.failed} failed` : ""}
-                  {coverage.blocked > 0 ? ` - ${coverage.blocked} blocked` : ""}
-                  {coverage.notStarted > 0
-                    ? ` - ${coverage.notStarted} not started`
-                    : ""}
-                </span>
-                <span className={styles.progressBar}>
-                  <CoverageBar
-                    value={coverage.percentExecuted}
-                    tone={coverage.failed ? "barFailed" : "barPurple"}
-                  />
-                </span>
-              </div>
+              <StatStrip className={styles.coverageStrip}>
+                <StatTile
+                  label="Executed"
+                  value={coverage.executed}
+                  total={coverage.total}
+                  hint={`${coverage.percentExecuted}% of the plan`}
+                />
+                <StatTile label="Passed" value={coverage.passed} tone="success" />
+                <StatTile
+                  label="Failed"
+                  value={coverage.failed}
+                  tone={coverage.failed ? "danger" : "neutral"}
+                />
+                <StatTile
+                  label="Blocked"
+                  value={coverage.blocked}
+                  tone={coverage.blocked ? "warning" : "neutral"}
+                />
+              </StatStrip>
             </div>
-            <div className={styles.chips}>
-              {chips.map((chip) => (
-                <button
-                  key={chip.value}
-                  type="button"
-                  className={`${styles.chip} ${
-                    statusFilter === chip.value ? styles.chipActive : ""
-                  }`}
-                  onClick={() =>
-                    handleStatusFilter(chip.value === statusFilter ? "all" : chip.value)
-                  }
-                >
-                  {chip.label}
-                  <b>{chip.count}</b>
-                </button>
-              ))}
+
+            <div className={styles.coverageRadar}>
+              <span className={styles.coverageRadarLabel}>Coverage by chapter</span>
+              <RadarChart
+                axes={categoryAxes}
+                size={286}
+                label="Cases executed per WSTG chapter"
+              />
             </div>
           </section>
+
+          <div className={styles.chips}>
+            {chips.map((chip) => (
+              <button
+                key={chip.value}
+                type="button"
+                className={`${styles.chip} ${
+                  statusFilter === chip.value ? styles.chipActive : ""
+                }`}
+                onClick={() =>
+                  handleStatusFilter(chip.value === statusFilter ? "all" : chip.value)
+                }
+              >
+                {chip.label}
+                <b>{chip.count}</b>
+              </button>
+            ))}
+          </div>
 
           <section className={styles.planCard}>
             {requestedCaseId && (
@@ -518,6 +665,17 @@ export default function TestPlanPage({ sessionId }) {
             {activeSelectedIds.size > 0 && (
               <div className={styles.selectionBar}>
                 <span>{activeSelectedIds.size} selected</span>
+                {/* The plan is where cases are chosen, so it is also where a
+                    scan of them starts: the launcher opens on this selection
+                    instead of making the operator re-pick it. */}
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  disabled={planQuery.isError}
+                  onClick={() => setScanSelection(Array.from(activeSelectedIds))}                >
+                  Scan selected
+                </Button>
                 <Button
                   size="small"
                   danger
@@ -580,23 +738,11 @@ export default function TestPlanPage({ sessionId }) {
                           </span>
                         </button>
 
-                        <span className={styles.groupBar}>
-                          <CoverageBar
-                            value={summary.percent}
-                            tone={summary.failed ? "barFailed" : "barPurple"}
-                          />
-                        </span>
-
-                        {summary.failed > 0 && (
-                          <span className={`${styles.stat} ${styles.statFailed}`}>
-                            {summary.failed} failed
-                          </span>
-                        )}
-                        {summary.blocked > 0 && (
-                          <span className={`${styles.stat} ${styles.statBlocked}`}>
-                            {summary.blocked} blocked
-                          </span>
-                        )}
+                        <CategoryBar
+                          code={group.code}
+                          name={group.name}
+                          summary={summary}
+                        />
                       </div>
 
                       {open && (
@@ -771,7 +917,7 @@ export default function TestPlanPage({ sessionId }) {
           </>
         )}
 
-      {setupOpen && (
+      {setupOpen && planQuery.isSuccess && (
         <PlanSetupModal
           sessionId={sessionId}
           plan={plan}
@@ -779,6 +925,19 @@ export default function TestPlanPage({ sessionId }) {
           engagement={engagement}
           onClose={() => setSetupOpen(false)}
           onSaved={invalidate}
+        />
+      )}
+
+      {scanSelection?.length > 0 && plan && (
+        <ScanLauncherModal
+          sessionId={sessionId}
+          plan={plan}
+          initialTestIds={scanSelection}
+          onClose={() => setScanSelection(null)}
+          onLaunched={(run) => {
+            setScanSelection(null);
+            if (run?.runId) router.push(`/session/${sessionId}/scans/${run.runId}`);
+          }}
         />
       )}
 

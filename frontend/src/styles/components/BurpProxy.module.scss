@@ -1,14 +1,14 @@
-﻿@import "../_variables";
+@import "../_variables";
 
 .burpContainer {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background: var(--primary-bg);
+  background: var(--moon-surface-1);
 }
 
-// â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Header ──────────────────────────────────────────────────────────────────
 
 .header {
   display: flex;
@@ -17,7 +17,43 @@
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  background: var(--secondary-bg);
+  background: var(--moon-surface-1);
+}
+
+/* As a full page (the rail's Burp entry) this panel *is* the page, so its
+   toolbar has to read like a page header. In the chat's right rail the same
+   markup stays a compact pane header. */
+.burpContainerPage {
+  padding: 1.5rem 1.8rem 2rem;
+
+  .header {
+    align-items: flex-end;
+    padding: 0 0 0.9rem;
+    border-bottom: 1px solid var(--moon-line-1);
+    background: transparent;
+  }
+
+  .headerTitle {
+    font-size: 1.5rem;
+    letter-spacing: -0.02em;
+    color: var(--moon-text);
+  }
+
+  .headerLeft {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
+
+  .headerEyebrow {
+    @include eyebrow;
+    display: block;
+    font-size: 0.62rem;
+  }
+}
+
+.headerEyebrow {
+  display: none;
 }
 
 .headerLeft {
@@ -26,18 +62,25 @@
   gap: 0.5rem;
 }
 
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .headerTitle {
   margin: 0;
   font-size: 0.8rem;
   font-weight: 400;
-  color: var(--primary-text);
+  color: var(--moon-text);
   letter-spacing: -0.01em;
 }
 
 .entryCount {
   font-size: 0.6rem;
   font-weight: 400;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   background: var(--surface-active);
   padding: 0.1rem 0.45rem;
   border-radius: 9px;
@@ -54,7 +97,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--vulnpen-green);
+  color: var(--moon-success);
   background: rgba(16, 202, 0, 0.07);
   border: 1px solid rgba(16, 202, 0, 0.18);
   border-radius: 4px;
@@ -97,13 +140,13 @@
   gap: 0.12rem;
 
   strong {
-    color: var(--primary-text);
+    color: var(--moon-text);
     font-size: 0.68rem;
     font-weight: 400;
   }
 
   span {
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
     font-size: 0.62rem;
     line-height: 1.4;
   }
@@ -151,7 +194,7 @@
   font-size: 0.65rem !important;
   height: 1.5rem !important;
   padding: 0 0.55rem !important;
-  color: var(--secondary-text) !important;
+  color: var(--moon-text-dim) !important;
   border: 1px solid var(--border-subtle) !important;
   background: transparent !important;
   border-radius: 4px !important;
@@ -161,13 +204,13 @@
   transition: all var(--transition-fast) !important;
 
   &:hover {
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
     border-color: var(--border-default) !important;
     background: var(--surface-hover) !important;
   }
 }
 
-// â”€â”€ Filter bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Filter bar ──────────────────────────────────────────────────────────────
 
 .filterBar {
   display: flex;
@@ -176,12 +219,12 @@
   padding: 0.35rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  background: var(--primary-bg);
+  background: var(--moon-surface-1);
 }
 
 .filterSearch {
   width: 190px;
-  background: var(--primary-bg) !important;
+  background: var(--moon-surface-1) !important;
   border: 1px solid var(--border-subtle) !important;
   border-radius: 4px !important;
   height: 1.35rem !important;
@@ -194,19 +237,19 @@
   &:global(.ant-input-affix-wrapper-focused) {
     border-color: var(--moon-accent) !important;
     box-shadow: none !important;
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
   }
 
   &:hover {
     border-color: var(--border-default) !important;
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
   }
 
   :global(.ant-input) {
     font-size: 0.6rem !important;
     font-family: "JetBrains Mono", monospace !important;
     background: transparent !important;
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
     line-height: 1.35rem !important;
 
     &::placeholder {
@@ -219,7 +262,7 @@
     font-size: 0.52rem !important;
 
     &:hover {
-      color: var(--primary-text) !important;
+      color: var(--moon-text) !important;
     }
   }
 
@@ -250,7 +293,7 @@
   transition: all var(--transition-fast) !important;
 
   &:hover {
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
     border-color: var(--border-default) !important;
   }
 
@@ -266,18 +309,18 @@
 
   :global(.ant-select-selector) {
     height: 1.35rem !important;
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
     border: 1px solid var(--border-subtle) !important;
     border-radius: 4px !important;
     font-size: 0.6rem !important;
-    color: var(--secondary-text) !important;
+    color: var(--moon-text-dim) !important;
     padding: 0 0.4rem !important;
   }
 
   :global(.ant-select-selection-item) {
     font-size: 0.6rem !important;
     line-height: 1.25rem !important;
-    color: var(--secondary-text) !important;
+    color: var(--moon-text-dim) !important;
   }
 
   :global(.ant-select-arrow) {
@@ -317,11 +360,11 @@
   height: auto !important;
 
   &:hover {
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
   }
 }
 
-// â”€â”€ Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Table ───────────────────────────────────────────────────────────────────
 
 .tableWrapper {
   flex: 1;
@@ -342,15 +385,11 @@
   }
 
   :global(.ant-table-thead > tr > th) {
-    background: var(--secondary-bg) !important;
-    color: var(--secondary-text) !important;
-    font-size: 0.58rem;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    border-bottom: 1px solid var(--border-subtle) !important;
-    padding: 0.35rem 0.6rem !important;
+    @include tableHead;
+    background: var(--moon-surface-2) !important;
+    color: var(--moon-text-mute) !important;
     border-top: none !important;
+    padding: 0.35rem 0.6rem !important;
 
     &::before {
       display: none !important;
@@ -358,12 +397,11 @@
   }
 
   :global(.ant-table-tbody > tr > td) {
-    border-bottom: 1px solid var(--border-subtle) !important;
+    @include tableCell;
     padding: 0.3rem 0.6rem !important;
-    color: var(--primary-text);
+    color: var(--moon-text);
     font-size: 0.72rem;
-    vertical-align: middle;
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
   }
 
   :global(.ant-table-tbody > tr) {
@@ -372,11 +410,11 @@
   }
 
   :global(.ant-table-tbody > tr:hover > td) {
-    background: var(--surface-hover) !important;
+    background: var(--moon-row-hover) !important;
   }
 
   :global(.ant-table-expanded-row > td) {
-    background: var(--secondary-bg) !important;
+    background: var(--moon-surface-1) !important;
     padding: 0 !important;
     border-bottom: 1px solid var(--border-default) !important;
   }
@@ -392,16 +430,16 @@
   }
 
   :global(.ant-table-tbody .ant-table-placeholder) {
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
   }
 
   :global(.ant-table-tbody .ant-table-placeholder > td) {
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
     border-bottom: none !important;
   }
 
   :global(.ant-table-tbody .ant-table-placeholder .ant-table-cell) {
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
   }
 
   :global(.ant-empty) {
@@ -419,7 +457,7 @@
   }
 
   :global(.ant-spin-dot-item) {
-    background-color: var(--filled-purple);
+    background-color: var(--moon-accent-strong);
   }
 
   // pagination
@@ -437,7 +475,7 @@
     border-radius: 4px;
 
     a {
-      color: var(--secondary-text);
+      color: var(--moon-text-dim);
       font-size: 0.65rem;
     }
 
@@ -456,20 +494,20 @@
 
   :global(.ant-pagination .ant-pagination-prev button),
   :global(.ant-pagination .ant-pagination-next button) {
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
   }
 
   :global(.ant-pagination .ant-pagination-options .ant-select-selector) {
     background: transparent !important;
     border-color: var(--border-subtle) !important;
-    color: var(--secondary-text) !important;
+    color: var(--moon-text-dim) !important;
     font-size: 0.65rem !important;
     height: 24px !important;
     border-radius: 4px !important;
   }
 
   :global(.ant-pagination .ant-pagination-options .ant-select-selection-item) {
-    color: var(--secondary-text) !important;
+    color: var(--moon-text-dim) !important;
     font-size: 0.65rem !important;
     line-height: 22px !important;
   }
@@ -479,7 +517,7 @@
   }
 }
 
-// â”€â”€ Cell styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Cell styles ─────────────────────────────────────────────────────────────
 
 .methodTag {
   font-size: 0.56rem;
@@ -500,16 +538,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--primary-text-100);
+  color: var(--moon-100);
   display: block;
 }
 
 .hostCell {
   font-size: 0.68rem;
-  color: var(--secondary-text);
-  display: inline-flex;
+  color: var(--moon-text-dim);
+  display: flex;
   align-items: center;
   gap: 0.3rem;
+  min-width: 0;
+}
+
+/* The host is a real flex item: an ellipsis on the cell itself would never
+   apply, because the raw text is an anonymous item that does not shrink. */
+.hostText {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -519,7 +564,7 @@
   font-size: 0.48rem;
   font-weight: 400;
   font-family: "JetBrains Mono", monospace;
-  color: var(--vulnpen-green);
+  color: var(--moon-success);
   background: rgba(16, 202, 0, 0.08);
   padding: 0.04rem 0.2rem;
   border-radius: 2px;
@@ -532,7 +577,7 @@
   font-weight: 400;
   font-size: 0.68rem;
 
-  &.status2xx { color: var(--vulnpen-green); }
+  &.status2xx { color: var(--moon-success); }
   &.status3xx { color: #79c0ff; }
   &.status4xx { color: var(--orange); }
   &.status5xx { color: #ff7b72; }
@@ -558,7 +603,7 @@
   }
 }
 
-// â”€â”€ Expanded row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Expanded row ────────────────────────────────────────────────────────────
 
 .expandedRow {
   padding: 0.5rem 0.65rem;
@@ -580,21 +625,21 @@
   padding: 0.25rem 0.55rem;
   font-size: 0.62rem;
   font-weight: 400;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: color var(--transition-fast), border-color var(--transition-fast);
   user-select: none;
 
   &:hover {
-    color: var(--primary-text);
+    color: var(--moon-text);
   }
 }
 
 .expandedTabActive {
   @extend .expandedTab;
-  color: var(--primary-text);
-  border-bottom-color: var(--filled-purple);
+  color: var(--moon-text);
+  border-bottom-color: var(--moon-accent-strong);
 }
 
 .expandedActions {
@@ -606,7 +651,7 @@
   font-size: 0.6rem !important;
   height: 1.35rem !important;
   padding: 0 0.45rem !important;
-  color: var(--secondary-text) !important;
+  color: var(--moon-text-dim) !important;
   border: 1px solid var(--border-subtle) !important;
   background: transparent !important;
   border-radius: 4px !important;
@@ -640,10 +685,10 @@
   }
 }
 
-// â”€â”€ Code block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Code block ──────────────────────────────────────────────────────────────
 
 .codeBlock {
-  background: var(--primary-bg);
+  background: var(--moon-surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
   max-height: 280px;
@@ -684,28 +729,28 @@
 .lineContent {
   display: table-cell;
   padding: 0 0.5rem;
-  color: var(--primary-text);
+  color: var(--moon-text);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 // Syntax highlighting
 .httpMethod { color: var(--moon-accent); font-weight: 400; }
-.httpUrl { color: var(--primary-text); }
-.httpVersion { color: var(--secondary-text); }
+.httpUrl { color: var(--moon-text); }
+.httpVersion { color: var(--moon-text-dim); }
 .httpHeaderName { color: #79c0ff; }
-.httpHeaderValue { color: var(--primary-text-100); }
-.httpStatusOk { color: var(--vulnpen-green); font-weight: 400; }
+.httpHeaderValue { color: var(--moon-100); }
+.httpStatusOk { color: var(--moon-success); font-weight: 400; }
 .httpStatusRedirect { color: #79c0ff; font-weight: 400; }
 .httpStatusClientErr { color: var(--orange); font-weight: 400; }
 .httpStatusServerErr { color: #ff7b72; font-weight: 400; }
-.httpBody { color: var(--secondary-text); }
+.httpBody { color: var(--moon-text-dim); }
 
-// â”€â”€ Repeater modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Repeater modal ──────────────────────────────────────────────────────────
 
 .repeaterModal {
   :global(.ant-modal-content) {
-    background: var(--primary-bg) !important;
+    background: var(--moon-surface-1) !important;
     border: 1px solid var(--border-default);
     border-radius: 8px;
     padding: 0;
@@ -720,7 +765,7 @@
   }
 
   :global(.ant-modal-title) {
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
     font-size: 0.75rem !important;
     font-weight: 400 !important;
   }
@@ -730,12 +775,12 @@
   }
 
   :global(.ant-modal-close) {
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
     top: 0.4rem;
     right: 0.55rem;
 
     &:hover {
-      color: var(--primary-text);
+      color: var(--moon-text);
     }
   }
 
@@ -752,7 +797,7 @@
   gap: 0.55rem;
   padding: 0.4rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--secondary-bg);
+  background: var(--moon-surface-1);
 }
 
 .metaField {
@@ -763,18 +808,18 @@
   label {
     font-size: 0.58rem;
     font-weight: 400;
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
   }
 
   input {
-    background: var(--primary-bg);
+    background: var(--moon-surface-1);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
     padding: 0.2rem 0.45rem;
-    color: var(--primary-text);
+    color: var(--moon-text);
     font-family: "JetBrains Mono", monospace;
     font-size: 0.62rem;
     outline: none;
@@ -802,7 +847,7 @@
   span {
     font-size: 0.58rem;
     font-weight: 400;
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -830,7 +875,7 @@
   justify-content: space-between;
   padding: 0.3rem 0.6rem;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--secondary-bg);
+  background: var(--moon-surface-1);
   flex-shrink: 0;
 }
 
@@ -839,7 +884,7 @@
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
 }
 
 .paneActions {
@@ -862,7 +907,7 @@
   font-size: 0.6rem !important;
   height: 1.35rem !important;
   padding: 0 0.5rem !important;
-  color: var(--secondary-text) !important;
+  color: var(--moon-text-dim) !important;
   border: 1px solid var(--border-subtle) !important;
   background: transparent !important;
   border-radius: 4px !important;
@@ -872,7 +917,7 @@
   font-weight: 400 !important;
 
   &:hover {
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
     border-color: var(--border-default) !important;
   }
 }
@@ -905,7 +950,7 @@
     width: 100%;
     height: 100%;
     background: transparent;
-    color: var(--primary-text);
+    color: var(--moon-text);
     border: none;
     padding: 0.45rem 0.6rem;
     font-family: "JetBrains Mono", monospace;
@@ -943,13 +988,13 @@
 .responseTimeBadge {
   font-size: 0.55rem;
   font-family: "JetBrains Mono", monospace;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   background: var(--surface-active);
   padding: 0.08rem 0.35rem;
   border-radius: 3px;
 }
 
-// â”€â”€ States â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── States ──────────────────────────────────────────────────────────────────
 
 .emptyState {
   display: flex;
@@ -958,12 +1003,12 @@
   justify-content: center;
   padding: 5rem 2rem;
   gap: 0.5rem;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   text-align: center;
 
   h3 {
     margin: 0;
-    color: var(--primary-text);
+    color: var(--moon-text);
     font-size: 0.82rem;
     font-weight: 400;
   }
@@ -973,7 +1018,7 @@
     font-size: 0.72rem;
     max-width: 300px;
     line-height: 1.5;
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
   }
 }
 
@@ -1003,5 +1048,59 @@
   align-items: center;
   gap: 0.3rem;
   flex-shrink: 0;
+}
+
+/* ============================================================================
+   TRAFFIC SUMMARY - the console's own readout
+   The table is the product; this band is what a tester reads before scrolling
+   it: how much was captured, what came back, and which hosts dominate. Every
+   figure drawn from the loaded page says so, because the API pages history.
+   ========================================================================== */
+.trafficSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-bottom: 1rem;
+}
+
+.summaryStrip {
+  min-width: 0;
+}
+
+.trafficGraphics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.trafficCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.8rem 1rem 0.95rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+.trafficTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  @include eyebrow;
+  font-size: 0.6rem;
+}
+
+.trafficScope {
+  color: var(--moon-text-faint);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 

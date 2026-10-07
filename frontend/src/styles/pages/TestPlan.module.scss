@@ -1,80 +1,22 @@
 @import '../_variables';
 
-.page {
-  width: 100%;
-  max-width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 2rem;
-  background: var(--primary-bg);
-  color: var(--primary-text);
-}
-
-.fullState {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 2rem;
-  margin-bottom: 1.25rem;
-
-  h1 {
-    margin: 0.25rem 0 0.35rem;
-    font-size: 2rem;
-    line-height: 1.1;
-    letter-spacing: -0.04em;
-  }
-}
-
-.eyebrow {
-  color: var(--primary-purple);
-  font-size: 0.7rem;
-  font-weight: 400;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.headerContext {
-  max-width: 80ch;
-  margin: 0;
-  color: var(--secondary-text);
-  font-size: 0.82rem;
-}
-
-.headerActions {
-  display: flex;
-  flex-shrink: 0;
-  gap: 0.5rem;
-}
-
-.muted {
-  color: var(--secondary-text);
-  font-size: 0.75rem;
-}
+/* The page frame, the header, the chips and the plan card are declared once,
+   further down under "WSTG TEST PLAN". They used to be declared twice — an
+   earlier block here and a later one there — which is how a redesign at the
+   bottom silently loses half its declarations and inherits the rest. */
 
 // antd controls default to the light theme; every page here is dark.
 .darkControls {
   :global(.ant-form-item-label > label) {
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
   }
 
   :global(.ant-input),
   :global(.ant-input-affix-wrapper),
   :global(.ant-select-selector) {
-    background: var(--secondary-bg) !important;
+    background: var(--moon-surface-1) !important;
     border-color: var(--border-subtle) !important;
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
   }
 
   :global(.ant-input::placeholder),
@@ -83,121 +25,11 @@
   }
 
   :global(.ant-select-arrow) {
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
   }
 }
 
-.emptyState {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4rem;
-  max-width: 620px;
-  padding: 1.75rem;
-  background: #0d0d0d;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-
-  h2 {
-    margin: 0;
-    font-size: 1.1rem;
-  }
-
-  p {
-    margin: 0 0 0.9rem;
-    color: var(--secondary-text);
-    font-size: 0.82rem;
-  }
-}
-
-// --- Progress and status filter chips --------------------------------
-
-.progress {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem 1.5rem;
-  margin-bottom: 1rem;
-  padding: 0.9rem 1.1rem;
-  background: #0d0d0d;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-}
-
-.progressHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.6rem;
-
-  strong {
-    font-size: 1.5rem;
-    line-height: 1;
-    letter-spacing: -0.04em;
-    color: #f5f5f5;
-  }
-
-  > span {
-    color: var(--secondary-text);
-    font-size: 0.78rem;
-  }
-}
-
-.progressBar {
-  display: block;
-  width: 140px;
-  align-self: center;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-left: auto;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
-  color: var(--secondary-text);
-  font-size: 0.72rem;
-  font-weight: 400;
-  background: #131313;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: border-color 0.12s ease, color 0.12s ease;
-
-  b {
-    color: #d7d7d7;
-    font-weight: 400;
-  }
-
-  &:hover {
-    color: var(--primary-text);
-    border-color: var(--border-default);
-  }
-}
-
-.chipActive {
-  color: #0d0d0d;
-  background: var(--primary-purple);
-  border-color: var(--primary-purple);
-
-  b {
-    color: #0d0d0d;
-  }
-}
 // --- Plan card, catalogue categories and cases ------------------------
-
-.planCard {
-  overflow: hidden;
-  background: #0d0d0d;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-}
 
 .toolbar {
   display: flex;
@@ -211,7 +43,7 @@
 .search {
   flex: 1 1 300px;
   max-width: 460px;
-  color: var(--primary-text) !important;
+  color: var(--moon-text) !important;
   background: var(--input-bg) !important;
   border-color: var(--border-default) !important;
 }
@@ -231,8 +63,8 @@
   padding: 0.5rem 1rem;
   color: #ffd7a8;
   font-size: 0.76rem;
-  background: #ff9f4310;
-  border-bottom: 1px solid #ff9f4333;
+  background: var(--moon-warning-bg);
+  border-bottom: 1px solid var(--moon-warning-line);
 
   /* Danger button: keep antd's danger semantics but on the dark surface. */
   :global(.ant-btn-dangerous) {
@@ -270,7 +102,7 @@
 .filterNote {
   margin: 0;
   padding: 0.65rem 1rem 0;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-size: 0.72rem;
 }
 
@@ -321,13 +153,13 @@
   }
 
   &:focus-visible {
-    outline: 1px solid var(--primary-purple);
+    outline: 1px solid var(--moon-text-dim);
     outline-offset: 2px;
   }
 }
 
 .chevron {
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-size: 0.66rem;
   transition: transform 0.15s ease;
 }
@@ -335,7 +167,7 @@
 
 
 .groupCode {
-  color: var(--primary-purple);
+  color: var(--moon-text-dim);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.72rem;
   font-weight: 400;
@@ -352,66 +184,61 @@
 
 .groupCount {
   flex-shrink: 0;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.7rem;
 }
 
+/* One segment per outcome, sharing the row width by count. The track behind
+   them is the work the chapter has not reached, so the bar is the whole
+   chapter, not just the settled part. */
 .groupBar {
-  display: block;
+  display: flex;
   flex-shrink: 0;
-  width: 110px;
-}
-
-.stat {
-  flex-shrink: 0;
-  padding: 0.1rem 0.4rem;
-  font-size: 0.64rem;
-  font-weight: 400;
-  border: 1px solid transparent;
-  border-radius: 999px;
-}
-
-.statFailed {
-  color: #ff5c5c;
-  background: #ff5c5c12;
-  border-color: #ff5c5c33;
-}
-
-.statBlocked {
-  color: #ff9f43;
-  background: #ff9f4312;
-  border-color: #ff9f4333;
-}
-
-.bar {
-  display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 90px;
+  max-width: 240px;
   height: 6px;
   overflow: hidden;
-  background: #191919;
+  background: var(--moon-surface-3);
   border-radius: 999px;
 }
 
-.barFill {
+.groupSeg {
   display: block;
   height: 100%;
-  background: #6b6b6b;
-  border-radius: 999px;
-  transition: width 0.2s ease;
+  min-width: 3px;
+  background: var(--seg, var(--moon-text-mute));
+
+  & + & {
+    margin-left: 1px;
+  }
 }
 
-.barPurple {
-  background: var(--primary-purple);
+.groupSegEmpty {
+  flex: 1 1 auto;
+  background: var(--moon-surface-3);
 }
 
-.barFailed {
-  background: #ff5c5c;
+.segPassed {
+  --seg: var(--moon-success);
 }
 
-.tableWrap {
-  overflow-x: auto;
-  border-top: 1px solid var(--border-subtle);
+.segFailed {
+  --seg: var(--moon-danger);
+}
+
+.segBlocked {
+  --seg: var(--moon-high);
+}
+
+.segActive {
+  --seg: var(--moon-info);
+}
+
+.segSkipped {
+  --seg: var(--moon-text-faint);
 }
 
 .caseTable {
@@ -421,23 +248,16 @@
   table-layout: fixed;
 
   th {
-    padding: 0.5rem 0.75rem;
-    color: #777;
-    font-size: 0.62rem;
-    font-weight: 400;
-    letter-spacing: 0.06em;
-    text-align: left;
-    text-transform: uppercase;
-    background: #0b0b0b;
-    border-bottom: 1px solid var(--border-subtle);
+    @include tableHead;
+    padding: 0.55rem 0.75rem;
+    letter-spacing: 0.1em;
+    background: rgba(255, 255, 255, 0.015);
+    border-bottom: 1px solid var(--moon-line-2);
   }
 
   td {
+    @include tableCell;
     padding: 0.65rem 0.75rem;
-    color: #d7d7d7;
-    font-size: 0.78rem;
-    vertical-align: middle;
-    border-bottom: 1px solid var(--border-subtle);
   }
 
   tbody tr {
@@ -445,7 +265,7 @@
     transition: background 0.12s ease;
 
     &:hover {
-      background: #161616;
+      @include tableRowHover;
     }
   }
 
@@ -460,14 +280,6 @@
 .colStatus { width: 140px; }
 .colFindings { width: 78px; }
 .colActions { width: 52px; }
-.rowOpen {
-  background: #171717;
-}
-
-.rowSelected {
-  background: var(--moon-accent-08);
-}
-
 // Row actions stay quiet until the row is pointed at, so a 97-case plan reads as data first.
 .rowActions {
   opacity: 0.3;
@@ -481,56 +293,23 @@
 
 .caseCode {
   display: block;
-  color: var(--primary-purple);
+  color: var(--moon-accent);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.72rem;
   font-weight: 400;
 }
-
-.caseSection {
-  display: block;
-  margin-top: 0.2rem;
-  color: var(--secondary-text);
-  font-size: 0.68rem;
-}
-
-.customTag {
-  display: inline-block;
-  margin-top: 0.25rem;
-  padding: 0.05rem 0.3rem;
-  color: #c8a6ff;
-  font-size: 0.58rem;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: var(--moon-accent-08);
-  border: 1px solid var(--moon-accent-24);
-  border-radius: 4px;
-}
-
 .caseTitle {
   display: block;
-  color: #f2f2f2;
+  color: var(--moon-text);
   font-size: 0.82rem;
   font-weight: 400;
 }
-
-.caseObjective {
-  display: -webkit-box;
-  overflow: hidden;
-  margin-top: 0.2rem;
-  color: var(--secondary-text);
-  font-size: 0.68rem;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
 // The status control carries the colour, so the table needs no second status column.
 .statusSelect {
   width: 100%;
 
   :global(.ant-select-selector) {
-    background: var(--secondary-bg) !important;
+    background: var(--moon-surface-1) !important;
     border-color: var(--border-subtle) !important;
   }
 
@@ -541,65 +320,20 @@
   }
 }
 
-.statusToneIdle :global(.ant-select-selection-item) { color: #9a9a9a; }
-.statusToneActive :global(.ant-select-selection-item) { color: #58a6ff; }
-.statusTonePassed :global(.ant-select-selection-item) { color: #7ee787; }
-.statusToneFailed :global(.ant-select-selection-item) { color: #ff5c5c; }
-.statusToneBlocked :global(.ant-select-selection-item) { color: #ff9f43; }
-
-.findingCount {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  padding: 0.15rem 0.4rem;
-  color: #0d0d0d;
-  font-size: 0.68rem;
-  font-weight: 400;
-  background: #ff9f43;
-  border-radius: 999px;
-}
-
-.detailRow td {
-  padding: 1rem 0.9rem 1.35rem;
-  background: #101010;
-}
-
-.detailGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.9rem 1.4rem;
-
-  h4 {
-    margin: 0 0 0.3rem;
-    color: #777;
-    font-size: 0.62rem;
-    font-weight: 400;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-  }
-
-  p {
-    margin: 0 0 0.35rem;
-    color: #cfcfcf;
-    font-size: 0.78rem;
-    line-height: 1.5;
-  }
-}
-
-.detailWide {
-  grid-column: 1 / -1;
-}
-// antd checkboxes render light by default; this page is dark.
+.statusToneIdle :global(.ant-select-selection-item) { color: var(--moon-text-mute); }
+.statusToneActive :global(.ant-select-selection-item) { color: var(--moon-info); }
+.statusTonePassed :global(.ant-select-selection-item) { color: var(--moon-success); }
+.statusToneFailed :global(.ant-select-selection-item) { color: var(--moon-danger); }
+.statusToneBlocked :global(.ant-select-selection-item) { color: var(--moon-high); }
 .caseTable :global(.ant-checkbox-inner) {
-  background: #131313;
+  background: var(--moon-surface-2);
   border-color: #3a3a3a;
 }
 
 .caseTable :global(.ant-checkbox-checked .ant-checkbox-inner),
 .caseTable :global(.ant-checkbox-indeterminate .ant-checkbox-inner) {
-  background: var(--primary-purple);
-  border-color: var(--primary-purple);
+  background: var(--moon-text-dim);
+  border-color: var(--moon-text-dim);
 }
 
 // --- Plan setup modal -----------------------------------------------
@@ -620,7 +354,7 @@
 
   > p {
     margin: 0 0 0.9rem;
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
     font-size: 0.75rem;
   }
 }
@@ -674,13 +408,13 @@
   }
 
   :global(.ant-checkbox-inner) {
-    background: #131313;
+    background: var(--moon-surface-2);
     border-color: #3a3a3a;
   }
 
   :global(.ant-checkbox-checked .ant-checkbox-inner) {
-    background: var(--primary-purple);
-    border-color: var(--primary-purple);
+    background: var(--moon-text-dim);
+    border-color: var(--moon-text-dim);
   }
 
   :global(.ant-checkbox + span) {
@@ -720,7 +454,7 @@
   background: none;
   border: none;
   border-radius: 6px;
-  color: #9a9a9a;
+  color: var(--moon-text-mute);
   cursor: pointer;
 
   &:hover {
@@ -754,7 +488,7 @@
 }
 
 .caseName {
-  color: #9a9a9a;
+  color: var(--moon-text-mute);
   font-size: 0.68rem;
 }
 
@@ -770,26 +504,65 @@
 }
 
 .categoryMeta {
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-size: 0.66rem;
+}
+
+/* How much of this category is planned. The count next to it says the same
+   thing in words; the bar is what makes ten categories comparable at a glance. */
+.categoryBar {
+  display: block;
+  flex: 0 0 auto;
+  width: 88px;
+  height: 5px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  background: var(--moon-surface-3);
+  border-radius: var(--moon-radius-pill);
+}
+
+.categoryBarFill {
+  display: block;
+  height: 100%;
+  background: var(--moon-accent);
+  border-radius: var(--moon-radius-pill);
+  transition: width var(--moon-dur-3) var(--moon-ease-out);
 }
 
 .scopePreview {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 1rem;
-  margin: 0 0 0.7rem;
-  color: var(--secondary-text);
+  margin: 0 0 0.5rem;
+  color: var(--moon-text-dim);
   font-size: 0.75rem;
 }
 
+/* The share of the catalogue this save would plan, in one fill. */
+.scopeBar {
+  display: block;
+  height: 6px;
+  margin: 0 0 0.7rem;
+  overflow: hidden;
+  background: var(--moon-surface-3);
+  border-radius: var(--moon-radius-pill);
+}
+
+.scopeBarFill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--moon-accent-40), var(--moon-accent));
+  border-radius: var(--moon-radius-pill);
+  transition: width var(--moon-dur-3) var(--moon-ease-out);
+}
+
 .scopeAdded {
-  color: #7ee787;
+  color: var(--moon-success);
   font-weight: 400;
 }
 
 .scopeDropped {
-  color: #ff5c5c;
+  color: var(--moon-danger);
   font-weight: 400;
 }
 
@@ -798,94 +571,15 @@
   color: #777;
   font-size: 0.7rem;
 }
-
-// --- Draft report modal ---------------------------------------------
-
-.reportMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-  padding-bottom: 0.85rem;
-  color: var(--secondary-text);
-  font-size: 0.72rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.reportBody {
-  max-height: 62vh;
-  overflow-y: auto;
-  color: #d7d7d7;
-  font-size: 0.8rem;
-  line-height: 1.6;
-
-  > :first-child {
-    margin-top: 0;
-  }
-
-  h1 {
-    font-size: 1.3rem;
-  }
-
-  h2 {
-    margin: 1.4rem 0 0.6rem;
-    padding-bottom: 0.3rem;
-    font-size: 1.05rem;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  h3 {
-    margin: 1.1rem 0 0.45rem;
-    font-size: 0.92rem;
-  }
-
-  table {
-    width: 100%;
-    margin: 0.7rem 0 1.1rem;
-    border-collapse: collapse;
-    font-size: 0.74rem;
-
-    th,
-    td {
-      padding: 0.4rem 0.55rem;
-      text-align: left;
-      border: 1px solid var(--border-subtle);
-    }
-
-    th {
-      color: #9a9a9a;
-      background: #131313;
-    }
-  }
-
-  pre {
-    padding: 0.75rem 0.85rem;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    background: #090909;
-    border: 1px solid var(--border-subtle);
-    border-radius: 7px;
-  }
-
-  code {
-    color: #c8a6ff;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.92em;
-  }
-
-  blockquote {
-    margin: 0.7rem 0;
-    padding-left: 0.8rem;
-    color: var(--secondary-text);
-    border-left: 2px solid var(--primary-purple);
-  }
-}
-
 @media (max-width: 1100px) {
   .page {
     padding: 1.25rem;
   }
+}
 
+/* The header row is tightest here, and the name needs the room more than the
+   bar does — the count beside it still carries the ratio. */
+@include responsive(tablet3) {
   .groupBar {
     display: none;
   }
@@ -932,10 +626,18 @@
    WSTG TEST PLAN - Lunar Monochrome
    ========================================================================== */
 .page {
-  background: transparent;
+  width: 100%;
   max-width: var(--moon-page-max);
+  height: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.75rem 2rem 3rem;
+  background: transparent;
+  color: var(--moon-text);
 
   @include responsive(tablet3) {
     padding: 1.25rem 1rem 2.5rem;
@@ -943,14 +645,24 @@
 }
 
 .header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
   margin-bottom: 1.2rem;
 
   h1 {
     margin: 0.3rem 0 0.4rem;
     font-size: clamp(1.5rem, 2.3vw, 2rem);
     font-weight: 400;
+    line-height: 1.1;
     letter-spacing: -0.04em;
     color: var(--moon-text);
+  }
+
+  @include responsive(tablet3) {
+    flex-direction: column;
+    gap: 0.9rem;
   }
 }
 
@@ -958,12 +670,41 @@
   @include eyebrow;
 }
 
-.headerContext {
-  max-width: 82ch;
-  margin: 0;
+.muted {
   color: var(--moon-text-mute);
-  font-size: 0.82rem;
-  line-height: 1.55;
+  font-size: 0.75rem;
+}
+
+/* The engagement boundary as chips: the same two facts the overview shows the
+   same way, instead of a sentence that spells them out. */
+.scopeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.scopeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 46ch;
+  padding: 0.2rem 0.6rem;
+  color: var(--moon-text-dim);
+  font-size: 0.75rem;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-pill);
+}
+
+.scopeChipLabel {
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+.scopeChipValue {
+  min-width: 0;
+  @include truncate(1);
 }
 
 .headerActions {
@@ -974,14 +715,16 @@
   flex-wrap: wrap;
 }
 
-/* ---- Coverage panel ---- */
-.progress {
-  display: flex;
-  flex-wrap: wrap;
+/* ---- Coverage readout ---- */
+/* The dial and the counters on the left, the ten chapters on one radar on the
+   right: "how far along" and "where is it thin" are two shapes, not two
+   paragraphs. */
+.coverage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem 1.5rem;
-  margin-bottom: 1rem;
+  gap: 1.5rem;
+  margin-bottom: 0.9rem;
   padding: 1.1rem 1.25rem;
   background: linear-gradient(
     150deg,
@@ -991,48 +734,51 @@
   border: 1px solid var(--moon-line-1);
   border-radius: var(--moon-radius-lg);
   box-shadow: var(--moon-inner-top);
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
 }
 
-.progressSummary {
+.coverageReadout {
   display: flex;
   align-items: center;
-  gap: 1.15rem;
+  gap: 1.25rem;
+  width: 100%;
   min-width: 0;
-  flex: 1 1 22rem;
+
+  @include responsive(mobile4) {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
-.progressText {
+.coverageStrip {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.coverageRadar {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  align-items: center;
+  gap: 0.35rem;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
-.progressPercent {
-  font-size: 1.05rem;
-  font-weight: 400;
-  letter-spacing: -0.03em;
-  color: var(--moon-text);
+.coverageRadarLabel {
+  @include eyebrow;
+  font-size: 0.56rem;
 }
 
-.progressMeta {
-  font-size: 0.76rem;
-  line-height: 1.45;
-  color: var(--moon-text-mute);
-}
-
-.progressBar {
-  display: block;
-  width: 100%;
-  max-width: 26rem;
-  margin-top: 0.15rem;
-}
-
+/* The status filter: it sits between the coverage card and the plan card, so
+   it needs the row's own breathing room. */
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  margin-bottom: 1rem;
 }
 
 .chip {
@@ -1081,104 +827,14 @@
   box-shadow: var(--moon-inner-top);
 }
 
-.barFill {
-  display: block;
-  height: 100%;
-  background: var(--moon-text-mute);
-  border-radius: var(--moon-radius-pill);
-  transition: width var(--moon-dur-3) var(--moon-ease-out);
-}
-
-.barPurple {
-  background: linear-gradient(90deg, var(--moon-accent-64), var(--moon-accent));
-}
-
-.barFailed {
-  background: linear-gradient(90deg, var(--moon-high), var(--moon-danger));
-}
-
 .tableWrap {
   overflow-x: auto;
   border-top: 1px solid var(--moon-line-1);
 }
 
-.caseTable {
-  th {
-    padding: 0.55rem 0.75rem;
-    color: var(--moon-text-mute);
-    font-size: 0.62rem;
-    font-weight: 400;
-    letter-spacing: 0.1em;
-    background: rgba(255, 255, 255, 0.015);
-    border-bottom: 1px solid var(--moon-line-2);
-  }
-
-  td {
-    padding: 0.65rem 0.75rem;
-    color: var(--moon-text-dim);
-    font-size: 0.78rem;
-    border-bottom: 1px solid var(--moon-line-1);
-  }
-
-  tbody tr:hover {
-    background: var(--surface-hover);
-  }
-}
-
-.rowOpen {
-  background: var(--moon-surface-2);
-  box-shadow: inset 2px 0 0 var(--moon-accent);
-}
-
 .rowSelected {
   background: var(--moon-accent-08);
   box-shadow: inset 2px 0 0 var(--moon-accent-40);
-}
-
-.caseCode {
-  color: var(--moon-accent);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.caseSection {
-  color: var(--moon-text-mute);
-}
-
-.customTag {
-  color: var(--moon-accent);
-  background: var(--moon-accent-08);
-  border: 1px solid var(--moon-accent-24);
-  border-radius: var(--moon-radius-xs);
-}
-
-.caseTitle {
-  color: var(--moon-text);
-}
-
-.emptyState {
-  max-width: 640px;
-  padding: 1.6rem 1.75rem;
-  background: var(--moon-surface-1);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
-  box-shadow: var(--moon-inner-top);
-
-  h2 {
-    color: var(--moon-text);
-  }
-
-  p {
-    color: var(--moon-text-mute);
-    line-height: 1.6;
-  }
-}
-
-.muted {
-  color: var(--moon-text-mute);
-}
-
-.fullState {
-  color: var(--moon-text-dim);
 }
 
 /* ============================================================================
@@ -1271,15 +927,6 @@
    Only the page-specific scaffolding lives here.
    ========================================================================== */
 
-// Top row of the detail header: back link on the left, actions on the right.
-.caseDetailTopRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
 // The status control on the detail page reads as a deliberate pill, not a
 // naked text field: dark surface, round cap, quiet arrow. The box itself is
 // tinted by the status colour (see the .pill* classes) so it reads at a glance.
@@ -1291,7 +938,7 @@
     align-items: center;
     height: 32px !important;
     padding: 0 30px 0 13px !important;
-    background: color-mix(in srgb, var(--pill, #9a9a9a) 10%, #131313) !important;
+    background: color-mix(in srgb, var(--pill, #9a9a9a) 10%, var(--moon-surface-2)) !important;
     border: 1px solid color-mix(in srgb, var(--pill, #9a9a9a) 40%, transparent) !important;
     border-radius: 999px !important;
     transition: border-color 0.12s ease;
@@ -1330,16 +977,18 @@
     top: 50% !important;
     transform: translateY(-50%);
     margin-top: 0;
-    color: var(--secondary-text);
+    color: var(--moon-text-dim);
   }
 }
 
-// Per-status tint for the pill above, one custom property each.
-.pillIdle { --pill: #9a9a9a; }
-.pillActive { --pill: #58a6ff; }
-.pillPassed { --pill: #7ee787; }
-.pillFailed { --pill: #ff5c5c; }
-.pillBlocked { --pill: #ff9f43; }
+// Per-status tint for the pill above, one custom property each. The values are
+// the semantic tokens, not a second palette: a failed scan and a failed finding
+// must not be two different reds.
+.pillIdle { --pill: var(--moon-text-mute); }
+.pillActive { --pill: var(--moon-info); }
+.pillPassed { --pill: var(--moon-success); }
+.pillFailed { --pill: var(--moon-danger); }
+.pillBlocked { --pill: var(--moon-warning); }
 
 // The options menu must follow the dark page, not antd's white default.
 .statusDropdown {
@@ -1361,50 +1010,16 @@
     color: #777;
   }
 }
-
-// Wider, roomier stat boxes than the vulnerability page's 3-up grid — a
-// dropdown and a link pill need breathing room that 76px columns can't give.
-.caseScoreGrid {
-  grid-template-columns: repeat(2, minmax(150px, 200px));
-
-  > div {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 0.45rem;
-    padding: 0.75rem 1rem !important;
-  }
-
-  // The vulnerability page's `.scoreGrid div` padding also lands on antd's
-  // internal Select divs, shoving the pill out of its wrapper. Reset it.
-  :global(.ant-select) {
-    padding: 0 !important;
-  }
-
-  // The findings pill is a link; kill the browser underline the vuln styles
-  // never see, and let its own pill styling carry it.
-  a {
-    text-decoration: none;
-  }
-}
-
 // Colour accents for the detail body's cards — a quiet severity-style palette:
-// each card gets a left bar and matching heading in its own hue.
+// each card gets a left bar and matching heading in its own hue. The hues are
+// the semantic tokens, so a "method" heading and an "info" finding agree.
 .tone_purple { --tone: var(--moon-accent); }
-.tone_blue { --tone: #58a6ff; }
-.tone_green { --tone: #7ee787; }
-.tone_orange { --tone: #ff9f43; }
-.tone_yellow { --tone: #f5d76e; }
-.tone_gray { --tone: #9a9a9a; }
-
-.tone_purple { --tone: var(--moon-accent); }
-.tone_blue { --tone: #58a6ff; }
-.tone_green { --tone: #7ee787; }
-.tone_orange { --tone: #ff9f43; }
-.tone_yellow { --tone: #f5d76e; }
-.tone_gray { --tone: #9a9a9a; }
-.tone_red { --tone: #ff5c5c; }
+.tone_blue { --tone: var(--moon-info); }
+.tone_green { --tone: var(--moon-success); }
+.tone_orange { --tone: var(--moon-high); }
+.tone_yellow { --tone: var(--moon-warning); }
+.tone_gray { --tone: var(--moon-text-mute); }
+.tone_red { --tone: var(--moon-danger); }
 
 // ─── Nessus-style runs on the case detail page ────────────────────────
 
@@ -1421,39 +1036,9 @@
   border-radius: 999px;
   font-size: 0.72rem;
   letter-spacing: 0.04em;
-  color: #58a6ff;
-  background: rgba(88, 166, 255, 0.12);
-  border: 1px solid rgba(88, 166, 255, 0.35);
-}
-
-.runsSection {
-  margin: 1.1rem 0 1.5rem;
-}
-
-// One card, divider-separated rows — the same visual language as the
-// Details report document.
-.runList {
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
-  background: var(--moon-surface-1);
-  overflow: hidden;
-}
-
-.runsCardHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.8rem 1.25rem;
-  border-bottom: 1px solid var(--moon-line-1);
-}
-
-.runsTitle {
-  margin: 0;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--moon-text-mute, #888);
+  color: var(--moon-info);
+  background: var(--moon-info-bg);
+  border: 1px solid var(--moon-info-line);
 }
 
 .runsCount {
@@ -1461,47 +1046,19 @@
   border-radius: 999px;
   font-size: 0.7rem;
   letter-spacing: 0;
-  color: var(--primary-text);
+  color: var(--moon-text);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--moon-line-2);
-}
-
-.runRowWrap {
-  border-bottom: 1px solid var(--moon-line-1);
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.runRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.65rem 1rem;
-  width: 100%;
-  min-width: 0;
-  padding: 0.7rem 1.25rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: var(--primary-text);
-  font: inherit;
-
-  &:hover {
-    background: var(--moon-surface-2);
-  }
-}
-
-.runRowOpen {
-  background: var(--moon-surface-2);
 }
 
 .runStatusPill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  /* As a grid child the pill would otherwise stretch to the whole status
+     column, turning every row into a full-width colour bar. */
+  justify-self: start;
+  width: fit-content;
   padding: 0.2rem 0.65rem;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -1511,39 +1068,33 @@
 }
 
 .runToneQueued {
-  color: #9a9a9a;
-  background: rgba(154, 154, 154, 0.12);
-  border: 1px solid rgba(154, 154, 154, 0.35);
+  color: var(--moon-text-mute);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--moon-line-2);
 }
 
 .runToneRunning {
-  color: #58a6ff;
-  background: rgba(88, 166, 255, 0.12);
-  border: 1px solid rgba(88, 166, 255, 0.35);
+  color: var(--moon-info);
+  background: var(--moon-info-bg);
+  border: 1px solid var(--moon-info-line);
 }
 
 .runToneCompleted {
-  color: #7ee787;
-  background: rgba(126, 231, 135, 0.1);
-  border: 1px solid rgba(126, 231, 135, 0.35);
+  color: var(--moon-success);
+  background: var(--moon-success-bg);
+  border: 1px solid var(--moon-success-line);
 }
 
 .runToneFailed {
-  color: #ff5c5c;
-  background: rgba(255, 92, 92, 0.1);
-  border: 1px solid rgba(255, 92, 92, 0.35);
+  color: var(--moon-danger);
+  background: var(--moon-danger-bg);
+  border: 1px solid var(--moon-danger-line);
 }
 
 .runToneCancelled {
-  color: #9a9a9a;
-  background: rgba(154, 154, 154, 0.08);
-  border: 1px solid rgba(154, 154, 154, 0.25);
-}
-
-.runQueuedNote {
-  font-size: 0.78rem;
-  color: var(--moon-text-mute, #888);
-  white-space: nowrap;
+  color: var(--moon-text-mute);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--moon-line-1);
 }
 
 .runProgress {
@@ -1567,7 +1118,7 @@
 .runProgressFill {
   display: block;
   height: 100%;
-  background: #58a6ff;
+  background: var(--moon-info);
   border-radius: 999px;
   transition: width 0.6s ease;
 }
@@ -1576,34 +1127,6 @@
   font-size: 0.78rem;
   color: var(--moon-text-mute, #888);
   white-space: nowrap;
-}
-
-.runResult {
-  flex: 1 1 180px;
-  min-width: 0;
-  font-size: 0.85rem;
-  color: var(--primary-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.runMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.9rem;
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  color: var(--moon-text-mute, #888);
-  white-space: nowrap;
-}
-
-.runRowTail {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--moon-text-mute, #888);
 }
 
 .runActivityWrap {
@@ -1626,7 +1149,7 @@
 }
 
 .activityStream {
-  background: var(--primary-bg);
+  background: var(--moon-surface-1);
 }
 
 .activityMessages {
@@ -1675,7 +1198,9 @@
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
-  padding: 1.4rem 1.6rem 0;
+  // Full padding: the hero used to end flush with its meta tiles because a tab
+  // strip was meant to sit on its bottom edge. The tabs are gone.
+  padding: 1.4rem 1.6rem;
   background:
     linear-gradient(
       160deg,
@@ -1713,7 +1238,7 @@
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--moon-accent, #7ee787);
+  color: var(--moon-accent);
   background: var(--moon-accent-08);
   border: 1px solid var(--moon-accent-24);
 }
@@ -1733,7 +1258,7 @@
   font-size: 1.75rem;
   line-height: 1.15;
   letter-spacing: -0.03em;
-  color: var(--primary-text);
+  color: var(--moon-text);
 }
 
 .caseLead {
@@ -1744,27 +1269,58 @@
   color: var(--moon-text-mute, #999);
 }
 
+/* One band with hairline dividers, not three floating boxes: status, findings
+   and tools are readings about the same case. */
 .caseMetaRow {
   display: flex;
   align-items: stretch;
-  gap: 0.6rem;
-  margin-top: 0.55rem;
   flex-wrap: wrap;
+  margin-top: 0.7rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  overflow: hidden;
 }
 
 .caseMetaTile {
   display: flex;
+  flex: 1 1 160px;
   flex-direction: column;
-  gap: 0.3rem;
-  min-width: 150px;
-  padding: 0.55rem 0.85rem;
-  border-radius: var(--moon-radius-md, 10px);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--moon-line-1);
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.6rem 0.9rem;
+
+  & + & {
+    border-left: 1px solid var(--moon-line-1);
+  }
+
+  @include responsive(tablet3) {
+    & + & {
+      border-left: 0;
+      border-top: 1px solid var(--moon-line-1);
+    }
+  }
 }
 
 .caseMetaTileWide {
   flex: 1 1 240px;
+}
+
+/* Where this case sits in its WSTG chapter: one square per case in the
+   chapter, coloured by the result it settled, so "am I in the thin part of this
+   chapter?" is a look rather than a count. */
+.caseChapter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.caseChapterLabel {
+  @include eyebrow;
+  font-size: 0.58rem;
 }
 
 .caseMetaLabel {
@@ -1777,7 +1333,7 @@
 
 .caseFindingsValue {
   font-size: 0.88rem;
-  color: var(--primary-text);
+  color: var(--moon-text);
   text-decoration: none;
 
   &:hover {
@@ -1797,18 +1353,19 @@
   border-radius: 999px;
   font-family: var(--font-mono, monospace);
   font-size: 0.72rem;
-  color: var(--primary-text);
+  color: var(--moon-text);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--moon-line-2);
 }
 
-// Tabs sit inside the hero, aligned with its padding.
+// Tabs rule off the scan header. They used to bleed past the hero's padding to
+// reach its edges; the scan detail page has no hero, so they align normally.
 .viewTabs {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin: 0.35rem -1.6rem 0;
-  padding: 0 1.6rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
   border-top: 1px solid var(--moon-line-1);
 }
 
@@ -1827,21 +1384,21 @@
   cursor: pointer;
 
   &:hover {
-    color: var(--primary-text);
+    color: var(--moon-text);
   }
 }
 
 .viewTabActive {
-  color: var(--primary-text);
-  border-bottom-color: var(--moon-accent, #58a6ff);
+  color: var(--moon-text);
+  border-bottom-color: var(--moon-accent);
 }
 
 .viewTabDot {
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: #58a6ff;
-  box-shadow: 0 0 6px rgba(88, 166, 255, 0.9);
+  background: var(--moon-info);
+  box-shadow: 0 0 6px var(--moon-info);
   animation: runDotPulse 1.4s ease-in-out infinite;
 }
 
@@ -1874,9 +1431,12 @@
 }
 
 .caseDocBody {
+  // The detail page is wide; without a measure the method paragraphs run the
+  // full window and become a wall of text.
+  max-width: 92ch;
   font-size: 0.92rem;
   line-height: 1.6;
-  color: var(--primary-text);
+  color: var(--moon-text);
   white-space: pre-wrap;
 }
 
@@ -1884,23 +1444,395 @@
   color: var(--moon-text-mute, #888);
 }
 
-.runsEmpty {
-  padding: 1.4rem 1.25rem;
-  font-size: 0.88rem;
-  color: var(--moon-text-mute, #888);
-}
-
-// The run row is a width:100% <button> with padding — without border-box the
-// padding overflows the card and the whole monitor pokes past the page edge.
-.runsSection,
-.runsSection *,
+// The case document is a width:100% box with padding — without border-box the
+// padding overflows the card and the page edge.
 .caseDoc,
 .caseDoc * {
   box-sizing: border-box;
 }
 
-// The case page owns its breathing room: the borrowed .detailPage has none,
-// so hero/cards used to sit flush against the viewport edge.
-.casePage {
-  padding: 1.5rem 1.8rem 2rem;
+// The scan and case pages used to declare their own shell here. They render
+// inside the shared page frame now (`components/common/ui/PageShell`), which
+// owns the scroll region, the measure and the padding — see PRODUCT.md.
+
+// --- Scan detail and the shared scan atoms ---------------------------------
+// The scan list itself lives on the Scans page and in `Scans.module.scss`. What
+// stays here are the pieces several surfaces draw the same way: the lifecycle
+// pill and its tones, the progress bar, the result counters, and the identity
+// block the case page and the scan detail both print.
+
+.scansHeroTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.scansHeroActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scansTitle {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--moon-text);
+}
+
+.scansLead {
+  margin: 0.4rem 0 0;
+  max-width: 62ch;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--moon-text-mute, #888);
+}
+
+.scansEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.6rem 1.4rem;
+  border: 1px dashed var(--moon-line-2);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  color: var(--moon-text-mute, #888);
+  font-size: 0.9rem;
+
+  p {
+    margin: 0;
+    max-width: 70ch;
+    line-height: 1.55;
+  }
+}
+
+.scanIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.scanName {
+  /* A span inside the link is inline, and inline boxes ignore overflow/ellipsis:
+     without this the name runs straight across the progress column. */
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scanMeta {
+  font-size: 0.75rem;
+  color: var(--moon-text-mute, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scanError {
+  font-size: 0.72rem;
+  /* Twelve identical failures shout in full-strength red; the row still has to
+     say what went wrong, so it keeps the hue and gives up the volume. */
+  color: color-mix(in srgb, var(--moon-danger) 70%, var(--moon-text-mute));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Result counters ----------------------------------------------------- */
+/* These lived here while the scans list drew them; the list now owns that
+   anatomy in `Scans.module.scss`, together with the rule that decides between a
+   word and a proportion bar. */
+
+.scanDetailHead {
+  margin-bottom: 1.2rem;
+}
+
+.scanDetailTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.policyTag {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #888);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--moon-line-2);
+}
+
+.scanConsent {
+  margin: 0.9rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--moon-warning-line);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-warning-bg);
+}
+
+.scanConsentLead {
+  margin: 0 0 0.7rem;
+  font-size: 0.86rem;
+  color: var(--moon-text);
+}
+
+// The per-case result table under the scan's results tab.
+.scanTable {
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  overflow: hidden;
+}
+
+.scanTableHead,
+.scanTableRow {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) 130px 140px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1.25rem;
+}
+
+.scanTableHead {
+  border-bottom: 1px solid var(--moon-line-1);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #888);
+}
+
+.scanTableRow {
+  border-bottom: 1px solid var(--moon-line-1);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.scanCaseLink {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--moon-accent);
+  }
+}
+
+// A read-only status chip: the same --pill tint contract as .scoreSelect.
+.scanCasePill {
+  justify-self: start;
+  padding: 0.18rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--pill, #d7d7d7);
+  background: color-mix(in srgb, var(--pill, #9a9a9a) 10%, var(--moon-surface-2));
+  border: 1px solid color-mix(in srgb, var(--pill, #9a9a9a) 40%, transparent);
+  white-space: nowrap;
+}
+
+// The case page's own slice of the scan history: a compact card between the
+// case header and the report, so the newest outcome is the first thing read.
+.caseScans {
+  margin: 1.1rem 0 0;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  overflow: hidden;
+}
+
+.caseScansHead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--moon-line-1);
+}
+
+.caseScansTitle {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #888);
+}
+
+.caseScansLive {
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--moon-info);
+  background: var(--moon-info-bg);
+  border: 1px solid var(--moon-info-line);
+  cursor: pointer;
+}
+
+.caseScansAll {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--moon-text-mute, #888);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--moon-accent);
+  }
+}
+
+.caseScanList {
+  display: flex;
+  flex-direction: column;
+}
+
+// The card's states before it has rows to show — a bare <p> or <Spin> would sit
+// flush against the border.
+.caseScansPad {
+  padding: 1rem 1.25rem;
+}
+
+.caseScansEmpty {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--moon-text-mute, #888);
+}
+
+// Status, identity, outcome, chevron: the same reading order as the session
+// scan table, narrowed to the columns a single case cares about.
+.caseScanRow {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto 14px;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--moon-line-1);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  font: inherit;
+  color: var(--moon-text);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--moon-surface-2);
+
+    .caseScanChevron {
+      color: var(--moon-text-mute, #999);
+    }
+  }
+}
+
+.caseScanOutcome {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.caseScanSettled {
+  font-size: 0.78rem;
+  color: var(--moon-text-mute, #888);
+  white-space: nowrap;
+
+  strong {
+    font-weight: 600;
+    color: var(--moon-text);
+  }
+}
+
+.caseScanChevron {
+  font-size: 0.7rem;
+  color: var(--moon-text-dim, #5c5c5c);
+}
+
+// --- New scan dialog -------------------------------------------------
+
+.scanLauncher {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.scanField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.scanFieldLabel {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--moon-text-mute, #888);
+}
+
+.scanFieldHint {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--moon-text-mute, #888);
+
+  strong {
+    color: var(--moon-text);
+    font-weight: 600;
+  }
+}
+
+.scanCasePicker {
+  width: 100%;
+}
+
+.policyChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+
+  :global(.ant-radio-wrapper) {
+    align-items: flex-start;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--moon-line-1);
+    border-radius: var(--moon-radius-lg);
+    background: var(--moon-surface-1);
+    white-space: normal;
+  }
+}
+
+.policyTitle {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--moon-text);
+}
+
+.policyHint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--moon-text-mute, #888);
 }

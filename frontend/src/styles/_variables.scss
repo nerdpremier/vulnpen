@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // VulnPen - SCSS foundations (Lunar Monochrome)
 // Breakpoints, type scale, spacing/radius/elevation scales and the shared
 // mixins every page module builds on.
@@ -180,6 +180,39 @@ $dur-4: 420ms;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+}
+
+// ---------------------------------------------------------------------------
+// TABLE SKIN
+// Every table in the product dresses itself from here — the hand-rolled ones
+// (findings, test plan, scan list) and the antd one (Burp) alike. The header
+// recedes and the data reads; a table that disagrees with its neighbours is
+// then a bug in one include, not four palettes drifting apart.
+// ---------------------------------------------------------------------------
+
+/// Column header: a quiet uppercase label, one hairline underneath.
+@mixin tableHead {
+  color: var(--moon-text-mute);
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  background: var(--moon-surface-2);
+  border-bottom: 1px solid var(--moon-line-1);
+}
+
+/// Body cell: dimmed text, hairline separator.
+@mixin tableCell {
+  color: var(--moon-text-dim);
+  font-size: 0.78rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--moon-line-1);
+}
+
+/// Pointer feedback shared by clickable rows.
+@mixin tableRowHover {
+  background: var(--moon-row-hover);
 }
 
 /// Slim monochrome scrollbars.

@@ -22,10 +22,6 @@ import {
   buildRunInstruction,
   updateTestCase,
 } from "../src/services/web-security/test-plan.service";
-import {
-  buildResultSummary,
-  sliceRunActivity,
-} from "../src/services/web-security/run-queue.service";
 import type { WebAppTestPlanDoc } from "../src/models/Sessions/Sessions.model";
 import { mapFindingToOwaspTop10 } from "../src/services/web-security/owasp-mapping.service";
 import { buildWebAppPentestReport } from "../src/services/web-security/report.service";
@@ -795,63 +791,21 @@ test("buildRunInstruction frames the run with a marker, boundary and case detail
   assert.ok(single.includes(`- Expected evidence: ${testCase.evidenceExpectation}`));
   assert.ok(single.includes(`- Tools: ${testCase.tools.join(", ")}`));
   assert.ok(single.includes("without waiting for confirmation"));
+  assert.ok(
+    single.includes("reviewed automatically as part of this scan"),
+    "an unattended scan is never told to stop and ask",
+  );
+
+  const supervised = buildRunInstruction("run-1", [testCase], {
+    target: plan.target,
+    policy: "supervised",
+  });
+  assert.ok(supervised.includes("request it and continue once approved"));
+  assert.ok(!supervised.includes("reviewed automatically"));
 
   const plan2 = createTestPlan({ target: "https://app.example.com", testIds: ["WSTG-INFO-02", "WSTG-INFO-03"] }).plan;
   const cases = ["WSTG-INFO-02", "WSTG-INFO-03"].map((id) => findPlanCase(plan2, id)!);
   const multi = buildRunInstruction("run-2", cases);
   assert.ok(multi.includes("2 WSTG test cases against the engagement target"));
   assert.ok(!multi.includes("Scope boundary:"), "no scope line when the plan has none");
-});
-
-test("sliceRunActivity cuts one run's transcript between run markers", () => {
-  const message = (id: string, role: any, content: string | null): any => ({
-    id,
-    role,
-    content,
-    timestamp: new Date(),
-  });
-
-  const messages = [
-    message("m0", "user", "some earlier chat message"),
-    message("m1", "assistant", "earlier answer"),
-    message("m2", "system", "volatile system note"),
-    message("m3", "user", "[WSTG run run-a] Execute the following 1 WSTG test case"),
-    message("m4", "assistant", "thinking about INFO-02"),
-    message("m5", "tool", "tool output"),
-    message("m6", "user", "[WSTG run run-b] Execute the following 1 WSTG test case"),
-    message("m7", "assistant", "next run's activity"),
-  ];
-
-  const sliceA = sliceRunActivity(messages, "run-a");
-  assert.deepEqual(
-    sliceA.map((m) => m.id),
-    ["m4", "m5"],
-    "run-a spans its marker until run-b's marker; the instruction itself and system rows never appear",
-  );
-
-  const sliceB = sliceRunActivity(messages, "run-b");
-  assert.deepEqual(
-    sliceB.map((m) => m.id),
-    ["m7"],
-    "the newest run runs to the end of the transcript, instruction excluded",
-  );
-
-  assert.deepEqual(sliceRunActivity(messages, "run-z"), [], "an unknown run has no slice");
-});
-
-test("buildResultSummary counts the run's cases the way the history row shows them", () => {
-  const summary = buildResultSummary(
-    ["WSTG-INFO-02", "WSTG-INFO-03", "WSTG-INFO-04", "WSTG-INFO-05"],
-    [
-      { testId: "WSTG-INFO-02", status: "passed" },
-      { testId: "WSTG-INFO-03", status: "failed" },
-      { testId: "WSTG-INFO-04", status: "blocked" },
-    ],
-  );
-  assert.deepEqual(summary!.counts, { passed: 1, failed: 1, blocked: 1, other: 1 });
-  assert.equal(summary!.perCase.find((c) => c.testId === "WSTG-INFO-05")!.status, "not_started");
-
-  // A run with no plan left (plan deleted mid-flight) degrades to not_started.
-  const orphan = buildResultSummary(["WSTG-INFO-02"], null);
-  assert.deepEqual(orphan!.counts, { passed: 0, failed: 0, blocked: 0, other: 1 });
 });

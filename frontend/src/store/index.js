@@ -1,6 +1,5 @@
 import { configureStore, combineReducers, createSerializableStateInvariantMiddleware } from "@reduxjs/toolkit";
 import userReducer from "./user.slice";
-import vpnReducer from "./vpn.slice";
 
 import { persistReducer } from "redux-persist";
 import storage from "redux-persist/lib/storage";
@@ -23,7 +22,6 @@ const isClient = typeof window !== "undefined";
 
 const reducers = combineReducers({
   user: userReducer,
-  vpn: vpnReducer,
 });
 
 const createAppStore = () => {
@@ -37,7 +35,7 @@ const createAppStore = () => {
   const persistConfig = {
     key: "root",
     storage,
-    whitelist: ["user", "vpn"],
+    whitelist: ["user"],
   };
 
   return configureStore({

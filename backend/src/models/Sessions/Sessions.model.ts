@@ -165,6 +165,16 @@ export type WebAppRunStatus =
   | "failed"
   | "cancelled";
 
+/**
+ * How much the scan asks of the operator while it runs.
+ *
+ * `unattended` reviews approval-boundary actions with the Approve-for-me
+ * reviewer so a launched scan finishes on its own; `supervised` leaves the
+ * user's own tool-execution mode in charge, which parks the scan on the first
+ * boundary action and waits for a human.
+ */
+export type WebAppRunPolicy = "unattended" | "supervised";
+
 export interface WebAppRunCaseResult {
   testId: string;
   status: WstgTestStatus;
@@ -175,6 +185,8 @@ export interface WebAppRunDoc {
   testIds: string[];
   label: string;
   status: WebAppRunStatus;
+  /** Absent on records written before scans had a policy: read it as unattended. */
+  policy?: WebAppRunPolicy;
   triggeredBy: "ui";
   queuedAt: Date;
   startedAt?: Date;
@@ -456,6 +468,11 @@ const WebAppRunSchema = new Schema(
       default: "queued",
     },
     triggeredBy: { type: String, default: "ui" },
+    policy: {
+      type: String,
+      enum: ["unattended", "supervised"],
+      default: "unattended",
+    },
     queuedAt: { type: Date, default: Date.now },
     startedAt: { type: Date },
     finishedAt: { type: Date },

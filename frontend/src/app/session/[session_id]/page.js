@@ -1,15 +1,14 @@
 "use client";
 
-import SessionMainPage from "@/components/pages/session/sessionId/SessionMainPage";
-import { Spin } from "antd";
-import { use } from "react";
+import React, { use } from "react";
+import EngagementOverviewPage from "@/components/pages/session/overview/EngagementOverviewPage";
 
-const SessionPage = ({ params }) => {
-  const { session_id } = use(params);
-
-  if (!session_id) return <Spin />;
-
-  return <SessionMainPage session_id={session_id} />;
-};
-
-export default SessionPage;
+/**
+ * The engagement's home. Chat moved to `/session/<id>/chat`; a session used to
+ * open straight into an empty composer, which says nothing about the state of
+ * the work.
+ */
+export default function SessionOverviewRoute({ params }) {
+  const { session_id: sessionId } = use(params);
+  return <EngagementOverviewPage sessionId={sessionId} />;
+}

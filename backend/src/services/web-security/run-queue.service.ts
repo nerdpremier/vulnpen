@@ -1,16 +1,22 @@
 /**
- * Nessus-style run queue for WSTG cases launched from the web UI.
+ * Nessus-style scan queue for WSTG cases launched from the web UI.
  *
- * Every launch is a run record persisted on the session document
- * (`webAppRuns`), so history survives reload and restart the way the test
- * plan itself does. A per-session in-memory FIFO feeds those records into the
- * agent loop one at a time: when the agent is idle the head record starts a
- * detached run (no SSE client — the UI follows along by polling the run's
- * transcript slice), and when the agent is busy the record stays queued until
- * a run of any kind releases its abort-controller slot.
+ * The product concept is a **scan**: the operator picks a set of WSTG cases
+ * (and how much approval the scan may assume) and launches it. This module is
+ * the engine behind that concept, so it keeps the storage vocabulary — every
+ * scan is a run record persisted on the session document (`webAppRuns`), so
+ * history survives reload and restart the way the test plan itself does.
  *
- * The agent's own safety gates are untouched: a queued run goes through the
- * same system prompt, tool consent and boundary checks as a chat message.
+ * A per-session in-memory FIFO feeds those records into the agent loop one at
+ * a time: when the agent is idle the head record starts a detached run (no SSE
+ * client — the UI follows along by polling the run's transcript slice), and
+ * when the agent is busy the record stays queued until a run of any kind
+ * releases its abort-controller slot.
+ *
+ * The agent's own safety gates are untouched: a queued scan goes through the
+ * same system prompt, boundary checks and consent rules as a chat message. An
+ * `unattended` scan only swaps the *human* for the existing Approve-for-me
+ * reviewer, exactly the way the user's own "auto_approve" mode does.
  */
 
 import { randomUUID } from "node:crypto";
@@ -18,9 +24,27 @@ import { randomUUID } from "node:crypto";
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import type {
   AgentMessageDoc,
+  SessionTestCaseDoc,
+  SessionVulnerabilityDoc,
   WebAppRunDoc,
+  WebAppRunPolicy,
   WebAppRunStatus,
 } from "../../models/Sessions/Sessions.model";
+import type { ToolExecutionMode } from "../../models/User/User.model";
+import {
+  buildResultSummary,
+  decorateRun,
+  normalizeRunLabel,
+  runCaseRows,
+  runFindings,
+  runPolicy,
+  selectRuns,
+  sliceRunActivity,
+  type RunCaseRow,
+  type RunFindingRow,
+  type RunListItem,
+  type RunListFilter,
+} from "./scan-results";
 import { createDetachedSSEWriter } from "../../utils/sse";
 import { initAndRun } from "../agent.service";
 import {
@@ -92,6 +116,8 @@ export interface EnqueueRunInput {
   userId: string;
   testIds: string[];
   label?: string;
+  /** Defaults to unattended: a launched scan is expected to finish on its own. */
+  policy?: WebAppRunPolicy;
 }
 
 export type EnqueueRunResult =
@@ -99,7 +125,7 @@ export type EnqueueRunResult =
   | { ok: false; missing: string[] };
 
 /**
- * Validates the requested test ids against the plan, appends a queued run
+ * Validates the requested test ids against the plan, appends a queued scan
  * record and tries to start it immediately if the agent is idle.
  */
 export async function enqueueRun(input: EnqueueRunInput): Promise<EnqueueRunResult> {
@@ -115,8 +141,9 @@ export async function enqueueRun(input: EnqueueRunInput): Promise<EnqueueRunResu
   const run: WebAppRunDoc = {
     runId: randomUUID(),
     testIds: requested,
-    label: input.label ?? "",
+    label: normalizeRunLabel(input.label),
     status: "queued",
+    policy: input.policy ?? "unattended",
     triggeredBy: "ui",
     queuedAt: new Date(),
   };
@@ -141,10 +168,13 @@ export async function enqueueRun(input: EnqueueRunInput): Promise<EnqueueRunResu
   state.userId = input.userId;
   await pump(input.sessionId);
 
+  // The same counting rule the list uses (see scan-results.decorateRun), so a
+  // launch never answers "position 1" about a scan the list calls "#2".
+  const ahead = state.activeRunId ? 1 : 0;
   return {
     ok: true,
     run,
-    position: state.queue.indexOf(run.runId) + 1,
+    position: ahead + state.queue.indexOf(run.runId) + 1,
   };
 }
 
@@ -219,6 +249,7 @@ async function startRun(
     const instruction = buildRunInstruction(run.runId, cases, {
       target: plan.target,
       scope: plan.scope,
+      policy: runPolicy(run),
     });
 
     // The loop polls a Redis pause flag the chat's pause button sets; a stale
@@ -241,8 +272,13 @@ async function startRun(
       sse,
       abortSignal: abortCtrl.signal,
       // Runs live in their own transcript channel: the model sees the history,
-      // the chat page's feed does not — the run is watched on the case page.
+      // the chat page's feed does not — the run is watched on the scan page.
       channel: "run",
+      // Unattended scans hand approval-boundary actions to the same reviewer
+      // the user's "Approve for me" mode uses; supervised scans leave the
+      // setting alone so their own mode decides (and may park for a human).
+      toolExecutionMode:
+        runPolicy(run) === "unattended" ? "auto_approve" : undefined,
     });
 
     await finishRun(sessionId, state, run.runId, abortCtrl, runError);
@@ -365,9 +401,17 @@ export async function stopRun(sessionId: string, runId: string): Promise<boolean
   if (!run) return false;
 
   if (run.status === "running") {
-    // A run parked on consent holds no controller; only the live loop aborts.
-    if (!hasActiveController(sessionId)) return false;
-    abortSession(sessionId);
+    if (hasActiveController(sessionId)) {
+      // The loop is live: abort it and let finishRun settle the record.
+      abortSession(sessionId);
+      return true;
+    }
+    // A run parked on consent released its controller, so there is nothing to
+    // abort. Stopping it means clearing the park and closing the record here —
+    // otherwise the only way out of a parked scan is to answer it.
+    await resetAgentRun(sessionId).catch(() => {});
+    await settleRun(sessionId, runId, "idle", true);
+    await pump(sessionId);
     return true;
   }
   if (run.status === "queued") {
@@ -382,39 +426,88 @@ export async function cancelQueuedRun(
   runId: string,
 ): Promise<boolean> {
   const state = stateFor(sessionId);
-  state.queue = state.queue.filter((entry) => entry !== runId);
-  const run = await mutateRun(sessionId, runId, (record) => {
+  let cancelled = false;
+  await mutateRun(sessionId, runId, (record) => {
     if (record.status !== "queued") return;
     record.status = "cancelled";
     record.finishedAt = new Date();
+    cancelled = true;
   });
-  return run != null;
+  if (!cancelled) return false;
+  state.queue = state.queue.filter((entry) => entry !== runId);
+  return true;
+}
+
+/**
+ * Delete a scan from the history: a queued one is dropped along with its queue
+ * slot, a settled one is removed from the document. A running scan must be
+ * stopped first.
+ *
+ * The removal is one atomic `$pull` guarded on the status, because deciding
+ * from a read and then writing the whole array back would let a scan that
+ * started in between be deleted while its detached agent kept running — an
+ * invisible run.
+ */
+export async function deleteRun(sessionId: string, runId: string): Promise<boolean> {
+  const state = stateFor(sessionId);
+  const runs = await loadRuns(sessionId);
+  const run = runs.find((entry) => entry.runId === runId);
+  if (!run || run.status === "running" || state.activeRunId === runId) return false;
+
+  const result = await SessionsModel.updateOne(
+    { sessionId, webAppRuns: { $elemMatch: { runId, status: { $ne: "running" } } } },
+    { $pull: { webAppRuns: { runId } } },
+  );
+  if (!result.modifiedCount) return false;
+
+  state.queue = state.queue.filter((entry) => entry !== runId);
+  return true;
 }
 
 // ─── Reads for the UI ─────────────────────────────────────────────────
 
-export interface RunListItem extends WebAppRunDoc {
-  position?: number;
-  active: boolean;
-}
-
-/** Queue position as the user counts it: behind the run already executing. */
-function decorateRun(run: WebAppRunDoc, state: SessionQueueState): RunListItem {
-  const ahead = state.activeRunId ? 1 : 0;
-  return {
-    ...run,
-    active: run.runId === state.activeRunId,
-    position:
-      run.status === "queued"
-        ? ahead + state.queue.indexOf(run.runId) + 1
-        : undefined,
-  };
-}
-
 /** All runs, newest first, with the live queue position filled in. */
-export async function listRuns(sessionId: string): Promise<RunListItem[]> {
+export async function listRuns(
+  sessionId: string,
+  filter: RunListFilter = {},
+): Promise<RunListItem[]> {
   const [runs, state] = [await loadRuns(sessionId), stateFor(sessionId)];
-  return [...runs].reverse().map((run) => decorateRun(run, state));
+  return selectRuns(runs, filter).map((run) => decorateRun(run, state));
+}
+
+export interface ParkedRunContext {
+  runId: string;
+  /** The transcript channel the scan writes in. */
+  channel: string;
+  /** The approval mode the scan was launched with, for its continuation. */
+  toolExecutionMode?: ToolExecutionMode;
+}
+
+/**
+ * Which scan a parked consent belongs to, for the resume path.
+ *
+ * A supervised scan parks and releases its controller; when the user answers,
+ * the continuation must run under the scan's own rules again — its transcript
+ * channel (or its activity leaks into the chat feed) and its approval mode (or
+ * an unattended scan silently becomes supervised for the rest of its cases).
+ * Returns null when the parked consent is a chat's, which changes nothing.
+ */
+export async function parkedRunContext(
+  sessionId: string,
+): Promise<ParkedRunContext | null> {
+  const state = stateFor(sessionId);
+  const runs = await loadRuns(sessionId);
+  const run = runs.find((entry) =>
+    state.activeRunId ? entry.runId === state.activeRunId : entry.status === "running",
+  );
+  if (!run) return null;
+
+  return {
+    runId: run.runId,
+    channel: "run",
+    toolExecutionMode:
+      runPolicy(run) === "unattended" ? "auto_approve" : undefined,
+  };
 }
 
 export interface RunActivityMessage {
@@ -434,76 +527,26 @@ export interface RunDetail {
   agentState?: string;
   pendingConsent?: Record<string, unknown> | null;
   messages: RunActivityMessage[];
+  /** The scan's own results, so the detail page reads as one document. */
+  cases: RunCaseRow[];
+  findings: RunFindingRow[];
 }
 
 /**
- * The transcript slice of one run: everything its agent produced — reasoning,
- * tool cards and outputs — between its marker user message and the next run's
- * marker. The instruction and the model's internal notes never enter the
- * feed. Pure, so the UI's live poll and a finished run's replay read the
- * exact same cut.
- */
-export function sliceRunActivity(
-  messages: AgentMessageDoc[],
-  runId: string,
-): AgentMessageDoc[] {
-  const marker = `[WSTG run ${runId}]`;
-  const startIndex = messages.findIndex(
-    (message) => message.role === "user" && message.content?.startsWith(marker),
-  );
-  if (startIndex < 0) return [];
-
-  let endIndex = messages.length;
-  for (let i = startIndex + 1; i < messages.length; i += 1) {
-    const message = messages[i];
-    if (message.role === "user" && (message.content ?? "").startsWith("[WSTG run ")) {
-      endIndex = i;
-      break;
-    }
-  }
-
-  return messages
-    .slice(startIndex + 1, endIndex)
-    .filter((message) => message.role === "assistant" || message.role === "tool");
-}
-
-/**
- * Snapshot a run's outcome from the plan: each requested case's current
- * status plus Nessus-style counts. Pure.
- */
-export function buildResultSummary(
-  testIds: string[],
-  planCases: { testId: string; status: string }[] | null,
-): WebAppRunDoc["resultSummary"] {
-  const perCase = testIds.map((testId) => ({
-    testId,
-    status:
-      (planCases?.find((testCase) => testCase.testId === testId)?.status as never) ??
-      "not_started",
-  }));
-  const counts = { passed: 0, failed: 0, blocked: 0, other: 0 };
-  for (const entry of perCase) {
-    if (entry.status === "passed") counts.passed += 1;
-    else if (entry.status === "failed") counts.failed += 1;
-    else if (entry.status === "blocked") counts.blocked += 1;
-    else counts.other += 1;
-  }
-  return { perCase, counts };
-}
-
-/**
- * One run plus its transcript slice: everything from the run's marker user
- * message until the next run's marker (or the end). Serves both live polling
- * and replay of finished runs.
+ * One run plus its transcript slice and its joined results: everything from
+ * the run's marker user message until the next run's marker (or the end).
+ * Serves both live polling and replay of finished runs.
  */
 export async function getRunDetail(
   sessionId: string,
   runId: string,
 ): Promise<RunDetail> {
   const session = await SessionsModel.findOne({ sessionId })
-    .select("webAppRuns messages agentState pendingConsent")
+    .select("webAppRuns messages agentState pendingConsent webAppTestPlan vulnerabilities")
     .lean();
-  if (!session) return { run: null, messages: [] };
+  if (!session) {
+    return { run: null, messages: [], cases: [], findings: [] };
+  }
 
   const runs = (session.webAppRuns as WebAppRunDoc[] | undefined) ?? [];
   const record = runs.find((entry) => entry.runId === runId);
@@ -512,6 +555,13 @@ export async function getRunDetail(
   const slice = sliceRunActivity(
     (session.messages ?? []) as AgentMessageDoc[],
     runId,
+  );
+
+  const plan = session.webAppTestPlan as { cases?: SessionTestCaseDoc[] } | undefined;
+  const cases = runCaseRows(record?.testIds ?? [], plan?.cases ?? null);
+  const findings = runFindings(
+    cases,
+    (session.vulnerabilities as SessionVulnerabilityDoc[] | undefined) ?? null,
   );
 
   // Consent belongs to whichever run the agent is actually executing — a run
@@ -542,6 +592,8 @@ export async function getRunDetail(
       files: message.files,
       timestamp: message.timestamp,
     })),
+    cases,
+    findings,
   };
 }
 

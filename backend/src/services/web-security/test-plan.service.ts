@@ -22,8 +22,10 @@ import {
 import type { WstgTest, WstgTestStatus } from "../../knowledge";
 import type {
   SessionTestCaseDoc,
+  WebAppRunPolicy,
   WebAppTestPlanDoc,
 } from "../../models/Sessions/Sessions.model";
+import { runMarker } from "./scan-results";
 
 export const TEST_PLAN_SOURCE = `OWASP WSTG v${WSTG_VERSION}`;
 
@@ -680,15 +682,19 @@ export function nextTestsToRun(
  * the case page). Persisted as a normal user message, so the chat transcript
  * records who asked for what; the `[WSTG run <runId>]` marker lets the UI
  * slice the transcript into per-run activity feeds.
+ *
+ * The scan's policy decides the approval paragraph: an unattended scan is
+ * reviewed by the Approve-for-me reviewer, so the agent must not stop and wait
+ * for a human; a supervised one is told to ask, because someone is watching.
  */
 export function buildRunInstruction(
   runId: string,
   cases: SessionTestCaseDoc[],
-  options?: { target?: string; scope?: string },
+  options?: { target?: string; scope?: string; policy?: WebAppRunPolicy },
 ): string {
   const target = options?.target || "the engagement target";
   const lines: string[] = [
-    `[WSTG run ${runId}] Execute the following ${cases.length} WSTG test case${
+    `${runMarker(runId)} Execute the following ${cases.length} WSTG test case${
       cases.length === 1 ? "" : "s"
     } against ${target}.`,
   ];
@@ -710,7 +716,9 @@ export function buildRunInstruction(
     "   - skipped only when the test genuinely does not apply to this target.",
     "4. Move on to the next case without waiting for confirmation.",
     "",
-    "If a tool needs approval (consent), request it and continue once approved.",
+    options?.policy === "supervised"
+      ? "If a tool needs approval (consent), request it and continue once approved."
+      : "Approval-boundary actions are reviewed automatically as part of this scan: do not stop to ask. If an action is refused, record why against the case and continue with the next one.",
     "",
     "Cases:",
   );

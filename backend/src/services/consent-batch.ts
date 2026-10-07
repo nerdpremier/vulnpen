@@ -117,11 +117,38 @@ export function loadPendingConsent(
 }
 
 /**
+ * Split a parked batch into what may run and what the operator refused.
+ *
+ * A supervised run parks on a *mixed* batch all the time — a read-only probe
+ * next to a boundary-crossing install — and the point of asking is that the
+ * operator may approve one and refuse the other. `approvedToolCallIds` is the
+ * ticked set: omitted means the whole batch, and an empty set means none of it.
+ * That asymmetry is deliberate: an empty list must never widen into "run
+ * everything", because it is what a mis-rendered checkbox list sends.
+ */
+export function splitConsentBatch(
+  pending: PendingConsentItem[],
+  approved: boolean,
+  approvedToolCallIds?: string[],
+): { allowed: PendingConsentItem[]; refused: PendingConsentItem[] } {
+  if (!approved) return { allowed: [], refused: [...pending] };
+
+  if (!approvedToolCallIds) return { allowed: [...pending], refused: [] };
+
+  const ticked = new Set(approvedToolCallIds);
+  const allowed = pending.filter((item) => ticked.has(item.toolCallId));
+  const allowedIds = new Set(allowed.map((item) => item.toolCallId));
+  return {
+    allowed,
+    refused: pending.filter((item) => !allowedIds.has(item.toolCallId)),
+  };
+}
+
+/**
  * The consent counters' one home — the run loop and the consent resume never
  * $inc them by hand: `approvals`/`denials` feed from the user's response,
  * `circuitOpens` from the approval-rejection streak tripping.
- */
-export async function recordConsentOutcome(
+ */export async function recordConsentOutcome(
   sessionId: string,
   approved: boolean,
 ): Promise<void> {

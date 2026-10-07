@@ -28,6 +28,7 @@ export const metadata = {
   metadataBase: new URL("http://localhost:3000"),
   icons: { icon: "/t-net-logo.png", apple: "/t-net-logo.png" },
 };
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">

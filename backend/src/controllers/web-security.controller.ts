@@ -7,7 +7,7 @@ import type { WebAppTestPlanDoc } from "../models/Sessions/Sessions.model";
 import { requireActiveSession } from "../services/session.helpers";
 import { saveSessionPlan } from "../services/web-security/session-plan-store";
 import {
-  cancelQueuedRun,
+  deleteRun,
   enqueueRun,
   getRunDetail,
   listRuns,
@@ -34,6 +34,7 @@ import {
   ensureReportDocx,
   markReportEditedByWord,
   reportDocxPath,
+  reportDocxStatus,
 } from "../services/web-security/report-docx.service";
 import { buildWordEditorUrl, resolveWopiToken } from "../services/web-security/wopi.service";
 import {
@@ -353,7 +354,15 @@ export const launchTestRun = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "testIds is required" });
     }
 
-    const result = await enqueueRun({ sessionId, userId, testIds });
+    const policy =
+      body.policy === "supervised" || body.policy === "unattended"
+        ? body.policy
+        : undefined;
+    // Trimming and the length cap are the record's own rule (enqueueRun), not
+    // the wire's: the handler only decides that a string was sent.
+    const label = typeof body.label === "string" ? body.label : undefined;
+
+    const result = await enqueueRun({ sessionId, userId, testIds, label, policy });
     if (!result.ok) {
       return res.status(404).json({
         message: "Some test cases are not part of this plan",
@@ -379,7 +388,12 @@ export const getTestRuns = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    return res.status(200).json({ runs: await listRuns(sessionId) });
+    // The case page asks for the scans that touched its case; the scans page
+    // asks for the whole history.
+    const testId =
+      typeof req.query.testId === "string" ? req.query.testId.trim() : undefined;
+
+    return res.status(200).json({ runs: await listRuns(sessionId, { testId }) });
   } catch (err: any) {
     console.error("[web-security] list test runs error:", err);
     return res.status(500).json({ message: "Failed to list the test runs" });
@@ -424,22 +438,28 @@ export const stopTestRun = async (req: Request, res: Response) => {
   }
 };
 
-export const cancelTestRun = async (req: Request, res: Response) => {
+/**
+ * Remove a scan from the session: a queued one is cancelled, a settled one is
+ * dropped from the history. A running scan must be stopped first.
+ */
+export const deleteTestRun = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
     const { sessionId, runId } = req.params;
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    const cancelled = await cancelQueuedRun(sessionId, runId);
-    if (!cancelled) {
-      return res.status(409).json({ message: "The test run is not queued" });
+    const removed = await deleteRun(sessionId, runId);
+    if (!removed) {
+      return res.status(409).json({
+        message: "Stop the scan before deleting it, or it no longer exists",
+      });
     }
 
-    return res.status(200).json({ runId, status: "cancelled" });
+    return res.status(200).json({ runId, deleted: true });
   } catch (err: any) {
-    console.error("[web-security] cancel test run error:", err);
-    return res.status(500).json({ message: "Failed to cancel the test run" });
+    console.error("[web-security] delete test run error:", err);
+    return res.status(500).json({ message: "Failed to delete the test run" });
   }
 };
 export const getReport = async (req: Request, res: Response) => {
@@ -624,10 +644,15 @@ export const openReportWord = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
+    // `rebuild=1` is the operator saying "discard my Word edits and regenerate
+    // from the engagement's current results" — the only way the stored
+    // document ever picks up scans and findings that arrived after an edit.
+    const rebuild = req.query.rebuild === "1" || req.body?.rebuild === true;
+
     // Materialise the working document before Collabora asks for it.
-    await ensureReportDocx(sessionId, userId);
+    await ensureReportDocx(sessionId, userId, { force: rebuild });
     const editor = await buildWordEditorUrl(sessionId, String(userId));
-    return res.status(200).json(editor);
+    return res.status(200).json({ ...editor, ...reportDocxStatus(sessionId) });
   } catch (err: any) {
     console.error("[web-security] word editor error:", err);
     return res.status(500).json({ message: err?.message ?? "Failed to open the Word editor" });
@@ -641,7 +666,10 @@ export const downloadReportDocxFile = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    const { filePath, fileName } = await ensureReportDocx(sessionId, userId);
+    const rebuild = req.query.rebuild === "1";
+    const { filePath, fileName } = await ensureReportDocx(sessionId, userId, {
+      force: rebuild,
+    });
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(fileName)}"`);
     return res.status(200).send(fs.readFileSync(filePath));
@@ -658,7 +686,10 @@ export const exportReportPdf = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    const { filePath, fileName } = await ensureReportDocx(sessionId, userId);
+    const rebuild = req.query.rebuild === "1";
+    const { filePath, fileName } = await ensureReportDocx(sessionId, userId, {
+      force: rebuild,
+    });
     const pdf = await convertReportToPdf(filePath);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(

@@ -23,11 +23,13 @@ import {
   loadPendingConsent,
   recordConsentOutcome,
   recordCircuitOpen,
+  splitConsentBatch,
 } from "./consent-batch";
 import { ContextBudget } from "./compaction.service";
 import { messagesToOpenAI, estimateToolSchemaTokens } from "./context.service";
 import { buildVolatileTail, injectVolatileTail } from "../utils/assistant/volatileContext";
 import UserModel, { resolveToolExecutionMode } from "../models/User/User.model";
+import type { ToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { wasSessionClearedSince } from "./session.helpers";
 import { engagementStateFromSession } from "./engagement-state";
@@ -204,6 +206,12 @@ export async function runAgentLoop(params: {
   abortSignal?: AbortSignal;
   /** Stamp all messages this run flushes with a transcript channel. */
   channel?: string;
+  /**
+   * Approval mode for this turn, overriding the user's own setting. An
+   * unattended scan passes "auto_approve" so a launched scan finishes without
+   * a human; everything else leaves it undefined and follows the user config.
+   */
+  toolExecutionMode?: ToolExecutionMode;
 }): Promise<void> {
   const { sessionId, userId, sse } = params;
 
@@ -220,7 +228,8 @@ export async function runAgentLoop(params: {
   }
 
   const user = await UserModel.findById(session.uid).lean();
-  const toolExecutionMode = resolveToolExecutionMode(user?.configs);
+  const toolExecutionMode =
+    params.toolExecutionMode ?? resolveToolExecutionMode(user?.configs);
   const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
   const maxAgentIterations = normalizeMaxAgentIterations(
     user?.configs?.maxAgentIterations,
@@ -617,8 +626,18 @@ export async function initAndRun(params: {
   abortSignal?: AbortSignal;
   /** Transcript channel for this whole turn (e.g. "run" for UI-launched runs). */
   channel?: string;
+  /** Approval mode for this turn; see runAgentLoop. */
+  toolExecutionMode?: ToolExecutionMode;
 }): Promise<void> {
-  const { sessionId, userId, userMessage: userMessageText, sse, abortSignal, channel } = params;
+  const {
+    sessionId,
+    userId,
+    userMessage: userMessageText,
+    sse,
+    abortSignal,
+    channel,
+    toolExecutionMode,
+  } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
@@ -634,7 +653,7 @@ export async function initAndRun(params: {
 
   sse.write("user_message_ack", { id: userMsg.id });
 
-  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode });
 }
 
 // ─── Handle consent response and resume ──────────────────────────────
@@ -643,10 +662,28 @@ export async function handleConsent(params: {
   sessionId: string;
   userId: string;
   approved: boolean;
+  /**
+   * Per-item approval: the tool call ids the operator ticked. Omitted means
+   * "every item in the batch". An empty array is a denial of everything, never
+   * an approval of everything — see the split below.
+   */
+  approvedToolCallIds?: string[];
   sse: SSEWriter;
   abortSignal?: AbortSignal;
+  /** Kept from the run that parked: see initAndRun for both. */
+  channel?: string;
+  toolExecutionMode?: ToolExecutionMode;
 }): Promise<void> {
-  const { sessionId, userId, approved, sse, abortSignal } = params;
+  const {
+    sessionId,
+    userId,
+    approved,
+    approvedToolCallIds,
+    sse,
+    abortSignal,
+    channel,
+    toolExecutionMode,
+  } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session || !session.pendingConsent) {
@@ -661,22 +698,40 @@ export async function handleConsent(params: {
 
   session.pendingConsent = undefined;
   await session.save();
-  await recordConsentOutcome(sessionId, approved);
 
-  if (!approved) {
-    const denialMessages: AgentMessageDoc[] = allPending.map((p) =>
-      toolResultMessage(
-        {
-          toolCallId: p.toolCallId,
-          toolName: p.toolName,
-          output: "User denied permission to run this tool.",
-        },
-        session.turnIndex,
-      ),
-    );
+  /**
+   * Split the batch into what may run and what is refused. A supervised scan
+   * can park on a mix of actions — a read-only probe and a boundary-crossing
+   * one — and the whole point of asking is that the operator may approve one
+   * and refuse the other. The rule lives in the consent-batch module, where it
+   * is unit-tested, because getting it wrong means running an action nobody
+   * approved.
+   */
+  const { allowed, refused } = splitConsentBatch(
+    allPending,
+    approved,
+    approvedToolCallIds,
+  );
+
+  // The approval streak tracks refusals: a mixed response is not a refusal, so
+  // it counts as an approval even when some items were denied.
+  await recordConsentOutcome(sessionId, allowed.length > 0);
+
+  const denialMessages: AgentMessageDoc[] = refused.map((p) =>
+    toolResultMessage(
+      {
+        toolCallId: p.toolCallId,
+        toolName: p.toolName,
+        output: "User denied permission to run this tool.",
+      },
+      session.turnIndex,
+    ),
+  );
+
+  if (allowed.length === 0) {
     await appendMessages(sessionId, denialMessages);
     await setAgentState(sessionId, "idle");
-    await runAgentLoop({ sessionId, userId, sse, abortSignal });
+    await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode });
     return;
   }
 
@@ -694,7 +749,7 @@ export async function handleConsent(params: {
   const callbacks = createSseToolCallbacks(sse);
 
   const toolMessages: AgentMessageDoc[] = [];
-  for (const pending of allPending) {
+  for (const pending of allowed) {
     const result = await executeConsentedTool(
       sessionId,
       pending.toolCallId,
@@ -716,6 +771,8 @@ export async function handleConsent(params: {
     );
   }
 
-  await appendMessages(sessionId, toolMessages);
-  await runAgentLoop({ sessionId, userId, sse, abortSignal });
+  // Refused items are answered too, or the model waits on a tool result that
+  // will never arrive.
+  await appendMessages(sessionId, [...toolMessages, ...denialMessages]);
+  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode });
 }

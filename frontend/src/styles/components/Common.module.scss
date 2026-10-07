@@ -5,7 +5,7 @@
   padding: 0 1.5rem;
   border-radius: 6px;
   background-color: transparent;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-weight: 400;
   font-size: 0.85rem;
   border: 1px solid var(--border-default);
@@ -20,7 +20,7 @@
   }
 
   &:hover {
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
     border-color: rgba(255, 255, 255, 0.2) !important;
     background-color: rgba(255, 255, 255, 0.06) !important;
   }
@@ -30,7 +30,7 @@
   }
 
   &:disabled {
-    color: var(--secondary-text) !important;
+    color: var(--moon-text-dim) !important;
     border-color: var(--border-subtle) !important;
     background-color: transparent !important;
     opacity: 0.4;
@@ -42,91 +42,26 @@
   display: flex;
   gap: 0.5rem;
   background-color: rgba(201, 210, 226, 0.12) !important;
-  color: var(--primary-text) !important;
-  border: 1px solid var(--primary-purple) !important;
+  color: var(--moon-text) !important;
+  border: 1px solid var(--moon-text-dim) !important;
 
   &:hover {
     background-color: rgba(201, 210, 226, 0.22) !important;
-    border-color: var(--primary-purple) !important;
-    color: var(--primary-text) !important;
-  }
-}
-
-.purpleFilledButton {
-  background-color: var(--filled-purple) !important;
-  border: 1px solid var(--filled-purple) !important;
-  color: var(--primary-text) !important;
-
-  &:hover {
-    background-color: var(--moon-0) !important;
-    border-color: var(--moon-0) !important;
-    color: var(--primary-text) !important;
-  }
-
-  &:active {
-    background-color: #6b26cc !important;
-    border-color: #6b26cc !important;
-  }
-}
-
-.pinkFilledButton {
-  background-color: var(--filled-pink) !important;
-  border: 1px solid var(--filled-pink) !important;
-  color: var(--primary-text) !important;
-
-  &:hover {
-    background-color: rgba(193, 10, 173, 0.85) !important;
-    border-color: var(--filled-pink) !important;
-    color: var(--primary-text) !important;
-  }
-}
-
-.dangerButton {
-  background-color: rgba(255, 62, 62, 0.12) !important;
-  color: var(--primary-text) !important;
-  border: 1px solid var(--danger) !important;
-
-  &:hover {
-    background-color: rgba(255, 62, 62, 0.22) !important;
-    border-color: var(--danger) !important;
-    color: var(--primary-text) !important;
-  }
-}
-
-.greenButton {
-  background-color: rgba(16, 202, 0, 0.12) !important;
-  color: var(--primary-text) !important;
-  border: 1px solid var(--vulnpen-green) !important;
-
-  &:hover {
-    background-color: rgba(16, 202, 0, 0.22) !important;
-    border-color: var(--vulnpen-green) !important;
-    color: var(--primary-text) !important;
-  }
-}
-
-.yellowButton {
-  background-color: rgba(245, 214, 0, 0.12) !important;
-  color: var(--primary-text) !important;
-  border: 1px solid var(--yellow) !important;
-
-  &:hover {
-    background-color: rgba(245, 214, 0, 0.22) !important;
-    border-color: var(--yellow) !important;
-    color: var(--primary-text) !important;
+    border-color: var(--moon-text-dim) !important;
+    color: var(--moon-text) !important;
   }
 }
 
 .whiteButton {
-  background-color: var(--primary-text) !important;
-  color: var(--secondary-bg) !important;
-  border: 1px solid var(--primary-text) !important;
+  background-color: var(--moon-text) !important;
+  color: var(--moon-surface-1) !important;
+  border: 1px solid var(--moon-text) !important;
   font-weight: 400;
 
   &:hover {
     background-color: rgba(255, 255, 255, 0.88) !important;
     border-color: rgba(255, 255, 255, 0.88) !important;
-    color: var(--secondary-bg) !important;
+    color: var(--moon-surface-1) !important;
   }
 
   &:active {
@@ -135,433 +70,24 @@
   }
 }
 
-.orangeButton {
-  background-color: rgba(239, 135, 81, 0.12) !important;
-  color: var(--primary-text) !important;
-  border: 1px solid var(--orange) !important;
-
-  &:hover {
-    background-color: rgba(239, 135, 81, 0.22) !important;
-    border-color: var(--orange) !important;
-    color: var(--primary-text) !important;
-  }
-}
-
-.limegreenButton {
-  background-color: rgba(159, 239, 0, 0.12) !important;
-  color: var(--primary-text) !important;
-  border: 1px solid var(--lime-green-700) !important;
-
-  &:hover {
-    background-color: rgba(159, 239, 0, 0.22) !important;
-    border-color: var(--lime-green-700) !important;
-    color: var(--primary-text) !important;
-  }
-}
-
 .disabledButton {
-  color: var(--secondary-text) !important;
+  color: var(--moon-text-dim) !important;
   border-color: var(--border-subtle) !important;
   background-color: transparent !important;
   opacity: 0.4;
   cursor: not-allowed;
 
   &:hover {
-    color: var(--secondary-text) !important;
+    color: var(--moon-text-dim) !important;
     border-color: var(--border-subtle) !important;
     background-color: transparent !important;
     opacity: 0.4;
   }
 }
 
-.alerts {
-  top: 4rem;
-  position: sticky;
-  padding: 0 2rem;
-  z-index: 1 !important;
-  flex-direction: column;
-  height: max-content;
-  background-color: var(--primary-bg);
-
-  .alertWarning {
-    margin-bottom: 0.75rem;
-    border-radius: 6px;
-    :global(.anticon-close:hover) {
-      color: var(--secondary-text) !important;
-    }
-  }
-}
-
-.modelSetupGate {
-  min-height: 100vh;
-  background: var(--primary-bg);
-  color: var(--primary-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-}
-
-.modelSetupPanel {
-  width: min(100%, 34rem);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--secondary-bg);
-  padding: 1.5rem;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
-
-  h1 {
-    margin: 0;
-    font-size: 1.35rem;
-    line-height: 1.25;
-    font-weight: 650;
-    letter-spacing: 0;
-  }
-
-  p {
-    margin: 0.75rem 0 0;
-    color: var(--secondary-text);
-    font-size: 0.9rem;
-    line-height: 1.55;
-  }
-}
-
-.modelSetupEyebrow {
-  margin-bottom: 0.5rem;
-  color: var(--secondary-text);
-  font-size: 0.72rem;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.modelSetupAlert {
-  margin-top: 1rem;
-  border-radius: 6px;
-}
-
-.modelSetupActions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 1.25rem;
-  flex-wrap: wrap;
-}
-
-.headerLinkWrapper {
-  height: 3.2rem;
-  flex-shrink: 0;
-  background-color: var(--primary-bg);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 1.25rem;
-  z-index: 10;
-  border-bottom: 1px solid var(--border-subtle);
-
-  .sessionContext {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .sessionName {
-    font-size: 0.8rem;
-    font-weight: 400;
-    color: var(--primary-text);
-    letter-spacing: -0.01em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .sessionId {
-    font-size: 0.65rem;
-    font-weight: 400;
-    color: var(--primary-purple);
-    font-family: "JetBrains Mono", monospace;
-    opacity: 0.7;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .options {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-
-    color: var(--primary-text);
-    font-size: 0.8rem;
-    font-weight: 400;
-
-    .info {
-      gap: 0.3rem;
-      display: flex;
-      align-items: center;
-      margin-right: 1rem;
-
-      span {
-        font-size: 0.85rem;
-      }
-    }
-
-    .upgradeButton {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-      color: var(--primary-text);
-      font-weight: 400;
-      background-color: var(--surface-active);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      margin-right: 0.75rem;
-      font-size: 0.8rem;
-      transition: all var(--transition-fast);
-
-      &:hover {
-        border-color: var(--border-default);
-        background-color: var(--surface-hover);
-      }
-    }
-
-    .avatar {
-      cursor: pointer;
-      border: 1.5px solid var(--border-default);
-      border-radius: 50%;
-    }
-
-    .username {
-      font-weight: 400;
-      font-size: 0.85rem;
-    }
-
-    .headerIconBtn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 2rem;
-      height: 2rem;
-      border-radius: 6px;
-      border: 1px solid var(--border-subtle);
-      background: transparent;
-      color: var(--secondary-text);
-      font-size: 1rem;
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      text-decoration: none;
-
-      &:hover {
-        color: var(--primary-text);
-        background: var(--surface-hover);
-        border-color: var(--border-default);
-      }
-    }
-
-    .headerLogoutBtn {
-      color: var(--danger);
-      border-color: transparent;
-
-      &:hover {
-        color: var(--danger);
-        background: rgba(255, 62, 62, 0.1);
-        border-color: rgba(255, 62, 62, 0.2);
-      }
-    }
-
-    .connectVPNbtn {
-      display: flex;
-      gap: 0.25rem;
-      padding: 0 0.75rem;
-      align-items: center;
-      border-radius: 2rem;
-      color: var(--primary-text);
-      border: 1px solid var(--lime-green);
-      transition: all var(--transition-fast);
-      background-color: rgba(#9fef00, 0.08);
-      margin-right: 0.75rem;
-      font-size: 0.75rem;
-      font-weight: 400;
-
-      &:hover {
-        opacity: 0.85;
-      }
-    }
-
-    .vpnConnectedbtn {
-      @extend .connectVPNbtn;
-      cursor: text;
-      border-color: var(--orange);
-      background-color: rgba(#ef8751, 0.08);
-    }
-  }
-
-  .headerLink {
-    font-size: 0.85rem;
-    text-decoration: none;
-    color: var(--secondary-text);
-    letter-spacing: -0.01em;
-    font-weight: 400;
-    transition: color var(--transition-fast);
-
-    &:hover {
-      color: var(--primary-text);
-    }
-  }
-
-  .activeHeaderLink {
-    @extend .headerLink;
-    color: var(--vulnpen-green);
-  }
-}
-
-.userDropdown {
-  width: 8rem;
-
-  .menuItem {
-    gap: 0.5rem;
-    display: flex;
-    font-weight: 400;
-    align-items: center;
-    color: var(--secondary-text);
-    font-size: 0.8rem;
-    transition: all var(--transition-fast);
-
-    &:hover {
-      color: var(--primary-text);
-    }
-  }
-
-  .logout {
-    @extend .menuItem;
-    color: var(--danger);
-  }
-
-  :global(.ant-dropdown-menu) {
-    background-color: var(--primary-bg);
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-  }
-
-  :global(.ant-dropdown-menu .ant-dropdown-menu-item) {
-    color: var(--secondary-text);
-    font-size: 0.8rem;
-    font-weight: 400;
-    border-radius: 4px;
-    transition: all var(--transition-fast);
-  }
-}
-
-.textBoxContainer {
-  max-width: 16rem;
-  .title {
-    color: var(--primary-text);
-    font-size: nth($fontSize, 5);
-    font-weight: 400;
-    letter-spacing: -0.02em;
-  }
-
-  .description {
-    font-weight: 400;
-    color: var(--secondary-text);
-    font-size: 0.85rem;
-    transition: all var(--transition-default);
-    line-height: 1.5;
-  }
-}
-
-.featureCardContainer {
-  background: var(--surface-hover);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  cursor: pointer;
-  padding: 1rem;
-  margin: 0.5rem 1rem;
-  transition: all var(--transition-default);
-  max-width: 60rem;
-
-  &:hover {
-    border-color: var(--border-default);
-    background: var(--surface-active);
-  }
-
-  .featureCardTitle {
-    color: var(--primary-text);
-    font-size: 1rem;
-    margin-bottom: 0.4rem;
-    font-weight: 400;
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    letter-spacing: -0.01em;
-  }
-
-  .featureCardDescription {
-    color: var(--secondary-text);
-    font-size: 0.85rem;
-    font-weight: 400;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.5;
-
-    @include responsive(tablet1) {
-      -webkit-line-clamp: 10;
-    }
-  }
-}
-
-.featureCardContainerActive {
-  @extend .featureCardContainer;
-
-  background: linear-gradient(
-    93deg,
-    rgba(201, 210, 226, 0.2) 0%,
-    rgba(201, 210, 226, 0) 100%
-  );
-  border-color: var(--primary-purple);
-
-  .featureCardDescription {
-    -webkit-line-clamp: 10;
-  }
-}
-
-.noAccessContainer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: calc(100vh - 5rem);
-
-  .noAccessImage {
-    margin-bottom: 2rem;
-    opacity: 0.6;
-  }
-
-  h1 {
-    font-size: 2.5rem;
-    font-weight: 400;
-    color: var(--primary-text);
-    text-align: center;
-    letter-spacing: -0.03em;
-  }
-
-  p {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 400;
-    color: var(--secondary-text);
-    width: 70%;
-    text-align: center;
-    line-height: 1.5;
-  }
-}
 /* ============================================================================
    APP HEADER - Lunar Monochrome
-   Redefines the header classes the app already imports and adds the new
-   account-cluster pieces. Declared last so it wins over the legacy block above.
+   The header, its breadcrumb and the account cluster.
    ========================================================================== */
 .headerLinkWrapper {
   position: sticky;
@@ -650,6 +176,14 @@
   @include eyebrow;
   font-size: 0.58rem;
   flex-shrink: 0;
+  /* Rendered as a link when the parent workspace is known. */
+  color: var(--moon-text-mute);
+  text-decoration: none;
+  transition: color var(--moon-dur-1) var(--moon-ease-out);
+
+  &:hover {
+    color: var(--moon-text);
+  }
 
   @include responsive(tablet3) {
     display: none;
@@ -673,47 +207,28 @@
   flex-shrink: 0;
 }
 
-.headerIconBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.05rem;
-  height: 2.05rem;
-  border-radius: var(--moon-radius-sm);
-  border: 1px solid var(--moon-line-1);
-  background: var(--moon-surface-2);
-  color: var(--moon-text-dim);
-  font-size: 1rem;
-  cursor: pointer;
-  text-decoration: none;
-  @include focus-ring(2px);
-
-  &:hover {
-    color: var(--moon-text);
-    background: var(--moon-surface-3);
-    border-color: var(--moon-line-3);
-  }
-
-  &:active {
-    transform: scale(0.97);
-  }
-}
-
-.headerLogoutBtn:hover {
-  color: var(--moon-danger);
-  border-color: var(--moon-danger-line);
-  background: var(--moon-danger-bg);
-}
-
 /* Floating dock for the account row: full-width bar pinned to the bottom-left
-   of the sidebar (where Clear context used to live), ChatGPT-style. */
+   of the sidebar (where Clear context used to live), ChatGPT-style. The width
+   tracks the rail's own breakpoints — a hardcoded 247px floated over the page
+   whenever the rail narrowed. */
 .accountDock {
   position: fixed;
   left: 0;
   bottom: 0;
-  width: 247px;
+  width: var(--moon-sidebar-w);
   padding: 0.5rem 0.75rem;
-  z-index: 300;
+  z-index: $z-header;
+  background: var(--moon-night);
+  border-right: 1px solid transparent;
+
+  @include responsive(laptop1) {
+    width: 216px;
+  }
+
+  @include responsive(tablet3) {
+    width: var(--moon-sidebar-w-sm);
+    padding: 0.5rem 0.4rem;
+  }
 }
 
 /* Compact pill variant for pages without the session rail. */
@@ -808,11 +323,6 @@
   color: var(--moon-danger) !important;
 }
 
-.menuHeader {
-  @include eyebrow;
-  font-size: 0.56rem;
-  padding: 0.2rem 0.5rem 0.3rem;
-}
 /* ============================================================================
    BUTTONS - Lunar Monochrome
    The prop names (purple / purpleFilled / pinkFilled / white) are part of the
@@ -981,51 +491,6 @@
     background-color: rgba(95, 211, 154, 0.2) !important;
     border-color: var(--moon-success) !important;
     color: var(--moon-success) !important;
-  }
-}
-
-/* Feature row (onboarding / capability lists) */
-.featureCardContainer {
-  margin: 0.4rem 0;
-  padding: 0.9rem 1rem;
-  max-width: none;
-  background: var(--moon-surface-1);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-md);
-  box-shadow: var(--moon-inner-top);
-
-  &:hover {
-    border-color: var(--moon-line-3);
-    background: var(--moon-surface-2);
-  }
-}
-
-.featureCardContainerActive {
-  background: linear-gradient(
-    95deg,
-    var(--moon-accent-14) 0%,
-    transparent 70%
-  );
-  border-color: var(--moon-accent-40);
-  box-shadow: var(--moon-glow-sm);
-}
-
-.textBoxContainer {
-  max-width: 26rem;
-
-  .title {
-    color: var(--moon-text);
-    font-size: nth($fontSize, 5);
-    font-weight: 400;
-    letter-spacing: -0.025em;
-  }
-
-  .description {
-    font-weight: 400;
-    color: var(--moon-text-mute);
-    font-size: 0.85rem;
-    line-height: 1.6;
-    transition: color var(--moon-dur-2) var(--moon-ease-out);
   }
 }
 

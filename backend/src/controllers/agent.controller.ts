@@ -11,7 +11,7 @@ import {
   runAgentLoop,
 } from "../services/agent.service";
 import { setAgentState, setPaused } from "../services/agent-state.service";
-import { pump } from "../services/web-security/run-queue.service";
+import { parkedRunContext, pump } from "../services/web-security/run-queue.service";
 import {
   reserveAbortController,
   releaseAbortController,
@@ -257,11 +257,22 @@ export const resumeAgent = async (req: Request, res: Response) => {
 export const respondToConsent = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId, approved } = req.body;
+    const { sessionId, approved, toolCallIds } = req.body;
 
     if (!sessionId || typeof approved !== "boolean") {
       return res.status(400).json({ message: "sessionId and approved (boolean) are required" });
     }
+
+    // Optional per-item approval: the ids the operator ticked. An empty array
+    // means "approve none" — it is never read as "approve everything", because
+    // that would turn a mis-rendered checkbox list into a full approval.
+    if (toolCallIds !== undefined && !Array.isArray(toolCallIds)) {
+      return res.status(400).json({ message: "toolCallIds must be an array of tool call ids" });
+    }
+    const requestedApprovals =
+      Array.isArray(toolCallIds) && toolCallIds.length
+        ? toolCallIds.filter((id: unknown): id is string => typeof id === "string")
+        : undefined;
 
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
@@ -270,8 +281,21 @@ export const respondToConsent = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "No pending consent request" });
     }
 
+    // A parked scan resumes as the same scan: its own transcript channel and
+    // its own approval mode. A chat's consent returns null and nothing changes.
+    const parked = await parkedRunContext(sessionId);
+
     return await withAgentRun(req, res, sessionId, (sse, abortCtrl) =>
-      handleConsent({ sessionId, userId, approved, sse, abortSignal: abortCtrl.signal })
+      handleConsent({
+        sessionId,
+        userId,
+        approved,
+        approvedToolCallIds: approved ? requestedApprovals : undefined,
+        sse,
+        abortSignal: abortCtrl.signal,
+        channel: parked?.channel,
+        toolExecutionMode: parked?.toolExecutionMode,
+      })
     );
   } catch (err: any) {
     console.error("[agent] respondToConsent error:", err);
@@ -340,9 +364,16 @@ export const getSessionInfo = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
+    // The session header names the engagement's parent workspace, so the crumb
+    // can read "Workspace / <name>" and link back instead of saying "Session".
+    const workspace = session.workspaceId
+      ? await WorkspaceModel.findOne({ workspaceId: session.workspaceId }).lean()
+      : null;
+
     return res.status(200).json({
       sessionId: session.sessionId,
       workspaceId: session.workspaceId,
+      workspaceName: workspace?.name ?? null,
       name: session.name,
       description: session.description,
       agentState: session.agentState,

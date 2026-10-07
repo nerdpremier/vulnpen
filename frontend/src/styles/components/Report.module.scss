@@ -1,0 +1,103 @@
+@import "@/styles/variables";
+
+/* ============================================================================
+   REPORT (LibreOffice Writer)
+   The editor is the page: it takes every pixel the shell can give it, so the
+   frame has to be a flex child of a *sized* chain the whole way down, and the
+   page keeps no chrome of its own.
+   ========================================================================== */
+.reportPage {
+  display: flex;
+  flex-direction: column;
+
+  /* The shell's inner wrapper is a plain block. Without joining it to the flex
+     column, `.frame { flex: 1 1 auto }` below has nothing to grow into and falls
+     back to its own min-height — which is exactly why the Word editor used to
+     occupy half the screen. `min-height: 0` is what lets it shrink instead of
+     pushing the page taller than the viewport. Nested so these win over
+     `.pageInner` regardless of which module the bundler emits first. */
+  .reportInner {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: none;
+    /* Edge to edge. The editor draws its own frame; a page padding around it
+       was just app chrome taking room from the document. */
+    padding: 0;
+  }
+}
+
+.frame {
+  position: relative;
+  flex: 1 1 auto;
+  /* The floor is a floor, not a target: on a window shorter than this the shell
+     scrolls (it owns `overflow-y: auto`) instead of clipping the toolbar. */
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--moon-surface-2);
+}
+
+/* Collabora sizes its own chrome (menu bar, toolbar, status bar) for a whole
+   browser window, so inside an app frame it reads oversized next to the rest of
+   the UI. We cannot style inside a cross-origin iframe, but we can hand it a
+   larger viewport and scale the result back down: the editor is laid out at
+   133.3% and rendered at 75%, which shrinks its chrome and its document
+   together while still filling the frame exactly. */
+.editor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 133.34%;
+  height: 133.34%;
+  border: 0;
+  transform: scale(0.75);
+  transform-origin: top left;
+}
+
+/* The document's own actions, parked on the editor's bottom-right corner: the
+   exports, reopening the session and rebuilding the report are about the
+   document, so they float over it rather than standing on a strip above it. */
+.floatingActions {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  z-index: 5;
+}
+
+.fab {
+  opacity: 0.62;
+  box-shadow: var(--moon-shadow-2);
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+  }
+}
+
+/* A manual Word edit is the one thing about this document that is not
+   obvious from looking at it, so the corner carries a quiet warning dot. */
+.fabDot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--moon-warning);
+  box-shadow: 0 0 0 2px var(--moon-surface-2);
+  pointer-events: none;
+}
+
+/* The document's provenance, as the first line of the actions menu: this page
+   has no counters of its own to draw (it fetches the editor URL and nothing
+   else), and a strip or a badge over the editor would take room from the
+   document or cover Collabora's own toolbar. */
+.menuState {
+  display: block;
+  max-width: 280px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: normal;
+  color: var(--moon-text-mute);
+}

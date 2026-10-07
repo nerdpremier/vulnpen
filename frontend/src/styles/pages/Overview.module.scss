@@ -1,0 +1,303 @@
+@import "@/styles/variables";
+
+/* ============================================================================
+   ENGAGEMENT OVERVIEW
+   The session's landing page: four headline tiles, then coverage, findings and
+   the scan of the moment. Cards share one hairline surface — the page reads as
+   a console, not a list of unrelated panels.
+   ========================================================================== */
+
+/* ---- Title chips: the engagement boundary in one line --------------------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-2);
+  color: var(--moon-text-dim);
+  font-size: 0.75rem;
+  max-width: 40ch;
+}
+
+/* The value clips inside its own box: an ellipsis on the flex container does
+   nothing, because the chip's text is an anonymous flex item that never
+   shrinks — the scope ran under the chip's own border before this. */
+.chipValue {
+  min-width: 0;
+  @include truncate(1);
+}
+
+.chipLabel {
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+/* ---- Headline numbers ----------------------------------------------------- */
+/* One band, four cells — `StatStrip` owns the frame and the dividers. */
+.strip {
+  margin-bottom: 1.1rem;
+}
+
+/* ---- Card grid ------------------------------------------------------------ */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  /* Each card is as tall as its own content: a stretched card is mostly gap. */
+  align-items: start;
+  margin-bottom: 0.9rem;
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  min-width: 0;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cardTitle {
+  @include eyebrow;
+  font-size: 0.64rem;
+}
+
+.cardLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--moon-text-mute);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--moon-text);
+  }
+
+  :global(svg) {
+    font-size: 0.7rem;
+  }
+}
+
+/* ---- Coverage ------------------------------------------------------------- */
+/* Dial on the left, the category outline on the right: the ring is the total,
+   the radar says which chapters that total is spread across. */
+.coverageBody {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1.25rem;
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+}
+
+/* The case grid sits under both: it is a wide shape and it needs the width. */
+.coverageMatrix {
+  margin-top: 0.35rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+/* One short label above a graphic. The graphic says the rest. */
+.subLabel {
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+.hostBars,
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.hostBars {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.activity {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.factMuted {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--moon-text-mute);
+}
+
+/* ---- Findings ------------------------------------------------------------- */
+.dot_critical {
+  --sev: var(--moon-critical);
+}
+
+.dot_high {
+  --sev: var(--moon-high);
+}
+
+.dot_medium {
+  --sev: var(--moon-medium);
+}
+
+.dot_low {
+  --sev: var(--moon-low);
+}
+
+.dot_info {
+  --sev: var(--moon-info-sev);
+}
+
+.findingList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.findingItem {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.severityDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--sev, var(--moon-text-mute));
+}
+
+.findingLink {
+  min-width: 0;
+  font-size: 0.84rem;
+  color: var(--moon-text-dim);
+  text-decoration: none;
+  @include truncate(1);
+
+  &:hover {
+    color: var(--moon-text);
+    text-decoration: underline;
+  }
+}
+
+/* ---- Scan of the moment --------------------------------------------------- */
+/* Full width under the two cards: the row has five things in it and half a
+   page was not enough room for them. */
+.scanRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+.scanIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.scanName {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--moon-text);
+  text-decoration: none;
+  @include truncate(1);
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+    border-radius: var(--moon-radius-xs);
+  }
+}
+
+.scanMeta {
+  font-size: 0.75rem;
+  color: var(--moon-text-mute);
+  @include truncate(1);
+}
+
+.scanProgress {
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--moon-accent);
+}
+
+.scanOpen {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--moon-text);
+  text-decoration: none;
+  white-space: nowrap;
+  @include focus-ring(2px);
+
+  &:hover {
+    color: var(--moon-accent);
+  }
+
+  :global(svg) {
+    font-size: 0.72rem;
+  }
+}
+
+.nextStep {
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--moon-line-1);
+  font-size: 0.82rem;
+  color: var(--moon-text-mute);
+
+  strong {
+    color: var(--moon-text);
+    font-weight: 600;
+  }
+}
+
+.inlineAction {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--moon-accent-strong, #fff);
+  text-decoration: underline;
+  cursor: pointer;
+  @include focus-ring(2px);
+
+  &:hover {
+    color: var(--moon-text);
+  }
+}

@@ -1,6 +1,5 @@
 @import '../_variables';
 
-.page,
 .detailPage {
   width: 100%;
   max-width: 100%;
@@ -10,106 +9,21 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--primary-bg);
-  color: var(--primary-text);
+  background: var(--moon-surface-1);
+  color: var(--moon-text);
 }
 
-.page {
-  padding: 2rem;
-}
-
-.header,
-.detailTitleRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 2rem;
-}
-
-.header {
-  margin-bottom: 1.5rem;
-
-  h1 {
-    margin: 0.25rem 0 0.35rem;
-    font-size: 2rem;
-    line-height: 1.1;
-    letter-spacing: -0.04em;
-  }
-
-  p {
-    margin: 0;
-    color: var(--secondary-text);
-  }
-}
-
-.eyebrow {
-  color: var(--primary-purple);
-  font-size: 0.7rem;
-  font-weight: 400;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.totalBadge,
-.status,
-.exploited {
+.status {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
   border: 1px solid var(--border-default);
   border-radius: 999px;
   padding: 0.25rem 0.55rem;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-size: 0.7rem;
   font-weight: 400;
   text-transform: capitalize;
-}
-
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.metric {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 72px;
-  padding: 0.9rem 1rem;
-  background: #0e0e0e;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-
-  span {
-    color: var(--secondary-text);
-    font-size: 0.78rem;
-    font-weight: 400;
-  }
-
-  strong {
-    font-size: 1.65rem;
-    letter-spacing: -0.04em;
-  }
-}
-
-.metricHigh strong { color: #ff9f43; }
-.metricUnmapped strong { color: #ff9f43; }
-
-.tableCard {
-  min-height: 360px;
-  overflow: hidden;
-  background: #0d0d0d;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-}
-
-.toolbar {
-  display: flex;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .search { max-width: 420px; }
@@ -118,7 +32,7 @@
 .toolbar :global(.ant-input-affix-wrapper),
 .toolbar :global(.ant-select-selector),
 .chatComposer :global(.ant-input) {
-  color: var(--primary-text) !important;
+  color: var(--moon-text) !important;
   background: var(--input-bg) !important;
   border-color: var(--border-default) !important;
 }
@@ -127,26 +41,21 @@
 
 .table {
   width: 100%;
+  /* Ten columns with per-column widths: below this the table would squeeze
+     every cell into a two-word line instead of scrolling (.tableWrap). */
+  min-width: 68rem;
   border-collapse: collapse;
   table-layout: fixed;
 
   th {
+    @include tableHead;
     padding: 0.7rem 0.9rem;
-    color: #777;
-    font-size: 0.65rem;
-    font-weight: 400;
-    letter-spacing: 0.06em;
-    text-align: left;
-    text-transform: uppercase;
-    border-bottom: 1px solid var(--border-subtle);
   }
 
   td {
+    @include tableCell;
     padding: 0.9rem;
-    vertical-align: middle;
-    color: #d7d7d7;
     font-size: 0.78rem;
-    border-bottom: 1px solid var(--border-subtle);
   }
 
   th:nth-child(1) { width: 96px; }
@@ -164,10 +73,8 @@
     cursor: pointer;
     transition: background var(--transition-fast);
 
-    &:hover,
-    &:focus-visible {
-      outline: none;
-      background: var(--surface-hover);
+    &:hover {
+      @include tableRowHover;
     }
 
     &:last-child td { border-bottom: 0; }
@@ -187,12 +94,6 @@
   text-transform: uppercase;
 }
 
-.critical { color: #ff5c5c; background: rgba(255, 92, 92, 0.12); }
-.high { color: #ff9f43; background: rgba(255, 159, 67, 0.09); }
-.medium { color: #f5d76e; background: rgba(245, 215, 110, 0.08); }
-.low { color: #58a6ff; background: rgba(88, 166, 255, 0.08); }
-.info { color: #9b9b9b; background: rgba(155, 155, 155, 0.08); }
-
 .findingTitle,
 .findingContext,
 .asset,
@@ -203,23 +104,34 @@
   text-overflow: ellipsis;
 }
 
-.findingTitle { color: var(--primary-text); margin-bottom: 0.25rem; }
-.findingContext,
-.assetMeta { color: #777; font-size: 0.7rem; }
-.asset { color: #d7d7d7; font-family: "JetBrains Mono", monospace; margin-bottom: 0.2rem; }
-.updated { color: #777 !important; font-size: 0.7rem !important; }
-.openIcon { color: #555; }
+.findingLink {
+  display: block;
+  text-decoration: none;
+  border-radius: var(--moon-radius-xs);
 
-.centerState,
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+.findingTitle { color: var(--moon-text); margin-bottom: 0.25rem; }
+.findingContext,
+.assetMeta { color: var(--moon-text-mute); font-size: 0.7rem; }
+.asset { color: var(--moon-text-dim); font-family: "JetBrains Mono", monospace; margin-bottom: 0.2rem; }
+
+/* `.table td` is a class+element selector, so it out-specifies a bare class;
+   naming the cell keeps the override honest without !important. */
+.table td.updated { color: var(--moon-text-mute); font-size: 0.7rem; }
+
 .fullState {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 320px;
-  color: var(--secondary-text);
+  height: 100%;
+  color: var(--moon-text-dim);
 }
-
-.fullState { height: 100%; }
 
 .detailPage {
   display: flex;
@@ -232,8 +144,10 @@
   flex-shrink: 0;
   min-width: 0;
   padding: 1.2rem 1.5rem 1.3rem;
-  background: #0d0d0d;
-  border-bottom: 1px solid var(--border-subtle);
+  /* The band is carried by the hairline, not by a background two shades off
+     the page (which the old #0d0d0d effectively was). */
+  background: var(--moon-surface-1);
+  border-bottom: 1px solid var(--moon-line-1);
 }
 
 .backButton {
@@ -242,39 +156,16 @@
   gap: 0.45rem;
   margin-bottom: 1rem;
   padding: 0;
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   background: none;
   border: 0;
   cursor: pointer;
   font-size: 0.75rem;
 
-  &:hover { color: var(--primary-text); }
-}
-
-.detailTitleRow {
-  min-width: 0;
-
-  > div:first-child { flex: 1 1 auto; min-width: 0; }
-
-  h1 {
-    margin: 0.45rem 0 0.25rem;
-    max-width: 820px;
-    font-size: 1.65rem;
-    line-height: 1.2;
-    letter-spacing: -0.035em;
-  }
-
-  p {
-    margin: 0;
-    overflow-wrap: anywhere;
-    color: var(--secondary-text);
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.75rem;
-  }
+  &:hover { color: var(--moon-text); }
 }
 
 .detailBadges { display: flex; align-items: center; gap: 0.45rem; }
-.exploited { color: #ff5c5c; border-color: rgba(255, 92, 92, 0.4); }
 
 .scoreGrid {
   display: grid;
@@ -328,7 +219,7 @@
 }
 
 .wstgRef {
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.68rem;
 }
@@ -340,7 +231,7 @@
 }
 
 .mappingRationale {
-  color: var(--secondary-text);
+  color: var(--moon-text-dim);
   font-size: 0.76rem;
   line-height: 1.55;
 }
@@ -526,8 +417,8 @@
   blockquote {
     margin: 0.7rem 0;
     padding-left: 0.8rem;
-    color: var(--secondary-text);
-    border-left: 2px solid var(--primary-purple);
+    color: var(--moon-text-dim);
+    border-left: 2px solid var(--moon-text-dim);
   }
 }
 
@@ -548,7 +439,7 @@
 
   :global(.ant-input-textarea-affix-wrapper),
   :global(textarea) {
-    color: var(--primary-text) !important;
+    color: var(--moon-text) !important;
     background: #101010 !important;
     border-color: var(--border-default) !important;
   }
@@ -557,7 +448,7 @@
   :global(textarea) { resize: none; }
 
   :global(.ant-btn-primary) {
-    background: var(--filled-purple);
+    background: var(--moon-accent-strong);
   }
 
   :global(.ant-btn-primary:disabled) {
@@ -592,13 +483,7 @@
   .chatMessage { max-width: 820px; }
 }
 
-@media (max-width: 1100px) {
-  .page { padding: 1.25rem; }
-  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 @media (max-width: 700px) {
-  .header,
   .detailTitleRow,
   .toolbar { flex-direction: column; }
   .search,
@@ -611,62 +496,70 @@
 /* ============================================================================
    VULNERABILITIES - Lunar Monochrome
    ========================================================================== */
-.page {
-  background: transparent;
-  max-width: var(--moon-page-max);
-  margin: 0 auto;
-  padding: 1.75rem 2rem 3rem;
-  width: 100%;
-
-  @include responsive(tablet3) {
-    padding: 1.25rem 1rem 2.5rem;
-  }
-}
-
-.header {
-  margin-bottom: 1.25rem;
-
-  h1 {
-    margin: 0.3rem 0 0.4rem;
-    font-size: clamp(1.6rem, 2.4vw, 2.1rem);
-    font-weight: 400;
-    letter-spacing: -0.04em;
-    color: var(--moon-text);
-  }
-
-  p {
-    margin: 0;
-    max-width: 68ch;
-    font-size: 0.85rem;
-    line-height: 1.6;
-    color: var(--moon-text-mute);
-  }
-}
-
 .eyebrow {
   @include eyebrow;
 }
+/* Metric band - the tiles double as severity filters. The frame, the dividers
+   and the responsive wrapping come from `StatStrip`; only the spacing is
+   local, so the two rules can never disagree about the grid. */
+.metrics {
+  margin-bottom: 1.15rem;
+}
 
-.totalBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--moon-accent);
-  background: var(--moon-accent-08);
-  border: 1px solid var(--moon-accent-24);
-  border-radius: var(--moon-radius-pill);
+/* ---------------------------------------------------------------------------
+   SUMMARY BAND
+   Four graphics over the same findings the table lists: severity mix, CVSS
+   distribution, whether the finding was proven, and the busiest assets. The
+   band collapses to as many columns as the viewport can hold and to one on a
+   phone, so no chart is ever squeezed below the width of its own labels.
+   -------------------------------------------------------------------------- */
+.summaryBand {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+}
+
+.summaryCell {
+  display: flex;
+  min-width: 0;
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.85rem 1rem 1rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+.summaryTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  @include eyebrow;
+  font-size: 0.6rem;
+}
+
+/* What a graphic covers, when it covers less than the whole engagement. */
+.summaryScope {
+  color: var(--moon-text-faint);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
   white-space: nowrap;
 }
 
-/* Metric band - the tiles double as severity filters. */
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
-  gap: 0.6rem;
-  margin-bottom: 1.15rem;
+.summaryEmpty {
+  margin: 0;
+  color: var(--moon-text-mute);
+  font-size: 0.75rem;
 }
 
 .tableCard {
@@ -772,7 +665,7 @@
 }
 
 .critical {
-  color: var(--moon-critical, #e63946);
+  color: var(--moon-critical);
   background: rgba(230, 57, 70, 0.14);
   border-color: rgba(230, 57, 70, 0.35);
 }
@@ -799,15 +692,6 @@
   color: var(--moon-text-mute);
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--moon-line-2);
-}
-
-.centerState {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1rem;
-  color: var(--moon-text-mute);
-  font-size: 0.82rem;
 }
 
 .openIcon {
@@ -891,4 +775,250 @@
   font-size: 0.68rem;
   font-weight: 400;
   color: var(--moon-accent);
+}
+
+/* ============================================================================
+   FINDING HEADER - the score, its metrics and the classification, as shapes
+   The prose version listed the same facts in a sentence; the shapes below put
+   the number where the eye lands first and let the rest be scanned.
+   ========================================================================== */
+
+/* Identity left, dial right. Later than the legacy block on purpose: that one
+   declared a flex row it never switched on. */
+.detailTitleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 1rem 1.75rem;
+  min-width: 0;
+
+  > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  h1 {
+    margin: 0.45rem 0 0.25rem;
+    max-width: 820px;
+    font-size: 1.65rem;
+    line-height: 1.2;
+    letter-spacing: -0.035em;
+  }
+
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--moon-text-dim);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.75rem;
+  }
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.detailIdentity {
+  min-width: 0;
+}
+
+.detailAsset {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--moon-text-dim);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+}
+
+/* Reference codes as chips: five labelled cells became one scannable line. */
+.refRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.refChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  color: var(--moon-text-dim);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-pill);
+
+  b {
+    font-size: 0.56rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--moon-text-faint);
+  }
+}
+
+.detailScore {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+/* The vector is the score's caption, not a cell in a table. */
+.vectorString {
+  max-width: 220px;
+  padding: 0.2rem 0.5rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+  color: var(--moon-text-mute);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.62rem;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-sm);
+}
+
+/* The eight base metrics as a fingerprint. The tone is the weight of the
+   value - amber for the setting that makes the finding worst, faint for the
+   one that makes it mildest - never a verdict on the finding itself. */
+.metricFingerprint {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 0.4rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metricChip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-left: 2px solid var(--weight, var(--moon-line-2));
+  border-radius: var(--moon-radius-sm);
+}
+
+.metricKey {
+  @include eyebrow;
+  font-size: 0.55rem;
+}
+
+.metricValue {
+  color: var(--weight, var(--moon-text));
+  font-size: 0.72rem;
+  @include truncate(1);
+}
+
+.weight_high {
+  --weight: var(--moon-warning);
+}
+
+.weight_mid {
+  --weight: var(--moon-text-dim);
+}
+
+.weight_low {
+  --weight: var(--moon-text-mute);
+}
+
+/* A confirmed exploit is a fact about the finding, not a shade of its
+   severity: the danger tone is deliberate and does not move with the rating. */
+.exploited {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  color: var(--moon-danger);
+  background: var(--moon-danger-bg);
+  border: 1px solid var(--moon-danger-line);
+  border-radius: var(--moon-radius-pill);
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ---- OWASP mapping: badge, confidence meter, provenance, related ---------- */
+.mappingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--moon-text-mute);
+  font-size: 0.68rem;
+}
+
+.confidenceBars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+
+  i {
+    display: block;
+    width: 4px;
+    border-radius: 1px;
+  }
+}
+
+.confidenceOn,
+.confidenceOff {
+  height: 11px;
+  background: var(--moon-accent-40);
+}
+
+.confidenceOn {
+  background: var(--moon-accent);
+}
+
+/* Only the middle step is short, so the meter reads as a rising scale. */
+.confidenceBars i:nth-child(1) { height: 6px; }
+.confidenceBars i:nth-child(2) { height: 9px; }
+
+.provenanceChip {
+  padding: 0.15rem 0.5rem;
+  color: var(--moon-text-mute);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--moon-surface-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-pill);
+}
+
+.relatedRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.relatedLabel {
+  color: var(--moon-text-mute);
+  font-size: 0.68rem;
+}
+
+.relatedChip {
+  padding: 0.1rem 0.45rem;
+  color: var(--moon-text-dim);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.66rem;
+  background: var(--moon-surface-3);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-xs);
 }

@@ -230,6 +230,20 @@ export default function PlanSetupModal({
                         </span>
                       </span>
                     </Checkbox>
+                    {/* The share of this category the save would plan. */}
+                    <span
+                      className={styles.categoryBar}
+                      role="img"
+                      aria-label={`${picked} of ${tests.length} ${category.code} cases planned`}
+                      title={`${picked} of ${tests.length} cases planned`}
+                    >
+                      <span
+                        className={styles.categoryBarFill}
+                        style={{
+                          width: `${tests.length ? (picked / tests.length) * 100 : 0}%`,
+                        }}
+                      />
+                    </span>
                     <button
                       type="button"
                       className={styles.categoryToggle}
@@ -271,6 +285,21 @@ export default function PlanSetupModal({
             )}
             {preview.handAdded > 0 && <span>{preview.handAdded} added by the assistant kept</span>}
           </div>
+
+          {/* The same figure as a share of the catalogue: saving this is either
+              the whole guide or a slice of it, and that should be visible. */}
+          <span
+            className={styles.scopeBar}
+            role="img"
+            aria-label={`${preview.total} of ${catalog?.totalTests ?? 0} catalogue cases planned`}
+          >
+            <span
+              className={styles.scopeBarFill}
+              style={{
+                width: `${catalog?.totalTests ? Math.min(100, (preview.total / catalog.totalTests) * 100) : 0}%`,
+              }}
+            />
+          </span>
 
           {preview.droppedWithResults > 0 && (
             <Alert

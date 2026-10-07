@@ -323,6 +323,129 @@
   }
 }
 
+.statTileInfo {
+  .statValue {
+    color: var(--moon-info);
+  }
+
+  .statIcon {
+    color: var(--moon-info);
+  }
+}
+
+/* The severity ramp, for a tile that reports one band of findings. */
+.statTileCritical {
+  .statValue {
+    color: var(--moon-critical);
+  }
+
+  .statIcon {
+    color: var(--moon-critical);
+  }
+}
+
+.statTileHigh {
+  .statValue {
+    color: var(--moon-high);
+  }
+
+  .statIcon {
+    color: var(--moon-high);
+  }
+}
+
+.statTileMedium {
+  .statValue {
+    color: var(--moon-medium);
+  }
+
+  .statIcon {
+    color: var(--moon-medium);
+  }
+}
+
+.statTileLow {
+  .statValue {
+    color: var(--moon-low);
+  }
+
+  .statIcon {
+    color: var(--moon-low);
+  }
+}
+
+/* A band of the tiles above: one frame, hairline dividers, no gaps between
+   them. The strip owns the border and the radius, so every tile inside drops
+   its own and the row reads as a single readout. See StatStrip.jsx. */
+.statStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  box-shadow: var(--moon-inner-top);
+  overflow: hidden;
+
+  > * {
+    position: relative;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  > *:not(:first-child)::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    background: var(--moon-line-1);
+  }
+
+  > .statTileInteractive:hover {
+    background: var(--moon-surface-2);
+  }
+
+  /* A strip is four columns wide, so a fifth tile starts a second row: the
+     first cell of *every* row drops the divider and every row after the first
+     gets the hairline above it. Without this, an eight-tile strip (the scan
+     detail page) drew a divider flush against the frame's own left border. */
+  > *:nth-child(4n + 1)::before {
+    display: none;
+  }
+
+  > *:nth-child(n + 5) {
+    border-top: 1px solid var(--moon-line-1);
+  }
+
+  @include responsive(laptop1) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    /* Two rows now: only the right-hand tile of each row keeps a divider. */
+    > *:nth-child(odd)::before {
+      display: none;
+    }
+
+    > *:nth-child(n + 3) {
+      border-top: 1px solid var(--moon-line-1);
+    }
+  }
+
+  @include responsive(mobile4) {
+    grid-template-columns: minmax(0, 1fr);
+
+    > *::before {
+      display: none;
+    }
+
+    > *:not(:first-child) {
+      border-top: 1px solid var(--moon-line-1);
+    }
+  }
+}
+
 /* ---------------------------------------------------------------------------
    G. PROGRESS RING
    Coverage / completion dial used on the WSTG plan header.
@@ -665,6 +788,208 @@
 
 .revealNone {
   animation-name: moonFade;
+}
+
+/* ---------------------------------------------------------------------------
+   H. DATA GRAPHICS
+   Shapes that carry a number without a sentence: a severity distribution and a
+   per-case coverage matrix. Both are plain CSS — no chart library, no canvas —
+   so they inherit the palette and stay readable in any density.
+   -------------------------------------------------------------------------- */
+
+/* Severity tones live on `--sev` so a segment, a legend swatch and the number
+   beside it never drift apart. */
+.sev_critical {
+  --sev: var(--moon-critical);
+}
+
+.sev_high {
+  --sev: var(--moon-high);
+}
+
+.sev_medium {
+  --sev: var(--moon-medium);
+}
+
+.sev_low {
+  --sev: var(--moon-low);
+}
+
+.sev_info {
+  --sev: var(--moon-info-sev);
+}
+
+/* One bar, then the counts as a single line. Five bordered pills said the same
+   thing with five times the chrome. */
+.severityBar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.severityTrack {
+  display: flex;
+  height: 8px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-3);
+  overflow: hidden;
+}
+
+.severitySeg {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  background: var(--sev, var(--moon-text-mute));
+  transition: flex-grow var(--moon-dur-4) var(--moon-ease-out);
+
+  & + & {
+    margin-left: 1px;
+  }
+}
+
+/* Nothing found yet: the track stays, empty, so the card does not resize the
+   moment the first finding lands. */
+.severityEmpty {
+  flex: 1 1 auto;
+  background: var(--moon-surface-3);
+}
+
+.severityLegend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+}
+
+.severityLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+
+  b {
+    font-weight: 600;
+    color: var(--moon-text);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.severityLegendDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--sev, var(--moon-text-mute));
+}
+
+/* An empty level keeps its slot in the scale but stops competing. */
+.severityLegendZero {
+  opacity: 0.45;
+
+  .severityLegendDot {
+    background: var(--moon-text-faint);
+  }
+}
+
+/* A square per planned case. A bar shows the ratio; the squares also show
+   *which* cases are missing and how the settled ones went. */
+.caseMatrix {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.matrixRow {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr) 2.8rem;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.matrixLabel {
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+.matrixCells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 0;
+}
+
+.matrixCell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--cell, var(--moon-surface-3));
+  box-shadow: inset 0 0 0 1px var(--moon-line-1);
+}
+
+.matrixCount {
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell_passed {
+  --cell: var(--moon-success);
+}
+
+.cell_failed {
+  --cell: var(--moon-danger);
+}
+
+.cell_blocked {
+  --cell: var(--moon-high);
+}
+
+.cell_in_progress {
+  --cell: var(--moon-info);
+}
+
+.cell_skipped,
+.cell_not_started {
+  --cell: var(--moon-surface-3);
+}
+
+/* The colour key under the grid. It doubles as the coverage summary, so the
+   card says "46 passed" once instead of twice. */
+.matrixLegend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.matrixLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+
+  b {
+    font-weight: 600;
+    color: var(--moon-text);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.matrixLegendSwatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--cell, var(--moon-surface-3));
+  box-shadow: inset 0 0 0 1px var(--moon-line-1);
 }
 
 

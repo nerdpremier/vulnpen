@@ -1,0 +1,131 @@
+@import "@/styles/variables";
+
+/* ============================================================================
+   MODEL SETUP BANNER
+   Non-blocking strip under the header. Three distinct messages, because a
+   failed read is not the same thing as "no model configured": only the owner
+   can act on the warning, a non-owner gets an explanation, and an unreachable
+   endpoint gets a retry rather than an accusation.
+   ========================================================================== */
+
+.gate {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.6rem 1.75rem;
+  border-bottom: 1px solid var(--moon-line-1);
+  background: var(--moon-surface-2);
+  animation: gateIn var(--moon-dur-3) var(--moon-ease-out) both;
+
+  @include responsive(tablet3) {
+    padding: 0.6rem 1rem;
+  }
+}
+
+@keyframes gateIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.warning {
+  background: var(--moon-warning-bg);
+  border-bottom-color: var(--moon-warning-line);
+
+  .icon {
+    color: var(--moon-warning);
+  }
+}
+
+.info {
+  background: var(--moon-info-bg);
+  border-bottom-color: var(--moon-info-line);
+
+  .icon {
+    color: var(--moon-info);
+  }
+}
+
+.icon {
+  display: flex;
+  flex: none;
+  margin-top: 0.1rem;
+  font-size: 0.95rem;
+}
+
+.copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 92ch;
+}
+
+.title {
+  margin: 0;
+  color: var(--moon-text);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.body {
+  margin: 0.15rem 0 0;
+  color: var(--moon-text-mute);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.primary,
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.7rem;
+  padding: 0 0.6rem;
+  border-radius: var(--moon-radius-sm);
+  border: 1px solid var(--moon-line-2);
+  background: transparent;
+  color: var(--moon-text-dim);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background var(--moon-dur-2) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out),
+    color var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-accent-08);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+/* Quiet exit for a message the reader cannot act on. */
+.ghost {
+  width: 1.7rem;
+  padding: 0;
+  justify-content: center;
+  border-color: transparent;
+  color: var(--moon-text-faint);
+}
+
+@include reduced-motion {
+  .gate {
+    animation: none;
+  }
+}

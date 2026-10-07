@@ -56,7 +56,7 @@ const CreateWorkspaceModal = ({ show, setShow, close }) => {
       onCancel={handleClose}
       footer={false}
       destroyOnHidden
-      width={"80%"}
+      width={560}
     >
       <div className={styles.createSession}>
         <Form form={form} layout="vertical" onFinish={handleStep1}>
@@ -73,15 +73,17 @@ const CreateWorkspaceModal = ({ show, setShow, close }) => {
                 {[
                   { key: "pentest", label: "Pentest", icon: <FiShield />, desc: "OWASP Web Security Testing Guide" },
                 ].map((t) => (
-                  <div
+                  <button
                     key={t.key}
+                    type="button"
+                    aria-pressed={workspaceType === t.key}
                     className={`${styles.typeOption} ${workspaceType === t.key ? styles.typeSelected : ""}`}
                     onClick={() => setWorkspaceType(t.key)}
                   >
                     <span className={styles.typeIcon}>{t.icon}</span>
                     <span className={styles.typeLabel}>{t.label}</span>
                     <span className={styles.typeDesc}>{t.desc}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </Form.Item>

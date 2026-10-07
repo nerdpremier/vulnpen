@@ -74,41 +74,93 @@ export const remapAllVulnerabilities = async (sessionId) => {
 
 // --- Report (LibreOffice / Collabora) --------------------------------
 
-export const getWordEditorUrl = async (sessionId) => {
-  const res = await apiClient.post(`/agent/session/${sessionId}/report/word`);
+/**
+ * Open the report in the Word editor. `rebuild` discards hand edits made in
+ * Word and regenerates the document from the engagement's current results —
+ * without it, a document that has been saved in Word never picks up later
+ * scans or findings.
+ */
+export const getWordEditorUrl = async (sessionId, { rebuild = false } = {}) => {
+  const res = await apiClient.post(
+    `/agent/session/${sessionId}/report/word`,
+    { rebuild },
+  );
   return res.data;
 };
-// --- Nessus-style runs (launch WSTG cases from the web UI) ------------
 
-/** Queue one or more cases for the agent to execute, one run at a time. */
-export const runTestCases = async ({ sessionId, testIds }) => {
+/** Read the file name the API chose for an attachment response. */
+const attachmentName = (headers, fallback) => {
+  const disposition = headers?.["content-disposition"] ?? "";
+  const match = /filename\*?=(?:UTF-8'')?"?([^"';]+)"?/i.exec(disposition);
+  return match?.[1] ? decodeURIComponent(match[1]) : fallback;
+};
+
+/** Fetch a report export as `{ blob, fileName }` so the caller can save it. */
+const fetchReportFile = async (url, fallbackName) => {
+  const res = await apiClient.get(url, { responseType: "blob" });
+  return {
+    blob: res.data,
+    fileName: attachmentName(res.headers, fallbackName),
+  };
+};
+
+export const downloadReportDocx = (sessionId, { rebuild = false } = {}) =>
+  fetchReportFile(
+    `/agent/session/${sessionId}/report/docx${rebuild ? "?rebuild=1" : ""}`,
+    "report.docx",
+  );
+
+export const downloadReportPdf = (sessionId, { rebuild = false } = {}) =>
+  fetchReportFile(
+    `/agent/session/${sessionId}/report/pdf${rebuild ? "?rebuild=1" : ""}`,
+    "report.pdf",
+  );
+
+export const downloadReportMarkdown = (sessionId) =>
+  fetchReportFile(`/agent/session/${sessionId}/report?download=1`, "report.md");
+
+// --- Scans (Nessus-style execution of WSTG cases) ---------------------
+
+/**
+ * Launch a scan over a set of WSTG cases. `policy` decides how much the scan
+ * may assume: "unattended" lets the Approve-for-me reviewer clear approval
+ * boundaries so the scan finishes on its own, "supervised" keeps the user's
+ * own tool-execution mode and may park the scan for a human.
+ */
+export const launchScan = async ({ sessionId, testIds, label, policy }) => {
   const res = await apiClient.post(`/agent/session/${sessionId}/test-plan/run`, {
     testIds,
+    label,
+    policy,
   });
   return res.data;
 };
 
-export const getTestRuns = async (sessionId) => {
-  const res = await apiClient.get(`/agent/session/${sessionId}/test-plan/runs`);
+/** The session's scan history, newest first; `testId` narrows it to one case. */
+export const getScans = async (sessionId, { testId } = {}) => {
+  const res = await apiClient.get(`/agent/session/${sessionId}/test-plan/runs`, {
+    params: testId ? { testId } : undefined,
+  });
   return res.data;
 };
 
-/** One run plus its activity feed — polled while the run is live. */
-export const getTestRunDetail = async (sessionId, runId) => {
+/** One scan with its results and activity feed — polled while it is live. */
+export const getScanDetail = async (sessionId, runId) => {
   const res = await apiClient.get(
     `/agent/session/${sessionId}/test-plan/runs/${runId}`,
   );
   return res.data;
 };
 
-export const stopTestRun = async (sessionId, runId) => {
+export const stopScan = async (sessionId, runId) => {
   const res = await apiClient.post(
     `/agent/session/${sessionId}/test-plan/runs/${runId}/stop`,
   );
   return res.data;
 };
 
-export const cancelTestRun = async (sessionId, runId) => {
+/** Remove a scan from the history (a queued one is cancelled, not lost). */
+export const deleteScan = async (sessionId, runId) => {
   const res = await apiClient.delete(
     `/agent/session/${sessionId}/test-plan/runs/${runId}`,
   );

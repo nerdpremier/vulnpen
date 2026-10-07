@@ -111,7 +111,11 @@ services:
       - aliasgroup1=http://host.docker.internal:8080.*
       - username=admin
       - password=${COLLABORA_PASSWORD:-vulnpen-admin}
-      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:net.post_allow.host[0]=.+ --o:frame_ancestors=localhost:3000
+      # Every report opens at a literal 100%. Collabora's smart zoom instead
+      # fits the page to the frame width, and Writer's zoom scale tops out at
+      # 170%, so on a wide window the report always opened over-zoomed at that
+      # ceiling and changed size with the window.
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:net.post_allow.host[0]=.+ --o:frame_ancestors=localhost:3000 --o:user_interface.smart_zoom=false --o:user_interface.default_zoom=100
     cap_add:
       - MKNOD
     ports:

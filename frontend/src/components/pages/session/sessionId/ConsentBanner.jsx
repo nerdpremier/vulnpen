@@ -1,4 +1,5 @@
 import React from "react";
+import { Checkbox } from "antd";
 import { CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
@@ -44,6 +45,14 @@ const highlighterCustomStyle = {
   maxHeight: "300px",
 };
 
+/**
+ * The stable identity of one item in the batch. Real batches always carry a
+ * `toolCallId`; the fallback only covers malformed data, and an id the backend
+ * does not recognise can only ever be *refused* — never silently approved.
+ */
+const itemKey = (action, index) =>
+  action.toolCallId ?? `${action.toolName}-${index}`;
+
 export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
   const { toolName, safetyBlock, approvalReason, safetyReason, safetyImpact, safetyKind } =
     pendingConsent;
@@ -54,19 +63,52 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
         ...action,
         args: action.args ?? action.arguments,
       }))
-    : [{ toolName, args, safetyBlock, approvalReason, safetyReason, safetyImpact, safetyKind }];
+    : [{ toolCallId: pendingConsent.toolCallId, toolName, args, safetyBlock, approvalReason, safetyReason, safetyImpact, safetyKind }];
   const isBatch = actions.length > 1;
+  // The system flagged at least one action as crossing a safety boundary: the
+  // card has to look different from a routine "may I install this" prompt.
+  const isBlocked = actions.some((action) => action.safetyBlock);
+
+  // Approval is one-shot: the request resolves asynchronously and the banner
+  // unmounts when the agent answers, so a double click must not send twice.
+  const [sent, setSent] = React.useState(false);
+  // Everything is ticked to begin with, so the default is exactly the old
+  // all-or-nothing approval; unticking is how an operator refuses one action of
+  // a mixed batch while letting the rest run.
+  const [ticked, setTicked] = React.useState(
+    () => new Set(actions.map(itemKey)),
+  );
+  const respond = (handler, payload) => {
+    if (sent) return;
+    setSent(true);
+    handler?.(payload);
+  };
+
+  const toggle = (key) => {
+    setTicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // One calm wording for every approval request: the reason / impact rows on
   // each item carry the specific why, so the header no longer grades verdicts.
-  const badgeLabel = "ต้องขออนุมัติ";
+  const badgeLabel = isBlocked ? "ต้องขออนุมัติ — ถูกตั้งค่าความปลอดภัย" : "ต้องขออนุมัติ";
   const headerTitle = isBatch ? "มีหลายรายการที่ต้องขออนุมัติ" : config.title;
 
   return (
-    <div className={styles.consentBanner}>
+    <div
+      className={`${styles.consentBanner} ${isBlocked ? styles.consentBannerDanger : ""}`}
+      role="alert"
+      aria-live="assertive"
+    >
       <div className={styles.consentInfo}>
         <div className={styles.consentHeader}>
-          <div className={styles.consentBadge}>
+          <div
+            className={`${styles.consentBadge} ${isBlocked ? styles.consentBadgeDanger : ""}`}
+          >
             <ExclamationCircleOutlined />
             <span>{badgeLabel}</span>
           </div>
@@ -81,16 +123,25 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
           <div className={styles.consentActions}>
             <button
               className={styles.consentApproveBtn}
-              onClick={onApprove}
+              onClick={() =>
+                respond(onApprove, actions
+                  .map(itemKey)
+                  .filter((key) => ticked.has(key)))
+              }
+              disabled={sent || ticked.size === 0}
               title="อนุมัติ"
               aria-label="อนุมัติ"
             >
               <CheckOutlined />
-              <span>อนุมัติ</span>
+              <span>
+                อนุมัติ
+                {isBatch ? ` (${ticked.size}/${actions.length})` : ""}
+              </span>
             </button>
             <button
               className={styles.consentDenyBtn}
-              onClick={onDeny}
+              onClick={() => respond(onDeny)}
+              disabled={sent}
               title="ปฏิเสธ"
               aria-label="ปฏิเสธ"
             >
@@ -104,15 +155,30 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
           const code = actionConfig.getCode(action.args);
           const reason = action.safetyReason ?? (action.safetyBlock ? GENERIC_SAFETY_REASON : action.approvalReason);
           const impact = action.safetyImpact ?? (action.safetyBlock ? GENERIC_SAFETY_IMPACT : undefined);
+          const key = itemKey(action, index);
           return (
             <div
-              key={action.toolCallId ?? `${action.toolName}-${index}`}
+              key={key}
               className={styles.consentCodePreview}
               style={{ marginTop: index === 0 ? "0.65rem" : "0.65rem" }}
             >
               {isBatch && (
                 <div className={styles.consentItemLabel}>
-                  <strong>{index + 1}. {actionConfig.title}</strong>
+                  {/* Per-item approval: the operator can let the read-only
+                      probe run and refuse the boundary-crossing one, instead
+                      of the whole batch sharing one verdict. */}
+                  <Checkbox
+                    checked={ticked.has(key)}
+                    disabled={sent}
+                    onChange={() => toggle(key)}
+                  >
+                    <strong>{index + 1}. {actionConfig.title}</strong>
+                  </Checkbox>
+                  {action.safetyBlock && (
+                    <span className={styles.consentItemBlocked}>
+                      ถูกตั้งค่าความปลอดภัย
+                    </span>
+                  )}
                 </div>
               )}
               {code && (

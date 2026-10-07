@@ -1,0 +1,227 @@
+@import "@/styles/variables";
+
+/* ============================================================================
+   SCAN DETAIL - the shape of one run
+   A run used to open as a column of pills, counters and sentences. These are
+   the shapes that replaced the sentences: a readout band, a completion dial, a
+   composition donut, a per-case strip and the category ranking.
+
+   Everything here is layout only - colour comes from the `--moon-*` tokens and
+   the chart kit's `tone_*` classes, both owned elsewhere.
+   ========================================================================== */
+
+/* ---- Readout band --------------------------------------------------------- */
+.kpis {
+  margin: 0.25rem 0 1.1rem;
+}
+
+/* The page's own back link when there is no run to describe yet. */
+.backRow {
+  margin-bottom: 1rem;
+}
+
+/* ---- Panels under the readout -------------------------------------------- */
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  margin-bottom: 1.2rem;
+  min-width: 0;
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  box-shadow: var(--moon-inner-top);
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.panelTitle {
+  @include eyebrow;
+  font-size: 0.62rem;
+}
+
+.panelNote {
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+  font-variant-numeric: tabular-nums;
+  @include truncate(1);
+}
+
+/* Dial and donut share one row: both hug their content, so the row wraps
+   rather than squeezing either shape. */
+.outcomeRow {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* ---- Per-case strip ------------------------------------------------------- */
+/* One segment per case of the run, in the order the run lists them. The whole
+   run reads in one glance, and a live one moves as its cases settle. */
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.stripTrack {
+  display: flex;
+  height: 10px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-3);
+  overflow: hidden;
+}
+
+.stripSeg {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  background: var(--seg, var(--moon-text-faint));
+
+  & + & {
+    margin-left: 1px;
+  }
+}
+
+/* Outcome tones. `--seg` is the switch so a swatch and a segment never drift. */
+.segPassed {
+  --seg: var(--moon-success);
+}
+
+.segFailed {
+  --seg: var(--moon-danger);
+}
+
+.segBlocked {
+  --seg: var(--moon-high);
+}
+
+.segActive {
+  --seg: var(--moon-info);
+}
+
+.segSkipped {
+  --seg: color-mix(in srgb, var(--moon-text-faint) 70%, transparent);
+}
+
+.segIdle {
+  --seg: color-mix(in srgb, var(--moon-text-faint) 26%, transparent);
+}
+
+.stripLegend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.95rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stripLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+
+  b {
+    font-weight: 600;
+    color: var(--moon-text);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.stripSwatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--seg, var(--moon-text-faint));
+}
+
+/* ---- Results tab ---------------------------------------------------------- */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+/* The strip arrives with its own frame inside the results tab. */
+.resultsStrip {
+  padding: 0.9rem 1.15rem 1rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+}
+
+/* ---- Tab count ------------------------------------------------------------ */
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  margin-left: 0.4rem;
+  padding: 0 0.28rem;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-danger-bg);
+  color: var(--moon-danger);
+  font-size: 0.64rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- CaseScanList: the same shape, row-sized ------------------------------ */
+.outcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  min-width: 8.5rem;
+}
+
+.outcomeBar {
+  display: flex;
+  width: 8.5rem;
+  max-width: 100%;
+  height: 5px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-3);
+  overflow: hidden;
+}
+
+/* ---- ScanLauncherModal: the selection, drawn ------------------------------ */
+.launchChart {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.launchChartLabel {
+  display: block;
+  margin-bottom: 0.45rem;
+  @include eyebrow;
+  font-size: 0.58rem;
+}

@@ -1,24 +1,25 @@
 import styles from "@/styles/pages/Dashboard.module.scss";
-import { Input, message, Tooltip } from "antd";
+import { message, Tooltip } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import { PlusOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import Loader from "@/components/common/loader/Loader";
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
 import { getUserWorkspaces, deleteWorkspace } from "@/services/workspace.service";
 import moment from "moment";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { FiTrash, FiFolder, FiShield, FiActivity, FiClock } from "react-icons/fi";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
-import { resetSessions } from "@/store/user.slice";
 import {
   AnimatedContent,
   EmptyState,
   MoonBackdrop,
+  PageState,
   ShinyText,
   SpotlightCard,
+  StatStrip,
   StatTile,
 } from "@/components/common/ui";
 
@@ -36,18 +37,13 @@ const TYPE_CONFIG = {
 };
 
 const DashboardPage = () => {
-  const router = useRouter();
   const queryClient = useQueryClient();
-  const searchParams = useSearchParams();
   const { user } = useSelector((state) => state.user);
   const confirmPopUp = useConfirmPopUp();
-  const dispatch = useDispatch();
-
-  const launchWorkspace = searchParams.get("launch") === "true";
 
   const [show, setShow] = useState(false);
 
-  const { data: workspacesData, isLoading } = useQuery(
+  const { data: workspacesData, isLoading, isError, refetch } = useQuery(
     ["get-user-workspaces"],
     getUserWorkspaces,
     {
@@ -102,17 +98,6 @@ const DashboardPage = () => {
     });
   };
 
-  useEffect(() => {
-    dispatch(resetSessions());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (launchWorkspace) {
-      setShow(true);
-    }
-  }, [launchWorkspace]);
-
   if (!user || isLoading) {
     return <Loader />;
   }
@@ -133,7 +118,7 @@ const DashboardPage = () => {
               </div>
             </div>
 
-            <div className={styles.heroStats}>
+            <StatStrip className={styles.heroStats}>
               <StatTile
                 label="Workspaces"
                 value={workspacesData?.length || 0}
@@ -160,7 +145,7 @@ const DashboardPage = () => {
                   totals.waiting ? "Needs your approval" : "No approvals pending"
                 }
               />
-            </div>
+            </StatStrip>
           </div>
         </section>
 
@@ -181,7 +166,16 @@ const DashboardPage = () => {
             </PrimaryButton>
           </div>
 
-          {filteredWorkspaces.length === 0 ? (
+          {isError ? (
+            /* A failed read used to render "Create your first workspace", which
+               invites the operator to build a workspace they already have. */
+            <PageState
+              state="error"
+              title="Could not load your workspaces"
+              description="Your workspaces are unchanged. Retry, or check the backend and reload."
+              onRetry={() => refetch()}
+            />
+          ) : filteredWorkspaces.length === 0 ? (
             <EmptyState
               icon={<FiFolder />}
               title={
@@ -192,7 +186,7 @@ const DashboardPage = () => {
               description={
                 hasWorkspaces
                   ? "Nothing to show yet. Create a workspace to get started."
-                  : "A workspace bundles one engagement: its target, its sessions, the WSTG test plan and the report draft."
+                  : "A workspace holds one engagement: its target, its sessions and its findings."
               }
               actions={
                 <PrimaryButton purpleFilled onClick={() => setShow(true)}>
@@ -210,94 +204,99 @@ const DashboardPage = () => {
                   sessions.running > 0 || sessions.waiting > 0;
 
                 return (
+                  /* The card is a real link, so the browser can open it in a
+                     new tab and the keyboard reaches it with one Tab. The
+                     delete button is a sibling *outside* the anchor: an
+                     interactive control nested in a link is invalid HTML and
+                     swallows its own clicks. */
                   <AnimatedContent
                     key={workspace.workspaceId}
-                    as={SpotlightCard}
-                    glare
                     delay={Math.min(index, 8) * 45}
-                    className={`${styles.workspaceCard} ${
-                      hasActivity ? styles.activeCard : ""
-                    }`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() =>
-                      router.push(`/workspace/${workspace.workspaceId}`)
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter")
-                        router.push(`/workspace/${workspace.workspaceId}`);
-                    }}
+                    className={styles.cardShell}
                   >
-                    <div className={styles.cardHeader}>
-                      <div className={styles.cardTitleRow}>
-                        <h3 className={styles.cardTitle}>{workspace.name}</h3>
+                    <SpotlightCard
+                      as={Link}
+                      href={`/workspace/${workspace.workspaceId}`}
+                      glare
+                      className={`${styles.workspaceCard} ${
+                        hasActivity ? styles.activeCard : ""
+                      }`}
+                    >
+                      <div className={styles.cardHeader}>
+                        <div className={styles.cardTitleRow}>
+                          <h3 className={styles.cardTitle}>{workspace.name}</h3>
+                        </div>
                       </div>
-                      <div
-                        className={styles.cardActions}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Tooltip title="Delete workspace">
-                          <button
-                            type="button"
-                            className={styles.deleteBtn}
-                            aria-label={`Delete ${workspace.name}`}
-                            onClick={(e) =>
-                              onDeleteWorkspace(workspace.workspaceId, e)
-                            }
+
+                      {workspace.description && (
+                        <p className={styles.cardDescription}>
+                          {workspace.description}
+                        </p>
+                      )}
+
+                      <div className={styles.cardMeta}>
+                        <span className={styles.typeChip}>
+                          {typeConf.icon}
+                          {typeConf.label}
+                        </span>
+                        <span className={styles.cardDate}>
+                          {moment(workspace.createdAt).format("MMM D, YYYY")}
+                        </span>
+                      </div>
+
+                      <div className={styles.sessionStats}>
+                        <div className={styles.statItem}>
+                          <span className={styles.statCount}>
+                            {sessions.total || 0}
+                          </span>
+                          <span className={styles.statLabel}>
+                            {sessions.total === 1 ? "session" : "sessions"}
+                          </span>
+                        </div>
+                        {sessions.running > 0 && (
+                          <div
+                            className={`${styles.statItem} ${styles.statRunning}`}
                           >
-                            <FiTrash size={13} />
-                          </button>
-                        </Tooltip>
+                            <span className={styles.liveDot} />
+                            <span className={styles.statCount}>
+                              {sessions.running}
+                            </span>
+                            <span className={styles.statLabel}>running</span>
+                          </div>
+                        )}
+                        {sessions.waiting > 0 && (
+                          <div
+                            className={`${styles.statItem} ${styles.statWaiting}`}
+                          >
+                            <span className={styles.waitDot} />
+                            <span className={styles.statCount}>
+                              {sessions.waiting}
+                            </span>
+                            <span className={styles.statLabel}>waiting</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
 
-                    {workspace.description && (
-                      <p className={styles.cardDescription}>{workspace.description}</p>
-                    )}
-
-                    <div className={styles.cardMeta}>
-                      <span className={styles.typeChip}>
-                        {typeConf.icon}
-                        {typeConf.label}
+                      <span className={styles.cardOpen}>
+                        Open workspace
+                        <ArrowRightOutlined />
                       </span>
-                      <span className={styles.cardDate}>
-                        {moment(workspace.createdAt).format("MMM D, YYYY")}
-                      </span>
-                    </div>
+                    </SpotlightCard>
 
-                    <div className={styles.sessionStats}>
-                      <div className={styles.statItem}>
-                        <span className={styles.statCount}>
-                          {sessions.total || 0}
-                        </span>
-                        <span className={styles.statLabel}>
-                          {sessions.total === 1 ? "session" : "sessions"}
-                        </span>
-                      </div>
-                      {sessions.running > 0 && (
-                        <div className={`${styles.statItem} ${styles.statRunning}`}>
-                          <span className={styles.liveDot} />
-                          <span className={styles.statCount}>
-                            {sessions.running}
-                          </span>
-                          <span className={styles.statLabel}>running</span>
-                        </div>
-                      )}
-                      {sessions.waiting > 0 && (
-                        <div className={`${styles.statItem} ${styles.statWaiting}`}>
-                          <span className={styles.waitDot} />
-                          <span className={styles.statCount}>
-                            {sessions.waiting}
-                          </span>
-                          <span className={styles.statLabel}>waiting</span>
-                        </div>
-                      )}
+                    <div className={styles.cardActions}>
+                      <Tooltip title="Delete workspace">
+                        <button
+                          type="button"
+                          className={styles.deleteBtn}
+                          aria-label={`Delete ${workspace.name}`}
+                          onClick={(e) =>
+                            onDeleteWorkspace(workspace.workspaceId, e)
+                          }
+                        >
+                          <FiTrash size={13} />
+                        </button>
+                      </Tooltip>
                     </div>
-
-                    <span className={styles.cardOpen}>
-                      Open workspace
-                      <ArrowRightOutlined />
-                    </span>
                   </AnimatedContent>
                 );
               })}

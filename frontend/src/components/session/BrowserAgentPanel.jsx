@@ -26,7 +26,12 @@ const BrowserAgentPanel = () => {
     { staleTime: 30000 }
   );
 
-  const { data: vncData, isLoading: vncLoading, refetch: refetchVnc } = useQuery(
+  const {
+    data: vncData,
+    isLoading: vncLoading,
+    isError: vncError,
+    refetch: refetchVnc,
+  } = useQuery(
     "browser-agent-vnc",
     getBrowserAgentVNC,
     {
@@ -96,6 +101,26 @@ const BrowserAgentPanel = () => {
               }}
             >
               Open Browser Agent Settings
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (vncError) {
+    /* Without this the panel diagnoses "Headed Mode Not Active" whenever the
+       API is unreachable, and sends the operator into Settings to change a
+       setting that was never the problem. */
+    return (
+      <div style={panelStyle}>
+        <Result
+          icon={<ReloadOutlined style={{ color: "var(--moon-warning)" }} />}
+          title="Could not read the browser agent's state"
+          subTitle="The API did not answer, so this panel cannot tell whether the live browser view is available. Nothing has been changed."
+          extra={
+            <Button icon={<ReloadOutlined />} onClick={() => refetchVnc()}>
+              Retry
             </Button>
           }
         />

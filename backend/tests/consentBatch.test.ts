@@ -4,6 +4,7 @@ import {
   buildPendingConsentBatch,
   consentRequiredEvent,
   loadPendingConsent,
+  splitConsentBatch,
 } from "../src/services/consent-batch";
 import type { ToolExecutionResult } from "../src/services/agent.tools";
 import type { ToolCallData } from "../src/utils/llm/types";
@@ -65,4 +66,59 @@ test("a lone consent call persists flat and resumes as a one-item list", () => {
   assert.equal(resumed.length, 1);
   assert.equal(resumed[0].toolCallId, "c1");
   assert.equal(resumed[0].arguments.command, "nmap -sV 10.0.0.1");
+});
+
+/** The two-item parked batch the per-item approval tests work from. */
+function parkedBatch() {
+  const calls = [
+    call("c1", "run_bash", '{"command":"curl -I http://target/"}'),
+    call("c2", "run_bash", '{"command":"apt-get install -y sqlmap"}'),
+  ];
+  const results = [consentResult("c1", "run_bash"), consentResult("c2", "run_bash")];
+  return buildPendingConsentBatch(results, calls);
+}
+
+test("an approval with no ids runs the whole parked batch", () => {
+  const batch = parkedBatch();
+  const { allowed, refused } = splitConsentBatch(batch, true);
+
+  assert.deepEqual(allowed.map((item) => item.toolCallId), ["c1", "c2"]);
+  assert.deepEqual(refused, []);
+});
+
+test("per-item approval runs exactly the ticked actions and refuses the rest", () => {
+  const batch = parkedBatch();
+  const { allowed, refused } = splitConsentBatch(batch, true, ["c1"]);
+
+  assert.deepEqual(allowed.map((item) => item.toolCallId), ["c1"]);
+  assert.deepEqual(refused.map((item) => item.toolCallId), ["c2"]);
+});
+
+test("an empty ticked set approves nothing rather than everything", () => {
+  // The dangerous reading of an empty checkbox list is "run it all"; it must
+  // stay the safe one (it is what a mis-rendered list sends).
+  const batch = parkedBatch();
+  const { allowed, refused } = splitConsentBatch(batch, true, []);
+
+  assert.deepEqual(allowed, []);
+  assert.deepEqual(refused.map((item) => item.toolCallId), ["c1", "c2"]);
+});
+
+test("ids the parked batch does not contain can only refuse, never add", () => {
+  const batch = parkedBatch();
+  const { allowed, refused } = splitConsentBatch(batch, true, [
+    "c1",
+    "not-in-the-batch",
+  ]);
+
+  assert.deepEqual(allowed.map((item) => item.toolCallId), ["c1"]);
+  assert.deepEqual(refused.map((item) => item.toolCallId), ["c2"]);
+});
+
+test("a denial refuses every item whatever ids were sent", () => {
+  const batch = parkedBatch();
+  const { allowed, refused } = splitConsentBatch(batch, false, ["c1"]);
+
+  assert.deepEqual(allowed, []);
+  assert.deepEqual(refused.map((item) => item.toolCallId), ["c1", "c2"]);
 });

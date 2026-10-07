@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { App, Button, Dropdown, Form, Input, Modal, Select, Spin } from "antd";
+import { App, Button, Dropdown, Form, Input, Modal, Select } from "antd";
 import {
   ArrowLeftOutlined,
   CaretDownOutlined,
@@ -13,8 +13,8 @@ import {
 } from "@ant-design/icons";
 import {
   getTestPlan,
-  getTestRuns,
-  runTestCases,
+  getScans,
+  launchScan,
   updateTestCase,
 } from "@/services/websecurity.service";
 import { getVulnerabilities } from "@/services/agent.service";
@@ -22,9 +22,10 @@ import { useAgentStreamStore } from "@/store/agentStream.store";
 import { apiErrorMessage } from "@/utils/apiError";
 import vStyles from "@/styles/pages/Vulnerabilities.module.scss";
 import styles from "@/styles/pages/TestPlan.module.scss";
-import { STATUS_OPTIONS } from "@/utils/testPlan.mjs";
-import { activeRunForCase } from "@/utils/runs.mjs";
-import RunHistorySection from "./RunHistorySection";
+import { STATUS_OPTIONS, summarise } from "@/utils/testPlan.mjs";
+import { activeScanForCase, isScanLive } from "@/utils/scans.mjs";
+import { CaseMatrix, PageShell, PageState } from "@/components/common/ui";
+import CaseScanList, { caseScansQueryKey } from "../scans/CaseScanList";
 
 /** Colour the status pill (box tint) and its text. Detail page only. */
 const PILL_TONE = {
@@ -78,29 +79,36 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
   const queryClient = useQueryClient();
   const [editForm] = Form.useForm();
   const [editing, setEditing] = useState(false);
-  // Which half of the page is showing: the case document, or the Nessus-style
-  // run monitor. Launching a run flips to the monitor automatically.
-  const [view, setView] = useState("details");
-
-  // Runs share the query key with the history section; while one of them owns
-  // this case, the plan polls so the status pill and coverage keep up.
-  const runsQuery = useQuery(["test-runs", sessionId], () => getTestRuns(sessionId));
-  const runs = runsQuery.data?.runs ?? [];
-  const runActive = runs.some(
-    (run) => run.status === "queued" || run.status === "running",
+  // The URL's test id, in the plan's own form — one place decodes it, so the
+  // scans query and the plan lookup can never disagree about which case this is.
+  const caseId = useMemo(
+    () => decodeURIComponent(testId).trim().toUpperCase(),
+    [testId],
   );
 
+  // This case's own scans, newest first. The list section below shares this
+  // query key, so both read one poll; while a scan owns the case, the plan
+  // polls too so the status pill and its observations keep up.
+  const scansQuery = useQuery(
+    caseScansQueryKey(sessionId, caseId),
+    () => getScans(sessionId, { testId: caseId }),
+    {
+      enabled: !!sessionId && !!caseId,
+      refetchInterval: (data) => ((data?.runs ?? []).some(isScanLive) ? 2000 : false),
+    },
+  );
+  const scans = scansQuery.data?.runs ?? [];
+  const scanLive = scans.some(isScanLive);
+
   const planQuery = useQuery(["test-plan", sessionId], () => getTestPlan(sessionId), {
-    refetchInterval: runActive ? 4000 : false,
+    refetchInterval: scanLive ? 4000 : false,
   });
   const plan = planQuery.data?.plan ?? null;
 
-  const testCase = useMemo(() => {
-    const wanted = decodeURIComponent(testId).trim().toUpperCase();
-    return (
-      (plan?.cases ?? []).find((one) => one.testId.toUpperCase() === wanted) ?? null
-    );
-  }, [plan, testId]);
+  const testCase = useMemo(
+    () => (plan?.cases ?? []).find((one) => one.testId.toUpperCase() === caseId) ?? null,
+    [plan, caseId],
+  );
 
   const categoryCases = useMemo(() => {
     if (!plan || !testCase) return [];
@@ -113,6 +121,17 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
     (one) => one.status === "not_started" || one.status === "in_progress",
   );
 
+  // The chapter's own name and outcome, for the strip under the case header.
+  // Both come from the plan query this page already runs.
+  const chapter = useMemo(
+    () =>
+      (planQuery.data?.catalog?.categories ?? []).find(
+        (category) => category.code === testCase?.categoryCode,
+      ) ?? null,
+    [planQuery.data, testCase],
+  );
+  const chapterCounts = useMemo(() => summarise(categoryCases), [categoryCases]);
+
   const vulnerabilitiesQuery = useQuery(
     ["vulnerabilities", sessionId],
     () => getVulnerabilities(sessionId),
@@ -124,20 +143,28 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
     );
   }, [vulnerabilitiesQuery.data, testCase]);
 
-  const invalidate = () => queryClient.invalidateQueries(["test-plan", sessionId]);
+  const invalidate = () => {
+    queryClient.invalidateQueries(["test-plan", sessionId]);
+    queryClient.invalidateQueries(["case-scans", sessionId]);
+  };
 
-  const launchMutation = useMutation(runTestCases, {
+  // Launching never opens a chat: the case page hands the work to a scan and
+  // follows it to the scan's own page, where the results land.
+  const launchMutation = useMutation(launchScan, {
     onSuccess: (data) => {
       message.success(
         data.queued
-          ? `Run queued — position ${data.position}`
-          : "Run started — follow it in the run monitor",
+          ? `Scan queued — position ${data.position}`
+          : "Scan launched — its results land on the scan page",
       );
-      queryClient.invalidateQueries(["test-runs", sessionId]);
+      queryClient.invalidateQueries(["case-scans", sessionId]);
+      // The sidebar and the scans page read this key, and the sidebar only
+      // starts polling once it knows a scan is live — so a launch has to say so.
+      queryClient.invalidateQueries(["scans", sessionId]);
       useAgentStreamStore.getState().markHistoryStale?.(sessionId);
-      setView("runs");
+      if (data.run?.runId) router.push(`/session/${sessionId}/scans/${data.run.runId}`);
     },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not start the run")),
+    onError: (error) => message.error(apiErrorMessage(error, "Could not start the scan")),
   });
 
   const statusMutation = useMutation(updateTestCase, {
@@ -192,59 +219,80 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
 
   if (planQuery.isLoading) {
     return (
-      <div className={vStyles.fullState}>
-        <Spin />
-      </div>
+      <PageShell>
+        <PageState state="loading" rows={4} />
+      </PageShell>
     );
   }
 
+  // A failed read and a case that is genuinely absent are different problems:
+  // one has a retry, the other is answered by going back to the plan.
   if (planQuery.isError || !testCase) {
     return (
-      <div className={vStyles.detailPage}>
-        <header className={vStyles.detailHeader}>
-          <button
-            className={vStyles.backButton}
-            onClick={() => router.push(`/session/${sessionId}/test-plan`)}
-          >
-            <ArrowLeftOutlined /> All test cases
-          </button>
-        </header>
-        <div className={vStyles.findingDocument}>
-          {planQuery.isError
-            ? "Could not load the test plan."
-            : `Test case ${decodeURIComponent(testId)} is not in this plan.`}
-        </div>
-      </div>
+      <PageShell>
+        <button
+          className={vStyles.backButton}
+          onClick={() => router.push(`/session/${sessionId}/test-plan`)}
+        >
+          <ArrowLeftOutlined /> All test cases
+        </button>
+        {planQuery.isError ? (
+          <PageState
+            state="error"
+            title="Could not load the test plan"
+            description="This case's details come from the plan. Its result and scan history are unchanged."
+            onRetry={() => planQuery.refetch()}
+          />
+        ) : (
+          <PageState
+            state="empty"
+            title={`Test case ${caseId} is not in this plan`}
+            description="It was removed from the plan. Scans that ran against it keep their own record."
+            actions={
+              <Button onClick={() => router.push(`/session/${sessionId}/scans`)}>
+                Scan history
+              </Button>
+            }
+          />
+        )}
+      </PageShell>
     );
   }
 
-  const activeRun = activeRunForCase(runs, testCase.testId);
+  const activeScan = activeScanForCase(scans, testCase.testId);
 
-  const runMenuItems = [
+  // Every launch from here is unattended: the case page promises "press Scan
+  // and read the result", which is only true if the scan may clear its own
+  // approval boundaries.
+  const scanMenuItems = [
     {
       key: "category",
-      label: `Run whole category — ${testCase.categoryCode} (${categoryCases.length} cases)`,
+      label: `Scan whole category — ${testCase.categoryCode} (${categoryCases.length} cases)`,
       disabled: launchMutation.isLoading,
       onClick: () =>
         launchMutation.mutate({
           sessionId,
           testIds: categoryCases.map((one) => one.testId),
+          label: `${testCase.categoryCode} — whole category`,
+          policy: "unattended",
         }),
     },
     {
       key: "remaining",
-      label: `Run remaining in category (${remainingInCategory.length} not executed)`,
+      label: `Scan remaining in category (${remainingInCategory.length} not executed)`,
       disabled: launchMutation.isLoading || remainingInCategory.length === 0,
       onClick: () =>
         launchMutation.mutate({
           sessionId,
           testIds: remainingInCategory.map((one) => one.testId),
+          label: `${testCase.categoryCode} — remaining`,
+          policy: "unattended",
         }),
     },
   ];
 
   return (
-    <div className={`${vStyles.detailPage} ${styles.casePage}`}>
+    <PageShell>
       <header className={styles.caseHero}>
         <div className={styles.caseHeroTop}>
           <button
@@ -261,12 +309,19 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
               type="primary"
               icon={<PlayCircleOutlined />}
               loading={launchMutation.isLoading}
-              onClick={() => launchMutation.mutate({ sessionId, testIds: [testCase.testId] })}
+              onClick={() =>
+                launchMutation.mutate({
+                  sessionId,
+                  testIds: [testCase.testId],
+                  label: `${testCase.testId} — ${testCase.title}`,
+                  policy: "unattended",
+                })
+              }
             >
-              Run
+              Scan
             </Button>
-            <Dropdown menu={{ items: runMenuItems }} trigger={["click"]}>
-              <Button icon={<CaretDownOutlined />} aria-label="More run options" />
+            <Dropdown menu={{ items: scanMenuItems }} trigger={["click"]}>
+              <Button icon={<CaretDownOutlined />} aria-label="More scan options" />
             </Dropdown>
           </div>
         </div>
@@ -277,11 +332,11 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
             {testCase.categoryCode && (
               <span className={styles.caseCategoryChip}>{testCase.categoryCode}</span>
             )}
-            {activeRun && (
+            {activeScan && (
               <span className={styles.activeRunBadge}>
-                {activeRun.status === "queued"
-                  ? `queued · #${activeRun.position ?? 1}`
-                  : "agent running"}
+                {activeScan.status === "queued"
+                  ? `scan queued · #${activeScan.position ?? 1}`
+                  : "scanning now"}
               </span>
             )}
           </div>
@@ -342,81 +397,92 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
               </div>
             )}
           </div>
-        </div>
 
-        <div className={styles.viewTabs}>
-          <button
-            type="button"
-            className={`${styles.viewTab} ${view === "details" ? styles.viewTabActive : ""}`}
-            onClick={() => setView("details")}
-          >
-            Details
-          </button>
-          <button
-            type="button"
-            className={`${styles.viewTab} ${view === "runs" ? styles.viewTabActive : ""}`}
-            onClick={() => setView("runs")}
-          >
-            Run monitor
-            {activeRun && <span className={styles.viewTabDot} aria-label="a run is active" />}
-          </button>
+          {categoryCases.length > 1 && (
+            <div className={styles.caseChapter}>
+              <span className={styles.caseChapterLabel}>
+                {testCase.categoryCode
+                  ? `Chapter ${testCase.categoryCode}`
+                  : "Other test cases"}
+                {chapter?.name ? ` · ${chapter.name}` : ""}
+              </span>
+              <CaseMatrix
+                rows={[
+                  {
+                    key: testCase.categoryCode || "OTHER",
+                    label: chapter?.name ?? testCase.categoryCode,
+                    cells: categoryCases.map((one) => ({
+                      id: one.testId,
+                      status: one.status,
+                    })),
+                  },
+                ]}
+                summary={{
+                  passed: chapterCounts.passed,
+                  failed: chapterCounts.failed,
+                  blocked: chapterCounts.blocked,
+                  in_progress: chapterCounts.inProgress,
+                  skipped: chapterCounts.skipped,
+                  not_started: chapterCounts.notStarted,
+                }}
+              />
+            </div>
+          )}
         </div>
       </header>
 
-      {view === "runs" ? (
-        <RunHistorySection
-          sessionId={sessionId}
-          testCase={testCase}
-          planCases={plan?.cases ?? []}
-        />
-      ) : (
-        <div className={styles.caseDoc}>
-          {!testCase.objective && (
-            <DocSection label="Objective">
-              {testCase.objective || "Not described."}
-            </DocSection>
+      <CaseScanList
+        sessionId={sessionId}
+        testCase={testCase}
+        planCases={plan?.cases ?? []}
+      />
+
+      <div className={styles.caseDoc}>
+        {/* The objective is the point of the case: it used to be guarded by
+            `!testCase.objective`, so it rendered only when it was missing. */}
+        <DocSection label="Objective">
+          {testCase.objective || "Not described."}
+        </DocSection>
+        <DocSection label="Method">
+          {testCase.howToTest || "Not described."}
+        </DocSection>
+        <DocSection label="Expected evidence">
+          {testCase.evidenceExpectation || "Not described."}
+        </DocSection>
+        <DocSection label="Observations recorded">
+          {testCase.observations || "Nothing recorded yet."}
+        </DocSection>
+        {testCase.notes && (
+          <DocSection label="Notes">{testCase.notes}</DocSection>
+        )}
+        <DocSection label="Findings">
+          {caseFindings.length > 0 ? (
+            <ul className={styles.findingList}>
+              {caseFindings.map((vuln) => (
+                <li key={vuln.vulnerabilityId} className={styles.findingItem}>
+                  <span
+                    className={`${vStyles.severity} ${
+                      vStyles[vuln.severity || "info"]
+                    }`}
+                  >
+                    {vuln.severity || "info"}
+                  </span>
+                  <Link
+                    href={`/session/${sessionId}/vulnerabilities/${vuln.vulnerabilityId}`}
+                    className={styles.findingLink}
+                  >
+                    {vuln.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span className={styles.caseDocMuted}>
+              No vulnerability has been linked to this case.
+            </span>
           )}
-          <DocSection label="Method">
-            {testCase.howToTest || "Not described."}
-          </DocSection>
-          <DocSection label="Expected evidence">
-            {testCase.evidenceExpectation || "Not described."}
-          </DocSection>
-          <DocSection label="Observations recorded">
-            {testCase.observations || "Nothing recorded yet."}
-          </DocSection>
-          {testCase.notes && (
-            <DocSection label="Notes">{testCase.notes}</DocSection>
-          )}
-          <DocSection label="Findings">
-            {caseFindings.length > 0 ? (
-              <ul className={styles.findingList}>
-                {caseFindings.map((vuln) => (
-                  <li key={vuln.vulnerabilityId} className={styles.findingItem}>
-                    <span
-                      className={`${vStyles.severity} ${
-                        vStyles[vuln.severity || "info"]
-                      }`}
-                    >
-                      {vuln.severity || "info"}
-                    </span>
-                    <Link
-                      href={`/session/${sessionId}/vulnerabilities/${vuln.vulnerabilityId}`}
-                      className={styles.findingLink}
-                    >
-                      {vuln.title}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span className={styles.caseDocMuted}>
-                No vulnerability has been linked to this case.
-              </span>
-            )}
-          </DocSection>
-        </div>
-      )}
+        </DocSection>
+      </div>
 
       <Modal
         open={editing}
@@ -463,6 +529,6 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </PageShell>
   );
 }

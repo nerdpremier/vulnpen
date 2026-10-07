@@ -1,189 +1,179 @@
-import { Tooltip } from "antd";
-import styles from "@/styles/pages/Session.module.scss";
-import Image from "next/image";
-import quad from "@/assets/sidebar/quad.svg";
-import rect from "@/assets/sidebar/rect.svg";
-import { useDispatch, useSelector } from "react-redux";
-import { setRecon, updateCurrentSession, updateSessions } from "@/store/user.slice";
-import { useRouter, usePathname } from "next/navigation";
+"use client";
+
+import React, { useMemo } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery } from "react-query";
-import { getVulnerabilities } from "@/services/agent.service";
-import { getTestPlan } from "@/services/websecurity.service";
-import { FiCheckSquare, FiMonitor, FiAlertOctagon } from "react-icons/fi";
+import { getScans, getTestPlan } from "@/services/websecurity.service";
+import { getSessionInfo, getVulnerabilities } from "@/services/agent.service";
+import {
+  FiAlertOctagon,
+  FiCheckSquare,
+  FiFileText,
+  FiHome,
+  FiMessageSquare,
+  FiMonitor,
+  FiPlayCircle,
+  FiZap,
+} from "react-icons/fi";
 import { HiOutlineChevronLeft } from "react-icons/hi";
+import { isScanLive } from "@/utils/scans.mjs";
+import styles from "@/styles/pages/Session.module.scss";
 
 /**
- * Session rail.
+ * Engagement rail.
  *
- * Three stacked zones: who/where you are at the top, the grouped view
- * navigation in the middle (Workspace / Testing / Views), and the session
- * utilities pinned to the bottom. The rail collapses to icons below 768px so
- * the workspace keeps its width on a laptop.
+ * Every entry is a real link to a real route, so middle-click, "open in new
+ * tab", prefetch and the browser's own back behaviour all work the way a user
+ * expects. The active entry is derived from the pathname and announced with
+ * `aria-current`, and the badges are live numbers, not decoration.
+ *
+ * Groups follow the work: what the engagement contains, the agent that does
+ * the work, and the tools it works through.
  */
 
-const Sidebar = ({ sessionId, workspaceId }) => {
-  const router = useRouter();
-  const pathname = usePathname();
-  const dispatch = useDispatch();
+const GROUPS = [
+  {
+    label: "Engagement",
+    items: [
+      {
+        key: "overview",
+        href: "",
+        label: "Overview",
+        icon: <FiHome />,
+        exact: true,
+      },
+      { key: "test-plan", href: "/test-plan", label: "Test plan", icon: <FiCheckSquare /> },
+      { key: "scans", href: "/scans", label: "Scans", icon: <FiPlayCircle /> },
+      {
+        key: "vulnerabilities",
+        href: "/vulnerabilities",
+        label: "Vulnerabilities",
+        icon: <FiAlertOctagon />,
+      },
+      { key: "report", href: "/report", label: "Report", icon: <FiFileText /> },
+    ],
+  },
+  {
+    label: "Agent",
+    items: [
+      {
+        key: "chat",
+        href: "/chat",
+        label: "Chat",
+        icon: <FiMessageSquare />,
+        live: true,
+      },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { key: "burp", href: "/burp", label: "Burp proxy", icon: <FiZap /> },
+      { key: "gui", href: "/gui", label: "Desktop", icon: <FiMonitor /> },
+    ],
+  },
+];
 
-  const { data: vulnerabilitiesData } = useQuery(
-    ["vulnerabilities", sessionId],
-    () => getVulnerabilities(sessionId),
-    { enabled: !!sessionId, refetchInterval: 5000, retry: false },
+const LIVE_SCAN_STATES = ["queued", "running"];
+
+const Sidebar = ({ sessionId, workspaceId }) => {
+  const pathname = usePathname();
+  const base = `/session/${sessionId}`;
+
+  // The engagement's own numbers. These share query keys with the pages that
+  // show the same data, so the rail costs no extra requests while a page is
+  // open and keeps its badges in step with it.
+  const { data: sessionInfo } = useQuery(
+    ["session-info", sessionId],
+    () => getSessionInfo(sessionId),
+    { enabled: !!sessionId, refetchInterval: 10000, retry: false },
   );
   const { data: testPlanData } = useQuery(
     ["test-plan", sessionId],
     () => getTestPlan(sessionId),
     { enabled: !!sessionId, refetchInterval: 15000, retry: false },
   );
-  const testPlanCoverage = testPlanData?.coverage;
+  const { data: vulnerabilitiesData } = useQuery(
+    ["vulnerabilities", sessionId],
+    () => getVulnerabilities(sessionId),
+    { enabled: !!sessionId, refetchInterval: 5000, retry: false },
+  );
+  const { data: scansData } = useQuery(
+    ["scans", sessionId],
+    () => getScans(sessionId),
+    {
+      enabled: !!sessionId,
+      retry: false,
+      // Poll only while something is actually moving: a settled history never
+      // changes on its own.
+      refetchInterval: (data) =>
+        (data?.runs ?? []).some(isScanLive) ? 5000 : false,
+    },
+  );
 
-  const { sessions } = useSelector((state) => state.user);
+  const coverage = testPlanData?.coverage;
+  const liveScans = (scansData?.runs ?? []).filter((scan) =>
+    LIVE_SCAN_STATES.includes(scan.status),
+  ).length;
+  const vulnerabilities = vulnerabilitiesData?.total ?? 0;
+  const agentRunning = sessionInfo?.agentState === "running";
 
-  const handleClickTab = (id) => {
-    dispatch(updateCurrentSession(id));
-    const selectedSession = sessions.filter((s) => s.id === id);
-    if (selectedSession.length > 0) {
-      router.push(`/session/${id}`);
-    }
+  const badges = useMemo(
+    () => ({
+      "test-plan": coverage?.total > 0 ? `${coverage.executed}/${coverage.total}` : null,
+      scans: liveScans > 0 ? liveScans : null,
+      vulnerabilities: vulnerabilities > 0 ? vulnerabilities : null,
+    }),
+    [coverage, liveScans, vulnerabilities],
+  );
+
+  const isActive = (item) => {
+    if (item.exact) return pathname === base || pathname === `${base}/`;
+    return pathname?.startsWith(`${base}${item.href}`);
   };
 
-  const navigateToGUI = () => {
-    const guiId = `${sessionId}/gui`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === guiId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: guiId, is_main: false, is_active: true, type: "gui" });
-      dispatch(updateSessions(updatedSess));
-    }
-    router.push(`/session/${sessionId}/gui`);
-  };
-
-  const exitTarget = workspaceId
-    ? `/workspace/${workspaceId}`
-    : "/dashboard";
-
-  const isOnWorkspace = pathname === `/session/${sessionId}`;
-  const isOnGUI = pathname?.includes("/gui");
-  const isOnVulnerabilities = pathname?.includes("/vulnerabilities");
-  const isOnTestPlan = pathname?.includes("/test-plan");
-
-  const mainSessions = sessions.filter((s) => s.is_main && s.type === "session");
-  const subSessions = sessions.filter((s) => !s.is_main && s.type === "session");
+  const exitHref = workspaceId ? `/workspace/${workspaceId}` : "/dashboard";
 
   return (
-    <aside className={styles.sidebar} aria-label="Session navigation">
+    <aside className={styles.sidebar} aria-label="Engagement navigation">
       <div className={styles.sidebarTop}>
-        <Tooltip title="All workspaces" placement="right">
-          <button
-            type="button"
-            className={styles.navRow}
-            aria-label={workspaceId ? "Back to workspace" : "Back to dashboard"}
-            onClick={() => {
-              dispatch(setRecon(false));
-              router.push(exitTarget);
-            }}
-          >
-            <HiOutlineChevronLeft size={13} />
-            <span>{workspaceId ? "Workspace" : "Dashboard"}</span>
-          </button>
-        </Tooltip>
+        <Link
+          href={exitHref}
+          className={styles.navRow}
+          aria-label={workspaceId ? "Back to workspace" : "Back to dashboard"}
+        >
+          <HiOutlineChevronLeft size={13} />
+          <span>{workspaceId ? "Workspace" : "Dashboard"}</span>
+        </Link>
       </div>
 
       <nav className={styles.sidebarNav}>
-        <div className={styles.navSectionLabel}>Workspace</div>
-
-        {mainSessions.map((sess) => (
-          <div
-            key={sess.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => handleClickTab(sess.id)}
-            onKeyDown={(event) => event.key === "Enter" && handleClickTab(sess.id)}
-            className={sess?.is_active ? styles.activeTab : styles.tab}
-          >
-            <Image src={quad} width={14} height={14} alt="" />
-            <span className={styles.navText}>Main workspace</span>
-          </div>
+        {GROUPS.map((group) => (
+          <React.Fragment key={group.label}>
+            <div className={styles.navSectionLabel}>{group.label}</div>
+            {group.items.map((item) => {
+              const active = isActive(item);
+              const badge = badges[item.key];
+              return (
+                <Link
+                  key={item.key}
+                  href={`${base}${item.href}`}
+                  className={active ? styles.activeTab : styles.tab}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={item.label}
+                >
+                  {item.icon}
+                  <span className={styles.navText}>{item.label}</span>
+                  {item.live && agentRunning && (
+                    <span className={styles.navLive} aria-label="agent running" />
+                  )}
+                  {badge && <span className={styles.navBadge}>{badge}</span>}
+                </Link>
+              );
+            })}
+          </React.Fragment>
         ))}
-
-        {subSessions.map((sess, i) => (
-          <div
-            key={sess.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => handleClickTab(sess.id)}
-            onKeyDown={(event) => event.key === "Enter" && handleClickTab(sess.id)}
-            className={sess?.is_active ? styles.activeTab : styles.tab}
-          >
-            <Image src={rect} width={14} height={14} alt="" />
-            <span className={styles.navText}>Sub workspace {i + 1}</span>
-          </div>
-        ))}
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push(`/session/${sessionId}`)}
-          onKeyDown={(event) =>
-            event.key === "Enter" && router.push(`/session/${sessionId}`)
-          }
-          className={isOnWorkspace ? styles.activeTab : styles.tab}
-        >
-          <Image src={quad} width={14} height={14} alt="" />
-          <span className={styles.navText}>Chat</span>
-        </div>
-
-        <div className={styles.navSectionLabel}>Testing</div>
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push(`/session/${sessionId}/test-plan`)}
-          onKeyDown={(event) =>
-            event.key === "Enter" && router.push(`/session/${sessionId}/test-plan`)
-          }
-          className={isOnTestPlan ? styles.activeTab : styles.tab}
-        >
-          <FiCheckSquare />
-          <span className={styles.navText}>Web Security Testing</span>
-          {testPlanCoverage?.total > 0 && (
-            <span className={styles.navBadge}>
-              {testPlanCoverage.executed}/{testPlanCoverage.total}
-            </span>
-          )}
-        </div>
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push(`/session/${sessionId}/vulnerabilities`)}
-          onKeyDown={(event) =>
-            event.key === "Enter" &&
-            router.push(`/session/${sessionId}/vulnerabilities`)
-          }
-          className={isOnVulnerabilities ? styles.activeTab : styles.tab}
-        >
-          <FiAlertOctagon />
-          <span className={styles.navText}>Vulnerabilities</span>
-          {(vulnerabilitiesData?.total ?? 0) > 0 && (
-            <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
-          )}
-        </div>
-
-        <div className={styles.navSectionLabel}>Views</div>
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={navigateToGUI}
-          onKeyDown={(event) => event.key === "Enter" && navigateToGUI()}
-          className={isOnGUI ? styles.activeTab : styles.tab}
-        >
-          <FiMonitor />
-          <span className={styles.navText}>GUI</span>
-        </div>
       </nav>
     </aside>
   );

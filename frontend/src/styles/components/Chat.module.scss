@@ -1,4 +1,4 @@
-﻿@import "../_variables";
+@import "../_variables";
 
 .chatContainer {
   display: flex;
@@ -9,7 +9,7 @@
   max-height: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--bg-primary, #0a0a0a);
+  background: var(--moon-surface-1);
 }
 
 .messagesArea {
@@ -109,7 +109,7 @@
   }
 }
 
-/* â”€â”€â”€ Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Messages ────────────────────────────────────────────────── */
 
 .message {
   display: flex;
@@ -171,7 +171,7 @@
   transition: opacity 0.15s ease, color 0.15s ease;
 
   &:hover {
-    color: var(--primary-text);
+    color: var(--moon-text);
     background: rgba(255, 255, 255, 0.05);
   }
 }
@@ -246,7 +246,7 @@
     /* U+258A LEFT THREE QUARTERS BLOCK, as a CSS escape so the file stays ASCII-safe. */
     content: "\258A";
     animation: blink 0.8s step-end infinite;
-    color: var(--accent-color, #4a9eff);
+    color: var(--moon-accent);
   }
 }
 
@@ -272,7 +272,7 @@
   color: #ff6b6b;
 }
 
-/* â”€â”€â”€ Iteration Limit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Iteration Limit ─────────────────────────────────────────── */
 
 .iterationLimitBanner {
   display: flex;
@@ -370,7 +370,7 @@
   }
 }
 
-/* â”€â”€â”€ Reasoning Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Reasoning Block ────────────────────────────────────────── */
 
 .reasoningBlock {
   width: 100%;
@@ -472,7 +472,7 @@
   }
 }
 
-/* â”€â”€â”€ Tool Call Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Tool Call Block ─────────────────────────────────────────── */
 
 .toolCallBlock {
   width: 100%;
@@ -542,7 +542,7 @@
 
 .toolCallName {
   font-weight: 400;
-  color: var(--accent-color, #4a9eff);
+  color: var(--moon-accent);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.78rem;
 }
@@ -678,7 +678,7 @@
   }
 }
 
-/* â”€â”€â”€ Consent Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Consent Banner ──────────────────────────────────────────── */
 
 .consentBanner {
   display: flex;
@@ -799,9 +799,26 @@
   }
 
   .consentItemLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.4rem 0.6rem;
-    color: var(--primary-text);
+    color: var(--moon-text);
     font-size: 0.75rem;
+
+    /* Per-item approval: each entry in a batch is separately tickable. */
+    :global(.ant-checkbox-wrapper) {
+      color: var(--moon-text);
+      font-size: 0.75rem;
+    }
+  }
+
+  .consentItemBlocked {
+    padding: 0.05rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.66rem;
+    background: var(--moon-danger-bg);
+    color: var(--moon-danger);
   }
 
   .consentExplain {
@@ -896,7 +913,7 @@
   text-transform: uppercase;
 }
 
-/* â”€â”€â”€ Install Suggestion Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Install Suggestion Banner ───────────────────────────────── */
 
 .installBanner {
   display: flex;
@@ -1057,115 +1074,14 @@
   }
 }
 
-/* â”€â”€â”€ Manual Execution Block â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-.manualExecBlock {
-  align-self: flex-start;
-  width: 100%;
-  max-width: 90%;
-  margin: 0.5rem 0;
-  border: 1px solid rgba(74, 158, 255, 0.25);
-  border-radius: var(--moon-radius-md);
-  overflow: hidden;
-  background: rgba(74, 158, 255, 0.04);
-}
-
-.manualExecHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 1rem;
-  background: rgba(74, 158, 255, 0.08);
-  border-bottom: 1px solid rgba(74, 158, 255, 0.12);
-}
-
-.manualExecIcon {
-  font-size: 0.9rem;
-}
-
-.manualExecTitle {
-  font-weight: 400;
-  font-size: 0.8rem;
-  color: var(--accent-color, #4a9eff);
-}
-
-.manualExecCommand {
-  position: relative;
-  margin: 0.75rem;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  padding-right: 2.5rem;
-
-  pre {
-    margin: 0;
-    font-size: 0.78rem;
-    font-family: "JetBrains Mono", monospace;
-    line-height: 1.5;
-    color: var(--primary-text, #e0e0e0);
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-}
-
-.manualExecCopyBtn {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  padding: 0.25rem 0.4rem;
-  cursor: pointer;
-  color: var(--secondary-text, #888);
-  font-size: 0.75rem;
-  transition: all 0.15s;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--primary-text, #fff);
-  }
-}
-
-.manualExecOutputArea {
-  padding: 0 0.75rem;
-}
-
-.manualExecTextarea {
-  background: rgba(0, 0, 0, 0.3) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 8px !important;
-  color: var(--primary-text, #e0e0e0) !important;
-  font-family: "JetBrains Mono", monospace !important;
-  font-size: 0.78rem !important;
-  resize: vertical !important;
-
-  &::placeholder {
-    color: var(--secondary-text, #555) !important;
-  }
-
-  &:focus {
-    border-color: var(--accent-color, #4a9eff) !important;
-    box-shadow: none !important;
-  }
-}
-
-.manualExecActions {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  justify-content: flex-end;
-}
-
-/* â”€â”€â”€ Slash Command Menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Slash Command Menu ─────────────────────────────────────── */
 
 .slashMenu {
   position: relative;
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--bg-elevated, #141414);
+  background: var(--moon-surface-3);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--moon-radius-md);
   margin-bottom: 0.5rem;
@@ -1228,7 +1144,7 @@
   font-family: "JetBrains Mono", monospace;
   font-size: 0.82rem;
   font-weight: 400;
-  color: var(--accent-color, #4a9eff);
+  color: var(--moon-accent);
   min-width: 100px;
 }
 
@@ -1237,7 +1153,7 @@
   color: var(--secondary-text, #888);
 }
 
-/* â”€â”€â”€ Slash Command Result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Slash Command Result ───────────────────────────────────── */
 
 .slashCommandResult {
   width: 100%;
@@ -1267,7 +1183,7 @@
   font-family: "JetBrains Mono", monospace;
   font-size: 0.78rem;
   font-weight: 400;
-  color: var(--accent-color, #4a9eff);
+  color: var(--moon-accent);
 }
 
 .slashCommandContent {
@@ -1316,13 +1232,56 @@
     }
   }
 
-  :global(.list-item) {
-    display: block;
-    padding-left: 0.25rem;
+  /* Rendered through react-markdown, so the elements are real block tags. */
+  p {
+    margin: 0.45em 0;
+
+    &:first-child {
+      margin-top: 0;
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  ul,
+  ol {
+    margin: 0.45em 0;
+    padding-left: 1.25rem;
+  }
+
+  li {
+    margin: 0.15em 0;
+  }
+
+  table {
+    width: 100%;
+    margin: 0.5rem 0;
+    border-collapse: collapse;
+    font-size: 0.95em;
+  }
+
+  th,
+  td {
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid var(--moon-line-1);
+    text-align: left;
+  }
+
+  th {
+    @include eyebrow;
+    font-size: 0.6rem;
+  }
+
+  blockquote {
+    margin: 0.5rem 0;
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--moon-line-2);
+    color: var(--moon-text-mute);
   }
 }
-
-/* â”€â”€â”€ Burp Attachment Chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Burp Attachment Chip ────────────────────────────────────── */
 
 .attachmentChip {
   display: flex;
@@ -1344,7 +1303,7 @@
   height: 24px;
   border-radius: 6px;
   background: rgba(74, 158, 255, 0.12);
-  color: var(--accent-color, #4a9eff);
+  color: var(--moon-accent);
   flex-shrink: 0;
 }
 
@@ -1361,7 +1320,7 @@
   font-family: "JetBrains Mono", monospace;
   font-size: 0.7rem;
   font-weight: 400;
-  color: var(--accent-color, #4a9eff);
+  color: var(--moon-accent);
   padding: 0.1rem 0.35rem;
   background: rgba(74, 158, 255, 0.1);
   border-radius: 3px;
@@ -1408,7 +1367,7 @@
   }
 }
 
-/* â”€â”€â”€ Burp Request Block (collapsible in chat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Burp Request Block (collapsible in chat) ───────────────── */
 
 .burpRequestBlock {
   width: 100%;
@@ -1437,7 +1396,7 @@
 
 .burpRequestIcon {
   font-size: 0.95rem;
-  color: var(--accent-color, #4a9eff);
+  color: var(--moon-accent);
   flex-shrink: 0;
 }
 
@@ -1445,7 +1404,7 @@
   font-family: "JetBrains Mono", monospace;
   font-size: 0.75rem;
   font-weight: 400;
-  color: var(--accent-color, #4a9eff);
+  color: var(--moon-accent);
   padding: 0.1rem 0.4rem;
   background: rgba(74, 158, 255, 0.12);
   border-radius: 4px;
@@ -1514,13 +1473,13 @@
   }
 }
 
-/* â”€â”€â”€ Input Area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Input Area ──────────────────────────────────────────────── */
 
 .inputArea {
   flex-shrink: 0;
   padding: 1rem 2rem 1.5rem;
   border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  background: var(--bg-primary, #0a0a0a);
+  background: var(--moon-surface-1);
 
   @media (max-width: 768px) {
     padding: 0.75rem 1rem 1rem;
@@ -1538,7 +1497,7 @@
   transition: border-color 0.2s;
 
   &:focus-within {
-    border-color: var(--accent-color, #4a9eff);
+    border-color: var(--moon-accent);
   }
 
   textarea {
@@ -1886,4 +1845,41 @@
 .toolCallOutput,
 .toolCallCodePreview {
   scrollbar-gutter: stable;
+}
+
+/* ============================================================================
+   SESSION ACTIVITY - the transcript's readout
+   A transcript is text by nature, so it is not charted: what is missing is the
+   shape of the run itself - how many tool calls, how many landed, which tools
+   carried the work. It sits at the top of the scroll area, not above it, so it
+   never takes room away from the conversation.
+   ========================================================================== */
+.activitySummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-bottom: 0.9rem;
+}
+
+.activityStrip {
+  min-width: 0;
+}
+
+.activityTools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.8rem 1rem 0.95rem;
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  box-shadow: var(--moon-inner-top);
+}
+
+.activityTitle {
+  margin: 0;
+  @include eyebrow;
+  font-size: 0.6rem;
 }

@@ -177,8 +177,10 @@ export default function useAgentStream({
 
       stream
         .onEvent("user_message_ack", (data) => {
+          // The chat echoes the turn optimistically; the persisted message
+          // replaces that placeholder instead of appearing beside it.
           setMessages((prev) => [
-            ...prev,
+            ...prev.filter((entry) => !entry.pending),
             { id: data.id, role: "user", content: message, timestamp: new Date(), ...(burpMeta ? { burpMeta } : {}) },
           ]);
         })

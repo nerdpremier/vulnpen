@@ -24,7 +24,7 @@ import {
   getVulnerability,
 } from "../controllers/vulnerability.controller";
 import {
-  cancelTestRun,
+  deleteTestRun,
   generateTestPlan,
   getOwaspCoverage,
   getReport,
@@ -71,7 +71,7 @@ router.post("/session/:sessionId/test-plan/run", [verifySess], launchTestRun);
 router.get("/session/:sessionId/test-plan/runs", [verifySess], getTestRuns);
 router.get("/session/:sessionId/test-plan/runs/:runId", [verifySess], getTestRunDetail);
 router.post("/session/:sessionId/test-plan/runs/:runId/stop", [verifySess], stopTestRun);
-router.delete("/session/:sessionId/test-plan/runs/:runId", [verifySess], cancelTestRun);
+router.delete("/session/:sessionId/test-plan/runs/:runId", [verifySess], deleteTestRun);
 router.get("/session/:sessionId/report", [verifySess], getReport);
 router.post("/session/:sessionId/report/word", [verifySess], openReportWord);
 router.get("/session/:sessionId/report/docx", [verifySess], downloadReportDocxFile);

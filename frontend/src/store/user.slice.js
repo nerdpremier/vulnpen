@@ -1,5 +1,15 @@
 import { createSlice } from "@reduxjs/toolkit";
 
+/**
+ * The signed-in user's session slice.
+ *
+ * It used to carry a second life as a workspace/session switcher (`sessions`,
+ * `updateSessions`, `updateCurrentSession`, `closeSession`) and a VNC handle
+ * (`vnc`, `updateVNC`) plus a `recon` flag. Nothing ever populated or read them
+ * — the rail renders its own links and the desktop page owns its own VNC
+ * connection — so they are gone rather than left as decoys. `resetSessions`
+ * survives because the dashboard calls it on mount.
+ */
 const initialState = {
   user: null,
   isLoggedIn: false,
@@ -8,14 +18,7 @@ const initialState = {
   readyToConnect: false,
   disclaimer: false,
   containerIP: null,
-  recon: false,
-  vnc: {
-    host: null,
-    password: null,
-    active: false,
-  },
   noOfExtends: 0,
-  sessions: [], // [{ id: session_id, is_main: true, is_active: true, type: "session" | "netcat" | "vpn" | "gui" }];
   cancelSource: null,
 };
 
@@ -54,41 +57,8 @@ export const userSlice = createSlice({
       state.noOfExtends = 0;
       state.status = "stopped";
     },
-    resetSessions: (state, action) => {
-      state.sessions = [];
-    },
-    updateSessions: (state, action) => {
-      state.sessions = action.payload;
-    },
-    updateCurrentSession: (state, action) => {
-      const session_id = action.payload;
-      const sessions = state.sessions.map((s) => {
-        return { ...s, is_active: s.id === session_id ? true : false };
-      });
-
-      state.sessions = sessions;
-    },
-    closeSession: (state, action) => {
-      const session_id = action.payload;
-
-      const sessions = state.sessions.filter((s) => s.id !== session_id);
-
-      const active_session = sessions.find((s) => s.is_active);
-
-      if (!active_session) {
-        sessions[0].is_active = true;
-      }
-
-      state.sessions = sessions;
-    },
-    updateVNC: (state, action) => {
-      state.vnc = action.payload;
-    },
     updateDisclaimer: (state, action) => {
       state.disclaimer = action.payload;
-    },
-    setRecon: (state, action) => {
-      state.recon = action.payload;
     },
     updateCancelSource: (state, action) => {
       state.cancelSource = action.payload;
@@ -100,15 +70,9 @@ export const {
   loginUser,
   update,
   logout,
-  resetSessions,
   updateExpiry,
   updateExploitBox,
-  updateSessions,
-  closeSession,
   expireContainer,
-  updateCurrentSession,
-  updateVNC,
   updateDisclaimer,
-  setRecon,
 } = userSlice.actions;
 export default userSlice.reducer;

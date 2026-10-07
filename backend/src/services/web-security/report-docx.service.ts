@@ -326,6 +326,15 @@ export function markReportEditedByWord(sessionId: string): void {
   fs.writeFileSync(reportMetaPath(sessionId), JSON.stringify(meta));
 }
 
+/**
+ * Whether the working document carries hand edits. The UI has to say so: once
+ * Word has saved it, later scans and findings are deliberately *not* merged,
+ * and an operator who does not know that ships a stale report.
+ */
+export function reportDocxStatus(sessionId: string): { editedByWord: boolean } {
+  return { editedByWord: readReportMeta(sessionId).editedByWord === true };
+}
+
 /** Fingerprint of the session data the deterministic report is built from. */
 function reportSignature(session: {
   name?: string;
@@ -353,9 +362,15 @@ function reportSignature(session: {
 /**
  * The stored .docx is the working document for LibreOffice. It is (re)built
  * from session data while the tester has not hand-edited it in Word; once a
- * Word save arrives the file is authoritative and never regenerated.
+ * Word save arrives the file is authoritative and never regenerated — unless
+ * the caller explicitly asks to rebuild, which is the operator's decision to
+ * discard their own edits in favour of the engagement's current results.
  */
-export async function ensureReportDocx(sessionId: string, uid: unknown): Promise<{ filePath: string; fileName: string }> {
+export async function ensureReportDocx(
+  sessionId: string,
+  uid: unknown,
+  options: { force?: boolean } = {},
+): Promise<{ filePath: string; fileName: string }> {
   const refreshed = await SessionsModel.findOne({ sessionId, uid })
     .select("name description createdAt vulnerabilities webAppTestPlan")
     .lean();
@@ -365,7 +380,9 @@ export async function ensureReportDocx(sessionId: string, uid: unknown): Promise
   const meta = readReportMeta(sessionId);
   const signature = reportSignature(refreshed as never);
   const stale =
-    !fs.existsSync(filePath) || (!meta.editedByWord && meta.signature !== signature);
+    options.force === true ||
+    !fs.existsSync(filePath) ||
+    (!meta.editedByWord && meta.signature !== signature);
   if (!stale) {
     return { filePath, fileName: meta.fileName ?? `${sessionId}.docx` };
   }

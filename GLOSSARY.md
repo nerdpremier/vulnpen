@@ -237,10 +237,19 @@ stops a turn (`pendingConsent` on the session document, `consentStats` for the
 counters). Owned by `services/consent-batch.ts`: the batch shape
 (`buildPendingConsentBatch`), the batch-vs-single persistence rule
 (`persistPendingConsent`), the `consent_required` SSE payload, the resume-side
-unpack (`loadPendingConsent`), and the counters (`recordConsentOutcome`,
-`recordCircuitOpen`). Never hand-build the pendingConsent document shape,
-re-derive `arguments` with parseToolArguments at a call site, or `$inc` a
-`consentStats` counter outside the module.
+unpack (`loadPendingConsent`), the per-item split (`splitConsentBatch`), and the
+counters (`recordConsentOutcome`, `recordCircuitOpen`). Never hand-build the
+pendingConsent document shape, re-derive `arguments` with parseToolArguments at
+a call site, or `$inc` a `consentStats` counter outside the module.
+
+The split has one asymmetry that is load-bearing: `approvedToolCallIds`
+**omitted** means "the whole batch" and **empty** means "none of it". A batch
+that parks on a read-only probe next to a boundary-crossing install is the
+normal case, so the operator may approve one and refuse the other; each refusal
+is answered with a denial tool result so the model is never left waiting, and a
+mixed response counts as an approval for the rejection-streak circuit breaker.
+An empty list must never widen into "run everything" — it is what a
+mis-rendered checkbox list sends.
 
 **Context window rules** — the elision policy for what reaches the model:
 staleness window (`isStaleMessage`), tool-result/args caps
@@ -254,10 +263,60 @@ write the caps or the window arithmetic a second time — `estimateMessageTokens
 and `messagesToOpenAI` share these helpers so the budget can never drift from
 what the prompt actually sends.
 
-**Finding store** — the finding lifecycle in
-`services/vulnerability.service.ts`: `recordSessionFinding` (resolve plan case
+**Finding store** — the finding lifecycle in`services/vulnerability.service.ts`: `recordSessionFinding` (resolve plan case
 → normalize → filter screenshots → classify → upsert → link, in that order —
 recording a finding against a WSTG case IS the failed result) and
 `removeSessionFinding` (unlink cases BEFORE pulling the document). Tools and
 report paths call these two verbs; they never touch the vulnerabilities array
 shape or re-order the chain.
+
+**Scan (WSTG)** — one execution of a set of test-plan cases, launched from the
+web UI rather than by prompting the agent. The product vocabulary is "scan"
+(frontend routes `/session/<id>/scans`, its own list and detail pages); the
+storage vocabulary stays "run" — a scan is a `webAppRuns` record on the session
+document, and the engine is
+`services/web-security/run-queue.service.ts` (`enqueueRun`, `pump`, `stopRun`,
+`deleteRun`, `parkedRunContext`). A launch carries a `policy`: `unattended`
+(the default, which passes `toolExecutionMode: "auto_approve"` into
+`initAndRun` so the existing Approve-for-me reviewer clears approval
+boundaries) or `supervised` (leave the user's own mode in charge, so the scan
+may park on consent and wait on its own page). A parked scan keeps both halves
+of that identity across the resume — `parkedRunContext` hands the consent
+continuation the scan's own channel and mode — so an unattended scan does not
+silently become supervised, and its activity never leaks into the chat feed.
+The agent's gates are never bypassed by either policy: a destructive action
+against the target is still refused outright.
+
+`scan-results.ts` owns every pure projection the scan pages read: `selectRuns`
+(the history a view shows), `decorateRun` (its queue position and liveness),
+`runCaseRows`/`runFindings` (the results a scan produced), `sliceRunActivity`
+plus the `[WSTG run <runId>]` marker itself (`runMarker`/`isRunMarker`, which
+`buildRunInstruction` renders), and `runPolicy`/`normalizeRunLabel`. All of it
+is what the tests exercise. One deliberate exception to "one copy of a result":
+a settled scan keeps the plan statuses it recorded (`resultSummary`, written by
+`snapshotRunResult`) and the list reads *that*, because history must not
+rewrite itself when a later scan changes a case — the plan stays the live truth
+and the detail page's progress reads it, scoped to the cases this scan touched
+(`updatedAt >= startedAt`, so a re-test does not open at 100%).
+
+## Web surface
+
+**Page frame** — the shell every product screen renders inside, owned by
+`components/common/ui/PageShell.jsx` + `PageHeader.jsx` + `PageState.jsx` and
+`styles/components/Page.module.scss`. The frame owns the scroll region, the
+reading measure, the responsive padding, the title/action block and the three
+data states (loading, empty, error-with-retry). A page owns only what is inside
+it: it never declares its own page padding, never borrows another page's shell
+class (that is how the case page inherited a flex column with
+`overflow: hidden` and lost the bottom of its report), and never hand-rolls a
+spinner-plus-paragraph empty state. `PRODUCT.md` holds the route map and the
+rules the frame exists to keep.
+
+**Engagement overview** — the session root (`/session/<sessionId>`), owned by
+`components/pages/session/overview/EngagementOverviewPage.jsx`. It reads the
+plan, the scans and the findings through the same react-query keys their own
+pages use, so the rail, the overview and the pages share one poll per resource.
+Chat is deliberately *not* the root: it lives at `/session/<sessionId>/chat`,
+and anything handing work to the chat composer (the Burp "send to workspace"
+handoff, for one) must target that path rather than the session root.
+

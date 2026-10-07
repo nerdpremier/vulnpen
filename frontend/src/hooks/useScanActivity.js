@@ -2,19 +2,20 @@
 
 import { useMemo } from "react";
 import { useQuery } from "react-query";
-import { getTestRunDetail } from "@/services/websecurity.service";
+import { getScanDetail } from "@/services/websecurity.service";
 import { buildToolIndex } from "@/utils/toolIndex.mjs";
 
 /**
- * One run's detail: its record plus the transcript slice of that run. While
- * the run is queued or running the query polls every 2s — the backend run is
- * detached (no SSE client), so the transcript the agent persists is the feed.
- * Finished runs fetch once and replay the same slice.
+ * One scan's detail: its record, its joined results and the transcript slice
+ * of its agent run. While the scan is queued or running the query polls every
+ * 2s — a scan runs detached on the server (no SSE client), so the record and
+ * the transcript the agent persists are the feed. Finished scans fetch once
+ * and replay the same slice.
  */
-export default function useRunActivity(sessionId, runId, { enabled = true } = {}) {
+export default function useScanActivity(sessionId, runId, { enabled = true } = {}) {
   const query = useQuery(
-    ["test-run", sessionId, runId],
-    () => getTestRunDetail(sessionId, runId),
+    ["scan", sessionId, runId],
+    () => getScanDetail(sessionId, runId),
     {
       enabled: enabled && !!sessionId && !!runId,
       refetchInterval: (data) => {
@@ -26,11 +27,10 @@ export default function useRunActivity(sessionId, runId, { enabled = true } = {}
   );
 
   const detail = query.data ?? null;
-  const messages = detail?.messages ?? [];
 
   const { toolIndex, visibleMessages } = useMemo(
-    () => buildToolIndex(messages),
-    [messages],
+    () => buildToolIndex(detail?.messages ?? []),
+    [detail],
   );
 
   const status = detail?.run?.status ?? null;
@@ -38,11 +38,14 @@ export default function useRunActivity(sessionId, runId, { enabled = true } = {}
 
   return {
     run: detail?.run ?? null,
+    cases: detail?.cases ?? [],
+    findings: detail?.findings ?? [],
     visibleMessages,
     toolIndex,
     pendingConsent: live ? detail?.pendingConsent ?? null : null,
     agentState: detail?.agentState ?? null,
     live,
     isLoading: query.isLoading,
+    isError: query.isError,
   };
 }

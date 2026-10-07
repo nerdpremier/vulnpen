@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback, useState, useMemo } from "react"
 import { v4 as uuidv4 } from "uuid";
 import { notification } from "antd";
 import { DownOutlined } from "@ant-design/icons";
+import { FiActivity, FiCheckCircle, FiClock, FiXCircle } from "react-icons/fi";
 import Image from "next/image";
 import styles from "@/styles/components/Chat.module.scss";
 import ChatMessage from "./ChatMessage";
@@ -16,7 +17,18 @@ import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
 import { buildToolIndex } from "@/utils/toolIndex.mjs";
+import { BarList, PageState, StatStrip, StatTile } from "@/components/common/ui";
 import { useQueryClient } from "react-query";
+
+/** A session's wall-clock span, rounded to the unit a human reads. */
+function formatElapsed(ms) {
+  if (!Number.isFinite(ms)) return "—";
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
 
 export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
@@ -82,7 +94,10 @@ export default function ChatView({ sessionId }) {
   const historyLoaded = useAgentStreamStore(
     (state) => state.sessions[sessionId]?.historyLoaded ?? false,
   );
-  const historyLoading = !historyLoaded;
+  const historyError = useAgentStreamStore(
+    (state) => state.sessions[sessionId]?.historyError ?? null,
+  );
+  const historyLoading = !historyLoaded && !historyError;
 
   useEffect(() => {
     if (historyLoaded) {
@@ -184,6 +199,26 @@ export default function ChatView({ sessionId }) {
 
       const endpoint =
         agentState === "paused" ? "resume" : "message";
+
+      /**
+       * Echo the turn immediately. The composer clears on send and the server
+       * acknowledges only after it has persisted the message, so a slow round
+       * trip used to leave the operator's own text out of the transcript — and
+       * a failed request lost it entirely. The ack replaces this entry
+       * (anything still marked `pending`) rather than appending beside it.
+       */
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `pending-${uuidv4()}`,
+          role: "user",
+          content: finalMessage,
+          timestamp: new Date(),
+          pending: true,
+          ...(burpMeta ? { burpMeta } : {}),
+        },
+      ]);
+
       startStream({ message: finalMessage, endpoint, burpMeta });
     },
     [agentState, startStream, setMessages, burpAttachment, buildBurpMessage],
@@ -210,13 +245,39 @@ export default function ChatView({ sessionId }) {
   }, [sessionId, abort, setAgentState]);
 
   const handleConsent = useCallback(
-    (approved) => {
+    (approved, toolCallIds) => {
       setPendingConsent(null);
       setAgentState("running");
-      startStream({ message: JSON.stringify({ approved }), endpoint: "consent" });
+      startStream({
+        message: JSON.stringify({
+          approved,
+          // Only sent for per-item approval: the backend reads a missing list
+          // as "the whole batch" and an empty one as "none of it".
+          ...(Array.isArray(toolCallIds) ? { toolCallIds } : {}),
+        }),
+        endpoint: "consent",
+      });
     },
     [setPendingConsent, setAgentState, startStream],
   );
+
+  /**
+   * A consent request must not be missable.
+   *
+   * The banner is the last child of the scrolling transcript, so an operator
+   * reading back through a long log never saw it appear: the run parked and
+   * the only signal was a disabled composer. Arriving consent now takes the
+   * scroll to the bottom and restores the "latest" affordance.
+   */
+  useEffect(() => {
+    if (!pendingConsent || agentState !== "waiting_consent") return;
+    shouldStickToBottomRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowScrollBtn(false);
+    // One frame later: the banner has to be in the DOM before we can reach it.
+    const frame = requestAnimationFrame(() => scrollToBottom("smooth"));
+    return () => cancelAnimationFrame(frame);
+  }, [pendingConsent, agentState, scrollToBottom]);
 
   const burpPendingProcessed = useRef(false);
   useEffect(() => {
@@ -246,7 +307,77 @@ export default function ChatView({ sessionId }) {
     [messages],
   );
 
-  const isEmpty = messages.length === 0 && !historyLoading;
+  /**
+   * What the agent actually did in this session. A transcript says what was
+   * tried; this says how much of it landed, which tools carried the work and
+   * how long the engagement has been running — the questions a tester asks
+   * before reading a long log, answered without reading it.
+   */
+  const activity = useMemo(() => {
+    const calls = [];
+    for (const message of messages) {
+      if (message.role === "assistant" && Array.isArray(message.toolCalls)) {
+        for (const call of message.toolCalls) calls.push(call);
+      }
+    }
+
+    let succeeded = 0;
+    let failed = 0;
+    let running = 0;
+    const perTool = new Map();
+
+    for (const call of calls) {
+      const output = toolIndex.outputs.get(call.id);
+      // A call with no result yet is still in flight, not a failure: the
+      // stream writes the tool message when the tool returns.
+      const state = !output || output.streaming
+        ? "running"
+        : output.exitCode == null
+          ? "settled"
+          : output.exitCode === 0
+            ? "succeeded"
+            : "failed";
+
+      if (state === "failed") failed += 1;
+      else if (state === "succeeded") succeeded += 1;
+      else if (state === "running") running += 1;
+
+      const name = call.name || "tool";
+      const row = perTool.get(name) ?? { key: name, label: name, value: 0, failed: 0 };
+      row.value += 1;
+      if (state === "failed") row.failed += 1;
+      perTool.set(name, row);
+    }
+
+    const stamps = messages
+      .map((message) => new Date(message.timestamp).getTime())
+      .filter((value) => Number.isFinite(value));
+    const elapsedMs = stamps.length > 1 ? Math.max(...stamps) - Math.min(...stamps) : null;
+
+    const tools = [...perTool.values()]
+      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
+      .slice(0, 4)
+      .map((row) => ({
+        key: row.key,
+        label: row.label,
+        value: row.value,
+        tone: row.failed ? "danger" : "success",
+        hint: `${row.label}: ${row.value} call${row.value === 1 ? "" : "s"}${
+          row.failed ? ` · ${row.failed} failed` : ""
+        }`,
+      }));
+
+    return {
+      calls: calls.length,
+      succeeded,
+      failed,
+      running,
+      tools,
+      elapsedMs,
+    };
+  }, [messages, toolIndex]);
+
+  const isEmpty = messages.length === 0 && !historyLoading && !historyError;
 
   return (
     <div className={styles.chatContainer}>
@@ -255,6 +386,63 @@ export default function ChatView({ sessionId }) {
         ref={messagesContainerRef}
         onScroll={updateStickToBottom}
       >
+        {/* The session's readout, at the top of the transcript: it scrolls away
+            with the conversation instead of costing the composer its room. */}
+        {!isEmpty && activity.calls > 0 && (
+          <section className={styles.activitySummary} aria-label="Session activity">
+            <StatStrip className={styles.activityStrip}>
+              <StatTile
+                label="Tool calls"
+                value={activity.calls}
+                icon={<FiActivity />}
+                hint={activity.running ? `${activity.running} running now` : "all settled"}
+              />
+              <StatTile
+                label="Succeeded"
+                value={activity.succeeded}
+                tone="success"
+                icon={<FiCheckCircle />}
+                hint="exit code 0"
+              />
+              <StatTile
+                label="Failed"
+                value={activity.failed}
+                tone={activity.failed ? "danger" : "neutral"}
+                icon={<FiXCircle />}
+                hint={activity.failed ? "non-zero exit" : "nothing failed"}
+              />
+              <StatTile
+                label="Elapsed"
+                value={formatElapsed(activity.elapsedMs)}
+                count={false}
+                icon={<FiClock />}
+                hint="first message to last"
+              />
+            </StatStrip>
+
+            {activity.tools.length > 1 && (
+              <div className={styles.activityTools}>
+                <h2 className={styles.activityTitle}>Tools carrying the work</h2>
+                <BarList items={activity.tools} />
+              </div>
+            )}
+          </section>
+        )}
+        {historyError && messages.length === 0 && (
+          <PageState
+            state="error"
+            title="Could not load this transcript"
+            description={`${historyError} The conversation with the agent is still on the server; load it again to continue.`}
+            onRetry={() =>
+              useAgentStreamStore.getState().retryHistory(sessionId)
+            }
+          />
+        )}
+
+        {historyLoading && (
+          <PageState state="loading" rows={3} />
+        )}
+
         {isEmpty && (
           <div className={styles.emptyState}>
             <Image
@@ -285,7 +473,7 @@ export default function ChatView({ sessionId }) {
         {pendingConsent && agentState === "waiting_consent" && (
           <ConsentBanner
             pendingConsent={pendingConsent}
-            onApprove={() => handleConsent(true)}
+            onApprove={(ids) => handleConsent(true, ids)}
             onDeny={() => handleConsent(false)}
           />
         )}

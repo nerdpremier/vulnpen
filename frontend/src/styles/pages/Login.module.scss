@@ -109,9 +109,54 @@
   border-radius: var(--moon-radius-xl);
   box-shadow: var(--moon-inner-top), var(--moon-shadow-4);
 
+  /* A moon rim: one hairline of light along the top edge, so the card reads as
+     lit from above rather than as a rectangle with a border. */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 1px;
+    border-radius: var(--moon-radius-xl) var(--moon-radius-xl) 0 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--moon-accent-40),
+      transparent
+    );
+    pointer-events: none;
+  }
+
   @include responsive(tablet1) {
     padding: 1.5rem 1.25rem 1.35rem;
     border-radius: var(--moon-radius-lg);
+  }
+}
+
+/* The entrance animation owns the centred column, so the card keeps one
+   transform context however the panel below it changes. */
+.authStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.15rem;
+  width: 100%;
+  max-width: 46rem;
+}
+
+/* ShinyText clips a gradient to the glyphs; it has to inherit the heading's
+   scale and spacing or the wordmark sits off the sentence's baseline. */
+.authWord {
+  font: inherit;
+  letter-spacing: inherit;
+  vertical-align: baseline;
+}
+
+/* The atmosphere breathes; a reader who asked for less motion keeps the glow
+   and loses the drift. */
+@include reduced-motion {
+  .authShell::before,
+  .authShell::after {
+    animation: none;
   }
 }
 

@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import { TbWorldWww } from "react-icons/tb";
 import ChatView from "./ChatView";
 import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
@@ -16,6 +16,7 @@ const RAIL_TABS = [
 ];
 
 const railTabStyle = (active) => ({
+  position: "relative",
   flex: "1 1 0%",
   border: "none",
   borderTop: active ? "2px solid var(--moon-accent)" : "1px solid var(--moon-line-1)",
@@ -175,13 +176,39 @@ const SessionMainPage = ({ session_id }) => {
         >
           {RAIL_TABS.map((tab) => {
             const active = activePanel === tab.key;
+            // The rail is 42px wide, so state has to be a shape: a live dot
+            // says "the agent is driving the browser right now" without a
+            // sentence, and it is the only thing on this strip that moves.
+            const live = tab.key === "browser" && browserActive;
             return (
               <button
                 key={tab.key}
                 onClick={() => openPanelManually(tab.key)}
-                title={active ? "Close panel" : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view`}
+                title={
+                  active
+                    ? "Close panel"
+                    : `Show ${tab.key === "burp" ? "Burp" : "browser agent"} view${
+                        live ? " — the agent is driving the browser now" : ""
+                      }`
+                }
                 style={railTabStyle(active)}
               >
+                {live && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      top: 6,
+                      right: 6,
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "var(--moon-success)",
+                      boxShadow: "0 0 0 3px var(--moon-success-bg)",
+                      animation: "thinkingPulse 1.8s ease-in-out infinite",
+                    }}
+                  />
+                )}
                 {tab.key === "browser" && <TbWorldWww size={14} />}
                 <span style={{ writingMode: "vertical-rl" }}>{tab.label}</span>
               </button>

@@ -1,4 +1,4 @@
-﻿/* ============================================================================
+/* ============================================================================
    VulnPen - "Engineered Cosmic" design tokens (xAI design language)
    ----------------------------------------------------------------------------
    One near-black canvas (#0a0a0a), graphitic card fills (#191919), pure-white
@@ -51,6 +51,8 @@
   --moon-line-2: rgba(255, 255, 255, 0.25);
   --moon-line-3: rgba(255, 255, 255, 0.35);
   --moon-line-4: rgba(255, 255, 255, 0.5);
+  /* One row-hover tint for every table in the product (see @mixin tableRow). */
+  --moon-row-hover: rgba(255, 255, 255, 0.05);
 
   /* ---- Interaction (white ink on near-black) ---------------------------- */
   --moon-accent: #dadbdf;
@@ -96,6 +98,10 @@
   --moon-info: #8fb8ff;
   --moon-info-bg: rgba(143, 184, 255, 0.1);
   --moon-info-line: rgba(143, 184, 255, 0.24);
+  /* Severity ramp. Deliberately separate from --moon-danger: severity is a
+     scale, danger is a state, and a "critical finding" is not an error.
+     critical -> high -> medium -> low -> info. */
+  --moon-critical: #e63946;
   --moon-high: #f4a261;
   --moon-medium: #e9c46a;
   --moon-low: #9ea9bf;
