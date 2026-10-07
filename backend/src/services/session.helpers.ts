@@ -65,6 +65,43 @@ export async function requireOwnedSession(
   return session;
 }
 
+// ─── Engagement boundary ─────────────────────────────────────────────────
+// The declared Target + Scope the scope gate arms against. Several surfaces
+// read it (session info, prompt facts, engagement state) and two write it
+// (session creation, plan setup) — this is the one projection and the one
+// write, so no reader re-derives the empty-string default and no writer
+// hand-rolls the `engagementContext.*` $set.
+
+export interface EngagementBoundary {
+  target: string;
+  scope: string;
+}
+
+export function engagementBoundary(session: unknown): EngagementBoundary {
+  const context = (session as { engagementContext?: { target?: string; scope?: string } | null })
+    ?.engagementContext;
+  return {
+    target: context?.target ?? "",
+    scope: context?.scope ?? "",
+  };
+}
+
+export async function setEngagementBoundary(
+  sessionId: string,
+  uid: string,
+  boundary: EngagementBoundary,
+): Promise<void> {
+  await SessionsModel.updateOne(
+    { sessionId, uid },
+    {
+      $set: {
+        "engagementContext.target": boundary.target.trim(),
+        "engagementContext.scope": boundary.scope.trim(),
+      },
+    },
+  );
+}
+
 /**
  * Resets a session's conversation context to a fresh state: messages drop
  * except the original (non-summary) system message, and all run counters go

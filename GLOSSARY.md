@@ -57,6 +57,22 @@ persisted on the session document (`webAppTestPlan`) through
 Mongo: handlers persist there, so anything rendering the plan for the model
 must re-read the document rather than trust an in-memory snapshot.
 
+**Engagement boundary** — the declared Target + Scope the scope gate arms
+against. One projection and one write in `services/session.helpers.ts`:
+`engagementBoundary(session)` reads it (empty-string defaults included) and
+`setEngagementBoundary(sessionId, uid, boundary)` writes it (trimming
+included). Session info, prompt facts and the plan setup screen all read the
+projection; session creation and plan generation write through the verb — no
+call site re-derives `engagementContext.*` or the empty-string default.
+
+**Capability install** — the attack-box capability protocol, owned by
+`services/capabilities.service.ts`: `installCapability` (OS probe →
+privilege-aware install command → apt guard → 10-minute exec → stamp the
+user's `installedCapabilities` on success) and `detectCapabilities` (run the
+registry's detection script over SSH, parse, stamp). The registry
+(`capabilities/`) owns the data — commands, script, parsing; controllers map
+HTTP to the two verbs and never exec or write the user config themselves.
+
 ## Settings
 
 **Model settings** — every mutation of the model registry, owned by
@@ -102,7 +118,14 @@ the test plan (`summarise`, `groupCases`, `matchesFilters`,
 `caseCarriesWork`), in `frontend/src/utils/testPlan.mjs`. The page only
 renders what these return. Status mapping is an explicit table because
 stored statuses (`in_progress`) do not match the coverage bucket keys
-(`inProgress`).
+(`inProgress`). The same module owns the plan table's interaction rules:
+`activeSelection`/`toggledSelection`/`selectionWith` (the checkbox set math),
+`groupIsOpen` (override → filter → focus → carrying-trouble open policy) and
+`coverageChips`. The plan CRUD mutations mirror the scan mutation seam:
+`hooks/usePlanMutations.js` owns status update, case edit and the two
+removals, and `invalidatePlanCaches` is their one cache-coherence policy
+(plan + session info go stale after any write) — never write a plan
+`useMutation` with its own invalidation set.
 
 **Context window seam** — the measured transcript projection sent to the
 model (token estimators, tool-result elision, `messagesToOpenAI`) lives
@@ -221,6 +244,32 @@ model, API key) is configured. Declared per tool by `checkReady` in its
 filter, the run path and the prompt builder all consume that one seam — never
 re-derive readiness from env reads elsewhere.
 
+**Trace tags** — the dynamic tags for an LLM call (plan vs analyze phase,
+which tools just ran), in `utils/traceTags.ts` (`buildTraceTags`). Pure and
+unit-tested; the loop passes the result straight to the invoke call.
+
+**Test plan renderers** — the shared prompt/tool-output vocabulary of the
+plan, in `services/web-security/test-plan.service.ts`:
+`describeCoverage` (the one coverage sentence the tool replies and the
+prompt section both read), `describeCase` (the one-line case name),
+`normalizeTestCasePatch` and `normalizePlanGenerateInput` (the raw → patch/input
+translation with the snake_case/camelCase aliases resolved once). The
+`wstg_test_plan` handler and the web-security controller dispatch through
+these; never hand-build a patch object or re-format the coverage sentence at
+a call site.
+
+**Session activity** — the chat page's readout projection (tool-call totals,
+per-tool top rows, wall-clock span), in `frontend/src/utils/sessionActivity.mjs`
+(`summariseSessionActivity`, `formatElapsed`, `toolCallState`). Pure and
+tested; ChatView only renders it.
+
+**Burp handoff** — the cross-page protocol that carries a Burp-captured
+request into the chat composer, owned by `frontend/src/utils/burpHandoff.mjs`:
+`BURP_HANDOFF_KEY` (the one sessionStorage key), `takeBurpHandoff`
+(read-remove-parse once) and `buildBurpMessage` (the prompt text +
+`burpMeta`). The proxy page writes the key; ChatView consumes it — neither
+re-derives the payload format.
+
 **Orchestrator resolution** — "which model orchestrates for this user", one
 verb in `utils/llm/orchestrator.ts` (`resolveOrchestrator`): the assigned
 orchestrator (verified, host-owner-restricted) or the env default, returned
@@ -266,9 +315,13 @@ what the prompt actually sends.
 **Finding store** — the finding lifecycle in`services/vulnerability.service.ts`: `recordSessionFinding` (resolve plan case
 → normalize → filter screenshots → classify → upsert → link, in that order —
 recording a finding against a WSTG case IS the failed result) and
-`removeSessionFinding` (unlink cases BEFORE pulling the document). Tools and
-report paths call these two verbs; they never touch the vulnerabilities array
-shape or re-order the chain.
+`removeSessionFinding` (unlink cases BEFORE pulling the document). The OWASP
+classification write is also owned here: `applyOwaspMapping` is the one
+`vulnerabilities.$...` positional $set (mapping stamp + wstgId→catalog title/
+category resolution, the finding's previous values as fallback). Tools, the
+mapping endpoints and the batch re-classifier call these verbs; they never
+touch the vulnerabilities array shape, re-order the chain, or build the
+array update themselves.
 
 **Scan (WSTG)** — one execution of a set of test-plan cases, launched from the
 web UI rather than by prompting the agent. The product vocabulary is "scan"

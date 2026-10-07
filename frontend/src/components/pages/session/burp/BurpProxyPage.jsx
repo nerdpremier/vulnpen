@@ -40,6 +40,7 @@ import {
   StatStrip,
   StatTile,
 } from "@/components/common/ui";
+import { BURP_HANDOFF_KEY } from "@/utils/burpHandoff.mjs";
 import styles from "@/styles/components/BurpProxy.module.scss";
 
 /**
@@ -85,7 +86,7 @@ const BURP_INTEGRATION = {
   intruderSuccess: "Sent to Burp Intruder",
   intruderError: "Failed to send to Intruder",
   interceptSupported: true,
-  storageKey: "burp-to-workspace",
+  storageKey: BURP_HANDOFF_KEY,
   queryPrefix: "burp",
   services: {
     getConnectionStatus: getBurpConnectionStatus,

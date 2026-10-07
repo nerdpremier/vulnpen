@@ -3,7 +3,7 @@ import { getModelContextLimit } from "../utils/modelMetadata";
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
-import { requireActiveSession, requireOwnedSession, resetSessionContext } from "../services/session.helpers";
+import { requireActiveSession, requireOwnedSession, resetSessionContext, engagementBoundary } from "../services/session.helpers";
 import { createSSEWriter } from "../utils/sse";
 import {
   initAndRun,
@@ -12,6 +12,7 @@ import {
 } from "../services/agent.service";
 import { setAgentState, setPaused } from "../services/agent-state.service";
 import { parkedRunContext, pump } from "../services/web-security/run-queue.service";
+import { isRunMarker } from "../services/web-security/scan-results";
 import {
   reserveAbortController,
   releaseAbortController,
@@ -25,12 +26,8 @@ import { resolveSessionFile } from "../services/artifacts.service";
 import { resolveOrchestrator } from "../utils/llm/orchestrator";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import type { SSEWriter } from "../utils/sse";
-import {
-  getCapabilityByName,
-  getInstallCommandForOS,
-} from "../capabilities/registry";
+import { CapabilityError, installCapability as installCapabilityOnBox } from "../services/capabilities.service";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
-import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
 
 // Every agent run exit path goes through this: release the controller slot and
 // arm the idle timer so ShellManagers (SSH connections, local shells) are torn
@@ -110,7 +107,7 @@ function withoutRunTranscript(
   let inRun = false;
   for (const message of messages) {
     if (message.role === "user") {
-      inRun = (message.content ?? "").startsWith("[WSTG run ");
+      inRun = isRunMarker(message.content);
       if (!inRun) visible.push(message);
       continue;
     }
@@ -383,10 +380,7 @@ export const getSessionInfo = async (req: Request, res: Response) => {
       connectionState: session.connectionState ?? { sshConnected: false },
       // Engagement boundary captured when the session was created. The plan
       // setup screen edits these same values, so both surfaces stay in step.
-      engagement: {
-        target: session.engagementContext?.target ?? "",
-        scope: session.engagementContext?.scope ?? "",
-      },
+      engagement: engagementBoundary(session),
     });
   } catch (err: any) {
     console.error("[agent] getSessionInfo error:", err);
@@ -559,59 +553,12 @@ export const installCapability = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    const cap = getCapabilityByName(capabilityName);
-    if (!cap) {
-      return res.status(400).json({ message: `Unknown capability: "${capabilityName}"` });
-    }
-
-    const shellManager = await sessionLifecycle.ensureShellManager(sessionId, {
-      required: true,
-    });
-
-    const { output: unameOutput } = await shellManager.execInShell(
-      "uname -s",
-      5_000,
-    );
-    const isDarwin = unameOutput.trim().includes("Darwin");
-    const installCommand = buildPrivilegeAwareInstallCommand(
-      getInstallCommandForOS(cap, isDarwin),
-      isDarwin,
-    );
-    if (!isDarwin && /(^|\s)(apt|apt-get)(\s|$)/.test(installCommand)) {
-      const { exitCode: aptExitCode } = await shellManager.execInShell(
-        "command -v apt-get",
-        5_000,
-      );
-      if (aptExitCode !== 0) {
-        return res.status(400).json({
-          message: `Automatic installation of ${cap.label} requires a Debian/Ubuntu/Kali work host with apt-get. Install it manually on this host and run capability detection again.`,
-        });
-      }
-    }
-    const { output, exitCode } = await shellManager.execInShell(
-      installCommand,
-      600_000,
-    );
-
-    if (exitCode === 0) {
-      const user = res.locals.user;
-      const installed = new Set(user.configs.installedCapabilities ?? []);
-      installed.add(cap.name);
-      user.configs.installedCapabilities = Array.from(installed);
-      await user.save();
-    }
-
-    return res.status(200).json({
-      success: exitCode === 0,
-      output,
-      exitCode,
-      message:
-        exitCode === 0
-          ? `${cap.label} installed successfully`
-          : output.trim() || `${cap.label} installation exited with code ${exitCode}`,
-      capability: { name: cap.name, label: cap.label },
-    });
+    const result = await installCapabilityOnBox(sessionId, capabilityName, res.locals.user);
+    return res.status(200).json(result);
   } catch (err: any) {
+    if (err instanceof CapabilityError) {
+      return res.status(400).json({ message: err.message });
+    }
     console.error("[agent] installCapability error:", err);
     return res.status(500).json({ message: err.message ?? "Install failed" });
   }

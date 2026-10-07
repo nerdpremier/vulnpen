@@ -81,3 +81,79 @@ export function caseCarriesWork(testCase) {
     (testCase.linkedVulnerabilityIds?.length ?? 0) > 0
   );
 }
+
+/**
+ * Selection semantics for the plan table's checkboxes, pure so the rules are
+ * testable without the page: only cases still in the plan may stay selected,
+ * and toggles return new Sets so React state updates stay immutable.
+ */
+
+/** The selection narrowed to the cases the plan still contains. */
+export function activeSelection(selectedIds, cases) {
+  if (selectedIds.size === 0) return selectedIds;
+  const planned = new Set(cases.map((testCase) => testCase.testId));
+  return new Set([...selectedIds].filter((id) => planned.has(id)));
+}
+
+/** One checkbox flip. */
+export function toggledSelection(selectedIds, testId) {
+  const next = new Set(selectedIds);
+  if (next.has(testId)) next.delete(testId);
+  else next.add(testId);
+  return next;
+}
+
+/** A group checkbox: add or remove every listed id. */
+export function selectionWith(selectedIds, testIds, checked) {
+  const next = new Set(selectedIds);
+  for (const testId of testIds) {
+    if (checked) next.add(testId);
+    else next.delete(testId);
+  }
+  return next;
+}
+
+/**
+ * The group open policy: an explicit override wins; with a filter on, every
+ * group with matches is open; the deep-linked focus case opens its group;
+ * otherwise only categories already carrying a failed or blocked case are.
+ * Filters never write overrides, so clearing one returns the plan to the calm,
+ * collapsed view.
+ */
+export function groupIsOpen(
+  group,
+  { overrides, filtersActive = false, focusCaseId = "" } = {},
+) {
+  if (overrides && overrides.has(group.key)) return overrides.get(group.key);
+  if (filtersActive) return true;
+  if (
+    focusCaseId &&
+    group.cases.some((testCase) => testCase.testId.toUpperCase() === focusCaseId)
+  ) {
+    return true;
+  }
+  return group.cases.some(
+    (testCase) => testCase.status === "failed" || testCase.status === "blocked",
+  );
+}
+
+/**
+ * The status chips are the status filter: one chip per filter the coverage can
+ * answer for, with the count each shows. `filters` is the page's filter list
+ * (value + label); the "all" chip always shows.
+ */
+export function coverageChips(coverage, filters) {
+  if (!coverage) return [];
+  const counts = {
+    all: coverage.total,
+    in_progress: coverage.inProgress,
+    passed: coverage.passed,
+    failed: coverage.failed,
+    blocked: coverage.blocked,
+    not_started: coverage.notStarted,
+    skipped: coverage.skipped,
+  };
+  return filters
+    .filter((filter) => filter.value === "all" || counts[filter.value] > 0)
+    .map((filter) => ({ ...filter, count: counts[filter.value] }));
+}

@@ -1,6 +1,6 @@
 import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
 import { BROWSER_TOOL_NAMES } from "../names";
-import type { WebAppTestPlanDoc } from "../../models/Sessions/Sessions.model";
+import type { SessionTestCaseDoc } from "../../models/Sessions/Sessions.model";
 import { sessionUsedTool } from "../../services/session-transcript";
 import {
   loadSessionPlan,
@@ -11,6 +11,10 @@ import {
   TEST_STATUSES,
   computeCoverage,
   createTestPlan,
+  normalizePlanGenerateInput,
+  normalizeTestCasePatch,
+  describeCase,
+  describeCoverage,
   nextTestsToRun,
   addTestCase,
   updateTestCase,
@@ -21,19 +25,9 @@ import {
 } from "../../services/web-security/test-plan.service";
 import { WSTG_VERSION, getWstgTest } from "../../knowledge";
 
-function coverageLine(plan: WebAppTestPlanDoc): string {
-  const coverage = computeCoverage(plan.cases);
-  return (
-    `${coverage.executed}/${coverage.total} executed (${coverage.percentExecuted}%): ` +
-    `${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ` +
-    `${coverage.inProgress} in progress, ${coverage.notStarted} not started, ${coverage.skipped} skipped.`
-  );
-}
-
-function caseLine(plan: WebAppTestPlanDoc, testId: string, verbose: boolean): string {
-  const testCase = plan.cases.find((item) => item.testId === testId)!;
+function caseDetail(testCase: SessionTestCaseDoc, verbose: boolean): string {
   const lines = [
-    `${testCase.testId} (${testCase.section}) ${testCase.title}`,
+    describeCase(testCase),
     `  status: ${testCase.status} | category: ${testCase.categoryCode || "—"}`,
     `  objective: ${testCase.objective}`,
   ];
@@ -155,13 +149,7 @@ const wstgTestPlan: ToolDefinition = {
     try {
       if (action === "generate") {
         const existing = await loadSessionPlan(sessionId);
-        const result = createTestPlan({
-          target: typeof args.target === "string" ? args.target : undefined,
-          scope: typeof args.scope === "string" ? args.scope : undefined,
-          categories: Array.isArray(args.categories) ? args.categories : undefined,
-          testIds: Array.isArray(args.test_ids) ? args.test_ids : undefined,
-          existing,
-        });
+        const result = createTestPlan({ ...normalizePlanGenerateInput(args), existing });
         await saveSessionPlan(sessionId, result.plan);
 
         const next = nextTestsToRun(result.plan, 8);
@@ -169,12 +157,10 @@ const wstgTestPlan: ToolDefinition = {
           `Test plan ${existing ? "updated" : "created"}: ${result.plan.cases.length} WSTG v${WSTG_VERSION} test cases. ${result.added} added, ${result.kept} kept with their previous status.`,
           result.plan.target ? `Target: ${result.plan.target}` : "",
           result.plan.scope ? `Scope: ${result.plan.scope}` : "",
-          coverageLine(result.plan),
+          describeCoverage(result.plan.cases),
           "",
           "Start with these (plan order):",
-          ...next.map(
-            (testCase) => `- ${testCase.testId} (${testCase.section}) ${testCase.title}`,
-          ),
+          ...next.map((testCase) => `- ${describeCase(testCase)}`),
           "",
           'Update each case with action "update_case" as you work through it. Add custom cases with action "add_case".',
         ];
@@ -193,7 +179,7 @@ const wstgTestPlan: ToolDefinition = {
       if (action === "coverage") {
         const coverage = computeCoverage(plan.cases);
         const lines = [
-          `WSTG v${WSTG_VERSION} plan — ${coverageLine(plan)}`,
+          `WSTG v${WSTG_VERSION} plan — ${describeCoverage(plan.cases)}`,
           "",
           "By category:",
           ...coverage.byCategory.map(
@@ -268,7 +254,7 @@ const wstgTestPlan: ToolDefinition = {
         const lines = [
           `Added case ${added.testCase.testId}: ${added.testCase.title}`,
           added.testCase.objective ? `  objective: ${added.testCase.objective}` : "",
-          coverageLine(added.plan),
+          describeCoverage(added.plan.cases),
           "",
           'Work it like any other case: action "update_case" with test_id when you run it.',
         ];
@@ -297,7 +283,7 @@ const wstgTestPlan: ToolDefinition = {
             removed.plan.cases.some((testCase) => testCase.linkedVulnerabilityIds?.length)
               ? "Linked findings are unaffected; remove the stale finding itself with update_engagement_state action \"remove_finding\" if it was not real."
               : "",
-            coverageLine(removed.plan),
+            describeCoverage(removed.plan.cases),
           ].filter(Boolean).join("\n"),
           exitCode: 0,
         };
@@ -317,7 +303,7 @@ const wstgTestPlan: ToolDefinition = {
             exitCode: 1,
           };
         }
-        return { output: caseLine(plan, testCase.testId, true), exitCode: 0 };
+        return { output: caseDetail(testCase, true), exitCode: 0 };
       }
 
       if (action === "update_case") {
@@ -325,21 +311,7 @@ const wstgTestPlan: ToolDefinition = {
         if (!testId) {
           return { output: '"update_case" requires test_id.', exitCode: 1 };
         }
-        const patch = {
-          status: args.status,
-          title: typeof args.title === "string" ? args.title : undefined,
-          objective: typeof args.objective === "string" ? args.objective : undefined,
-          howToTest:
-            typeof args.how_to_test === "string"
-              ? args.how_to_test
-              : typeof args.howToTest === "string"
-                ? args.howToTest
-                : undefined,
-          notes: typeof args.notes === "string" ? args.notes : undefined,
-          observations: typeof args.observations === "string" ? args.observations : undefined,
-          addLinkedVulnerabilityId:
-            typeof args.vulnerability_id === "string" ? args.vulnerability_id : undefined,
-        };
+        const patch = normalizeTestCasePatch(args);
         const refusal = caseUpdateError(plan, testId, patch);
         if (refusal) return { output: refusal, exitCode: 1 };
 
@@ -380,7 +352,7 @@ const wstgTestPlan: ToolDefinition = {
 
         const lines = [
           `${updated.testCase.testId} → ${updated.testCase.status}`,
-          coverageLine(updated.plan),
+          describeCoverage(updated.plan.cases),
         ];
         return { output: lines.join("\n"), exitCode: 0 };
       }
@@ -400,12 +372,12 @@ const wstgTestPlan: ToolDefinition = {
         const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(200, Number(args.limit))) : 25;
         const shown = cases.slice(0, limit);
         const lines = [
-          `WSTG v${WSTG_VERSION} plan — ${coverageLine(plan)}`,
+          `WSTG v${WSTG_VERSION} plan — ${describeCoverage(plan.cases)}`,
           requestedCategories.length || statusFilter
             ? `Filtered to ${cases.length} case(s)${statusFilter ? ` with status ${statusFilter}` : ""}.`
             : "",
           "",
-          ...shown.map((testCase) => caseLine(plan, testCase.testId, false)),
+          ...shown.map((testCase) => caseDetail(testCase, false)),
         ];
         if (cases.length > shown.length) {
           lines.push(`...and ${cases.length - shown.length} more. Raise limit or filter by category.`);

@@ -4,7 +4,11 @@ import SessionsModel, {
   SessionVulnerabilityDoc,
 } from "../models/Sessions/Sessions.model";
 import type { WebAppTestPlanDoc } from "../models/Sessions/Sessions.model";
-import { requireActiveSession } from "../services/session.helpers";
+import {
+  engagementBoundary,
+  requireActiveSession,
+  setEngagementBoundary,
+} from "../services/session.helpers";
 import { saveSessionPlan } from "../services/web-security/session-plan-store";
 import {
   deleteRun,
@@ -13,11 +17,13 @@ import {
   listRuns,
   stopRun,
 } from "../services/web-security/run-queue.service";
-import { mapUnclassifiedVulnerabilities } from "../services/vulnerability.service";
+import { applyOwaspMapping, mapUnclassifiedVulnerabilities } from "../services/vulnerability.service";
 import {
   addCatalogueCases,
   computeCoverage,
   createTestPlan,
+  normalizePlanGenerateInput,
+  normalizeTestCasePatch,
   normalizeTestStatus,
   removeCase,
   removeCases,
@@ -46,7 +52,6 @@ import {
   WSTG_TESTS,
   WSTG_VERSION,
   computeOwaspCoverage,
-  getOwaspCategory,
 } from "../knowledge";
 
 function catalogPayload() {
@@ -155,32 +160,16 @@ export const generateTestPlan = async (req: Request, res: Response) => {
     if (action && action !== "generate") {
       return res.status(400).json({ message: `Unsupported test plan action: ${body.action}` });
     }
-    const result = createTestPlan({
-      target: typeof body.target === "string" ? body.target : undefined,
-      scope: typeof body.scope === "string" ? body.scope : undefined,
-      categories: Array.isArray(body.categories) ? body.categories : undefined,
-      testIds: Array.isArray(body.testIds)
-        ? body.testIds
-        : Array.isArray(body.test_ids)
-          ? body.test_ids
-          : undefined,
-      existing,
-    });
+    const result = createTestPlan({ ...normalizePlanGenerateInput(body), existing });
 
     await saveSessionPlan(sessionId, result.plan, { uid: userId });
 
     // Keep the engagement boundary in step with the plan: the scope gate reads
     // engagementContext, so "edit the plan later" must update it too.
-    await SessionsModel.updateOne(
-      { sessionId, uid: userId },
-      {
-        $set: {
-          "engagementContext.target":
-            typeof body.target === "string" ? body.target.trim() : "",
-          "engagementContext.scope":
-            typeof body.scope === "string" ? body.scope.trim() : "",
-        },
-      },
+    await setEngagementBoundary(
+      sessionId,
+      userId,
+      engagementBoundary({ engagementContext: body }),
     );
 
     return res.status(200).json({
@@ -211,27 +200,7 @@ export const updateTestCaseStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ message: `Unsupported test status: ${body.status}` });
     }
 
-    const updated = updateTestCase(plan, testId, {
-      status: body.status,
-      title: typeof body.title === "string" ? body.title : undefined,
-      objective: typeof body.objective === "string" ? body.objective : undefined,
-      howToTest: typeof body.howToTest === "string" ? body.howToTest : undefined,
-      evidenceExpectation:
-        typeof body.evidenceExpectation === "string" ? body.evidenceExpectation : undefined,
-      tools: Array.isArray(body.tools)
-        ? body.tools
-            .filter((tool: unknown): tool is string => typeof tool === "string" && tool.trim().length > 0)
-            .map((tool: string) => tool.trim())
-        : undefined,
-      notes: typeof body.notes === "string" ? body.notes : undefined,
-      observations: typeof body.observations === "string" ? body.observations : undefined,
-      addLinkedVulnerabilityId:
-        typeof body.vulnerabilityId === "string"
-          ? body.vulnerabilityId
-          : typeof body.vulnerability_id === "string"
-            ? body.vulnerability_id
-            : undefined,
-    });
+    const updated = updateTestCase(plan, testId, normalizeTestCasePatch(body));
     if (!updated) {
       return res.status(404).json({ message: `${testId} is not part of this test plan` });
     }
@@ -577,32 +546,14 @@ export const mapVulnerability = async (req: Request, res: Response) => {
 
     let vulnerability = target;
     if (apply && mapping.primary) {
-      const category = getOwaspCategory(mapping.primary);
-      const { wstgId } = { wstgId: body.wstgId ?? body.wstg_id ?? target.wstgId };
-      await SessionsModel.updateOne(
-        { sessionId, uid: userId, "vulnerabilities.vulnerabilityId": vulnerabilityId },
-        {
-          $set: {
-            "vulnerabilities.$.owaspTop10": mapping.primary,
-            "vulnerabilities.$.owaspTop10Title": category?.title,
-            "vulnerabilities.$.owaspRelated": mapping.related,
-            "vulnerabilities.$.owaspConfidence": mapping.confidence,
-            "vulnerabilities.$.owaspRationale": mapping.rationale,
-            "vulnerabilities.$.owaspMappedAt": new Date(),
-            "vulnerabilities.$.wstgId": wstgId,
-            "vulnerabilities.$.updatedAt": new Date(),
-          },
-        },
+      const patch = await applyOwaspMapping(
+        sessionId,
+        vulnerabilityId,
+        mapping,
+        target,
+        body.wstgId ?? body.wstg_id ?? target.wstgId,
       );
-      vulnerability = {
-        ...target,
-        owaspTop10: mapping.primary,
-        owaspTop10Title: category?.title,
-        owaspRelated: mapping.related,
-        owaspConfidence: mapping.confidence,
-        owaspRationale: mapping.rationale,
-        wstgId,
-      } as SessionVulnerabilityDoc;
+      vulnerability = { ...target, ...patch } as SessionVulnerabilityDoc;
     }
 
     return res.status(200).json({

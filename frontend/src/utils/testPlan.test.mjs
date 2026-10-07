@@ -6,6 +6,11 @@ import {
   groupCases,
   matchesFilters,
   caseCarriesWork,
+  activeSelection,
+  toggledSelection,
+  selectionWith,
+  groupIsOpen,
+  coverageChips,
 } from "./testPlan.mjs";
 
 test("summarise counts every stored status, including in_progress and not_started", () => {
@@ -121,4 +126,72 @@ test("caseCarriesWork is true once anything was recorded", () => {
     caseCarriesWork({ status: "not_started", linkedVulnerabilityIds: ["v1"] }),
     true,
   );
+});
+
+test("activeSelection keeps only ids the plan still contains", () => {
+  const cases = [{ testId: "A" }, { testId: "B" }];
+  assert.deepEqual([...activeSelection(new Set(["A", "B", "C"]), cases)], ["A", "B"]);
+  const empty = new Set();
+  assert.equal(activeSelection(empty, cases), empty);
+});
+
+test("toggledSelection flips one id without mutating the original", () => {
+  const start = new Set(["A"]);
+  const next = toggledSelection(start, "B");
+  assert.deepEqual([...next], ["A", "B"]);
+  assert.equal(next.has("A"), toggledSelection(next, "A").size === 1);
+  assert.deepEqual([...start], ["A"]);
+});
+
+test("selectionWith adds or removes the listed ids as a group", () => {
+  assert.deepEqual([...selectionWith(new Set(), ["A", "B"], true)], ["A", "B"]);
+  assert.deepEqual([...selectionWith(new Set(["A", "B"]), ["A"], false)], ["B"]);
+});
+
+test("groupIsOpen: override wins, filters open everything with matches, trouble opens its group", () => {
+  const group = {
+    key: "INPV",
+    cases: [
+      { testId: "WSTG-INPV-01", status: "passed" },
+      { testId: "WSTG-INPV-02", status: "failed" },
+    ],
+  };
+  const calm = { overrides: new Map(), filtersActive: false };
+  assert.equal(groupIsOpen(group, calm), true); // carries a failed case
+  const passedGroup = {
+    key: "CONF",
+    cases: [{ testId: "WSTG-CONF-01", status: "passed" }],
+  };
+  assert.equal(groupIsOpen(passedGroup, calm), false);
+  assert.equal(groupIsOpen(passedGroup, { ...calm, filtersActive: true }), true);
+  assert.equal(
+    groupIsOpen(passedGroup, { ...calm, focusCaseId: "WSTG-CONF-01" }),
+    true,
+  );
+  assert.equal(
+    groupIsOpen(passedGroup, { overrides: new Map([["CONF", true]]) }),
+    true,
+  );
+  assert.equal(
+    groupIsOpen(group, { overrides: new Map([["INPV", false]]) }),
+    false,
+  );
+});
+
+test("coverageChips lists only the filters the coverage answers for, all always first", () => {
+  const FILTERS = [
+    { value: "all", label: "All" },
+    { value: "passed", label: "Passed" },
+    { value: "failed", label: "Failed" },
+    { value: "blocked", label: "Blocked" },
+  ];
+  const chips = coverageChips(
+    { total: 5, passed: 2, failed: 0, blocked: 0, inProgress: 3, notStarted: 0, skipped: 0 },
+    FILTERS,
+  );
+  assert.deepEqual(
+    chips.map((chip) => [chip.value, chip.count]),
+    [["all", 5], ["passed", 2]],
+  );
+  assert.deepEqual(coverageChips(null, FILTERS), []);
 });

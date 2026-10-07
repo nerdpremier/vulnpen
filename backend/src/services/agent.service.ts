@@ -1,5 +1,6 @@
 import SessionsModel, {
   AgentMessageDoc,
+  SessionDoc,
 } from "../models/Sessions/Sessions.model";
 import { invoke_llm_streaming } from "../utils/llm/streaming";
 import { resolveOrchestrator } from "../utils/llm/orchestrator";
@@ -87,10 +88,8 @@ import { probeBoxEnv } from "./box-env";
 // Everything the prompt renders from the session document lives in
 // prompt-facts.ts; the loop only asks for the rendered blocks.
 
-import {
-  buildSystemMessage,
-  buildVolatileWebAppForSession,
-} from "./prompt-facts";
+import { buildSystemMessage, buildVolatileWebAppForSession } from "./prompt-facts";
+import { buildTraceTags } from "../utils/traceTags";
 
 // ─── Build shell status context (injected after summarization) ──────
 
@@ -111,37 +110,46 @@ function buildShellStatusMessage(shellManager: ShellManager, turnIndex: number):
   return systemNoteMessage(`shell_status_${Date.now()}`, content, turnIndex);
 }
 
-// ─── Build dynamic trace tags from preceding tool results ───────────
+// ─── Core agent loop ─────────────────────────────────────────────────
+// buildTraceTags lives in utils/traceTags.ts (pure, unit-tested).
 
-export function buildTraceTags(
-  prefix: string,
-  messages: AgentMessageDoc[],
-  extra?: string[],
-): { tags: string[]; phase: string } {
-  const trailingTools: string[] = [];
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "tool" && messages[i].toolName) {
-      trailingTools.push(messages[i].toolName!);
-    } else {
-      break;
-    }
+/**
+ * The session load every run entry point shares: on miss, emit the SSE error
+ * and end the stream, so no entry point can leave an HTTP stream hanging open.
+ */
+async function loadRunSession(sessionId: string, sse: SSEWriter): Promise<SessionDoc | null> {
+  const session = await SessionsModel.findOne({ sessionId });
+  if (!session) {
+    sse.write("error", { message: "Session not found" });
+    sse.end();
+    return null;
   }
-
-  const tags = [prefix];
-  if (extra) tags.push(...extra);
-
-  if (trailingTools.length === 0) {
-    tags.push("planning");
-    return { tags, phase: "plan" };
-  }
-
-  tags.push("analyze");
-  const uniqueTools = [...new Set(trailingTools)];
-  tags.push(...uniqueTools);
-  return { tags, phase: "analyze" };
+  return session;
 }
 
-// ─── Core agent loop ─────────────────────────────────────────────────
+/**
+ * The run setup shared by the main loop and the consent-resume path: the
+ * shell manager (created or reused) and the main execution context built from
+ * the session's engagement state. One owner, so the two paths cannot drift.
+ */
+async function buildMainRunContext(params: {
+  sessionId: string;
+  session: SessionDoc;
+  userId: string;
+  abortSignal?: AbortSignal;
+}) {
+  const shellManager = await sessionLifecycle.ensureShellManager(params.sessionId);
+  const engagementState = engagementStateFromSession(params.session);
+  const ctx = buildExecutionContext({
+    sessionId: params.sessionId,
+    agentId: "main",
+    shellManager,
+    userId: params.userId,
+    abortSignal: params.abortSignal,
+    engagementState,
+  });
+  return { shellManager, engagementState, ctx };
+}
 
 /**
  * SSE plumbing shared by every tool-execution site (the main loop and the
@@ -220,12 +228,8 @@ export async function runAgentLoop(params: {
   // cleared after this instant invalidates the tail this run accumulates.
   const runStartedAt = Date.now();
 
-  const session = await SessionsModel.findOne({ sessionId });
-  if (!session) {
-    sse.write("error", { message: "Session not found" });
-    sse.end();
-    return;
-  }
+  const session = await loadRunSession(sessionId, sse);
+  if (!session) return;
 
   const user = await UserModel.findById(session.uid).lean();
   const toolExecutionMode =
@@ -246,7 +250,12 @@ export async function runAgentLoop(params: {
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
 
-  const shellManager = await sessionLifecycle.ensureShellManager(sessionId);
+  const { shellManager, engagementState, ctx: executionCtx } = await buildMainRunContext({
+    sessionId,
+    session,
+    userId,
+    abortSignal: params.abortSignal,
+  });
 
   // Attack-box facts for the prompt's env section — one probe, owned by
   // box-env.ts. Undefined when the shell is not connected or the probe
@@ -315,17 +324,6 @@ export async function runAgentLoop(params: {
         abortSignal: params.abortSignal,
       })
     : undefined;
-
-  const engagementState = engagementStateFromSession(session);
-
-  const executionCtx = buildExecutionContext({
-    sessionId,
-    agentId: "main",
-    shellManager,
-    userId,
-    abortSignal: params.abortSignal,
-    engagementState,
-  });
 
   try {
     while (iteration < maxAgentIterations) {
@@ -685,8 +683,9 @@ export async function handleConsent(params: {
     toolExecutionMode,
   } = params;
 
-  const session = await SessionsModel.findOne({ sessionId });
-  if (!session || !session.pendingConsent) {
+  const session = await loadRunSession(sessionId, sse);
+  if (!session) return;
+  if (!session.pendingConsent) {
     sse.write("error", { message: "No pending consent" });
     sse.end();
     return;
@@ -735,15 +734,11 @@ export async function handleConsent(params: {
     return;
   }
 
-  const shellManager = await sessionLifecycle.ensureShellManager(sessionId);
-
-  const ctx = buildExecutionContext({
+  const { ctx } = await buildMainRunContext({
     sessionId,
-    agentId: "main",
-    shellManager,
+    session,
     userId,
     abortSignal,
-    engagementState: engagementStateFromSession(session),
   });
 
   const callbacks = createSseToolCallbacks(sse);

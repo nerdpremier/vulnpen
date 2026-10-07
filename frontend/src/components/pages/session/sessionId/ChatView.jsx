@@ -17,18 +17,10 @@ import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
 import { buildToolIndex } from "@/utils/toolIndex.mjs";
+import { formatElapsed, summariseSessionActivity } from "@/utils/sessionActivity.mjs";
+import { buildBurpMessage, takeBurpHandoff } from "@/utils/burpHandoff.mjs";
 import { BarList, PageState, StatStrip, StatTile } from "@/components/common/ui";
 import { useQueryClient } from "react-query";
-
-/** A session's wall-clock span, rounded to the unit a human reads. */
-function formatElapsed(ms) {
-  if (!Number.isFinite(ms)) return "—";
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
 
 export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
@@ -147,29 +139,6 @@ export default function ChatView({ sessionId }) {
 
   const [burpAttachment, setBurpAttachment] = useState(null);
 
-  const buildBurpMessage = useCallback((userText, attachment) => {
-    const scheme = attachment.secure ? "https" : "http";
-    const target = `${attachment.method} ${scheme}://${attachment.host}${attachment.path}`;
-    const tls = attachment.secure ? "Yes" : "No";
-
-    let msg = "";
-    if (userText.trim()) {
-      msg += `${userText.trim()}\n\n`;
-    } else {
-      msg += `Analyze and pentest the following HTTP request captured from ${attachment.sourceName || "Burp Suite"} proxy:\n\n`;
-    }
-    msg += `Target: ${target}\n`;
-    msg += `Host: ${attachment.host} | Port: ${attachment.port || 443} | TLS: ${tls}\n\n`;
-    msg += `--- RAW REQUEST ---\n${attachment.rawRequest || "(empty)"}\n--- END REQUEST ---\n`;
-    if (attachment.rawResponse) {
-      msg += `\n--- RAW RESPONSE ---\n${attachment.rawResponse}\n--- END RESPONSE ---\n`;
-    }
-    if (!userText.trim()) {
-      msg += `\nAnalyze this request for potential vulnerabilities and suggest testing categories.`;
-    }
-    return { text: msg, burpMeta: { method: attachment.method, host: attachment.host, path: attachment.path, port: attachment.port, secure: attachment.secure, statusCode: attachment.statusCode } };
-  }, []);
-
   const handleSend = useCallback(
     (message) => {
       setIterationLimit(null);
@@ -221,7 +190,7 @@ export default function ChatView({ sessionId }) {
 
       startStream({ message: finalMessage, endpoint, burpMeta });
     },
-    [agentState, startStream, setMessages, burpAttachment, buildBurpMessage],
+    [agentState, startStream, setMessages, burpAttachment],
   );
 
   const handleContinueAfterLimit = useCallback(() => {
@@ -282,18 +251,12 @@ export default function ChatView({ sessionId }) {
   const burpPendingProcessed = useRef(false);
   useEffect(() => {
     if (historyLoading || burpPendingProcessed.current) return;
-    const pending = sessionStorage.getItem("burp-to-workspace");
-    if (pending) {
-      sessionStorage.removeItem("burp-to-workspace");
+    // Consume the cross-page session-storage handoff once history is ready.
+    const parsed = takeBurpHandoff();
+    if (parsed) {
       burpPendingProcessed.current = true;
-      try {
-        const parsed = JSON.parse(pending);
-        // Consume the cross-page session-storage handoff once history is ready.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setBurpAttachment(parsed);
-      } catch {
-        setBurpAttachment(null);
-      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBurpAttachment(parsed);
     }
   }, [historyLoading]);
 
@@ -313,69 +276,10 @@ export default function ChatView({ sessionId }) {
    * how long the engagement has been running — the questions a tester asks
    * before reading a long log, answered without reading it.
    */
-  const activity = useMemo(() => {
-    const calls = [];
-    for (const message of messages) {
-      if (message.role === "assistant" && Array.isArray(message.toolCalls)) {
-        for (const call of message.toolCalls) calls.push(call);
-      }
-    }
-
-    let succeeded = 0;
-    let failed = 0;
-    let running = 0;
-    const perTool = new Map();
-
-    for (const call of calls) {
-      const output = toolIndex.outputs.get(call.id);
-      // A call with no result yet is still in flight, not a failure: the
-      // stream writes the tool message when the tool returns.
-      const state = !output || output.streaming
-        ? "running"
-        : output.exitCode == null
-          ? "settled"
-          : output.exitCode === 0
-            ? "succeeded"
-            : "failed";
-
-      if (state === "failed") failed += 1;
-      else if (state === "succeeded") succeeded += 1;
-      else if (state === "running") running += 1;
-
-      const name = call.name || "tool";
-      const row = perTool.get(name) ?? { key: name, label: name, value: 0, failed: 0 };
-      row.value += 1;
-      if (state === "failed") row.failed += 1;
-      perTool.set(name, row);
-    }
-
-    const stamps = messages
-      .map((message) => new Date(message.timestamp).getTime())
-      .filter((value) => Number.isFinite(value));
-    const elapsedMs = stamps.length > 1 ? Math.max(...stamps) - Math.min(...stamps) : null;
-
-    const tools = [...perTool.values()]
-      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
-      .slice(0, 4)
-      .map((row) => ({
-        key: row.key,
-        label: row.label,
-        value: row.value,
-        tone: row.failed ? "danger" : "success",
-        hint: `${row.label}: ${row.value} call${row.value === 1 ? "" : "s"}${
-          row.failed ? ` · ${row.failed} failed` : ""
-        }`,
-      }));
-
-    return {
-      calls: calls.length,
-      succeeded,
-      failed,
-      running,
-      tools,
-      elapsedMs,
-    };
-  }, [messages, toolIndex]);
+  const activity = useMemo(
+    () => summariseSessionActivity(messages, toolIndex),
+    [messages, toolIndex],
+  );
 
   const isEmpty = messages.length === 0 && !historyLoading && !historyError;
 

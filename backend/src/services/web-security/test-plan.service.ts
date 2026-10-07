@@ -677,6 +677,71 @@ export function nextTestsToRun(
     .slice(0, limit);
 }
 
+/** The one-line case name every renderer (tool output, prompt rows) shares. */
+export function describeCase(testCase: SessionTestCaseDoc): string {
+  return `${testCase.testId} (${testCase.section}) ${testCase.title}`;
+}
+
+/**
+ * The canonical coverage sentence, computed from the plan's cases. The tool
+ * handler's replies and the prompt section both read this, so the two can
+ * never drift.
+ */
+export function describeCoverage(cases: SessionTestCaseDoc[]): string {
+  const coverage = computeCoverage(cases);
+  return (
+    `${coverage.executed}/${coverage.total} executed (${coverage.percentExecuted}%): ` +
+    `${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ` +
+    `${coverage.inProgress} in progress, ${coverage.notStarted} not started, ${coverage.skipped} skipped.`
+  );
+}
+
+/**
+ * The raw → patch translation for "update a test case", shared by the tool
+ * handler (snake_case arguments) and the HTTP controller (camelCase body):
+ * the aliases (`how_to_test`/`howToTest`, `vulnerabilityId`/`vulnerability_id`)
+ * resolve in one place, so the two entry points cannot drift.
+ */
+export function normalizeTestCasePatch(raw: Record<string, unknown>): UpdateTestCasePatch {
+  const str = (value: unknown) => (typeof value === "string" ? value : undefined);
+  const firstString = (...values: unknown[]) =>
+    values.map(str).find((value) => value !== undefined);
+  return {
+    status: str(raw.status),
+    title: str(raw.title),
+    objective: str(raw.objective),
+    howToTest: firstString(raw.how_to_test, raw.howToTest),
+    evidenceExpectation: str(raw.evidenceExpectation),
+    tools: Array.isArray(raw.tools)
+      ? raw.tools
+          .filter((tool): tool is string => typeof tool === "string" && tool.trim().length > 0)
+          .map((tool) => tool.trim())
+      : undefined,
+    notes: str(raw.notes),
+    observations: str(raw.observations),
+    addLinkedVulnerabilityId: firstString(raw.vulnerabilityId, raw.vulnerability_id),
+  };
+}
+
+/**
+ * The raw → input translation for "generate the plan", same discipline as
+ * `normalizeTestCasePatch`: `test_ids` (tool args) and `testIds`/`test_ids`
+ * (HTTP body) land in one shape.
+ */
+export function normalizePlanGenerateInput(
+  raw: Record<string, unknown>,
+): Omit<CreateTestPlanInput, "existing"> {
+  const array = (value: unknown) =>
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+  const str = (value: unknown) => (typeof value === "string" ? value : undefined);
+  return {
+    target: str(raw.target),
+    scope: str(raw.scope),
+    categories: array(raw.categories),
+    testIds: array(raw.testIds) ?? array(raw.test_ids),
+  };
+}
+
 /**
  * The user message that drives a UI-launched run (the Nessus-style "Run" on
  * the case page). Persisted as a normal user message, so the chat transcript
@@ -762,7 +827,7 @@ export function renderTestPlanPrompt(
 
   const lines: string[] = [
     `<wstg_test_plan source="${plan.source}" target="${plan.target || "undefined"}">`,
-    `Coverage: ${coverage.executed}/${coverage.total} executed (${coverage.percentExecuted}%) — ${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ${coverage.inProgress} in progress, ${coverage.notStarted} not started, ${coverage.skipped} skipped.`,
+    `Coverage: ${describeCoverage(plan.cases)}`,
   ];
 
   if (plan.scope) lines.push(`Scope: ${plan.scope}`);
@@ -779,7 +844,7 @@ export function renderTestPlanPrompt(
     lines.push("", "Tests that produced findings (link every finding to its test):");
     for (const testCase of failed.slice(0, maxFailures)) {
       lines.push(
-        `- ${statusGlyph(testCase.status)} ${testCase.testId} (${testCase.section}) ${testCase.title}${
+        `- ${statusGlyph(testCase.status)} ${describeCase(testCase)}${
           testCase.observations ? ` — observed: ${truncate(testCase.observations, 160)}` : ""
         }`,
       );
@@ -801,9 +866,7 @@ export function renderTestPlanPrompt(
   if (next.length) {
     lines.push("", "Next tests (plan order):");
     for (const testCase of next) {
-      lines.push(
-        `- ${testCase.testId} (${testCase.section}) ${testCase.title} — objective: ${testCase.objective}`,
-      );
+      lines.push(`- ${describeCase(testCase)} — objective: ${testCase.objective}`);
     }
     if (coverage.notStarted > next.length) {
       lines.push(`- ...plus ${coverage.notStarted - next.length} more not started.`);

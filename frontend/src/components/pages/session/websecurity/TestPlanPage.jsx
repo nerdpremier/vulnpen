@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "react-query";
+import { useQuery } from "react-query";
 import {
-  App,
   Button,
   Checkbox,
   Dropdown,
@@ -25,14 +24,8 @@ import {
   RightOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import {
-  getTestPlan,
-  removeTestCase,
-  removeTestCases,
-  updateTestCase,
-} from "@/services/websecurity.service";
+import { getTestPlan } from "@/services/websecurity.service";
 import { getSessionInfo } from "@/services/agent.service";
-import { apiErrorMessage } from "@/utils/apiError";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import PlanSetupModal from "./PlanSetupModal";
 import ScanLauncherModal from "../scans/ScanLauncherModal";
@@ -40,7 +33,8 @@ import styles from "@/styles/pages/TestPlan.module.scss";
 import { PageState } from "@/components/common/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { summarise, groupCases, matchesFilters, caseCarriesWork, STATUS_OPTIONS } from "@/utils/testPlan.mjs";
+import { summarise, groupCases, matchesFilters, caseCarriesWork, STATUS_OPTIONS, activeSelection, toggledSelection, selectionWith, groupIsOpen, coverageChips } from "@/utils/testPlan.mjs";
+import { usePlanMutations } from "@/hooks/usePlanMutations";
 import { testPlanKey } from "@/utils/scanQueryKeys.mjs";
 
 /** Colour the one status control by what it says, so no second status column is needed. */
@@ -157,9 +151,7 @@ function CategoryBar({ code, name, summary }) {
 }
 
 export default function TestPlanPage({ sessionId }) {
-  const { message } = App.useApp();
   const confirmPopUp = useConfirmPopUp();
-  const queryClient = useQueryClient();
   const [editForm] = Form.useForm();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -228,12 +220,10 @@ export default function TestPlanPage({ sessionId }) {
   // (removed via the row menu, plan regeneration, ...), so batch actions never
   // hit cases that do not exist any more. Derived during render instead of
   // synced by an effect, so stale ids never reach the UI.
-  const activeSelectedIds = useMemo(() => {
-    if (selectedIds.size === 0) return selectedIds;
-    const planned = new Set((plan?.cases ?? []).map((c) => c.testId));
-    const next = new Set([...selectedIds].filter((id) => planned.has(id)));
-    return next;
-  }, [selectedIds, plan]);
+  const activeSelectedIds = useMemo(
+    () => activeSelection(selectedIds, plan?.cases ?? []),
+    [selectedIds, plan],
+  );
 
   const catalogueIds = useMemo(
     () => new Set((catalog?.tests ?? []).map((test) => test.id)),
@@ -257,93 +247,32 @@ export default function TestPlanPage({ sessionId }) {
   const matchCount = visibleGroups.reduce((sum, group) => sum + group.matches.length, 0);
 
   // The chips are the status filter: they show the counts the summary does, and toggle it.
-  const chips = useMemo(() => {
-    if (!coverage) return [];
-    const counts = {
-      all: coverage.total,
-      in_progress: coverage.inProgress,
-      passed: coverage.passed,
-      failed: coverage.failed,
-      blocked: coverage.blocked,
-      not_started: coverage.notStarted,
-      skipped: coverage.skipped,
-    };
-    return FILTERS.filter((filter) => filter.value === "all" || counts[filter.value] > 0).map(
-      (filter) => ({ ...filter, count: counts[filter.value] }),
-    );
-  }, [coverage]);
+  const chips = useMemo(() => coverageChips(coverage, FILTERS), [coverage]);
 
   /**
    * Open when the user opened it; open while a filter is on, so matches are visible; otherwise
    * open only for the categories that already hold a failed or blocked case. A filter never writes
    * an override, so clearing it returns the plan to the calm, collapsed view.
    */
-  const isGroupOpen = (group) => {
-    if (groupOverrides.has(group.key)) return groupOverrides.get(group.key);
-    if (filtersActive) return true;
-    if (
-      focusCaseId &&
-      group.cases.some(
-        (testCase) => testCase.testId.toUpperCase() === focusCaseId,
-      )
-    ) {
-      return true;
-    }
-    return group.cases.some(
-      (testCase) => testCase.status === "failed" || testCase.status === "blocked",
-    );
-  };
+  const isGroupOpen = (group) =>
+    groupIsOpen(group, { overrides: groupOverrides, filtersActive, focusCaseId });
   const allExpanded = groups.length > 0 && groups.every(isGroupOpen);
 
-  const invalidate = () => {
-    queryClient.invalidateQueries(testPlanKey(sessionId));
-    // Setup writes the engagement boundary too, so the cached values the modal
-    // starts from have to be refreshed alongside the plan.
-    queryClient.invalidateQueries(["session-info", sessionId]);
-  };
-
-  const statusMutation = useMutation(updateTestCase, {
-    onSuccess: (data) => {
-      message.success(`${data.testCase?.testId} -> ${data.testCase?.status}`);
-      invalidate();
-    },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not save the result")),
-  });
-
-  const updateCaseMutation = useMutation(updateTestCase, {
-    onSuccess: (data) => {
-      message.success(`${data.testCase?.testId} updated`);
-      setEditingCase(null);
-      invalidate();
-    },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not update the case")),
-  });
-
-  const removeCaseMutation = useMutation(removeTestCase, {
-    onSuccess: (data) => {
-      message.success(`${data.testId} removed from the plan`);
-      // Drop the removed id from the selection so the selection bar can't
-      // reference a case that is no longer part of the plan.
-      setSelectedIds((prev) => {
-        if (!prev.has(data.testId)) return prev;
-        const next = new Set(prev);
-        next.delete(data.testId);
-        return next;
-      });
-      invalidate();
-    },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not remove the case")),
-  });
-
-  const casesRemoveMutation = useMutation(removeTestCases, {
-    onSuccess: (data) => {
-      const removed = data?.removed?.length ?? 0;
-      message.success(`${removed} case${removed === 1 ? "" : "s"} removed from the plan`);
-      setSelectedIds(new Set());
-      invalidate();
-    },
-    onError: (error) => message.error(apiErrorMessage(error, "Could not remove the cases")),
-  });
+  const { statusMutation, updateCaseMutation, removeCaseMutation, casesRemoveMutation, invalidate } =
+    usePlanMutations(sessionId, {
+      onCaseUpdated: () => setEditingCase(null),
+      onCaseRemoved: (testId) => {
+        // Drop the removed id from the selection so the selection bar can't
+        // reference a case that is no longer part of the plan.
+        setSelectedIds((prev) => {
+          if (!prev.has(testId)) return prev;
+          const next = new Set(prev);
+          next.delete(testId);
+          return next;
+        });
+      },
+      onCasesRemoved: () => setSelectedIds(new Set()),
+    });
 
   const setGroupOpen = (targets, open) => {
     setGroupOverrides((previous) => {
@@ -367,24 +296,11 @@ export default function TestPlanPage({ sessionId }) {
     setSelectedIds(new Set());
   };
 
-  const toggleSelected = (testId) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(testId)) next.delete(testId);
-      else next.add(testId);
-      return next;
-    });
-  };
+  const toggleSelected = (testId) =>
+    setSelectedIds((previous) => toggledSelection(previous, testId));
 
   const setGroupSelected = (testIds, checked) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      for (const testId of testIds) {
-        if (checked) next.add(testId);
-        else next.delete(testId);
-      }
-      return next;
-    });
+    setSelectedIds((previous) => selectionWith(previous, testIds, checked));
   };
 
   // A case nobody has worked on costs nothing to drop: it comes back with one click. Only stop for
