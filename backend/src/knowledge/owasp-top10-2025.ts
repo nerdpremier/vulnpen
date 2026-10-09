@@ -1,12 +1,22 @@
 /**
  * OWASP Top 10:2025 - static reference data.
  *
- * Mirrors the published 2025 list (https://owasp.org/Top10/2025/) in release
- * order. The notable changes from the 2021 edition are captured here: A03 is
- * now Software Supply Chain Failures (absorbing Vulnerable and Outdated
- * Components), Injection is a single A05, SSRF is folded into A01, and A10 is
- * Mishandling of Exceptional Conditions instead of SSRF. `wstgFocus` points at
- * the OWASP WSTG v4.2 test ids that primarily exercise each category.
+ * Transcribed from the published release, in release order. Source of record:
+ * the category pages under https://owasp.org/Top10/2025/ (repository
+ * OWASP/Top10, `2025/docs/en/Axx_2025-*.md`). The notable changes from the 2021
+ * edition are captured here: A03 is now Software Supply Chain Failures
+ * (absorbing Vulnerable and Outdated Components), Injection is a single A05,
+ * SSRF is folded into A01, and A10 is Mishandling of Exceptional Conditions
+ * instead of SSRF.
+ *
+ * Every `cwes` entry is copied from the "List of Mapped CWEs" section of its
+ * category page. Those lists are disjoint — no CWE appears under two categories
+ * — which is what makes `CWE -> category` a single-valued official lookup
+ * (`owasp-cwe-index.ts`). `tests/catalogConformance.test.ts` pins both the
+ * membership and the disjointness, so this data cannot drift silently.
+ *
+ * Nothing here is inferred, curated or model-generated: it is the published
+ * list, copied.
  */
 
 import type { OwaspTop10Category } from "./types";
@@ -15,12 +25,16 @@ export const OWASP_TOP10_2025_VERSION = "2025";
 export const OWASP_TOP10_2025_SOURCE = "https://owasp.org/Top10/2025/";
 
 /**
- * Date the per-category CWE lists below were transcribed from the official
+ * Date the per-category CWE lists below were last verified against the official
  * OWASP Top 10:2025 category pages (their 'List of Mapped CWEs' sections).
  * Re-verify against the source before changing any of them.
  */
-export const OWASP_TOP10_2025_CWES_RETRIEVED = "2026-10-02";
-export const OWASP_TOP10_2025_CWE_SOURCE = "https://owasp.org/Top10/2025/ — each Axx:2025 page, List of Mapped CWEs";
+export const OWASP_TOP10_2025_CWES_RETRIEVED = "2026-10-09";
+export const OWASP_TOP10_2025_CWE_SOURCE =
+  "https://owasp.org/Top10/2025/ — the 'List of Mapped CWEs' section of each Axx:2025 page (OWASP/Top10, 2025/docs/en/)";
+
+/** The published total: 249 CWEs across the ten 2025 categories. */
+export const OWASP_TOP10_2025_CWE_TOTAL = 249;
 
 export const OWASP_TOP10_2025: OwaspTop10Category[] = [
   {
@@ -71,16 +85,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-922",
       "CWE-1275",
     ],
-    wstgFocus: [
-      "WSTG-ATHZ-02",
-      "WSTG-ATHZ-03",
-      "WSTG-ATHZ-04",
-      "WSTG-ATHZ-01",
-      "WSTG-INPV-19",
-      "WSTG-SESS-05",
-      "WSTG-CLNT-07",
-      "WSTG-CONF-05",
-    ],
     detection: [
       "Endpoints that return another user's object when an id, filename or token is swapped.",
       "Low-privilege sessions receiving success responses from privileged pages or API routes.",
@@ -120,16 +124,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-1004",
       "CWE-1174",
     ],
-    wstgFocus: [
-      "WSTG-CONF-02",
-      "WSTG-CONF-03",
-      "WSTG-CONF-04",
-      "WSTG-CONF-06",
-      "WSTG-CONF-07",
-      "WSTG-CONF-08",
-      "WSTG-INPV-16",
-      "WSTG-CLNT-09",
-    ],
     detection: [
       "Default pages, sample applications, directory listings or management consoles answering on the tested host.",
       "Banners, stack traces or debug output naming versions, frameworks and internal paths.",
@@ -158,15 +152,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-1329",
       "CWE-1357",
       "CWE-1395",
-    ],
-    wstgFocus: [
-      "WSTG-INFO-09",
-      "WSTG-INFO-02",
-      "WSTG-INFO-08",
-      "WSTG-CONF-10",
-      "WSTG-CONF-11",
-      "WSTG-CLNT-06",
-      "WSTG-CLNT-13",
     ],
     detection: [
       "Component, plug-in or library versions that map to known CVEs or are end-of-life.",
@@ -221,14 +206,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-916",
       "CWE-1240",
       "CWE-1241",
-    ],
-    wstgFocus: [
-      "WSTG-CRYP-01",
-      "WSTG-CRYP-02",
-      "WSTG-CRYP-03",
-      "WSTG-CRYP-04",
-      "WSTG-ATHN-01",
-      "WSTG-ATHN-05",
     ],
     detection: [
       "SSLv2/v3 or TLS 1.0/1.1 accepted, or RC4, 3DES, NULL and export ciphers offered.",
@@ -289,16 +266,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-643",
       "CWE-644",
       "CWE-917",
-    ],
-    wstgFocus: [
-      "WSTG-INPV-05",
-      "WSTG-INPV-01",
-      "WSTG-INPV-02",
-      "WSTG-INPV-12",
-      "WSTG-INPV-11",
-      "WSTG-INPV-18",
-      "WSTG-INPV-07",
-      "WSTG-CLNT-01",
     ],
     detection: [
       "Quote or metacharacter payloads that change query results, error text, record counts or response length.",
@@ -361,15 +328,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-1022",
       "CWE-1125",
     ],
-    wstgFocus: [
-      "WSTG-BUSL-01",
-      "WSTG-BUSL-02",
-      "WSTG-BUSL-04",
-      "WSTG-BUSL-06",
-      "WSTG-BUSL-07",
-      "WSTG-BUSL-08",
-      "WSTG-BUSL-09",
-    ],
     detection: [
       "Multi-step flows that complete when a mandatory step is skipped, repeated or reordered.",
       "Impossible business values such as negative amounts, mismatched totals or reversed date ranges accepted and persisted.",
@@ -429,16 +387,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-1392",
       "CWE-1393",
     ],
-    wstgFocus: [
-      "WSTG-ATHN-02",
-      "WSTG-ATHN-03",
-      "WSTG-ATHN-04",
-      "WSTG-ATHN-07",
-      "WSTG-ATHN-09",
-      "WSTG-IDNT-04",
-      "WSTG-SESS-03",
-      "WSTG-SESS-06",
-    ],
     detection: [
       "Login, reset or registration responses that differ for existing and non-existing accounts.",
       "Repeated failed logins with no lockout, delay, CAPTCHA or alert.",
@@ -475,13 +423,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-915",
       "CWE-926",
     ],
-    wstgFocus: [
-      "WSTG-BUSL-03",
-      "WSTG-BUSL-09",
-      "WSTG-INPV-14",
-      "WSTG-CLNT-13",
-      "WSTG-CONF-10",
-    ],
     detection: [
       "Client-supplied data whose checksum, HMAC or signature is accepted after tampering, removal or replay.",
       "Serialised payloads (Java, .NET ViewState, PHP, pickle, YAML) deserialised from client input.",
@@ -509,14 +450,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-223",
       "CWE-532",
       "CWE-778",
-    ],
-    wstgFocus: [
-      "WSTG-BUSL-07",
-      "WSTG-ATHN-03",
-      "WSTG-BUSL-05",
-      "WSTG-CONF-02",
-      "WSTG-ERRH-01",
-      "WSTG-SESS-09",
     ],
     detection: [
       "Hundreds of failed logins, enumerations or forged requests with no throttle, lockout or alert.",
@@ -564,13 +497,6 @@ export const OWASP_TOP10_2025: OwaspTop10Category[] = [
       "CWE-754",
       "CWE-755",
       "CWE-756",
-    ],
-    wstgFocus: [
-      "WSTG-ERRH-01",
-      "WSTG-ERRH-02",
-      "WSTG-CRYP-02",
-      "WSTG-INPV-13",
-      "WSTG-BUSL-04",
     ],
     detection: [
       "Stack traces, framework versions, file paths or SQL fragments returned to the client.",

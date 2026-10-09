@@ -168,10 +168,11 @@ export type WebAppRunStatus =
 /**
  * How much the scan asks of the operator while it runs.
  *
- * `unattended` reviews approval-boundary actions with the Approve-for-me
- * reviewer so a launched scan finishes on its own; `supervised` leaves the
- * user's own tool-execution mode in charge, which parks the scan on the first
- * boundary action and waits for a human.
+ * `unattended` runs the scan in `auto` so it is not left parked for an operator
+ * who is not watching — the agent is told to record a refusal against the case
+ * and move on, and the boundary itself still holds. `supervised` leaves the
+ * user's own tool-execution mode in charge, so a boundary action parks the scan
+ * and waits for a human.
  */
 export type WebAppRunPolicy = "unattended" | "supervised";
 
@@ -221,14 +222,14 @@ export interface SessionVulnerabilityDoc {
   wstgId?: string;
   wstgTitle?: string;
   wstgCategory?: string;
-  /** OWASP Top 10:2025 classification, e.g. "A05:2025". */
+  /** OWASP Top 10:2025 classification, e.g. "A05:2025". Derived from the CWE
+   *  recorded on the finding, through the CWE lists OWASP publishes. */
   owaspTop10?: string;
   owaspTop10Title?: string;
-  owaspRelated?: string[];
-  owaspConfidence?: "high" | "medium" | "low";
   owaspRationale?: string;
   owaspMappedAt?: Date;
-  /** How the OWASP mapping was decided: official, curated, tester or model. */
+  /** How the OWASP mapping was decided. Only "official" is ever written: the
+   *  classification is a lookup in the published lists, nothing else. */
   owaspProvenance?: string;
   /** CVSS v3.0 base metrics (FIRST spec) the model rated, with the score the
    *  system computed from them. Severity always follows the score. The v2 and
@@ -397,7 +398,10 @@ const SubagentSchema = new Schema(
     status: {
       type: String,
       default: "running",
-      enum: ["running", "completed", "failed", "cancelled"],
+      // Mirrors SubagentStatus — the union includes "paused", so the schema
+      // must accept it or a paused subagent would fail validation on the next
+      // whole-document save().
+      enum: ["running", "completed", "failed", "cancelled", "paused"],
     },
     result: { type: String },
     messages: { type: [SubagentMessageSchema], default: [] },
@@ -521,7 +525,13 @@ const SessionVulnerabilitySchema = new Schema(
     severity: {
       type: String,
       required: true,
-      enum: ["info", "low", "medium", "high"],
+      // Must stay in step with the `severity` union on SessionVulnerabilityDoc
+      // and with severityFromCvssScore(), which returns "critical" for any
+      // CVSS base score >= 9.0. Findings are written with updateOne (which
+      // skips validators) but every later session.save() validates the whole
+      // document — an enum that omitted "critical" made one 9.8 finding brick
+      // the session on the next chat turn or scan start.
+      enum: ["info", "low", "medium", "high", "critical"],
       default: "info",
     },
     cwe: { type: String },
@@ -539,8 +549,6 @@ const SessionVulnerabilitySchema = new Schema(
     wstgCategory: { type: String },
     owaspTop10: { type: String },
     owaspTop10Title: { type: String },
-    owaspRelated: { type: [String], default: [] },
-    owaspConfidence: { type: String, enum: ["high", "medium", "low"] },
     owaspRationale: { type: String },
     owaspMappedAt: { type: Date },
     owaspProvenance: { type: String },

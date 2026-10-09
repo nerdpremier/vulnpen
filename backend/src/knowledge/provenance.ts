@@ -1,32 +1,37 @@
 /**
  * Provenance for the reference data in this folder.
  *
- * The OWASP facts (category ids, titles and the per-category CWE lists) are
- * transcribed from the official sources and must stay identical to them: the
- * conformance test in tests/catalogConformance.test.ts fails if they drift.
+ * Two official sources feed the product, and nothing else does:
  *
- * The WSTG -> OWASP Top 10 crosswalk is NOT published by OWASP. It is a curated
- * mapping maintained by this project, derived from the CWE lists OWASP publishes
- * for each category, and it is labelled as curated everywhere it is used so a
- * report never claims OWASP authorship it does not have.
+ *   1. the OWASP Top 10:2025 category pages, whose "List of Mapped CWEs"
+ *      sections are the one published relation between a weakness and a
+ *      category; and
+ *   2. the OWASP Web Security Testing Guide v4.2, whose test cases are the
+ *      methodology the engagement is planned and reported against.
+ *
+ * Neither source publishes a mapping from a WSTG test case to a CWE or to the
+ * Top 10. This project therefore does not carry one: a finding is classified by
+ * the CWE recorded on it, looked up in source 1. The constants below exist so a
+ * report can state where its facts came from.
  */
 
 export const OWASP_TOP10_2025_CWE_PROVENANCE = {
   kind: "official" as const,
-  source: "OWASP Top 10:2025 - the List of Mapped CWEs section of each Axx:2025 page",
+  source:
+    "OWASP Top 10:2025 — the 'List of Mapped CWEs' section of each Axx:2025 category page",
   url: "https://owasp.org/Top10/2025/",
-  retrieved: "2026-10-02",
+  repository: "https://github.com/OWASP/Top10 (2025/docs/en/)",
+  retrieved: "2026-10-09",
+  note:
+    "The ten lists are disjoint: every one of the 249 CWEs appears under exactly one category, so CWE -> category is single-valued. Pinned by tests/catalogConformance.test.ts.",
 };
 
-
-
-export const WSTG_OWASP_CROSSWALK_PROVENANCE = {
-  kind: "curated" as const,
-  curatedBy: "VulnPen (T-NET IT Solution)",
-  basis:
-    "Crosswalk derived from the CWE identifiers OWASP publishes for each Top 10:2025 category. OWASP does not publish a machine-readable WSTG-to-Top-10 mapping.",
-  version: "1.0",
-  updated: "2026-10-02",
+export const WSTG_V42_CATALOGUE_PROVENANCE = {
+  kind: "official" as const,
+  source: "OWASP Web Security Testing Guide v4.2 — the test case catalogue",
+  url: "https://owasp.org/www-project-web-security-testing-guide/v42/",
+  repository: "https://github.com/OWASP/wstg (tag v4.2, checklist/checklist.json)",
+  retrieved: "2026-10-09",
   note:
-    "Labelled curated wherever a mapping rationale is shown, so the report never implies OWASP authorship.",
+    "Ids, sections and titles are the published v4.2 facts. The WSTG publishes no CWE or Top 10 mapping for a test case, so none is attached to one here.",
 };

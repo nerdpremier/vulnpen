@@ -55,8 +55,6 @@ export interface OwaspTop10Category {
   summary: string;
   /** CWE identifiers the OWASP Top 10:2025 lists for this category. */
   cwes: string[];
-  /** WSTG v4.2 test ids that exercise this category. */
-  wstgFocus: string[];
   /** Concrete signals to look for while testing. */
   detection: string[];
   /** Remediation guidance for findings in this category. */
@@ -82,11 +80,21 @@ export interface WstgTest {
   objective: string;
   /** How to run the test, including the sub-techniques WSTG lists under it. */
   howToTest: string;
-  /** OWASP Top 10:2025 mapping, most relevant category first. */
-  owasp: OwaspTop10Id[];
-  /** Primary CWEs for findings produced by this test. */
-  cwe: string[];
-  /** Tools on the attack box that make this test efficient. */
+  /**
+   * The tools on *this* box that make the test efficient — a curated,
+   * project-specific list, NOT an OWASP publication.
+   *
+   * WSTG v4.2 does carry a `## Tools` section, but only in 55 of the 97 cases,
+   * and it is prose ("Figure 4.1.8-8: Whatweb Output sample", "Regular
+   * expressions"), so it cannot be transcribed as a tool list. This field names
+   * what the agent should actually reach for here: a registered agent tool
+   * (`run_bash`, `send_to_burp_repeater`, `browser_action`, …) or a capability
+   * in `src/capabilities/registry.ts`.
+   *
+   * That invariant is enforced by `tests/catalogConformance.test.ts`: a name
+   * that is neither a registered tool nor a known capability fails the suite,
+   * so this field can never point at a tool the box does not have.
+   */
   tools: string[];
   /** Evidence that must be captured for a report-ready result. */
   evidence: string;

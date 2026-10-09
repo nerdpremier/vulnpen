@@ -4,12 +4,10 @@ import type { SessionVulnerabilityDoc } from "../../models/Sessions/Sessions.mod
 import {
   describeOwaspMapping,
   mapFindingToOwaspTop10,
-  suggestWstgTestsForFinding,
 } from "../../services/web-security/owasp-mapping.service";
-import { classifyWithLlm } from "../../services/web-security/owasp-llm-classifier";
+import { applyOwaspMapping } from "../../services/vulnerability.service";
 import {
   getOwaspCategory,
-  getWstgTest,
   normalizeOwaspTop10Id,
   OWASP_TOP10_2025,
 } from "../../knowledge";
@@ -22,9 +20,12 @@ const mapFindingOwasp: ToolDefinition = {
   name: "map_finding_owasp",
   description:
     "Classify a finding against the OWASP Top 10:2025 and persist the classification. " +
-    "Pass vulnerability_id to classify an existing finding (apply=true to store), or title/cwe/wstg_id for one still being investigated; " +
-    "apply_to_all=true maps every unmapped finding in the session. The cascade (your category → WSTG case → CWE → LLM) runs automatically. " +
-    `Valid categories: ${VALID_CATEGORIES}.`,
+    "The classification is a lookup of the finding's CWE in the CWE lists OWASP publishes for the ten 2025 categories — " +
+    "it is deterministic, so pass the CWE and the category follows; you do not choose the category. " +
+    "Pass vulnerability_id to classify a recorded finding (apply=true to store it), or cwe for one still being investigated; " +
+    "apply_to_all=true re-derives every finding in this session from its CWE and writes back what changed. " +
+    "A finding with no CWE, or a CWE no 2025 list contains, comes back unmapped — that is the correct answer, not a failure. " +
+    `Categories: ${VALID_CATEGORIES}.`,
   parameters: {
     type: "object",
     properties: {
@@ -32,22 +33,14 @@ const mapFindingOwasp: ToolDefinition = {
         type: "string",
         description: "Id of an existing finding in this session to classify.",
       },
-      title: { type: "string", description: "Finding title when it is not yet recorded." },
-      description: {
-        type: "string",
-        description: "Short description of the finding, including the mechanism.",
-      },
-      evidence: { type: "string", description: "Evidence text, used to corroborate the mapping." },
-      cwe: { type: "string", description: "CWE id of the underlying weakness, e.g. CWE-89." },
-      wstg_id: {
+      cwe: {
         type: "string",
         description:
-          "WSTG test case that produced the finding, e.g. WSTG-INPV-05 — the strongest mapping signal.",
+          "CWE id of the weakness, e.g. CWE-89. The only input the classification uses.",
       },
-      owasp_top10: {
+      title: {
         type: "string",
-        description:
-          "Explicit category (A01:2025 ... A10:2025); supply only when the classification is clear from the evidence.",
+        description: "Finding title, when classifying one that is not recorded yet.",
       },
       apply: {
         type: "boolean",
@@ -55,7 +48,7 @@ const mapFindingOwasp: ToolDefinition = {
       },
       apply_to_all: {
         type: "boolean",
-        description: "Map and persist every finding in this session that has no OWASP category yet.",
+        description: "Classify and persist every finding in this session that has no OWASP category yet.",
       },
     },
     required: [],
@@ -71,54 +64,36 @@ const mapFindingOwasp: ToolDefinition = {
           .select("vulnerabilities")
           .lean();
         const vulnerabilities = (session?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-        const unmapped = vulnerabilities.filter(
-          (vulnerability) => !normalizeOwaspTop10Id(vulnerability.owaspTop10),
+        // The stored category is a cache of the derivation, so reconcile rather
+        // than only fill gaps: a stale category is corrected, and one that no
+        // longer follows from a CWE is cleared.
+        const stale = vulnerabilities.filter(
+          (vulnerability) =>
+            mapFindingToOwaspTop10({ cwe: vulnerability.cwe }).primary !==
+            normalizeOwaspTop10Id(vulnerability.owaspTop10),
         );
-        if (!unmapped.length) {
+        if (!stale.length) {
           return {
-            output: `${vulnerabilities.length} finding(s) in this session; all of them already carry an OWASP Top 10:2025 category.`,
+            output: `${vulnerabilities.length} finding(s) in this session; every one already matches its CWE.`,
             exitCode: 0,
           };
         }
 
         const lines: string[] = [];
-        for (const vulnerability of unmapped) {
-          let result = mapFindingToOwaspTop10({
-            title: vulnerability.title,
-            description: vulnerability.description,
-            contextSummary: vulnerability.contextSummary,
-            evidence: vulnerability.evidence,
-            endpoint: vulnerability.endpoint,
-            service: vulnerability.service,
-            cwe: vulnerability.cwe,
-            wstgId: vulnerability.wstgId,
-          });
-          if (!result.primary) {
-            const llmResult = await classifyWithLlm(
-              {
-                title: vulnerability.title,
-                description: vulnerability.description,
-                contextSummary: vulnerability.contextSummary,
-                evidence: vulnerability.evidence,
-                endpoint: vulnerability.endpoint,
-                cwe: vulnerability.cwe,
-                wstgId: vulnerability.wstgId,
-              },
-              { userId: ctx.userId, sessionId, candidates: result.ambiguous },
-            );
-            if (llmResult) result = llmResult;
-          }
-          if (!result.primary) {
-            lines.push(`- ${vulnerability.title}: still unmapped — ${result.rationale}`);
-            continue;
-          }
-          await persistMapping(sessionId, vulnerability.vulnerabilityId, result);
+        for (const vulnerability of stale) {
+          const result = mapFindingToOwaspTop10({ cwe: vulnerability.cwe });
+          await applyOwaspMapping(sessionId, vulnerability.vulnerabilityId, result);
           lines.push(
-            `- ${vulnerability.title}: ${result.primary} ${result.primaryTitle ?? ""} (${result.confidence} confidence via ${result.source}, ${vulnerability.service ?? vulnerability.endpoint ?? vulnerability.host})`,
+            result.primary
+              ? `- ${vulnerability.title}: ${result.primary} ${result.primaryTitle ?? ""} (official, via ${vulnerability.cwe})`
+              : `- ${vulnerability.title}: unmapped — ${result.rationale}`,
           );
         }
         return {
-          output: [`Mapped ${unmapped.length} finding(s):`, ...lines].join("\n"),
+          output: [
+            `Re-derived ${stale.length} of ${vulnerabilities.length} finding(s) from their CWE:`,
+            ...lines,
+          ].join("\n"),
           exitCode: 0,
         };
       }
@@ -136,38 +111,10 @@ const mapFindingOwasp: ToolDefinition = {
         }
       }
 
-      let result = mapFindingToOwaspTop10({
-        title: args.title ?? target?.title,
-        description: args.description ?? target?.description,
-        contextSummary: target?.contextSummary,
-        evidence: args.evidence ?? target?.evidence,
-        endpoint: target?.endpoint,
-        service: target?.service,
-        cwe: args.cwe ?? target?.cwe,
-        wstgId: args.wstg_id ?? target?.wstgId,
-        owaspTop10: args.owasp_top10 ?? target?.owaspTop10,
-      });
-      if (!result.primary) {
-        const llmResult = await classifyWithLlm(
-          {
-            title: args.title ?? target?.title,
-            description: args.description ?? target?.description,
-            contextSummary: target?.contextSummary,
-            evidence: args.evidence ?? target?.evidence,
-            endpoint: target?.endpoint,
-            cwe: args.cwe ?? target?.cwe,
-            wstgId: args.wstg_id ?? target?.wstgId,
-          },
-          { userId: ctx.userId, sessionId, candidates: result.ambiguous },
-        );
-        if (llmResult) result = llmResult;
-      }
+      const cwe = args.cwe ?? target?.cwe;
+      const result = mapFindingToOwaspTop10({ cwe });
 
       const lines: string[] = [describeOwaspMapping(result)];
-      const wstg = getWstgTest(args.wstg_id ?? target?.wstgId);
-      if (wstg) {
-        lines.push(`WSTG reference: ${wstg.id} (${wstg.section}) ${wstg.title} — ${wstg.objective}`);
-      }
       if (result.primary) {
         const category = getOwaspCategory(result.primary);
         if (category) {
@@ -177,21 +124,16 @@ const mapFindingOwasp: ToolDefinition = {
           );
         }
       } else {
-        const suggestions = suggestWstgTestsForFinding({
-          title: args.title ?? target?.title,
-          description: args.description ?? target?.description,
-          evidence: args.evidence ?? target?.evidence,
-          cwe: args.cwe ?? target?.cwe,
-        });
-        if (suggestions.length) {
-          lines.push(`Candidate WSTG tests to trace this finding to: ${suggestions.join(", ")}`);
-        }
+        lines.push(
+          "Record the weakness id on the finding (data.cwe) and it will classify itself; " +
+            "do not pick a category by hand — this system reports only what the OWASP lists support.",
+        );
       }
 
-      if (args.apply === true && target) {
-        await persistMapping(sessionId, target.vulnerabilityId, result, args.wstg_id ?? target.wstgId);
+      if (args.apply === true && target && result.primary) {
+        await applyOwaspMapping(sessionId, target.vulnerabilityId, result);
         lines.push(`Stored on finding ${target.vulnerabilityId}.`);
-      } else if (target) {
+      } else if (target && result.primary) {
         lines.push(
           `Not stored yet — call again with apply=true (vulnerability_id ${target.vulnerabilityId}) to persist the classification.`,
         );
@@ -203,41 +145,5 @@ const mapFindingOwasp: ToolDefinition = {
     }
   },
 };
-
-interface MappingLike {
-  primary?: string;
-  primaryTitle?: string;
-  related: string[];
-  confidence: string;
-  source: string;
-  rationale: string;
-}
-
-async function persistMapping(
-  sessionId: string,
-  vulnerabilityId: string,
-  result: MappingLike,
-  wstgId?: string,
-): Promise<void> {
-  const update: Record<string, any> = {
-    "vulnerabilities.$.owaspTop10": result.primary,
-    "vulnerabilities.$.owaspTop10Title": result.primaryTitle,
-    "vulnerabilities.$.owaspRelated": result.related,
-    "vulnerabilities.$.owaspConfidence": result.confidence,
-    "vulnerabilities.$.owaspRationale": result.rationale,
-    "vulnerabilities.$.owaspMappedAt": new Date(),
-    "vulnerabilities.$.updatedAt": new Date(),
-  };
-  const wstg = getWstgTest(wstgId);
-  if (wstg) {
-    update["vulnerabilities.$.wstgId"] = wstg.id;
-    update["vulnerabilities.$.wstgTitle"] = wstg.title;
-    update["vulnerabilities.$.wstgCategory"] = wstg.category;
-  }
-  await SessionsModel.updateOne(
-    { sessionId, "vulnerabilities.vulnerabilityId": vulnerabilityId },
-    { $set: update },
-  );
-}
 
 export default mapFindingOwasp;

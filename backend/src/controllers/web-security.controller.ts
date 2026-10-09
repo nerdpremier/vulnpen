@@ -17,9 +17,11 @@ import {
   listRuns,
   stopRun,
 } from "../services/web-security/run-queue.service";
-import { applyOwaspMapping, mapUnclassifiedVulnerabilities } from "../services/vulnerability.service";
+import { applyOwaspMapping, refreshOwaspClassifications } from "../services/vulnerability.service";
 import {
   addCatalogueCases,
+  caseRemovalError,
+  caseUpdateError,
   computeCoverage,
   createTestPlan,
   normalizePlanGenerateInput,
@@ -45,14 +47,11 @@ import {
 } from "../services/web-security/report-docx.service";
 import { buildWordEditorUrl, resolveWopiToken } from "../services/web-security/wopi.service";
 import {
-  OWASP_TOP10_2025,
-  OWASP_TOP10_2025_SOURCE,
-  OWASP_TOP10_2025_VERSION,
   WSTG_CATEGORIES,
   WSTG_SOURCE,
   WSTG_TESTS,
   WSTG_VERSION,
-  computeOwaspCoverage,
+  normalizeCwe,
 } from "../knowledge";
 
 function catalogPayload() {
@@ -201,7 +200,17 @@ export const updateTestCaseStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ message: `Unsupported test status: ${body.status}` });
     }
 
-    const updated = updateTestCase(plan, testId, normalizeTestCasePatch(body));
+    const patch = normalizeTestCasePatch(body);
+    // The same invariant the agent's update_case enforces: a case may not be
+    // marked "failed" without a finding linked to it, or the report claims a
+    // vulnerability that cannot be traced. Applying it only on the agent path
+    // let the UI create the desync the service documents against.
+    const refusal = caseUpdateError(plan, testId, patch);
+    if (refusal) {
+      return res.status(409).json({ message: refusal });
+    }
+
+    const updated = updateTestCase(plan, testId, patch);
     if (!updated) {
       return res.status(404).json({ message: `${testId} is not part of this test plan` });
     }
@@ -229,6 +238,11 @@ export const removeTestCase = async (req: Request, res: Response) => {
     const plan = (session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
     if (!plan?.cases?.length) {
       return res.status(404).json({ message: "No WSTG test plan exists for this session" });
+    }
+
+    const removalRefusal = caseRemovalError(plan, [testId]);
+    if (removalRefusal) {
+      return res.status(409).json({ message: removalRefusal });
     }
 
     const removed = removeCase(plan, testId);
@@ -280,6 +294,11 @@ export const removeTestCases = async (req: Request, res: Response) => {
       return res
         .status(400)
         .json({ message: "Provide testIds to remove, or the category to clear" });
+    }
+
+    const removalRefusal = caseRemovalError(plan, testIds);
+    if (removalRefusal) {
+      return res.status(409).json({ message: removalRefusal });
     }
 
     const removed = removeCases(plan, testIds);
@@ -444,6 +463,7 @@ export const getReport = async (req: Request, res: Response) => {
       .lean();
     if (!refreshed) return res.status(404).json({ message: "Session not found" });
 
+    const testPlan = (refreshed.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
     const reportOptions = {
       session: {
         sessionId,
@@ -451,8 +471,13 @@ export const getReport = async (req: Request, res: Response) => {
         description: refreshed.description ?? "",
         createdAt: refreshed.createdAt as unknown as Date,
       },
+      // Without these the scope section always rendered "No scope statement was
+      // recorded in this session" even when the plan held one: the agent tool
+      // passes them, this handler never did.
+      target: testPlan?.target,
+      scope: testPlan?.scope,
       vulnerabilities: (refreshed.vulnerabilities ?? []) as SessionVulnerabilityDoc[],
-      testPlan: (refreshed.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
+      testPlan,
     };
     const report = buildWebAppPentestReport(reportOptions);
 
@@ -475,43 +500,6 @@ export const getReport = async (req: Request, res: Response) => {
   }
 };
 
-export const getOwaspCoverage = async (req: Request, res: Response) => {
-  try {
-    const userId = res.locals.userId;
-    const { sessionId } = req.params;
-    const session = await requireActiveSession(userId, sessionId, res);
-    if (!session) return;
-
-    const refreshed = await SessionsModel.findOne({ sessionId, uid: userId })
-      .select("vulnerabilities webAppTestPlan")
-      .lean();
-    const vulnerabilities = (refreshed?.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
-    const coverage = computeOwaspCoverage(vulnerabilities);
-    const findingsByCategory = new Map(coverage.byOwasp.map((row) => [row.id, row.findings]));
-
-    return res.status(200).json({
-      framework: {
-        version: OWASP_TOP10_2025_VERSION,
-        source: OWASP_TOP10_2025_SOURCE,
-        categories: OWASP_TOP10_2025.map((category) => ({
-          id: category.id,
-          rank: category.rank,
-          title: category.title,
-          summary: category.summary,
-          cwes: category.cwes,
-          wstgFocus: category.wstgFocus,
-          findings: findingsByCategory.get(category.id) ?? 0,
-        })),
-      },
-      totalFindings: coverage.total,
-      unmappedFindings: coverage.unmapped,
-    });
-  } catch (err: any) {
-    console.error("[web-security] owasp coverage error:", err);
-    return res.status(500).json({ message: "Failed to load OWASP Top 10:2025 coverage" });
-  }
-};
-
 export const mapVulnerability = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
@@ -524,35 +512,27 @@ export const mapVulnerability = async (req: Request, res: Response) => {
     );
     if (!target) return res.status(404).json({ message: "Vulnerability not found" });
 
-    const body = req.body ?? {};
-    const apply = body.apply !== false;
-    const mapping = mapFindingToOwaspTop10({
-      title: body.title ?? target.title,
-      description: body.description ?? target.description,
-      contextSummary: target.contextSummary,
-      evidence: body.evidence ?? target.evidence,
-      endpoint: target.endpoint,
-      service: target.service,
-      cwe: body.cwe ?? target.cwe,
-      wstgId: body.wstgId ?? body.wstg_id ?? target.wstgId,
-      owaspTop10: body.owaspTop10 ?? body.owasp_top10 ?? target.owaspTop10,
-    });
+    // The category is never chosen here — it is looked up. A caller may supply a
+    // corrected CWE (the tester fixing the weakness id), which is stored on the
+    // finding so the derived category and the finding agree from then on.
+    const suppliedCwe = normalizeCwe(req.body?.cwe);
+    const cwe = suppliedCwe || target.cwe;
+    const mapping = mapFindingToOwaspTop10({ cwe });
 
     let vulnerability = target;
-    if (apply && mapping.primary) {
+    if (mapping.primary) {
       const patch = await applyOwaspMapping(
         sessionId,
         vulnerabilityId,
         mapping,
-        target,
-        body.wstgId ?? body.wstg_id ?? target.wstgId,
+        suppliedCwe ? { cwe: suppliedCwe } : {},
       );
       vulnerability = { ...target, ...patch } as SessionVulnerabilityDoc;
     }
 
     return res.status(200).json({
       mapping: { ...mapping, description: describeOwaspMapping(mapping) },
-      applied: apply && !!mapping.primary,
+      applied: !!mapping.primary,
       vulnerability,
     });
   } catch (err: any) {
@@ -561,6 +541,7 @@ export const mapVulnerability = async (req: Request, res: Response) => {
   }
 };
 
+/** Re-derive every finding's OWASP classification from its CWE. */
 export const remapAllVulnerabilities = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
@@ -568,7 +549,7 @@ export const remapAllVulnerabilities = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    const mapped = await mapUnclassifiedVulnerabilities(
+    const mapped = await refreshOwaspClassifications(
       sessionId,
       (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[],
     );

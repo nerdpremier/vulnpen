@@ -107,8 +107,8 @@ without a resize observer.
   comparable because every row scales against the same maximum.
 - `DonutChart` — a part-of-whole split with the total in the hole, which is the
   one thing a pie does better than a bar.
-- `RadarChart` — coverage across ordered categories (the ten WSTG chapters). The
-  *outline* answers "where are we thin?", which ten separate rows ask the reader
+- `RadarChart` — coverage across ordered categories (the twelve WSTG chapters). The
+  *outline* answers "where are we thin?", which twelve separate rows ask the reader
   to reconstruct.
 - `GaugeArc` — a single score against its ceiling (a CVSS base score, a
   confidence, a completion ratio).

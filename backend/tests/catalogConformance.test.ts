@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   OWASP_TOP10_2025,
+  OWASP_TOP10_2025_CWE_TOTAL,
+  WSTG_TESTS,
   cvssBaseScore,
   cvssVectorString,
   cvssV2BaseScore,
@@ -11,14 +13,17 @@ import {
   computeCvssBase,
   cvssQualitativeRating,
   normalizeCvssBaseMetrics,
+  normalizeCwe,
+  owaspCategoriesForCwe,
   parseCvssVector,
   severityFromCvssScore,
   type CvssBaseMetrics,
 } from "../src/knowledge";
 import { toolRegistry } from "../src/tools/registry";
+import { allCapabilities } from "../src/capabilities/registry";
 import {
   OWASP_TOP10_2025_CWE_PROVENANCE,
-  WSTG_OWASP_CROSSWALK_PROVENANCE,
+  WSTG_V42_CATALOGUE_PROVENANCE,
 } from "../src/knowledge/provenance";
 import { mapFindingToOwaspTop10 } from "../src/services/web-security/owasp-mapping.service";
 import {
@@ -68,24 +73,113 @@ test("the catalog carries the official CWEs, not the pre-audit approximations", 
   assert.ok(!OWASP_TOP10_2025.some((category) => category.cwes.includes("CWE-937")));
 });
 
+test("the published CWE lists are disjoint, so CWE -> category is single-valued", () => {
+  // This is the property the whole classifier rests on: if a CWE appeared under
+  // two categories there would be no official answer to look up. It is not a
+  // convention we adopted — it is how OWASP published the 2025 lists.
+  const seen = new Map<string, string>();
+  for (const category of OWASP_TOP10_2025) {
+    for (const cwe of category.cwes) {
+      const owner = seen.get(cwe);
+      assert.equal(
+        owner,
+        undefined,
+        `${cwe} is listed under both ${owner} and ${category.id}`,
+      );
+      seen.set(cwe, category.id);
+    }
+  }
+  assert.equal(seen.size, OWASP_TOP10_2025_CWE_TOTAL);
+  assert.equal(OWASP_TOP10_2025_CWE_TOTAL, 249);
+
+  // And the index agrees with the lists it was built from.
+  for (const [cwe, category] of seen) {
+    assert.deepEqual(owaspCategoriesForCwe(cwe), [category], cwe);
+    assert.deepEqual(owaspCategoriesForCwe(cwe.toLowerCase()), [category], cwe);
+  }
+});
+
+test("a CWE outside the published lists yields no category at all", () => {
+  // CWE-134 (format string) is a real weakness that none of the ten 2025 lists
+  // contains. The honest answer is "no official category", not a nearest match.
+  assert.deepEqual(owaspCategoriesForCwe("CWE-134"), []);
+  assert.deepEqual(owaspCategoriesForCwe("not-a-cwe"), []);
+  assert.equal(normalizeCwe("cwe_89"), "CWE-89");
+});
+
+test("the WSTG catalogue is the published v4.2 case list, with no classification", () => {
+  assert.equal(WSTG_TESTS.length, 97);
+  assert.equal(WSTG_V42_CATALOGUE_PROVENANCE.kind, "official");
+  assert.match(WSTG_V42_CATALOGUE_PROVENANCE.repository, /tag v4\.2/);
+  for (const wstg of WSTG_TESTS) {
+    assert.ok(!("owasp" in wstg) && !("cwe" in wstg), `${wstg.id} carries a classification`);
+  }
+});
+
+test("every tool a WSTG case names is one the box actually has", () => {
+  // `tools` is a curated list, not an OWASP publication (the guide's own
+  // `## Tools` section covers only 55 of the 97 cases and is prose). What it
+  // must never do is name something that does not exist — the frontend used to
+  // label a `magnitude_browser` tool that was never registered. A name is valid
+  // only as a registered agent tool or as a capability the box can provide.
+  const agentTools = new Set(toolRegistry.getAll().map((tool) => tool.name));
+  const capabilities = new Set(allCapabilities.map((capability) => capability.name));
+
+  const unknown: string[] = [];
+  for (const wstg of WSTG_TESTS) {
+    assert.ok(wstg.tools.length > 0, `${wstg.id} names no tool at all`);
+    for (const tool of wstg.tools) {
+      if (!agentTools.has(tool) && !capabilities.has(tool)) {
+        unknown.push(`${wstg.id} -> ${tool}`);
+      }
+    }
+  }
+  assert.deepEqual(unknown, [], `WSTG cases name tools the box does not have:\n${unknown.join("\n")}`);
+});
+
+test("the capabilities cover the tools WSTG v4.2 recommends", () => {
+  // The sections of the guide whose entire `## Tools` list the box was missing.
+  // Each entry is the tool that closes one of them; if one is dropped from the
+  // registry the guide's advice silently becomes unreachable again.
+  const closing: Record<string, string> = {
+    "OWASP ZAP (4.4.6, 4.5.3, 4.6.3, 4.7.4)": "zaproxy",
+    "directory traversal (4.5.1)": "dotdotpwn",
+    "padding oracle (4.9.2)": "padbuster",
+    "cloud storage (4.2.11)": "awscli",
+    "file permissions (4.2.9)": "namei",
+    "GraphQL (4.12.1)": "inql",
+  };
+  for (const [area, name] of Object.entries(closing)) {
+    assert.ok(
+      allCapabilities.some((capability) => capability.name === name),
+      `no capability closes ${area} (expected "${name}")`,
+    );
+  }
+});
+
 test("the reference data records its provenance", () => {
   assert.equal(OWASP_TOP10_2025_CWE_PROVENANCE.kind, "official");
   assert.match(OWASP_TOP10_2025_CWE_PROVENANCE.retrieved, /^\d{4}-\d{2}-\d{2}$/);
-  assert.equal(WSTG_OWASP_CROSSWALK_PROVENANCE.kind, "curated");
-  assert.ok(WSTG_OWASP_CROSSWALK_PROVENANCE.basis.includes("OWASP does not publish"));
+  assert.equal(OWASP_TOP10_2025_CWE_PROVENANCE.url, "https://owasp.org/Top10/2025/");
+  assert.equal(WSTG_V42_CATALOGUE_PROVENANCE.kind, "official");
+  assert.ok(
+    WSTG_V42_CATALOGUE_PROVENANCE.note.includes("no CWE or Top 10 mapping"),
+    "the provenance must state that OWASP publishes no test-case mapping",
+  );
 });
 
-test("mapping states an honest provenance for every source", () => {
-  assert.equal(mapFindingToOwaspTop10({ owaspTop10: "A01:2025" }).provenance, "tester");
+test("every mapping is official, and only a CWE can produce one", () => {
+  const mapped = mapFindingToOwaspTop10({ cwe: "CWE-918" });
+  assert.equal(mapped.primary, "A01:2025");
+  assert.equal(mapped.provenance, "official");
+  assert.equal(mapped.source, "cwe");
 
-  const wstg = mapFindingToOwaspTop10({ wstgId: "WSTG-INPV-05" });
-  assert.equal(wstg.provenance, "curated");
-  assert.ok(
-    !/OWASP Top 10:2025 mapping of WSTG/.test(wstg.rationale),
-    "the rationale must not claim OWASP authorship of the crosswalk",
+  // Neither a WSTG case nor free text can produce a classification any more.
+  assert.equal(mapFindingToOwaspTop10({ wstgId: "WSTG-INPV-05" }).primary, undefined);
+  assert.equal(
+    mapFindingToOwaspTop10({ title: "SQL injection in the product search" }).primary,
+    undefined,
   );
-
-  assert.equal(mapFindingToOwaspTop10({ cwe: "CWE-918" }).provenance, "official");
 });
 
 test("evidence is masked in the report", () => {
