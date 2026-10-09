@@ -64,6 +64,7 @@ import {
   estimatePromptTokens,
   estimateToolSchemaTokens,
 } from "../src/services/context.service";
+import { getModelContextLimit, getModelMaxOutput } from "../src/utils/modelMetadata";
 
 function turn(i: number, chars: number): AgentMessageDoc {
   return doc({
@@ -78,6 +79,10 @@ function turn(i: number, chars: number): AgentMessageDoc {
 // budget decision states the window it means instead of inheriting whatever
 // model happens to be configured. 36k gives the historical 18k working set.
 const TEST_MODEL_LIMIT = 36_000;
+
+// The model this deployment is configured with (/srv/data/model-registry.json),
+// which is what the window and output-ceiling assertions below are about.
+const MODEL_REGISTRY_MODEL = "oc/muse-spark-1.3-contributor-free";
 function planWith(
   msgs: AgentMessageDoc[],
   lastPromptTokens?: number,
@@ -362,6 +367,30 @@ test("the working set is a reserve off the window, not a fixed ceiling", async (
   );
   assert.equal(narrow.shouldCompact, true, "the same history must compact on a 32k model");
   assert.equal(wide.shouldCompact, false, "a 128k model keeps it verbatim");
+});
+
+test("the configured model's window plans a working set at ~80%", () => {
+  const configured = MODEL_REGISTRY_MODEL;
+  const limit = getModelContextLimit(configured);
+  assert.equal(limit, 200_000, "the configured model's window");
+  assert.equal(
+    workingSetBudget(limit),
+    limit - COMPACTION_TUNING.WORKING_SET_RESERVE_TOKENS,
+    "the reserve is what the trigger is built from",
+  );
+  assert.equal(Math.round((workingSetBudget(limit) / limit) * 100), 80);
+});
+
+test("the reserve matches the output ceiling we send with every request", () => {
+  // The promise the reserve is built on: the next turn must have at least as much
+  // room to answer as the provider will let it use. Change the model's output
+  // ceiling and this fails until the reserve follows.
+  const ceiling = getModelMaxOutput(MODEL_REGISTRY_MODEL);
+  assert.equal(ceiling, 32_000, "max output tokens for the configured model");
+  assert.equal(
+    COMPACTION_TUNING.WORKING_SET_RESERVE_TOKENS,
+    ceiling! + COMPACTION_TUNING.WORKING_SET_RESERVE_MARGIN_TOKENS,
+  );
 });
 
 test("a small window keeps its reserve proportional instead of losing its working set", () => {

@@ -12,6 +12,7 @@ import {
   isAnthropicApiProvider,
 } from "./provider-config";
 import { resolveInvocationProvider } from "./orchestrator";
+import { getModelMaxOutput } from "../modelMetadata";
 import {
   assertCompletionChoices,
   buildCompletionConfig,
@@ -295,6 +296,7 @@ export async function runOpenAIResponsesStream(
   // Raw client: observeOpenAI maps Responses API params poorly (no `messages` in trace input).
   // We record a manual generation with Chat Completions–shaped input instead.
   const { instructions, input } = openaiToResponsesInput(opts.messages);
+  const maxOutputTokens = getModelMaxOutput(config.model);
   const responsesTools = openaiToResponsesTools(opts.tools);
 
   const params: any = {
@@ -304,6 +306,7 @@ export async function runOpenAIResponsesStream(
     reasoning: { effort: reasoningMode, summary: "auto" },
     ...(instructions ? { instructions } : {}),
     ...(responsesTools ? { tools: responsesTools, tool_choice: "auto" } : {}),
+    ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
   };
 
   console.log(

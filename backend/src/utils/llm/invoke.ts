@@ -13,6 +13,7 @@ import {
   isAnthropicApiProvider,
 } from "./provider-config";
 import { resolveInvocationProvider } from "./orchestrator";
+import { getModelMaxOutput } from "../modelMetadata";
 import { toolCallArguments } from "../toolArguments";
 import type {
   FinishReason,
@@ -148,6 +149,12 @@ export function buildCompletionConfig(
   if (stream) {
     params.stream_options = { include_usage: true };
   }
+
+  // Only sent for models whose output ceiling we actually know: a wrong
+  // max_tokens is rejected outright by some providers, and leaving it unset is
+  // precisely how every model behaved before this table existed.
+  const maxOutput = getModelMaxOutput(config.model);
+  if (maxOutput) params.max_tokens = maxOutput;
 
   if (opts.tools?.length) {
     params.tools = opts.tools;

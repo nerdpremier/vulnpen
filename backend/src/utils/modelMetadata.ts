@@ -81,6 +81,18 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "MiniMax-M2.5-highspeed": 204_800,
   "MiniMax-M2.7": 204_800,
   "MiniMax-M2.7-highspeed": 204_800,
+  "muse-spark-1.3": 200_000,
+};
+
+// The most the model may write back in one turn. This is not a tuning knob: it is
+// the promise the compaction reserve in services/compaction.service.ts is built
+// on (a prompt must never leave the next turn less room than the provider will
+// let it use), so the two are asserted to be in step. A model with no entry here
+// is asked for no `max_tokens` at all, which is what every model did before this
+// table existed.
+// Keep the most specific identifiers first, as above.
+export const MODEL_MAX_OUTPUT_TOKENS: Record<string, number> = {
+  "muse-spark-1.3": 32_000,
 };
 
 export const DEFAULT_CONTEXT_LIMIT = 128_000;
@@ -95,4 +107,14 @@ export function getModelContextLimit(model: string): number {
     SORTED_CONTEXT_LIMITS.find(([key]) => normalized.includes(key))?.[1] ??
     DEFAULT_CONTEXT_LIMIT
   );
+}
+
+const SORTED_MAX_OUTPUT_TOKENS = Object.entries(MODEL_MAX_OUTPUT_TOKENS).sort(
+  ([a], [b]) => b.length - a.length,
+);
+
+/** The model's own output ceiling, or undefined when we do not know it. */
+export function getModelMaxOutput(model: string): number | undefined {
+  const normalized = normalizeModelId(model);
+  return SORTED_MAX_OUTPUT_TOKENS.find(([key]) => normalized.includes(key))?.[1];
 }

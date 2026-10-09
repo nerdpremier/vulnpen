@@ -215,15 +215,21 @@ Handlers take a `SlashReply` (`ok`/`fail`/`sessionMissing`/`ack`/`stream`),
 never a raw `SSEWriter` — forget one `end()` and the HTTP stream hangs open.
 The session lookup shares that shape: handlers that read the session go
 through the handler ctx's `loadSession` (lookup + `sessionMissing` guard in
-one place, errors left to `executeSlashCommand`'s catch); only `/map` and
-`/report` keep their own `select()` projections, with the same
-missing-session guard.
+one place, errors left to `executeSlashCommand`'s catch). A command earns its
+place only when no page and no tool already does the same thing.
 
 **Context budget** — the per-run compaction state machine in
 `services/compaction.service.ts` (`ContextBudget`): the cached prompt size, the
 plan decision, and the invariant that a compaction resets the cached size to
 the post-compaction projection (the anti-thrashing guard against
-summarize → one tool → summarize loops).
+summarize → one tool → summarize loops). The working set it plans against is a
+RESERVE off the model's context window (`workingSetBudget`), never one fixed
+number for every model: the reserve is the model's own output ceiling — the
+`max_tokens` sent with every request (`MODEL_MAX_OUTPUT_TOKENS`) — plus a margin
+for the estimate's error, so the invariant is the room the next turn needs to
+answer, and the percentage falls where that puts it (~80% of the configured
+200k window). A wide-context model therefore pays for fewer, less lossy
+summaries.
 
 **VNC config** — the stored VNC settings (`VNC_*` env keys), owned by
 `services/vnc-provisioning.service.ts`: `getVncConfig` (the one
@@ -306,7 +312,7 @@ staleness window (`isStaleMessage`), tool-result/args caps
 replay window, and the conversation input bounding for LLM calls that receive
 the whole history (`boundedConversationText`). The first three live in
 `services/context.service.ts` (with the token estimator, `messagesToOpenAI`,
-and the /summarize and /export projections); `boundedConversationText` lives
+and the /summarize projection); `boundedConversationText` lives
 in `services/compaction.service.ts` beside the summarizer that built it. Never
 write the caps or the window arithmetic a second time — `estimateMessageTokens`
 and `messagesToOpenAI` share these helpers so the budget can never drift from
