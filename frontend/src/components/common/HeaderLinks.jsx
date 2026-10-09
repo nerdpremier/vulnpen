@@ -16,6 +16,7 @@ import {
 
 import { logout } from "@/store/user.slice";
 import SettingsOverlay from "./SettingsOverlay";
+import { useHeaderActions } from "./HeaderActions";
 
 /** First letters of the display name, for the account avatar. */
 const initialsOf = (name) => {
@@ -49,6 +50,9 @@ const HeaderLinks = ({
   const { message } = App.useApp();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState(null);
+  // A page mounts its buttons here so they ride in the header beside the
+  // breadcrumb instead of taking a band above the body.
+  const { slot: headerActions } = useHeaderActions() ?? {};
 
   const handleOpenSettings = useCallback((e) => {
     const tab = e.detail?.tab || null;
@@ -140,6 +144,10 @@ const HeaderLinks = ({
             </>
           )}
         </div>
+
+        {sessionId && headerActions ? (
+          <div className={styles.headerActions}>{headerActions}</div>
+        ) : null}
 
         {!sessionId && (
           <div className={styles.options}>

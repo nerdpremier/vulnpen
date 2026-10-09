@@ -31,7 +31,7 @@ import {
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import { getDataDir } from "../../utils/loadConfig";
 import type { WebAppTestPlanDoc, SessionVulnerabilityDoc } from "../../models/Sessions/Sessions.model";
-import { buildClientReport, type ClientFinding, type ClientReport } from "./client-report.service";
+import { buildDraftReport, buildClientReport, type ClientFinding, type ClientReport } from "./client-report.service";
 
 const THAI_FONT = "TH Sarabun New";
 const HEADER_BLUE = "4472C4";
@@ -111,11 +111,11 @@ const detailTable = (pairs: [string, string][]) =>
     ),
   });
 
-function findingCard(finding: ClientFinding, index: number) {
+function findingCard(finding: ClientFinding) {
   const fill = BAND_FILL[finding.band] ?? BAND_FILL.grey;
   const color = BAND_TEXT[finding.band] ?? "FFFFFF";
   const children: (Paragraph | Table)[] = [
-    heading(`6.${index + 1} ${finding.code} — ${finding.title}`, HeadingLevel.HEADING_2),
+    heading(`${finding.code} — ${finding.title}`, HeadingLevel.HEADING_2),
     detailTable([
       ["หัวข้อ :", `${finding.code} — ${finding.title}`],
       ["OWASP Top 10:2025 :", finding.owasp],
@@ -181,7 +181,7 @@ function findingCard(finding: ClientFinding, index: number) {
   return children;
 }
 
-function blockToDocx(block: ClientReport["body"][number], findingCounter: { count: number }) {
+function blockToDocx(block: ClientReport["body"][number]) {
   switch (block.type) {
     case "h1":
       return [heading(block.text, HeadingLevel.HEADING_1)];
@@ -198,7 +198,7 @@ function blockToDocx(block: ClientReport["body"][number], findingCounter: { coun
     case "table":
       return [tableFrom(block.headers, block.rows), body("")];
     case "finding":
-      return findingCard(block.finding, findingCounter.count++);
+      return findingCard(block.finding);
     default:
       return [];
   }
@@ -206,7 +206,6 @@ function blockToDocx(block: ClientReport["body"][number], findingCounter: { coun
 
 export async function buildClientDocx(client: ClientReport): Promise<Buffer> {
   const { frontMatter, body: blocks } = client;
-  const findingCounter = { count: 0 };
 
   const cover = [
     ...Array.from({ length: 6 }, () => new Paragraph({ children: [] })),
@@ -249,7 +248,7 @@ export async function buildClientDocx(client: ClientReport): Promise<Buffer> {
     new Paragraph({ children: [new PageBreak()] }),
   ];
 
-  const bodyChildren = blocks.flatMap((block) => blockToDocx(block, findingCounter));
+  const bodyChildren = blocks.flatMap((block) => blockToDocx(block));
 
   const doc = new Document({
     numbering: {
@@ -289,6 +288,66 @@ export async function buildClientDocx(client: ClientReport): Promise<Buffer> {
           }),
         },
         children: [...cover, ...frontMatterChildren, ...bodyChildren],
+      },
+    ],
+  });
+
+  return Packer.toBuffer(doc);
+}
+
+/**
+ * The draft report: the findings, and nothing else.
+ *
+ * No cover, no document-details / abbreviations / history / tester tables, no
+ * table of contents, no terms, no page-numbering front matter — just a one-line
+ * heading, the summary the tester reads first, and one section per finding. It
+ * is the same evidence the formal report carries, so a draft can be handed
+ * around while the full document is still being shaped.
+ */
+export async function buildDraftDocx(client: ClientReport): Promise<Buffer> {
+  const { frontMatter, body: blocks } = client;
+
+  const header = [
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: frontMatter.cover.titleLines[0] ?? "รายงานช่องโหว่",
+          font: THAI_FONT,
+          size: 40,
+          bold: true,
+        }),
+      ],
+      spacing: { after: 120 },
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: `ฉบับร่างสำหรับ ${frontMatter.cover.client} — สรุปช่องโหว่ที่ตรวจพบ`,
+          font: THAI_FONT,
+          size: 26,
+          color: "595959",
+        }),
+      ],
+      spacing: { after: 240 },
+    }),
+  ];
+
+  const bodyChildren = blocks.flatMap((block) => blockToDocx(block));
+
+  const doc = new Document({
+    numbering: {
+      config: [
+        {
+          reference: "client-goals",
+          levels: [{ level: 0, format: "decimal", text: "%1.", alignment: AlignmentType.START }],
+        },
+      ],
+    },
+    styles: { default: { document: { run: { font: THAI_FONT, size: 32 } } } },
+    sections: [
+      {
+        properties: {},
+        children: [...header, ...bodyChildren],
       },
     ],
   });
@@ -401,6 +460,36 @@ export async function ensureReportDocx(
   fs.writeFileSync(filePath, buffer);
   fs.writeFileSync(reportMetaPath(sessionId), JSON.stringify({ signature, editedByWord: false, fileName: client.fileName }));
   return { filePath, fileName: client.fileName };
+}
+
+/**
+ * Build the draft .docx on demand. It is never stored as the working document
+ * (Collabora edits the formal report), so every call rebuilds it from the
+ * engagement's current findings — a draft that lagged behind the results would
+ * be worse than no draft.
+ */
+export async function buildDraftReportDocx(
+  sessionId: string,
+  uid: unknown,
+): Promise<{ buffer: Buffer; fileName: string }> {
+  const refreshed = await SessionsModel.findOne({ sessionId, uid })
+    .select("name description createdAt vulnerabilities webAppTestPlan")
+    .lean();
+  if (!refreshed) throw new Error("Session not found");
+
+  const client = buildDraftReport({
+    session: {
+      sessionId,
+      name: refreshed.name ?? "Engagement",
+      description: refreshed.description ?? "",
+      createdAt: refreshed.createdAt as unknown as Date,
+    },
+    vulnerabilities: (refreshed.vulnerabilities ?? []) as SessionVulnerabilityDoc[],
+    testPlan: (refreshed.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
+  });
+
+  const buffer = await buildDraftDocx(client);
+  return { buffer, fileName: client.fileName };
 }
 
 export function findSoffice(): string | null {

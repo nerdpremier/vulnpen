@@ -127,84 +127,9 @@
   border-radius: 10px;
 }
 
-.groupHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.65rem;
-}
-
-.groupToggle {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 0.55rem;
-  min-width: 0;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  background: none;
-  border: 0;
-  cursor: pointer;
-
-  &:hover .groupName {
-    color: #fff;
-  }
-
-  &:focus-visible {
-    outline: 1px solid var(--moon-text-dim);
-    outline-offset: 2px;
-  }
-}
-
-.chevron {
-  color: var(--moon-text-dim);
-  font-size: 0.66rem;
-  transition: transform 0.15s ease;
-}
-
-
-
-.groupCode {
-  color: var(--moon-text-dim);
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.72rem;
-  font-weight: 400;
-}
-
-.groupName {
-  overflow: hidden;
-  color: #f2f2f2;
-  font-size: 0.84rem;
-  font-weight: 400;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.groupCount {
-  flex-shrink: 0;
-  color: var(--moon-text-dim);
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.7rem;
-}
-
 /* One segment per outcome, sharing the row width by count. The track behind
    them is the work the chapter has not reached, so the bar is the whole
    chapter, not just the settled part. */
-.groupBar {
-  display: flex;
-  flex-shrink: 0;
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 90px;
-  max-width: 240px;
-  height: 6px;
-  overflow: hidden;
-  background: var(--moon-surface-3);
-  border-radius: 999px;
-}
-
 .groupSeg {
   display: block;
   height: 100%;
@@ -325,15 +250,34 @@
 .statusTonePassed :global(.ant-select-selection-item) { color: var(--moon-success); }
 .statusToneFailed :global(.ant-select-selection-item) { color: var(--moon-danger); }
 .statusToneBlocked :global(.ant-select-selection-item) { color: var(--moon-high); }
+/* The plan's checkboxes: dark recess at rest; when marked, a light fill with a
+   dark tick — antd's own tick is white, so without the recolour a checked box
+   is a blank white blob on this theme. */
 .caseTable :global(.ant-checkbox-inner) {
   background: var(--moon-surface-2);
-  border-color: #3a3a3a;
+  border-color: var(--moon-line-2);
+  border-radius: 4px;
+  transition:
+    background var(--moon-dur-2) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.caseTable :global(.ant-checkbox:hover .ant-checkbox-inner) {
+  border-color: var(--moon-line-3);
 }
 
 .caseTable :global(.ant-checkbox-checked .ant-checkbox-inner),
 .caseTable :global(.ant-checkbox-indeterminate .ant-checkbox-inner) {
-  background: var(--moon-text-dim);
-  border-color: var(--moon-text-dim);
+  background: var(--moon-accent);
+  border-color: var(--moon-accent);
+}
+
+.caseTable :global(.ant-checkbox-checked .ant-checkbox-inner::after) {
+  border-color: var(--moon-accent-ink);
+}
+
+.caseTable :global(.ant-checkbox-indeterminate .ant-checkbox-inner::after) {
+  background: var(--moon-accent-ink);
 }
 
 // --- Plan setup modal -----------------------------------------------
@@ -577,11 +521,17 @@
   }
 }
 
-/* The header row is tightest here, and the name needs the room more than the
-   bar does — the count beside it still carries the ratio. */
+/* One column: the bar gives up its side-by-side seat and runs full width under
+   the name, so long chapter names keep their room. */
 @include responsive(tablet3) {
-  .groupBar {
-    display: none;
+  .chapterRow {
+    grid-template-columns: minmax(0, 1fr) 2.6rem;
+    row-gap: 0.4rem;
+  }
+
+  .chapterProgress {
+    grid-column: 1 / -1;
+    padding-left: 1.1rem;
   }
 }
 
@@ -599,10 +549,6 @@
   .header,
   .toolbar {
     flex-direction: column;
-  }
-
-  .headerActions {
-    width: 100%;
   }
 
   .search {
@@ -624,32 +570,16 @@
   }
 }/* ============================================================================
    WSTG TEST PLAN - Lunar Monochrome
+   The page frame, its scroll region and its measure belong to PageShell now;
+   this module owns only what sits inside it.
    ========================================================================== */
-.page {
-  width: 100%;
-  max-width: var(--moon-page-max);
-  height: 100%;
-  margin: 0 auto;
-  box-sizing: border-box;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 1.75rem 2rem 3rem;
-  background: transparent;
-  color: var(--moon-text);
-
-  @include responsive(tablet3) {
-    padding: 1.25rem 1rem 2.5rem;
-  }
-}
 
 .header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 2rem;
-  margin-bottom: 1.2rem;
+  margin-bottom: 1rem;
 
   h1 {
     margin: 0.3rem 0 0.4rem;
@@ -666,6 +596,18 @@
   }
 }
 
+.headings {
+  min-width: 0;
+}
+
+.lead {
+  max-width: 62ch;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--moon-text-mute);
+}
+
 .eyebrow {
   @include eyebrow;
 }
@@ -675,105 +617,289 @@
   font-size: 0.75rem;
 }
 
-/* The engagement boundary as chips: the same two facts the overview shows the
-   same way, instead of a sentence that spells them out. */
-.scopeChips {
+/* The engagement boundary, read as facts rather than prose: the target and the
+   scope keep their labels and their values on one line each, so the header says
+   what is being tested without a sentence. */
+.engagement {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 34ch;
+  flex-shrink: 0;
+
+  @include responsive(tablet3) {
+    max-width: none;
+  }
+}
+
+.engagementFact {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
   min-width: 0;
 }
 
-.scopeChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  max-width: 46ch;
-  padding: 0.2rem 0.6rem;
-  color: var(--moon-text-dim);
-  font-size: 0.75rem;
-  background: var(--moon-surface-2);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-pill);
-}
-
-.scopeChipLabel {
-  @include eyebrow;
+.engagementLabel {
+  flex: none;
+  width: 3.4rem;
+  font-family: "JetBrains Mono", monospace;
   font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--moon-text-faint);
 }
 
-.scopeChipValue {
+.engagementValue {
   min-width: 0;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  color: var(--moon-text-dim);
   @include truncate(1);
 }
 
-.headerActions {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+/* The outcomes card is a full-width 3D terrain: the towers draw the plan, and
+   the chapter headers in the table below name and manage its parts. */
+.outcomes {
+  margin-bottom: 0.9rem;
 }
 
-/* One overview of outcome proportions; the per-chapter bars below locate gaps. */
-.coverage {
-  margin-bottom: 0.9rem;
-  padding: 1.15rem 1.25rem;
-  background: linear-gradient(145deg, var(--moon-surface-2), var(--moon-surface-1));
+/* The terrain is the tallest thing on the page and the part the operator
+   drags; it gets the whole width and the room for a horizon. */
+.outcomeStage {
+  position: relative;
+  height: 24rem;
   border: 1px solid var(--moon-line-1);
   border-radius: var(--moon-radius-lg);
-  box-shadow: var(--moon-inner-top);
+  background: radial-gradient(120% 120% at 50% 0%, var(--moon-surface-2), var(--moon-void));
+  overflow: hidden;
+  @include terminal-panel;
 }
 
-.outcomeHeading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  margin-bottom: 1rem;
+.terrainCanvas {
+  position: absolute;
+  inset: 0;
 
-  h2 {
-    margin: 0.3rem 0 0;
-    font-size: 1.08rem;
-    font-weight: 500;
+  canvas {
+    display: block;
+    touch-action: none;
+  }
+}
+
+/* The plan's headline figure, in the low-left corner where the towers leave a
+   gap — clear of both the tower labels, which sit along the base line. */
+.terrainReadout {
+  position: absolute;
+  left: 1.15rem;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  pointer-events: none;
+}
+
+.terrainPercent {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1.9rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-text);
+  text-shadow: var(--moon-glow-text);
+}
+
+.terrainPercentMark {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--moon-text-faint);
+  text-shadow: none;
+}
+
+.terrainCount {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-text-mute);
+
+  b {
+    font-weight: 600;
     color: var(--moon-text);
   }
 }
 
-.outcomeTotal {
-  font-size: 0.8rem;
-  color: var(--moon-text-mute);
-  font-variant-numeric: tabular-nums;
-
-  strong { font-size: 1.4rem; font-weight: 500; color: var(--moon-text); }
+.terrainHint {
+  margin-top: 0.15rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.02em;
+  color: var(--moon-text-faint);
 }
 
-.outcomeTrack {
+/* The chapter's code, floating under its tower. Two characters, so the skyline
+   is a set of named chapters rather than anonymous columns. */
+.towerCode {
+  display: block;
+  padding: 0.05rem 0.28rem;
+  border-radius: var(--moon-radius-xs);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  color: var(--moon-text-faint);
+  background: rgba(10, 10, 10, 0.72);
+  transition: color var(--moon-dur-2) var(--moon-ease-out);
+
+  &[data-active="yes"] {
+    color: var(--moon-text);
+    background: rgba(20, 20, 20, 0.92);
+  }
+}
+
+/* The hovered tower, named in the corner the readout does not use. */
+.towerCaption {
+  position: absolute;
+  top: 0.9rem;
+  right: 1.1rem;
   display: flex;
-  height: 24px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  max-width: 46%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-sm);
+  background: var(--moon-glass-bg-strong, rgba(10, 10, 10, 0.95));
+  backdrop-filter: blur(var(--moon-blur, 12px));
+  pointer-events: none;
+  text-align: right;
+}
+
+.towerCaptionCode {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  color: var(--moon-accent);
+}
+
+.towerCaptionName {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--moon-text);
+  @include truncate(2);
+}
+
+.towerCaptionFoot {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.58rem;
+  color: var(--moon-text-faint);
+}
+
+/* ---- The chapter row ------------------------------------------------------ */
+/* One chapter per row: name, the bar that draws its outcome, and the caption
+   that says what the bar counted. It heads the chapter's case table, so the
+   same row both reports the chapter and opens it. */
+.chapterRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(9rem, 0.85fr) 2.6rem;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.42rem 0.65rem;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.chapterRowLit {
+  background: var(--moon-surface-1);
+
+  .chapterName {
+    color: var(--moon-text);
+  }
+}
+
+.chapterToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  @include focus-ring(2px);
+
+  &:hover .chapterName {
+    color: var(--moon-text);
+  }
+}
+
+.chapterChevron {
+  flex: none;
+  color: var(--moon-text-faint);
+  font-size: 0.6rem;
+}
+
+.chapterName {
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--moon-text-dim);
+  @include truncate(1);
+  transition: color var(--moon-dur-2) var(--moon-ease-out);
+}
+
+/* The bad news for a chapter, stated once, so a chapter holding failures is
+   visible before its row is opened. */
+.chapterBadge {
+  flex: none;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--moon-radius-pill);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--moon-danger);
+  background: var(--moon-danger-bg, rgba(230, 57, 70, 0.12));
+  border: 1px solid var(--moon-danger-line, rgba(230, 57, 70, 0.3));
+}
+
+.chapterProgress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+/* The track behind the segments is the work the chapter has not reached, so the
+   bar is the whole chapter, not only the settled part. */
+.chapterBar {
+  display: flex;
+  width: 100%;
+  height: 6px;
   overflow: hidden;
   background: var(--moon-surface-3);
-  border-radius: var(--moon-radius-pill);
+  border-radius: 999px;
 }
 
-.outcomeSegment {
+.chapterCaption {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.02em;
+  color: var(--moon-text-faint);
+  @include truncate(1);
+}
+
+/* The part of the chapter nobody has reached: a flat recess rather than a
+   colour, because it is the absence of a result. */
+.groupSegRest {
+  display: block;
+  height: 100%;
   min-width: 0;
-  background: var(--seg, var(--moon-surface-3));
-  border-right: 2px solid var(--moon-surface-1);
-
-  &:last-child { border-right: 0; }
+  background: var(--moon-surface-3);
 }
 
-.segUnstarted { --seg: var(--moon-line-3); }
-
-.outcomeHint {
-  margin: 0.75rem 0 0;
-  color: var(--moon-text-mute);
-  font-size: 0.72rem;
-}
-
-/* The status filter: it sits between the coverage card and the plan card, so
+/* The status filter: it sits between the outcomes card and the plan card, so
    it needs the row's own breathing room. */
 .chips {
   display: flex;

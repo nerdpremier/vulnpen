@@ -2,13 +2,14 @@
 
 /* ============================================================================
    DESKTOP (VNC)
-   Same shape as the report editor: the iframe takes every pixel the header does
-   not, which only works if the shell's inner wrapper is part of the flex column
-   (a block wrapper caps the frame at its own min-height).
+   The desktop fills the page: the frame takes every pixel the shell does not,
+   edge to edge, with no header or readout band competing for the screen.
    ========================================================================== */
 .desktopPage {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 
   /* Nested so the flex chain wins over `.pageInner` whatever order the bundler
      emits the modules in. */
@@ -18,20 +19,12 @@
     flex: 1 1 auto;
     min-height: 0;
     max-width: none;
-    padding-bottom: 1.25rem;
+    padding: 0;
   }
 }
 
-/* The session readout, one band above the frame. Only the spacing is local —
-   the frame, the dividers and the wrapping belong to `StatStrip`. */
-.readout {
-  margin-bottom: 0.55rem;
-}
-
-/* A live dot drawn in the tile's own tone (`currentColor`), so the same span
-   works in the Link tile and in the status pill above the frame. The ring only
-   travels while something is still settling (`pulseDotSeeking`); a settled link
-   keeps the ring, still. */
+/* A live dot drawn in the tile's own tone (`currentColor`). The ring only
+   travels while something is still settling (`pulseDotSeeking`). */
 .pulseDot {
   position: relative;
   display: inline-block;
@@ -65,28 +58,32 @@
   }
 }
 
-/* Sits above the frame rather than over it: a hint that could cover a desktop
-   that did load is worse than a hint that lingers. */
+/* The only thing drawn over the desktop, and only until the first frame lands:
+   a small pill pinned to the top-left, never taking pointer events. */
 .frameHint {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  align-self: flex-start;
-  margin: 0 0 0.55rem;
+  margin: 0;
   padding: 0.25rem 0.7rem;
   border: 1px solid var(--moon-line-1);
   border-radius: var(--moon-radius-pill);
-  background: var(--moon-surface-2);
+  background: var(--moon-glass-bg, rgba(10, 10, 10, 0.85));
+  backdrop-filter: blur(10px);
   color: var(--moon-text-mute);
   font-size: 0.75rem;
+  pointer-events: none;
 }
 
 .frame {
+  position: relative;
   flex: 1 1 auto;
   /* A floor, not a target: a shorter window makes the shell scroll. */
   min-height: 320px;
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
   overflow: hidden;
   background: var(--moon-surface-2);
 }

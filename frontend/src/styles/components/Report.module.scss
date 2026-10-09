@@ -55,44 +55,11 @@
   transform-origin: top left;
 }
 
-/* The document's own actions, parked on the editor's bottom-right corner: the
-   exports, reopening the session and rebuilding the report are about the
-   document, so they float over it rather than standing on a strip above it. */
-.floatingActions {
-  position: absolute;
-  right: 0.6rem;
-  bottom: 0.6rem;
-  z-index: 5;
-}
-
-.fab {
-  opacity: 0.62;
-  box-shadow: var(--moon-shadow-2);
-
-  &:hover,
-  &:focus-visible {
-    opacity: 1;
-  }
-}
-
-/* A manual Word edit is the one thing about this document that is not
-   obvious from looking at it, so the corner carries a quiet warning dot. */
-.fabDot {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--moon-warning);
-  box-shadow: 0 0 0 2px var(--moon-surface-2);
-  pointer-events: none;
-}
-
 /* The document's provenance, as the first line of the actions menu: this page
    has no counters of its own to draw (it fetches the editor URL and nothing
    else), and a strip or a badge over the editor would take room from the
-   document or cover Collabora's own toolbar. */
+   document or cover Collabora's own toolbar. The actions themselves live in the
+   shared header slot, so the editor is left entirely alone. */
 .menuState {
   display: block;
   max-width: 280px;

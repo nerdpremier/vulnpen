@@ -2,16 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "react-query";
-import {
-  Button,
-  Checkbox,
-  Dropdown,
-  Empty,
-  Form,
-  Input,
-  Modal,
-  Select,
-} from "antd";
+import { Button, Checkbox, Dropdown, Empty, Form, Input, Modal, Select, Tooltip } from "antd";
 import {
   DeleteOutlined,
   DownOutlined,
@@ -28,9 +19,11 @@ import { getTestPlan } from "@/services/websecurity.service";
 import { getSessionInfo } from "@/services/agent.service";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import PlanSetupModal from "./PlanSetupModal";
+import PlanTerrain from "./PlanTerrain";
 import ScanLauncherModal from "../scans/ScanLauncherModal";
 import styles from "@/styles/pages/TestPlan.module.scss";
-import { PageState } from "@/components/common/ui";
+import { PageShell, PageState } from "@/components/common/ui";
+import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { summarise, groupCases, matchesFilters, caseCarriesWork, STATUS_OPTIONS, activeSelection, toggledSelection, selectionWith, groupIsOpen, coverageChips } from "@/utils/testPlan.mjs";
@@ -58,33 +51,16 @@ const FILTERS = [
 ];
 
 /**
- * The engagement boundary as chips. It used to be a sentence that repeated the
- * target and the scope in prose; the two facts are labels, so they are badges.
+ * The plan as a landscape of towers, drawn in three dimensions.
+ *
+ * The header used to spell the plan out as a sentence and a single wide bar —
+ * one number repeated twice, and no way to see which chapter was thin. The
+ * terrain puts every chapter on the ground: a tower is a chapter, each course
+ * of blocks is one of its cases, and the colour of a course is the result it
+ * settled. Height says how much a chapter holds; colour says how it went; and
+ * the chapter that carries failures has red at its base. Hover a tower to name
+ * it, click one to read it out in the ledger beside it.
  */
-function PlanChips({ target, scope }) {
-  if (!target && !scope) return null;
-  return (
-    <div className={styles.scopeChips}>
-      {target && (
-        <span className={styles.scopeChip}>
-          <span className={styles.scopeChipLabel}>Target</span>
-          <span className={styles.scopeChipValue} title={target}>
-            {target}
-          </span>
-        </span>
-      )}
-      {scope && (
-        <span className={styles.scopeChip}>
-          <span className={styles.scopeChipLabel}>Scope</span>
-          <span className={styles.scopeChipValue} title={scope}>
-            {scope}
-          </span>
-        </span>
-      )}
-    </div>
-  );
-}
-
 /* One segment per outcome; the remainder of the track is what the category has
    not reached yet. Selected by key, so the tone map cannot drift from the
    legend the rest of the product uses. */
@@ -107,46 +83,84 @@ const SEGMENT_LABEL = {
 };
 
 /**
- * A category's outcome as one proportional bar.
+ * One chapter as a ledger row: its name, the bar that draws its outcome, and
+ * the plain caption that says what the bar means.
  *
- * The header used to carry a plain fill bar plus "8 failed" / "2 blocked"
- * pills; the bar said how much was done, the pills said how it went, and the
- * two had to be read together. One segmented bar carries both, and the counts
- * stay available by tooltip and to a screen reader.
+ * The header used to carry `9/18` beside the name and a segmented bar with no
+ * scale of its own, so a reader had to pair a bare ratio with a colour key
+ * held somewhere else. The row now names what it counted under the bar and
+ * moves the raw ratio into the tooltip a screen reader already had.
  */
-function CategoryBar({ code, name, summary }) {
+function ChapterRow({ group, lit, open, onToggle, onFocus, onBlur }) {
+  const summary = summarise(group.cases);
   const segments = CATEGORY_SEGMENTS.map((segment) => ({
     ...segment,
     value: summary[segment.key] ?? 0,
   })).filter((segment) => segment.value > 0);
 
-  const title = `${code ? `${code} — ` : ""}${name}: ${summary.executed}/${
-    summary.total
-  } settled — ${segments
-    .map((segment) => `${segment.value} ${SEGMENT_LABEL[segment.key]}`)
-    .join(", ")}`;
+  const label = `${group.code ? `${group.code} — ` : ""}${group.name}`;
 
   return (
-    <span
-      className={styles.groupBar}
-      role="img"
-      aria-label={title}
-      title={title}
+    <div
+      className={`${styles.chapterRow} ${lit ? styles.chapterRowLit : ""}`}
+      onMouseEnter={onFocus}
+      onMouseLeave={onBlur}
     >
-      {summary.total === 0 ? (
-        <span className={styles.groupSegEmpty} />
-      ) : (
-        segments.map((segment) => (
-          <span
-            key={segment.key}
-            className={[styles.groupSeg, segment.tone ? styles[segment.tone] : ""]
-              .filter(Boolean)
-              .join(" ")}
-            style={{ flexGrow: segment.value }}
-          />
-        ))
-      )}
-    </span>
+      <button
+        type="button"
+        className={styles.chapterToggle}
+        aria-expanded={open}
+        onClick={() => {
+          onFocus();
+          onToggle();
+        }}
+        title={`${label} — ${summary.executed}/${summary.total} executed, ${summary.failed} failed, ${summary.blocked} blocked, ${summary.skipped} skipped`}
+      >
+        <span className={styles.chapterChevron} aria-hidden="true">
+          {open ? <DownOutlined /> : <RightOutlined />}
+        </span>
+        <span className={styles.chapterName}>{group.name}</span>
+        {summary.failed + summary.blocked > 0 && (
+          <span className={styles.chapterBadge}>
+            {summary.failed + summary.blocked} failed
+          </span>
+        )}
+      </button>
+
+      <span className={styles.chapterProgress}>
+        <span
+          className={styles.chapterBar}
+          role="img"
+          aria-label={`${summary.executed} of ${summary.total} executed`}
+        >
+          {summary.total === 0 ? (
+            <span className={styles.groupSegEmpty} />
+          ) : (
+            <>
+              {segments.map((segment) => (
+                <span
+                  key={segment.key}
+                  className={[styles.groupSeg, segment.tone ? styles[segment.tone] : ""].filter(Boolean).join(" ")}
+                  style={{ flexGrow: segment.value }}
+                  aria-hidden="true"
+                />
+              ))}
+              {summary.notStarted > 0 && (
+                <span
+                  className={styles.groupSegRest}
+                  style={{ flexGrow: summary.notStarted }}
+                  aria-hidden="true"
+                />
+              )}
+            </>
+          )}
+        </span>
+        <span className={styles.chapterCaption}>
+          {summary.executed}/{summary.total} executed
+          {summary.skipped > 0 ? ` · ${summary.skipped} skipped` : ""}
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -158,6 +172,8 @@ export default function TestPlanPage({ sessionId }) {
   const [groupOverrides, setGroupOverrides] = useState(() => new Map());
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [setupOpen, setSetupOpen] = useState(false);
+  /* The chapter the ring is reading out; hover or focus sets it, leaving clears it. */
+  const [activeChapter, setActiveChapter] = useState(null);
   // The cases the selection bar wants to scan; null = launcher closed.
   const [scanSelection, setScanSelection] = useState(null);
   const [editingCase, setEditingCase] = useState(null);
@@ -360,60 +376,69 @@ export default function TestPlanPage({ sessionId }) {
     });
   };
 
-  if (planQuery.isLoading) {
-    return (
-      <div className={styles.page}>
-        <PageState state="loading" rows={5} />
-      </div>
-    );
-  }
-  return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <span className={styles.eyebrow}>OWASP WSTG v{catalog?.version ?? "4.2"}</span>
-          <h1>Web Application Security Testing</h1>
-          {/* The plan's own boundary when it exists, the session's before that. */}
-          <PlanChips
-            target={plan?.target || engagement?.target}
-            scope={plan?.scope || engagement?.scope}
-          />
-        </div>
-        <div className={styles.headerActions}>
+  /* The page's actions ride in the app header, on the same row as the
+     engagement's breadcrumb, so the body opens on the plan itself instead of a
+     band of buttons. Published upward because the header belongs to the session
+     layout, one level above this page. */
+  const actions = useMemo(
+    () => (
+      <>
+        <Tooltip title="Reload the plan and its coverage">
           <Button
             icon={<ReloadOutlined />}
-            title="Refresh"
-            loading={planQuery.isFetching}
             onClick={() => planQuery.refetch()}
+            aria-label="Reload the plan"
           />
-          <Button
-            icon={<PlayCircleOutlined />}
-            disabled={!plan}
-            title="Launch and follow scans of this plan"
-            onClick={() => router.push(`/session/${sessionId}/scans`)}
-          >
-            Scans
-          </Button>
-          <Button
-            type="primary"
-            icon={<SettingOutlined />}
-            // Never open setup on a plan we could not read: the modal would
-            // start from an empty selection and save over the real one.
-            disabled={planQuery.isError || planQuery.isLoading}
-            onClick={() => setSetupOpen(true)}
-          >
-            {plan ? "Plan setup" : "Set up plan"}
-          </Button>
-          <Button
-            icon={<FileTextOutlined />}
-            disabled={!plan}
-            onClick={() => router.push(`/session/${sessionId}/report`)}
-          >
-            Report
-          </Button>
+        </Tooltip>
+        <Button
+          icon={<PlayCircleOutlined />}
+          disabled={!plan}
+          onClick={() => router.push(`/session/${sessionId}/scans`)}
+        >
+          Scans
+        </Button>
+        <Button
+          type="primary"
+          icon={<SettingOutlined />}
+          // Never open setup on a plan we could not read: the modal would start
+          // from an empty selection and save over the real one.
+          disabled={planQuery.isError || planQuery.isLoading}
+          onClick={() => setSetupOpen(true)}
+        >
+          {plan ? "Plan setup" : "Set up plan"}
+        </Button>
+        <Button
+          icon={<FileTextOutlined />}
+          disabled={!plan}
+          onClick={() => router.push(`/session/${sessionId}/report`)}
+        >
+          Report
+        </Button>
+      </>
+    ),
+    [sessionId, plan, planQuery.isError, planQuery.isLoading, router],
+  );
+  usePublishHeaderActions(actions);
+
+  if (planQuery.isLoading) {
+    return (
+      <PageShell>
+        <PageState state="loading" rows={5} />
+      </PageShell>
+    );
+  }
+
+  const target = plan?.target || engagement?.target;
+  const scope = plan?.scope || engagement?.scope;
+
+  return (
+    <PageShell>
+      <header className={styles.header}>
+        <div className={styles.headings}>
+          <span className={styles.eyebrow}>OWASP WSTG v{catalog?.version ?? "4.2"}</span>
+          <h1>Web Application Security Testing</h1>
         </div>
       </header>
-
       {/*
         A failed read is not an empty plan. The old markup painted an Alert and
         still offered "Set up the test plan", which opens the setup modal with
@@ -449,38 +474,47 @@ export default function TestPlanPage({ sessionId }) {
 
       {plan && coverage && (
         <>
-          {/* The proportions live here; the chapters below show where work is thin. */}
-          <section className={styles.coverage} aria-label="Plan outcomes">
-            <div className={styles.outcomeHeading}>
-              <div>
-                <span className={styles.eyebrow}>PLAN OUTCOMES</span>
-                <h2>Every case, one result</h2>
+          {/* The plan as a landscape of chapter towers, with the one figure the
+              whole shape stands for. Nothing here is said twice: the towers draw
+              the outcome chapter by chapter, the readout totals it, and the chips
+              below are the control that filters on it. */}
+          <section className={styles.outcomes} aria-label="Plan outcomes">
+            <div className={styles.outcomeStage}>
+              <PlanTerrain
+                groups={groups}
+                sessionId={sessionId}
+                className={styles.terrainCanvas}
+                onPick={(group) => {
+                  /* Clicking a tower opens its chapter in the table below and
+                     takes the reader to its first case. */
+                  setActiveChapter(group.key);
+                  setGroupOpen([group], true);
+                  const first = group.cases[0];
+                  if (first) {
+                    requestAnimationFrame(() => {
+                      document
+                        .getElementById(`case-${first.testId}`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    });
+                  }
+                }}
+              />
+              <div className={styles.terrainReadout}>
+                <span className={styles.terrainPercent}>
+                  {coverage.total
+                    ? Math.round((coverage.executed / coverage.total) * 100)
+                    : 0}
+                  <span className={styles.terrainPercentMark}>%</span>
+                </span>
+                <span className={styles.terrainCount}>
+                  <b>{coverage.executed}</b>
+                  <span>/{coverage.total} cases executed</span>
+                </span>
+                <span className={styles.terrainHint}>
+                  one tower per WSTG chapter, one block per case
+                </span>
               </div>
-              <span className={styles.outcomeTotal}>
-                <strong>{coverage.executed}</strong> / {coverage.total} executed
-              </span>
             </div>
-            <div
-              className={styles.outcomeTrack}
-              role="img"
-              aria-label={CATEGORY_SEGMENTS.map((segment) =>
-                `${coverage[segment.key] ?? 0} ${SEGMENT_LABEL[segment.key]}`,
-              ).join(", ")}
-            >
-              {CATEGORY_SEGMENTS.filter((segment) => coverage[segment.key] > 0).map(
-                (segment) => (
-                  <span
-                    key={segment.key}
-                    className={`${styles.outcomeSegment} ${styles[segment.tone || "segUnstarted"]}`}
-                    style={{ flexGrow: coverage[segment.key] }}
-                    title={`${coverage[segment.key]} ${SEGMENT_LABEL[segment.key]}`}
-                  />
-                ),
-              )}
-            </div>
-            <p className={styles.outcomeHint}>
-              Select a result below to inspect its cases; open a chapter for the detail.
-            </p>
           </section>
 
           <div className={styles.chips}>
@@ -597,7 +631,6 @@ export default function TestPlanPage({ sessionId }) {
               <div className={styles.groups}>
                 {visibleGroups.map((group) => {
                   const open = isGroupOpen(group);
-                  const summary = summarise(group.cases);
                   const groupIds = group.matches.map((testCase) => testCase.testId);
                   const groupSelectedCount = groupIds.filter((testId) =>
                     activeSelectedIds.has(testId),
@@ -605,31 +638,18 @@ export default function TestPlanPage({ sessionId }) {
 
                   return (
                     <div key={group.key} className={styles.group}>
-                      <div className={styles.groupHeader}>
-                        <button
-                          type="button"
-                          className={styles.groupToggle}
-                          aria-expanded={open}
-                          onClick={() => toggleGroup(group)}
-                        >
-                          {open ? (
-                            <DownOutlined className={styles.chevron} />
-                          ) : (
-                            <RightOutlined className={styles.chevron} />
-                          )}
-                          <span className={styles.groupCode}>{group.code || "OTHER"}</span>
-                          <span className={styles.groupName}>{group.name}</span>
-                          <span className={styles.groupCount}>
-                            {summary.executed}/{summary.total}
-                          </span>
-                        </button>
-
-                        <CategoryBar
-                          code={group.code}
-                          name={group.name}
-                          summary={summary}
-                        />
-                      </div>
+                      {/* The chapter's own header: its name, the bar that draws
+                          its outcome, and the caption that says what the bar
+                          counted. The terrain above names the chapters; this is
+                          where each one is opened and managed. */}
+                      <ChapterRow
+                        group={group}
+                        lit={activeChapter === group.key}
+                        open={open}
+                        onToggle={() => toggleGroup(group)}
+                        onFocus={() => setActiveChapter(group.key)}
+                        onBlur={() => setActiveChapter(null)}
+                      />
 
                       {open && (
                         <div className={styles.tableWrap}>
@@ -872,6 +892,6 @@ export default function TestPlanPage({ sessionId }) {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </PageShell>
   );
 }

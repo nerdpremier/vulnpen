@@ -1,18 +1,16 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
-import { App, Button, Dropdown } from "antd";
+import React, { useCallback, useMemo, useState } from "react";
+import { App, Button, Dropdown, Tooltip } from "antd";
 import {
   DownloadOutlined,
   FileMarkdownOutlined,
   FilePdfOutlined,
-  FileWordOutlined,
-  MoreOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
 import { useQuery } from "react-query";
 import { PageShell, PageState } from "@/components/common/ui";
-import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
+import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import { apiErrorMessage } from "@/utils/apiError";
 import { saveBlob } from "@/utils/download";
 import {
@@ -29,15 +27,13 @@ import styles from "@/styles/components/Report.module.scss";
  * through the WOPI endpoints.
  *
  * The editor is the page — no title bar, no toolbar strip above it — so the
- * actions that belong to the document (exports, reopen, regenerate) float over
- * the editor's own corner. Two things they exist to be honest about: the
- * document is deliberately never regenerated after a Word save (so later
- * findings never reach it), and the API can hand back a .docx, a PDF and the
- * markdown source.
+ * document's actions ride in the shared header slot: reopen the editor, and
+ * export the document in any of the three formats the API holds it in. The
+ * document is deliberately never regenerated after a Word save, and the menu
+ * says so, because an operator who does not know that ships a stale report.
  */
 export default function ReportPage({ sessionId }) {
   const { message } = App.useApp();
-  const confirmPopUp = useConfirmPopUp();
   const [busy, setBusy] = useState(null);
 
   const editorQuery = useQuery(
@@ -64,26 +60,9 @@ export default function ReportPage({ sessionId }) {
     [sessionId, message],
   );
 
-  const regenerate = useCallback(
-    () =>
-      confirmPopUp({
-        title: "Regenerate the report from current results?",
-        content:
-          "The document currently holds edits made in Word. Regenerating discards them and rebuilds the report from the engagement's scans, findings and test plan — the only way later work reaches the report.",
-        okText: "Regenerate",
-        onOk: async () => {
-          const data = await getWordEditorUrl(sessionId, { rebuild: true });
-          editorQuery.refetch();
-          return data;
-        },
-      }),
-    [confirmPopUp, sessionId, editorQuery],
-  );
-
-  /* The document's provenance, stated in the menu. It cannot be a strip above
-     the editor — the editor is the page, and the one chrome fact this surface
-     has would then cost it a row — and a floating badge would sit on top of
-     Collabora's own toolbar. */
+  /* The document's provenance. It lives in the menu, not as a strip above the
+     editor (which is the whole page) and not as a floating badge (which would
+     sit on Collabora's own toolbar). */
   const provenance = editedByWord
     ? "Edited in Word — later scans and findings are not merged into this document"
     : "Generated from the plan, scans and findings as they stand";
@@ -113,20 +92,32 @@ export default function ReportPage({ sessionId }) {
       label: "Download PDF",
       onClick: () => save("pdf", downloadReportPdf),
     },
-    { type: "divider" },
-    {
-      key: "reopen",
-      icon: <ReloadOutlined />,
-      label: "Reopen the editor",
-      onClick: () => editorQuery.refetch(),
-    },
-    {
-      key: "regenerate",
-      icon: <FileWordOutlined />,
-      label: "Regenerate from current results",
-      onClick: regenerate,
-    },
   ];
+
+  /* The report's actions, in the same header slot every session page uses. The
+     draft is one entry inside Export, not a second button beside it: both would
+     call the same endpoint and hand back the same file. */
+  const actions = useMemo(
+    () => (
+      <>
+        <Tooltip title="Reopen the editor">
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => editorQuery.refetch()}
+            aria-label="Reopen the editor"
+          />
+        </Tooltip>
+        <Dropdown menu={{ items: menuItems }} trigger={["click"]} placement="bottomRight">
+          <Button type="primary" icon={<DownloadOutlined />} loading={busy != null}>
+            Export
+          </Button>
+        </Dropdown>
+      </>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [busy, sessionId],
+  );
+  usePublishHeaderActions(actions);
 
   if (editorQuery.isLoading) {
     return (
@@ -165,24 +156,6 @@ export default function ReportPage({ sessionId }) {
           title="LibreOffice Writer — report"
           allow="clipboard-read; clipboard-write"
         />
-
-        <div className={styles.floatingActions}>
-          <Dropdown menu={{ items: menuItems }} trigger={["click"]} placement="topRight">
-            <Button
-              className={styles.fab}
-              shape="circle"
-              icon={<MoreOutlined />}
-              loading={busy != null}
-              title={
-                editedByWord
-                  ? "Edited in Word — later scans and findings are not merged into this document"
-                  : "Report actions"
-              }
-              aria-label="Report actions"
-            />
-          </Dropdown>
-          {editedByWord && <span className={styles.fabDot} aria-hidden="true" />}
-        </div>
       </div>
     </PageShell>
   );

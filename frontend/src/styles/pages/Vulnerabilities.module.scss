@@ -512,35 +512,43 @@
 }
 /* ============================================================================
    VULNERABILITIES - Lunar Monochrome
+   The summary band opens on the three shapes a tester reads first: the CVSS
+   distribution (the anchor), the severity mix as a clickable ridge, and the
+   proof-of-exploitation split. The detailed inventory follows as records.
    ========================================================================== */
+
+/* ---- The heading ---------------------------------------------------------- */
+.pageHead {
+  margin-bottom: 1.1rem;
+
+  h1 {
+    margin: 0.25rem 0 0.35rem;
+    font-size: clamp(1.5rem, 2.3vw, 2rem);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+    color: var(--moon-text);
+  }
+}
+
 .eyebrow {
   @include eyebrow;
-}
-/* Metric band - the tiles double as severity filters. The frame, the dividers
-   and the responsive wrapping come from `StatStrip`; only the spacing is
-   local, so the two rules can never disagree about the grid. */
-.metrics {
-  margin-bottom: 1.15rem;
 }
 
 /* ---------------------------------------------------------------------------
    SUMMARY BAND
-   Four graphics over the same findings the table lists: severity mix, CVSS
-   distribution, whether the finding was proven, and the busiest assets. The
+   Three complementary graphics over the same findings the records list. The
    band collapses to as many columns as the viewport can hold and to one on a
-   phone, so no chart is ever squeezed below the width of its own labels.
+   phone, so no card is ever squeezed below the width of its own labels.
    -------------------------------------------------------------------------- */
 .summaryBand {
   display: grid;
-  /* Severity mix reads wider than the rest; the remaining cards split evenly. */
-  grid-template-columns: 1.6fr 1fr 1fr;
+  grid-template-columns: 1fr 1.4fr 1fr;
   gap: 0.75rem;
   margin-bottom: 1.15rem;
-}
 
-@media (max-width: 900px) {
-  .summaryBand {
-    grid-template-columns: 1fr;
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -572,8 +580,16 @@
   font-size: 0.6rem;
 }
 
+.titleCount {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--moon-text);
+}
+
 /* The graphic fills the rest of the card and sits centred, so a short bar or
-   a small donut does not strand the card's lower half in whitespace. */
+   a small chart does not strand the card's lower half in whitespace. */
 .summaryBody {
   display: flex;
   flex: 1 1 auto;
@@ -594,70 +610,151 @@
   text-align: center;
 }
 
-/* The donut sits mid-card instead of hugging the left edge. */
-.donutCentered {
-  justify-content: center;
-}
-
-/* What a graphic covers, when it covers less than the whole engagement. */
-.summaryScope {
-  color: var(--moon-text-faint);
-  font-size: 0.56rem;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-
-.summaryEmpty {
-  margin: 0;
-  color: var(--moon-text-mute);
-  font-size: 0.75rem;
-}
-
-.tableCard {
-  min-height: 320px;
-  overflow: hidden;
-  background: var(--moon-surface-1);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
-  box-shadow: var(--moon-inner-top), var(--moon-shadow-1);
-}
-
-.toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+/* ---- Severity mix: one clickable row per severity on a shared axis -------- */
+.ridge {
   display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-  padding: 0.8rem 1rem;
-  border-bottom: 1px solid var(--moon-line-1);
-  background: var(--moon-glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
 }
 
-.clearFilters {
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--moon-text-dim);
-  background: var(--moon-surface-2);
-  border: 1px solid var(--moon-line-2);
-  border-radius: var(--moon-radius-pill);
-  padding: 0.25rem 0.7rem;
+.ridgeRow {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr) 1.4rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.12rem 0.2rem;
+  border: 0;
+  border-radius: var(--moon-radius-xs);
+  background: transparent;
   cursor: pointer;
+  transition: background var(--moon-dur-2) var(--moon-ease-out);
 
   &:hover {
+    background: var(--moon-surface-2);
+  }
+
+  &[data-active] {
+    background: var(--moon-accent-08);
+  }
+
+  @include focus-ring(2px);
+}
+
+.ridgeLabel {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--moon-text-mute);
+}
+
+.ridgeTrack {
+  position: relative;
+  height: 7px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-3);
+  overflow: hidden;
+}
+
+.ridgeBar {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: var(--moon-radius-pill);
+  transition: width var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.ridgeCount {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--moon-text);
+}
+
+/* ---- Exploitation: one split bar, its two halves named under it ----------- */
+.exploitSplit {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.9rem;
+}
+
+.exploitBar {
+  display: flex;
+  width: 100%;
+  height: 12px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-3);
+  overflow: hidden;
+}
+
+.exploitSeg {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  transition: width var(--moon-dur-2) var(--moon-ease-out);
+
+  &[data-tone="danger"] { background: var(--moon-danger); }
+}
+
+.exploitLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+}
+
+.exploitItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+
+  b {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: var(--moon-text);
-    border-color: var(--moon-line-3);
-    background: var(--moon-surface-3);
   }
 }
 
+.legendDot {
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone, var(--moon-text-faint));
+
+  &[data-tone="danger"] { --tone: var(--moon-danger); }
+  &[data-tone="mute"] { --tone: var(--moon-text-faint); }
+}
+
+/* ---- The record: the filter, then one row per finding --------------------- */
+.records {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+
 .search {
-  flex: 1 1 220px;
+  flex: 1 1 16rem;
+  max-width: 24rem;
   min-width: 10rem;
-  max-width: none;
 }
 
 .filter {
@@ -665,44 +762,170 @@
   flex-shrink: 0;
 }
 
+/* Width hugs the selected label, so a long entry like "A10:2025 Mishandling
+   of Exceptional Conditions" stretches the box instead of clipping. */
+.filterWide {
+  width: auto;
+  min-width: 170px;
+  flex: 0 0 auto;
+}
+
+.controls :global(.ant-input-affix-wrapper),
+.controls :global(.ant-select-selector) {
+  color: var(--moon-text) !important;
+  background: var(--input-bg, var(--moon-surface-2)) !important;
+  border-color: var(--border-default) !important;
+}
+
+.controls :global(.ant-input-affix-wrapper) {
+  padding-block: 4px;
+}
+
 .table {
-  th {
-    padding: 0.65rem 0.9rem;
-    color: var(--moon-text-mute);
-    font-size: 0.64rem;
-    font-weight: 400;
-    letter-spacing: 0.1em;
-    background: rgba(255, 255, 255, 0.015);
-    border-bottom: 1px solid var(--moon-line-2);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  box-shadow: var(--moon-inner-top);
+  overflow: hidden;
+}
+
+.head,
+.row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 2.4fr) 116px 118px minmax(140px, 1fr) 40px;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.head {
+  @include tableHead;
+  border-bottom: 1px solid var(--moon-line-1);
+
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
+.row {
+  width: 100%;
+  border-bottom: 1px solid var(--moon-line-1);
+  cursor: pointer;
+  color: var(--moon-text);
+  text-decoration: none;
+  transition: background var(--moon-dur-1) var(--moon-ease-out);
+
+  &:last-child {
+    border-bottom: none;
   }
 
-  td {
-    padding: 0.85rem 0.9rem;
-    color: var(--moon-text-dim);
-    font-size: 0.78rem;
-    border-bottom: 1px solid var(--moon-line-1);
+  &:hover,
+  &:focus-within {
+    @include tableRowHover;
   }
 
-  tbody tr {
-    transition: background var(--moon-dur-1) var(--moon-ease-out);
+  @include responsive(tablet3) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "identity open"
+      "finding  finding"
+      "score    exploit"
+      "owasp    owasp";
+    row-gap: 0.5rem;
+    padding: 0.75rem 0.85rem;
 
-    &:hover,
-    &:focus-visible {
-      outline: none;
-      background: var(--surface-hover);
-      box-shadow: inset 2px 0 0 var(--moon-accent);
-    }
+    .identity { grid-area: identity; }
+    .findingCell { grid-area: finding; }
+    .scoreCell { grid-area: score; }
+    .exploitCell { grid-area: exploit; justify-content: flex-end; }
+    .owaspCell { grid-area: owasp; }
+    .openCell { grid-area: open; }
   }
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.findingCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.findingTitle {
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--moon-text);
+  text-decoration: none;
+  @include truncate(1);
+
+  &:hover {
+    color: var(--moon-accent);
+  }
+
+  @include focus-ring(2px);
+}
+
+.findingContext {
+  font-size: 0.7rem;
+  color: var(--moon-text-mute);
+  @include truncate(1);
+}
+
+.scoreCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+
+  b {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--moon-text);
+  }
+}
+
+.scoreVector {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.62rem;
+  color: var(--moon-text-faint);
+  @include truncate(1);
+}
+
+.scoreNone {
+  font-size: 0.74rem;
+  color: var(--moon-text-faint);
+}
+
+.exploitCell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.owaspCell {
+  min-width: 0;
 }
 
 /* Severity pills keep their meaning but lose the neon. */
 .severity {
+  display: inline-flex;
+  justify-content: center;
   min-width: 72px;
   padding: 0.2rem 0.5rem;
+  border: 1px solid currentColor;
   border-radius: var(--moon-radius-pill);
   font-size: 0.62rem;
   font-weight: 400;
   letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 .critical {
@@ -735,6 +958,11 @@
   border-color: var(--moon-line-2);
 }
 
+.openCell {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .openIcon {
   color: var(--moon-text-faint);
   font-size: 0.7rem;
@@ -742,7 +970,7 @@
     color var(--moon-dur-2) var(--moon-ease-out);
 }
 
-.table tbody tr:hover .openIcon {
+.row:hover .openIcon {
   color: var(--moon-accent);
   transform: translateX(2px);
 }

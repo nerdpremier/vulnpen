@@ -1,287 +1,740 @@
 @import "@/styles/variables";
 
-/* Engagement snapshot: one visual per question; details live in the other tabs. */
+/* Engagement situation report, read like a console: one instrument readout
+   across the top, then two panels — the findings that need action, and the
+   coverage line by line. Every metric appears exactly once. */
 
-/* ---- Title chips: the engagement boundary in one line --------------------- */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.2rem 0.6rem;
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-pill);
-  background: var(--moon-surface-2);
-  color: var(--moon-text-dim);
-  font-size: 0.75rem;
-  max-width: 40ch;
-}
-
-/* The value clips inside its own box: an ellipsis on the flex container does
-   nothing, because the chip's text is an anonymous flex item that never
-   shrinks — the scope ran under the chip's own border before this. */
-.chipValue {
-  min-width: 0;
-  @include truncate(1);
-}
-
-.chipLabel {
-  @include eyebrow;
-  font-size: 0.56rem;
-}
-
-/* ---- Card grid ------------------------------------------------------------ */
-.grid {
+/* ---- The hero: the engagement as a sphere of chapters --------------------- */
+.hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.9rem;
-  align-items: stretch;
-  margin-bottom: 0.9rem;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+  gap: 1.4rem;
+  margin: 0 0 0.8rem;
 
   @include responsive(laptop1) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  padding: 1.1rem 1.25rem 1.25rem;
+/* The stage takes the room the panels below do not: with the header chips gone,
+   the graph is the tallest thing on the page and the space it was written into
+   is what it gets. */
+.heroStage {
+  position: relative;
+  min-height: 25rem;
   border: 1px solid var(--moon-line-1);
   border-radius: var(--moon-radius-lg);
-  background: var(--moon-surface-1);
-  min-width: 0;
+  background: linear-gradient(180deg, var(--moon-surface-2), var(--moon-void));
+  overflow: hidden;
+  @include terminal-panel;
 }
 
-.cardHead {
+.heroCanvas {
+  position: absolute;
+  inset: 0;
+
+  canvas {
+    display: block;
+    touch-action: none;
+  }
+}
+
+/* The hovered or pinned finding, captioned over the canvas. */
+.caption {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.9rem;
+  right: 0.9rem;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-width: 46ch;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-md);
+  background: var(--moon-glass-bg-strong, rgba(10, 10, 10, 0.97));
+  backdrop-filter: blur(var(--moon-blur, 12px));
+  pointer-events: none;
 }
 
-.cardTitle {
-  @include eyebrow;
-  font-size: 0.64rem;
+.captionSev {
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.cardLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.78rem;
+.captionTitle {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--moon-text);
+  @include truncate(2);
+}
+
+.captionEndpoint {
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.66rem;
   color: var(--moon-text-mute);
+  @include truncate(1);
+}
+
+.captionLink {
+  margin-top: 0.2rem;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.68rem;
+  color: var(--moon-accent);
   text-decoration: none;
-  white-space: nowrap;
+  pointer-events: auto;
 
   &:hover {
     color: var(--moon-text);
   }
+}
 
-  :global(svg) {
-    font-size: 0.7rem;
+.heroLegend {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  color: var(--moon-text-mute);
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
   }
 }
 
-/* The ring is progress; the matrix below pinpoints the untested cases. */
-.coverageBody {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 1.5rem;
-
-  @include responsive(tablet3) {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: start;
-  }
-}
-
-.coverageCallout {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.25rem;
-  min-width: 0;
-  color: var(--moon-text-mute);
-  font-size: 0.8rem;
-}
-
-.calloutNumber,
-.priorityNumber {
-  font-variant-numeric: tabular-nums;
-  font-size: clamp(2rem, 4vw, 3.5rem);
-  line-height: 1;
-  letter-spacing: -0.06em;
-  color: var(--moon-text);
-}
-
-.calloutLabel { margin-bottom: 0.65rem; }
-
-.priorityReadout {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  color: var(--moon-text-mute);
-  font-size: 0.8rem;
-}
-
-/* The case grid sits under both: it is a wide shape and it needs the width. */
-.coverageMatrix {
-  margin-top: 0.35rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--moon-line-1);
-}
-
-.factMuted {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.55;
-  color: var(--moon-text-mute);
-}
-
-/* ---- Findings ------------------------------------------------------------- */
-.dot_critical {
-  --sev: var(--moon-critical);
-}
-
-.dot_high {
-  --sev: var(--moon-high);
-}
-
-.dot_medium {
-  --sev: var(--moon-medium);
-}
-
-.dot_low {
-  --sev: var(--moon-low);
-}
-
-.dot_info {
-  --sev: var(--moon-info-sev);
-}
-
-.findingList {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-evenly;
-  flex: 1 1 auto;
-  gap: 0.45rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.findingItem {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-width: 0;
-}
-
-.severityDot {
+.legendDot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--sev, var(--moon-text-mute));
 }
 
-.findingLink {
-  min-width: 0;
-  font-size: 0.84rem;
-  color: var(--moon-text-dim);
-  text-decoration: none;
-  @include truncate(1);
+.legend_critical { background: #ff4d5e; }
+.legend_high     { background: #ff8a3d; }
+.legend_medium   { background: #ffd166; }
+.legend_low      { background: #7fb2ff; }
+.legend_info     { background: #79d1ff; }
 
-  &:hover {
-    color: var(--moon-text);
-    text-decoration: underline;
-  }
-}
-
-/* One live run (or latest completed) is a preview, not a second history list. */
-.scanFeature {
+/* The panel is a status ledger: one row per measure. A row reads label, then
+   value, then — under both — the bar that draws the value to scale, captioned
+   so a bar's meaning is never guessed: the findings bar names each of its
+   colours, the others say what their filled and empty parts are. */
+.heroFacts {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.8rem 1.2rem;
-}
-
-.scanFeatureMain {
-  display: flex;
-  flex: 1 1 16rem;
   flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
+  padding: 0.5rem 1.15rem;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
 }
 
-.scanFeatureLabel {
-  @include eyebrow;
-  font-size: 0.58rem;
-}
-
-.scanName {
-  display: block;
-  font-size: 0.78rem;
-  font-weight: 400;
-  color: var(--moon-text);
+.ledgerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label value"
+    "bar bar";
+  align-items: baseline;
+  flex: 1;
+  column-gap: 0.9rem;
+  row-gap: 0.45rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--moon-line-1);
   text-decoration: none;
-  @include truncate(1);
+  color: inherit;
 
-  &:hover {
-    text-decoration: underline;
+  &:last-of-type {
+    border-bottom: none;
   }
 
   &:focus-visible {
     outline: none;
     box-shadow: var(--moon-focus-ring);
-    border-radius: var(--moon-radius-xs);
   }
 }
 
-.scanMeta {
-  font-size: 0.7rem;
+a.ledgerRow:hover .ledgerLabel {
+  color: var(--moon-text);
+}
+
+/* The agent row: a live dot, its name, and the state — one line, no bar. The
+   head has its own areas so the dot sits beside the label instead of under
+   it. */
+.ledgerHead {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "dot label value";
+  align-items: center;
+  border-bottom: 1px solid var(--moon-line-2);
+}
+
+.ledgerDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  grid-area: dot;
+  background: var(--moon-text-faint);
+
+  &[data-live="yes"] {
+    background: var(--moon-success);
+    box-shadow: 0 0 8px var(--moon-success);
+  }
+}
+
+.ledgerLabel {
+  grid-area: label;
+  font-size: 0.76rem;
   color: var(--moon-text-mute);
-  @include truncate(1);
+  white-space: nowrap;
+  transition: color var(--moon-dur-2) var(--moon-ease-out);
 }
 
-.scanProgress {
-  font-family: "Geist Mono", "JetBrains Mono", monospace;
+.ledgerHead .ledgerLabel {
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+.ledgerValue {
+  grid-area: value;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.05rem;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-text-dim);
+  white-space: nowrap;
+
+  b {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--moon-text);
+    text-shadow: var(--moon-glow-text);
+  }
+
+  span {
+    font-size: 0.72rem;
+    color: var(--moon-text-faint);
+  }
+}
+
+.ledgerHead .ledgerValue {
   font-size: 0.78rem;
-  color: var(--moon-accent);
+  text-transform: capitalize;
 }
 
-.scanOpen {
+/* The bar and the caption that names it travel as one block, so the caption
+   can never drift away from the shape it explains. */
+.ledgerBar {
+  grid-area: bar;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.ledgerTrack {
+  display: flex;
+  gap: 1px;
+  height: 6px;
+  min-width: 0;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-4);
+  overflow: hidden;
+}
+
+.ledgerFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-accent-strong);
+  transition: width var(--moon-dur-4) var(--moon-ease-out);
+}
+
+.ledgerFillDanger {
+  background: var(--moon-critical);
+}
+
+.ledgerSeg {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+
+.ledger_critical { background: #ff4d5e; }
+.ledger_high     { background: #ff8a3d; }
+.ledger_medium   { background: #ffd166; }
+.ledger_low      { background: #7fb2ff; }
+.ledger_info     { background: #79d1ff; }
+
+/* The bar's own key: one item per segment, in the segment's own order. */
+.ledgerScale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.7rem;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.02em;
+  color: var(--moon-text-faint);
+}
+
+.ledgerScaleItem {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--moon-text);
-  text-decoration: none;
-  white-space: nowrap;
-  @include focus-ring(2px);
-
-  &:hover {
-    color: var(--moon-accent);
-  }
-
-  :global(svg) {
-    font-size: 0.72rem;
-  }
+  gap: 0.3rem;
 }
 
-.inlineAction {
+.ledgerChip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ledgerFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: auto;
+  padding: 0.75rem 0 0.9rem;
+  border-top: 1px solid var(--moon-line-1);
+}
+
+.heroScanLink {
   padding: 0;
   border: none;
   background: none;
   font: inherit;
-  color: var(--moon-accent-strong, #fff);
-  text-decoration: underline;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+  text-decoration: none;
   cursor: pointer;
   @include focus-ring(2px);
 
   &:hover {
     color: var(--moon-text);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* ---- The two panels ------------------------------------------------------- */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1.4rem;
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--moon-line-2);
+  margin-bottom: 0.2rem;
+}
+
+.panelTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moon-text-dim);
+}
+
+/* A short accent bar before the title, the way a console marks a section. */
+.panelMark {
+  width: 3px;
+  height: 0.9rem;
+  border-radius: 1px;
+  background: var(--moon-accent-solid);
+  box-shadow: 0 0 8px var(--moon-accent-40);
+}
+
+.panelLink {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  @include focus-ring(2px);
+
+  &:hover {
+    color: var(--moon-text);
+  }
+}
+
+.panelEmpty {
+  margin: 0.9rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--moon-text-mute);
+}
+
+/* ---- Needs attention: findings as ranked cards ---------------------------- */
+/* Each finding is its own card with a severity edge on the leading side, so the
+   rank is legible from the shape before a single word is read. The severity
+   tone is the only colour in the panel. */
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.boardItem {
+  min-width: 0;
+}
+
+/* The rank rides the leading edge as a gutter number, so a card is two tight
+   lines — title over endpoint — instead of three stacked rows. */
+.boardCard {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.65rem;
+  padding: 0.5rem 0.7rem 0.5rem 0.7rem;
+  border: 1px solid var(--moon-line-1);
+  border-left: 2px solid var(--board-edge, var(--moon-line-3));
+  border-radius: var(--moon-radius-md);
+  background: var(--moon-surface-1);
+  text-decoration: none;
+  transition:
+    background var(--moon-dur-2) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover {
+    background: var(--moon-surface-2);
+    border-color: var(--moon-line-2);
+    border-left-color: var(--board-edge, var(--moon-line-3));
+
+    .boardRank {
+      color: var(--moon-text-mute);
+    }
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+/* Severity names the edge colour, nothing else does. */
+.board_critical { --board-edge: #ff4d5e; --board-tone: #ff8a99; }
+.board_high     { --board-edge: #ff8a3d; --board-tone: #ffb98a; }
+.board_medium   { --board-edge: #ffd166; --board-tone: #ffe9a8; }
+.board_low      { --board-edge: #7fb2ff; --board-tone: #b9d3ff; }
+.board_info     { --board-edge: #79d1ff; --board-tone: #b6e5ff; }
+
+.boardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.boardTitle {
+  min-width: 0;
+  font-size: 0.84rem;
+  line-height: 1.3;
+  color: var(--moon-text);
+  @include truncate(1);
+}
+
+.boardEndpoint {
+  min-width: 0;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.64rem;
+  color: var(--moon-text-faint);
+  @include truncate(1);
+}
+
+.boardSev {
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--board-tone, var(--moon-text-mute));
+}
+
+.boardRank {
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-text-faint);
+  transition: color var(--moon-dur-2) var(--moon-ease-out);
+}
+
+/* ---- Coverage: the plan as one dial, chapters as its legend --------------- */
+/* The dial and its legend sit side by side: the ring states the total, the list
+   names the parts, and together they fill the panel's width instead of stacking
+   into a column of empty space. */
+.coverBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: center;
+  gap: 1.2rem;
+  flex: 1;
+  margin-top: 0.7rem;
+
+  @include responsive(tablet2) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dial {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dialSvg {
+  width: 100%;
+  max-width: 15.5rem;
+  height: auto;
+  overflow: visible;
+}
+
+.dialArc {
+  cursor: default;
+  transition: opacity var(--moon-dur-2) var(--moon-ease-out);
+}
+
+/* While one chapter is picked out, the rest step back rather than disappear. */
+.dialArcDim {
+  opacity: 0.3;
+}
+
+.dialTrack {
+  stroke: var(--moon-surface-4);
+  transition: stroke var(--moon-dur-2) var(--moon-ease-out);
+}
+
+/* The executed work is drawn in two parts: what passed, and what failed or was
+   blocked. A chapter that ran everything and failed everything is a full red
+   arc, so "finished" can never be mistaken for "clean". */
+.dialPass {
+  stroke: var(--moon-accent-strong);
+  transition: stroke var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.dialFail {
+  stroke: var(--moon-danger);
+  transition: stroke var(--moon-dur-2) var(--moon-ease-out);
+}
+
+/* Hovering a chapter lifts its arc off the dimmed ring. */
+.dialArc:hover,
+.dialArcLit {
+  .dialTrack {
+    stroke: var(--moon-line-3);
+  }
+}
+
+/* The readout lives inside the ring's hole, so it must clear the inner radius:
+   the ring is drawn wide and thin, and the type is sized to the opening rather
+   than to the page. */
+.dialReadout {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - 0.9rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  width: 6.5rem;
+  pointer-events: none;
+}
+
+.dialPercent {
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-text);
+  text-shadow: var(--moon-glow-text);
+}
+
+.dialPercentMark {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--moon-text-faint);
+  text-shadow: none;
+}
+
+.dialLabel {
+  max-width: 6.5rem;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--moon-text-mute);
+  @include truncate(2);
+}
+
+.dialCount {
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-text-dim);
+
+  span {
+    color: var(--moon-text-faint);
+  }
+}
+
+/* The dial's bad news, stated once: an all-red chapter cannot hide behind a
+   tidy execution percentage. */
+.dialFailed {
+  margin-top: 0.15rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--moon-radius-xs);
+  background: var(--moon-danger-bg, rgba(230, 57, 70, 0.12));
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.52rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--moon-danger);
+}
+
+/* One column, not two: the chapter names are long and a half-width cell clipped
+   the count on the right edge. A single column gives every name its room and
+   keeps the numbers in a straight gutter. */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  & > li {
+    min-width: 0;
+  }
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 0.5rem minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.32rem 0.4rem;
+  border: none;
+  border-radius: var(--moon-radius-xs);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover,
+  &:focus-visible {
+    background: var(--moon-surface-1);
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: var(--moon-focus-ring);
+  }
+}
+
+.legendRowLit {
+  background: var(--moon-surface-1);
+
+  .legendKey {
+    background: var(--moon-accent-strong);
+    box-shadow: 0 0 6px var(--moon-accent-40);
+  }
+
+  .legendName {
+    color: var(--moon-text);
+  }
+}
+
+/* A short tick that reads as this chapter's slice of the ring; it turns red the
+   moment the chapter holds a failure, so the legend carries the bad news too. */
+.legendKey {
+  width: 0.5rem;
+  height: 3px;
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-line-3);
+  transition: background var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.legendKeyAlert {
+  background: var(--moon-danger);
+}
+
+.legendRowLit .legendKeyAlert {
+  background: var(--moon-danger);
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.5);
+}
+
+.legendName {
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--moon-text-dim);
+  @include truncate(1);
+  transition: color var(--moon-dur-2) var(--moon-ease-out);
+}
+
+.legendCount {
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--moon-text-mute);
+  white-space: nowrap;
+
+  b {
+    font-weight: 600;
+    color: var(--moon-text);
+  }
+
+  span {
+    color: var(--moon-text-faint);
   }
 }

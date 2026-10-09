@@ -9,10 +9,16 @@ import styles from "./ui.module.scss";
  * carries the proportion in the width of the card, and the legend underneath
  * stays a line of text instead of a row of boxes.
  *
- * @param levels  [{ key, label, count }] in the canonical order, critical first
- *                (the shape `findingsBySeverity` returns)
+ * @param levels       [{ key, label, count }] — canonical order, critical first
+ * @param legend       bool — draw the counts line under the bar (default true)
+ * @param segmentCounts bool — print each count inside its own segment
  */
-const SeverityBar = ({ levels = [], className = "" }) => {
+const SeverityBar = ({
+  levels = [],
+  className = "",
+  legend = true,
+  segmentCounts = false,
+}) => {
   const populated = levels.filter((level) => level.count > 0);
 
   return (
@@ -35,28 +41,34 @@ const SeverityBar = ({ levels = [], className = "" }) => {
                  however wide the card is, with no measurement pass. */
               style={{ flexGrow: level.count }}
               title={`${level.count} ${level.label.toLowerCase()}`}
-            />
+            >
+              {segmentCounts && level.count > 0 ? (
+                <span className={styles.severitySegCount}>{level.count}</span>
+              ) : null}
+            </span>
           ))
         )}
       </div>
 
-      <div className={styles.severityLegend}>
-        {levels.map((level) => (
-          <span
-            key={level.key}
-            className={[
-              styles.severityLegendItem,
-              level.count ? styles[`sev_${level.key}`] ?? "" : styles.severityLegendZero,
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            <span className={styles.severityLegendDot} aria-hidden="true" />
-            <b>{level.count}</b>
-            <span>{level.label.toLowerCase()}</span>
-          </span>
-        ))}
-      </div>
+      {legend && (
+        <div className={styles.severityLegend}>
+          {levels.map((level) => (
+            <span
+              key={level.key}
+              className={[
+                styles.severityLegendItem,
+                level.count ? styles[`sev_${level.key}`] ?? "" : styles.severityLegendZero,
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <span className={styles.severityLegendDot} aria-hidden="true" />
+              <b>{level.count}</b>
+              <span>{level.label.toLowerCase()}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

@@ -118,6 +118,15 @@
   flex: 1 1 auto;
 }
 
+/* The current page's actions, right-aligned in the header. They keep their own
+   height so they line up with the breadcrumb on the left. */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .brandLink {
   display: inline-flex;
   align-items: center;

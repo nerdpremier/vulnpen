@@ -79,6 +79,18 @@
   --moon-star: transparent;
   --moon-grain: transparent;
 
+  /* ---- Terminal texture (offensive-tool posture) ------------------------ */
+  /* Faint engineering grid + scanline wash. Kept low-alpha so pages still
+     read as near-black; the texture registers as intent, not as a table. */
+  --moon-grid-line: rgba(255, 255, 255, 0.022);
+  --moon-grid-size: 44px;
+  --moon-scanline: rgba(255, 255, 255, 0.012);
+  --moon-scanline-size: 3px;
+  /* Corner ticks on framed blocks, the way a terminal draws a panel. */
+  --moon-tick: rgba(255, 255, 255, 0.28);
+  /* Phosphor glow for headline figures — the one warm mark on a cold page. */
+  --moon-glow-text: 0 0 12px rgba(255, 255, 255, 0.16);
+
   /* ---- Glass (opaque canvas; hairline border only) ----------------------- */
   --moon-glass-bg: rgba(10, 10, 10, 0.92);
   --moon-glass-bg-strong: rgba(10, 10, 10, 0.97);

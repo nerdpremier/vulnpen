@@ -1,37 +1,31 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "react-query";
-import { Button } from "antd";
+import { Button, Tooltip } from "antd";
 import {
   DesktopOutlined,
+  MessageOutlined,
   ReloadOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
 import { connectToVNC } from "@/services/infra.service";
 import { getVNCConfig } from "@/services/user.service";
-import {
-  PageHeader,
-  PageShell,
-  PageState,
-  StatStrip,
-  StatTile,
-} from "@/components/common/ui";
+import { PageShell, PageState } from "@/components/common/ui";
+import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import styles from "@/styles/components/Desktop.module.scss";
 
 /**
  * The engagement's graphical desktop: a VNC session in an iframe.
  *
- * Three states matter and each one now says what to do next — configuring a
- * desktop (which lives in Settings → Connection, the only place that can
- * actually install one), connecting, and connected/failed. The old route sent
- * both "fix it" buttons to `/session/<id>/connection`, a route that has never
- * existed, so the one screen that could unblock the user 404'd.
- *
- * Everything the readout band shows is either read from the API (target, setup
- * mode, credential) or measured from the frame itself (the pixels noVNC scales
- * the remote screen into). No frame rate, because nothing here reports one.
+ * The desktop IS the page — the frame takes every pixel the shell does not, and
+ * the controls (reconnect, setup, the agent's chat) ride in the shared header
+ * slot rather than in a page header of their own. The three states that are not
+ * a live desktop — nothing configured, unreachable, still opening — each say
+ * what to do next; the readout band that used to sit above the frame is gone,
+ * because a desktop that fills the screen has no room to spend on its own
+ * metadata.
  */
 
 /** Settings owns desktop setup; open it on the tab that can install one. */
@@ -63,60 +57,45 @@ export default function DesktopPage({ sessionId }) {
     },
   );
 
-  // The frame is the viewport noVNC scales the remote screen into, so its own
-  // size is the reading that matters — not the window's. Measured after the
-  // frame mounts (the session has to arrive first) and on every resize.
-  const [frameSize, setFrameSize] = useState(null);
   const hasSession = Boolean(desktopQuery.data);
-  useEffect(() => {
-    const node = frameRef.current;
-    if (!node) return undefined;
-    const read = () =>
-      setFrameSize({
-        width: node.clientWidth,
-        height: node.clientHeight,
-        dpr: window.devicePixelRatio || 1,
-      });
-    read();
-    const observer = new ResizeObserver(read);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasSession]);
 
-  const header = (
-    <PageHeader
-      compact
-      eyebrow="Engagement"
-      title="Desktop"
-      description="A screen on this engagement's workspace host, for tools that need one."
-      back={
-        <Button type="text" icon={<DesktopOutlined />} onClick={() => router.push(`/session/${sessionId}`)}>
-          Overview
-        </Button>
-      }
-      actions={
-        <>
-          <Button icon={<SettingOutlined />} onClick={openConnectionSettings}>
-            Desktop setup
-          </Button>
+  /* The desktop's own controls, in the same header slot every session page
+     uses: reconfigure it, reconnect it, or hand the operator to the agent. */
+  const actions = useMemo(
+    () => (
+      <>
+        <Tooltip title="Reconnect the desktop">
           <Button
-            type="primary"
             icon={<ReloadOutlined />}
             loading={desktopQuery.isFetching}
             disabled={!configured}
             onClick={() => desktopQuery.refetch()}
-          >
-            Reconnect
-          </Button>
-        </>
-      }
-    />
+            aria-label="Reconnect the desktop"
+          />
+        </Tooltip>
+        <Button
+          icon={<SettingOutlined />}
+          onClick={openConnectionSettings}
+        >
+          Desktop setup
+        </Button>
+        <Button
+          type="primary"
+          icon={<MessageOutlined />}
+          onClick={() => router.push(`/session/${sessionId}/chat`)}
+        >
+          Agent chat
+        </Button>
+      </>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessionId, router, configured, desktopQuery.isFetching],
   );
+  usePublishHeaderActions(actions);
 
   if (configQuery.isLoading) {
     return (
       <PageShell width="full">
-        {header}
         <PageState state="loading" rows={3} />
       </PageShell>
     );
@@ -128,7 +107,6 @@ export default function DesktopPage({ sessionId }) {
        this mistake. */
     return (
       <PageShell width="full">
-        {header}
         <PageState
           state="error"
           title="Could not read the desktop configuration"
@@ -142,7 +120,6 @@ export default function DesktopPage({ sessionId }) {
   if (!configured) {
     return (
       <PageShell width="full">
-        {header}
         <PageState
           state="empty"
           icon={<DesktopOutlined />}
@@ -161,7 +138,6 @@ export default function DesktopPage({ sessionId }) {
   if (desktopQuery.isError) {
     return (
       <PageShell width="full">
-        {header}
         <PageState
           state="error"
           title="Could not reach the desktop"
@@ -183,39 +159,16 @@ export default function DesktopPage({ sessionId }) {
   if (desktopQuery.isLoading || !desktopQuery.data) {
     return (
       <PageShell width="full">
-        {header}
         <PageState state="loading" variant="spinner" />
       </PageShell>
     );
   }
 
-  const { vncURL, password, workHost } = desktopQuery.data;
+  const { vncURL, password } = desktopQuery.data;
   const base =
     vncURL?.startsWith("http://") || vncURL?.startsWith("https://")
       ? vncURL
       : `http://${vncURL}`;
-
-  /* The viewer address as an operator reads it: host and port, not the whole
-     URL. A saved address that does not parse is shown as saved. */
-  let target = vncURL || "—";
-  try {
-    target = new URL(base).host || target;
-  } catch {
-    /* keep the raw value */
-  }
-
-  const config = configQuery.data ?? {};
-  const link = desktopQuery.isFetching
-    ? { value: "Linking", tone: "info" }
-    : frameReady
-      ? { value: "Live", tone: "success" }
-      : { value: "Opening", tone: "warning" };
-  const desktopState =
-    config.mode === "manual"
-      ? { value: "Manual", tone: "neutral", hint: "address set by hand" }
-      : config.setupDone
-        ? { value: "Provisioned", tone: "neutral", hint: "installed on the host" }
-        : { value: "Pending", tone: "warning", hint: "install has not run" };
 
   return (
     <PageShell
@@ -223,57 +176,9 @@ export default function DesktopPage({ sessionId }) {
       className={styles.desktopPage}
       innerClassName={styles.desktopInner}
     >
-      {header}
-
-      <StatStrip className={styles.readout} role="group" aria-label="Desktop session">
-        <StatTile
-          label="Link"
-          value={link.value}
-          tone={link.tone}
-          /* The ring only travels while the link is still settling. A "Live"
-             desktop that pulses forever is a light that never stops blinking. */
-          icon={
-            <span
-              className={`${styles.pulseDot}${
-                frameReady ? "" : ` ${styles.pulseDotSeeking}`
-              }`}
-              aria-hidden="true"
-            />
-          }
-          hint={frameReady ? "desktop is drawing" : "waiting for the first frame"}
-        />
-        <StatTile
-          label="Target"
-          value={target}
-          hint={workHost === "ssh" ? "remote SSH work host" : "local work host"}
-        />
-        <StatTile
-          label="Desktop"
-          value={desktopState.value}
-          tone={desktopState.tone}
-          hint={desktopState.hint}
-        />
-        <StatTile
-          label="Frame"
-          value={
-            frameSize ? `${frameSize.width}×${frameSize.height}` : "—"
-          }
-          hint={frameSize ? `device pixel ratio ${frameSize.dpr}` : "measuring the canvas"}
-        />
-      </StatStrip>
-
-      {/* The iframe is blank until the desktop's own page loads, which is
-          several seconds on a cold workspace host. The hint sits above the
-          frame, never over it. */}
-      {!frameReady && (
-        <p className={styles.frameHint} role="status">
-          <span
-            className={`${styles.pulseDot} ${styles.pulseDotSeeking}`}
-            aria-hidden="true"
-          />
-          Opening the desktop…
-        </p>
-      )}
+      {/* The desktop, edge to edge. The iframe only re-measures on mount and on
+          resize, so the frame is the whole remaining column and nothing else
+          competes for it. */}
       <div
         ref={frameRef}
         className={`${styles.frame} ${frameReady ? "" : styles.frameLoading}`}
@@ -285,7 +190,17 @@ export default function DesktopPage({ sessionId }) {
           allow="fullscreen; clipboard-read; clipboard-write"
           onLoad={() => setFrameReady(true)}
         />
+        {!frameReady && (
+          <p className={styles.frameHint} role="status">
+            <span
+              className={`${styles.pulseDot} ${styles.pulseDotSeeking}`}
+              aria-hidden="true"
+            />
+            Opening the desktop…
+          </p>
+        )}
       </div>
     </PageShell>
   );
 }
+

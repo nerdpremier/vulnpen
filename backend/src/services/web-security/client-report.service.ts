@@ -360,3 +360,81 @@ export function buildClientReport(options: ReportOptions): ClientReport {
     body,
   };
 }
+
+/**
+ * The draft report: a starting skeleton, findings only.
+ *
+ * Where the formal report is a deliverable, this is the system's default draft
+ * template — a fixed frame (a short heading, the severity summary, then one
+ * block per finding) whose content is filled from the engagement's own data as
+ * the agent produces it. No cover, document details, abbreviations, revision
+ * history, tester list, terms or table of contents: the shape a reader can scan
+ * in one sitting, and the shape the findings themselves are written for.
+ */
+export function buildDraftReport(options: ReportOptions): ClientReport {
+  const generatedAt = options.generatedAt ?? new Date();
+  const vulnerabilities = options.vulnerabilities ?? [];
+  const findings = buildReportFindings(vulnerabilities);
+  const stats = computeReportStats(findings, options.testPlan);
+  const byId = new Map(vulnerabilities.map((v) => [v.vulnerabilityId, v]));
+  const client = options.client || "ผู้ว่าจ้าง";
+  const tester = options.tester || "";
+
+  const severityRows = (["วิกฤต", "สูง", "ปานกลาง", "ต่ำ", "ข้อมูลข่าวสาร"] as ThaiLevel[]).map((level) => {
+    const severity: Severity =
+      level === "วิกฤต"
+        ? "critical"
+        : level === "สูง"
+          ? "high"
+          : level === "ปานกลาง"
+            ? "medium"
+            : level === "ต่ำ"
+              ? "low"
+              : "info";
+    return [level, String(stats.bySeverity[severity] ?? 0)];
+  });
+
+  const body: ClientBlock[] = [];
+
+  /* A one-paragraph scope line, then the numbers, then the findings. Nothing
+     else: this is a draft, and every extra section is a page the reader has to
+     get past before the actual vulnerabilities. */
+  body.push({
+    type: "p",
+    text: `รายงานฉบับร่างนี้สรุปช่องโหว่ที่ตรวจพบจากการทดสอบเจาะระบบเว็บแอปพลิเคชันของ ${client}${
+      options.target ? ` (${options.target})` : ""
+    } จำนวน ${stats.totalFindings} รายการ โดยเรียงลำดับจากความเสี่ยงสูงไปต่ำ แต่ละรายการระบุระดับความเสี่ยง คะแนน CVSS v3.0 สิ่งที่ตรวจพบ ผลกระทบ และแนวทางแก้ไข`,
+  });
+  body.push({ type: "table", headers: ["ระดับความเสี่ยง", "จำนวนช่องโหว่ที่ตรวจพบ"], rows: severityRows });
+
+  body.push({ type: "h1", text: "รายละเอียดช่องโหว่ที่ตรวจพบ" });
+  if (!findings.length) {
+    body.push({ type: "p", text: "ไม่พบช่องโหว่ที่ต้องรายงานจากการทดสอบในขอบเขตที่กำหนด" });
+  }
+  findings.forEach((finding, index) => {
+    body.push({ type: "finding", finding: buildFindingCard(index, finding, byId.get(finding.id), options) });
+  });
+
+  const frontMatter: ClientReportFrontMatter = {
+    cover: {
+      titleLines: ["รายงานช่องโหว่ (ฉบับร่าง)"],
+      preparedBy: tester || "ทีมผู้ทดสอบ",
+      client,
+    },
+    documentDetails: [],
+    abbreviations: [],
+    history: [],
+    testers: [],
+    terms: "",
+    footerLine: `เอกสารฉบับร่างสำหรับ ${client} เท่านั้น — สรุปช่องโหว่ที่ตรวจพบ`,
+  };
+
+  return {
+    fileName: reportFileName({ ...options, generatedAt })
+      .replace(/\.md$/, "-draft.docx")
+      .replace(/\.docx-draft\.docx$/, "-draft.docx"),
+    frontMatter,
+    toc: [],
+    body,
+  };
+}

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { notification } from "antd";
-import { DownOutlined } from "@ant-design/icons";
+import { Button, notification, Tooltip } from "antd";
+import { DownOutlined, MessageOutlined, ReloadOutlined } from "@ant-design/icons";
 import { FiActivity, FiCheckCircle, FiClock, FiXCircle } from "react-icons/fi";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import styles from "@/styles/components/Chat.module.scss";
 import ChatMessage from "./ChatMessage";
 
@@ -20,6 +21,7 @@ import { buildToolIndex } from "@/utils/toolIndex.mjs";
 import { formatElapsed, summariseSessionActivity } from "@/utils/sessionActivity.mjs";
 import { buildBurpMessage, takeBurpHandoff } from "@/utils/burpHandoff.mjs";
 import { BarList, PageState, StatStrip, StatTile } from "@/components/common/ui";
+import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import { useQueryClient } from "react-query";
 
 export default function ChatView({ sessionId }) {
@@ -30,6 +32,7 @@ export default function ChatView({ sessionId }) {
   const [installSuggestions, setInstallSuggestions] = useState([]);
   const [iterationLimit, setIterationLimit] = useState(null);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const FAR_UP_THRESHOLD = 250;
 
@@ -283,6 +286,43 @@ export default function ChatView({ sessionId }) {
 
   const isEmpty = messages.length === 0 && !historyLoading && !historyError;
 
+  /* The chat's own controls, in the same header slot every session page uses:
+     the live transcript reloads from the server, and the page's other primary
+     action is to jump to the records the conversation is producing. */
+  const actions = useMemo(
+    () => (
+      <>
+        <Tooltip title="Reload the transcript">
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() =>
+              useAgentStreamStore.getState().retryHistory(sessionId)
+            }
+            aria-label="Reload the transcript"
+          />
+        </Tooltip>
+        <Button
+          icon={<MessageOutlined />}
+          onClick={() => router.push(`/session/${sessionId}/vulnerabilities`)}
+        >
+          Findings
+        </Button>
+        <Button
+          type="primary"
+          onClick={() => {
+            const el = messagesContainerRef.current;
+            if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+          }}
+          disabled={isEmpty}
+        >
+          Latest
+        </Button>
+      </>
+    ),
+    [sessionId, router, isEmpty],
+  );
+  usePublishHeaderActions(actions);
+
   return (
     <div className={styles.chatContainer}>
       <div
@@ -306,21 +346,18 @@ export default function ChatView({ sessionId }) {
                 value={activity.succeeded}
                 tone="success"
                 icon={<FiCheckCircle />}
-                hint="exit code 0"
               />
               <StatTile
                 label="Failed"
                 value={activity.failed}
                 tone={activity.failed ? "danger" : "neutral"}
                 icon={<FiXCircle />}
-                hint={activity.failed ? "non-zero exit" : "nothing failed"}
               />
               <StatTile
                 label="Elapsed"
                 value={formatElapsed(activity.elapsedMs)}
                 count={false}
                 icon={<FiClock />}
-                hint="first message to last"
               />
             </StatStrip>
 

@@ -36,6 +36,7 @@ import {
 import { buildWebAppPentestReport } from "../services/web-security/report.service";
 import { buildClientReport } from "../services/web-security/client-report.service";
 import {
+  buildDraftReportDocx,
   convertReportToPdf,
   ensureReportDocx,
   markReportEditedByWord,
@@ -651,6 +652,28 @@ export const exportReportPdf = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[web-security] pdf export error:", err);
     return res.status(500).json({ message: err?.message ?? "Failed to convert the report to PDF" });
+  }
+};
+
+/**
+ * The draft report export: findings only. Rebuilt from the engagement's current
+ * results on every call — it is never the stored working document, so it can
+ * never go stale against the findings it is meant to summarise.
+ */
+export const downloadReportDraftDocxFile = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const { buffer, fileName } = await buildDraftReportDocx(sessionId, userId);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(fileName)}"`);
+    return res.status(200).send(buffer);
+  } catch (err: any) {
+    console.error("[web-security] draft docx error:", err);
+    return res.status(500).json({ message: err?.message ?? "Failed to build the draft report" });
   }
 };
 

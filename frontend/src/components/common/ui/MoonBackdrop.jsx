@@ -1,14 +1,22 @@
 import styles from "./ui.module.scss";
 
 /**
- * Decorative canvas layer (xAI posture: flat near-black, no atmosphere).
+ * Decorative canvas layer (flat near-black, engineering texture only).
  * Purely presentational: aria-hidden and pointer-events: none, so it can sit
- * behind any page or hero block. Optionally draws a faint hairline grid.
+ * behind any page or hero block. Draws a faint hairline grid and a scanline
+ * wash — the texture of an instrument, not an atmosphere.
  *
  * @param {"page"|"hero"} variant  `page` pins the layer to the viewport, `hero`
  *                                 fills the nearest positioned ancestor.
+ * @param grid                     draw the hairline grid (off by default)
+ * @param scanlines                draw the horizontal scanline wash (off by default)
  */
-const MoonBackdrop = ({ variant = "hero", grid = true, className = "" }) => {
+const MoonBackdrop = ({
+  variant = "hero",
+  grid = false,
+  scanlines = false,
+  className = "",
+}) => {
   const root = [
     styles.backdrop,
     variant === "page" ? styles.backdropPage : styles.backdropHero,
@@ -20,6 +28,7 @@ const MoonBackdrop = ({ variant = "hero", grid = true, className = "" }) => {
   return (
     <div className={root} aria-hidden="true">
       {grid && <span className={styles.grid} />}
+      {scanlines && <span className={styles.scanlines} />}
     </div>
   );
 };

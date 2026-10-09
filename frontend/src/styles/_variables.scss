@@ -157,13 +157,46 @@ $dur-4: 420ms;
   -webkit-backdrop-filter: blur(var(--moon-blur, 12px));
 }
 
-/// Small uppercase mono label above a heading (xAI eyebrow-mono).
+/// A framed block with corner ticks, the way a terminal draws a panel. The
+/// ticks are four 1px L-bends drawn by a single pseudo-element background, so
+/// the block needs no extra markup. Pair with a hairline border.
+@mixin terminal-panel($tick: var(--moon-tick, rgba(255, 255, 255, 0.28))) {
+  position: relative;
+  border: 1px solid var(--moon-line-1, rgba(255, 255, 255, 0.08));
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(#{$tick}, #{$tick}) left top / 9px 1px no-repeat,
+      linear-gradient(#{$tick}, #{$tick}) left top / 1px 9px no-repeat,
+      linear-gradient(#{$tick}, #{$tick}) right top / 9px 1px no-repeat,
+      linear-gradient(#{$tick}, #{$tick}) right top / 1px 9px no-repeat,
+      linear-gradient(#{$tick}, #{$tick}) left bottom / 9px 1px no-repeat,
+      linear-gradient(#{$tick}, #{$tick}) left bottom / 1px 9px no-repeat,
+      linear-gradient(#{$tick}, #{$tick}) right bottom / 9px 1px no-repeat,
+      linear-gradient(#{$tick}, #{$tick}) right bottom / 1px 9px no-repeat;
+  }
+}
+
+/// A faint engineering grid, drawn behind a block's content. Very low alpha,
+/// so it registers as texture rather than as a table.
+@mixin terminal-grid($size: var(--moon-grid-size, 44px)) {
+  background-image:
+    linear-gradient(var(--moon-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--moon-grid-line) 1px, transparent 1px);
+  background-size: $size $size;
+}
+
+/// Small uppercase mono label above a heading.
 @mixin eyebrow {
-  font-family: "Geist Mono", "JetBrains Mono", "Menlo for powerline",
+  font-family: "JetBrains Mono", "Geist Mono", "Menlo for powerline",
     ui-monospace, monospace;
   font-size: 0.72rem;
-  font-weight: 400;
-  letter-spacing: 0.1em;
+  font-weight: 500;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--moon-text-mute, #7d8187);
 }

@@ -13,21 +13,12 @@ import {
 } from "@ant-design/icons";
 import { getScans, getTestPlan } from "@/services/websecurity.service";
 import { getSessionInfo, getVulnerabilities } from "@/services/agent.service";
-import {
-  CaseMatrix,
-  PageHeader,
-  PageShell,
-  PageState,
-  ProgressRing,
-} from "@/components/common/ui";
+import { PageShell, PageState } from "@/components/common/ui";
+import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import ScanLauncherModal from "@/components/pages/session/scans/ScanLauncherModal";
+import AttackSurface from "./AttackSurface";
 import { ScanStatusPill } from "@/components/pages/session/scans/ScanStatus";
-import {
-  isScanLive,
-  scanName,
-  scanProgress,
-  scanScopeLabel,
-} from "@/utils/scans.mjs";
+import { isScanLive } from "@/utils/scans.mjs";
 import { findingsBySeverity } from "@/utils/findings.mjs";
 import { scansKey, testPlanKey } from "@/utils/scanQueryKeys.mjs";
 import styles from "@/styles/pages/Overview.module.scss";
@@ -42,48 +33,168 @@ import styles from "@/styles/pages/Overview.module.scss";
  * follows from it.
  */
 
-/** The badges under the title: the engagement boundary, in one line. */
-function EngagementChips({ target, scope, agentState }) {
+/** "6 Oct, 11:36" - compact stamp for a scan row. */
+/* The chapter cards are narrow, so a long WSTG chapter name is cut mid-word.
+   Dropping the trailing "Testing" keeps every chapter's meaningful words and
+   reads whole: "Configuration and Deployment Management". */
+const shortChapterLabel = (label) =>
+  String(label ?? "").replace(/\s+Testing$/, "").trim();
+
+/* A case is settled once it produced a result. `skipped` is deliberately left
+   out: it is a gap the operator chose, and the dial has to show it as one. */
+const settledCount = (counts) =>
+  (counts.passed ?? 0) + (counts.failed ?? 0) + (counts.blocked ?? 0);
+
+/**
+ * The coverage dial: every chapter as one arc of one ring, the executed share
+ * filled and the skipped share left dark. A chapter is lit while hovered or
+ * focused, and the ring's centre reads that chapter's own numbers — so the
+ * whole plan is one shape and every part of it stays reachable without a list.
+ */
+function CoverageDial({ rows, activeKey, onActivate }) {
+  const SIZE = 260;
+  const CX = SIZE / 2;
+  const CY = SIZE / 2;
+  /* A thin ring leaves a wide hole for the readout, and the hole is where the
+     number lives — the ring only has to be legible, not heavy. */
+  const R = 101;
+  const STROKE = 11;
+  const GAP_DEG = 2.6;
+
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const settled = rows.reduce((sum, row) => sum + settledCount(row.counts), 0);
+
+  const active = rows.find((row) => row.key === activeKey) ?? null;
+
+  let cursor = -90;
+  const arcs = rows.map((row) => {
+    const span = total > 0 ? (row.total / total) * 360 : 0;
+    const start = cursor;
+    cursor += span;
+    const end = cursor - GAP_DEG;
+    const executed = settledCount(row.counts);
+    const passShare = row.total > 0 ? (row.counts.passed ?? 0) / row.total : 0;
+    const failShare = row.total > 0
+      ? ((row.counts.failed ?? 0) + (row.counts.blocked ?? 0)) / row.total
+      : 0;
+    return {
+      row,
+      start,
+      end,
+      executed,
+      /* The fill runs to the executed share; the tail of it is red when that
+         work went badly. A chapter that ran everything and failed everything
+         therefore reads as a full red arc, not as a finished green one. */
+      runEnd: start + (end - start) * (passShare + failShare),
+      passEnd: start + (end - start) * passShare,
+    };
+  });
+
+  const polar = (deg, radius) => {
+    const rad = (deg * Math.PI) / 180;
+    return [CX + Math.cos(rad) * radius, CY + Math.sin(rad) * radius];
+  };
+  const arcPath = (start, end, radius) => {
+    const [x1, y1] = polar(start, radius);
+    const [x2, y2] = polar(end, radius);
+    const large = end - start > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`;
+  };
+  const seg = (start, end) =>
+    end - start > 0.4 ? arcPath(start, end, R) : null;
+
+  const activeSettled = active ? settledCount(active.counts) : settled;
+  const activeTotal = active ? active.total : total;
+  const activeFailed = active
+    ? (active.counts.failed ?? 0) + (active.counts.blocked ?? 0)
+    : rows.reduce((sum, row) => sum + (row.counts.failed ?? 0) + (row.counts.blocked ?? 0), 0);
+  const shown = {
+    label: active ? active.label : "",
+    count: activeSettled,
+    total: activeTotal,
+    failed: activeFailed,
+    percent: activeTotal > 0 ? Math.round((activeSettled / activeTotal) * 100) : 0,
+  };
+
   return (
-    <>
-      {target && (
-        <span className={styles.chip}>
-          <span className={styles.chipLabel}>Target</span>
-          <span className={styles.chipValue} title={target}>
-            {target}
+    <div className={styles.dial}>
+      <svg
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        className={styles.dialSvg}
+        role="img"
+        aria-label={`Test plan coverage: ${settled} of ${total} cases executed across ${rows.length} chapters`}
+      >
+        {arcs.map(({ row, start, end, runEnd, passEnd }) => {
+          const lit = activeKey === row.key;
+          const pass = seg(start, passEnd);
+          const fail = seg(passEnd, runEnd);
+          return (
+            <g
+              key={row.key}
+              className={`${styles.dialArc} ${lit ? styles.dialArcLit : ""} ${
+                activeKey && !lit ? styles.dialArcDim : ""
+              }`}
+              onMouseEnter={() => onActivate(row.key)}
+              onMouseLeave={() => onActivate(null)}
+            >
+              <path
+                d={arcPath(start, end, R)}
+                className={styles.dialTrack}
+                strokeWidth={STROKE}
+                fill="none"
+              />
+              {pass && (
+                <path
+                  d={pass}
+                  className={styles.dialPass}
+                  strokeWidth={STROKE}
+                  fill="none"
+                />
+              )}
+              {fail && (
+                <path
+                  d={fail}
+                  className={styles.dialFail}
+                  strokeWidth={STROKE}
+                  fill="none"
+                />
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className={styles.dialReadout} aria-hidden="true">
+        <span className={styles.dialPercent}>
+          {shown.percent}
+          <span className={styles.dialPercentMark}>%</span>
+        </span>
+        {/* Unpicked, the hero already states the plan's 79/97, so the ring leads
+            with the one figure it owns — the executed share. Picking a chapter
+            adds that chapter's name and its own count, which are new. */}
+        {shown.label && (
+          <>
+            <span className={styles.dialLabel}>{shown.label}</span>
+            <span className={styles.dialCount}>
+              {shown.count}
+              <span>/{shown.total}</span>
+            </span>
+          </>
+        )}
+        {shown.failed > 0 && (
+          <span className={styles.dialFailed}>
+            {shown.failed} failed or blocked
           </span>
-        </span>
-      )}
-      {scope && (
-        <span className={styles.chip}>
-          <span className={styles.chipLabel}>Scope</span>
-          <span className={styles.chipValue} title={scope}>
-            {scope}
-          </span>
-        </span>
-      )}
-      {agentState && (
-        <span className={styles.chip}>
-          <span className={styles.chipLabel}>Agent</span>
-          <span className={styles.chipValue}>{agentState.replace(/_/g, " ")}</span>
-        </span>
-      )}
-    </>
+        )}
+      </div>
+    </div>
   );
 }
-
-/** "6 Oct, 11:36" - compact stamp for a scan row. */
-const shortStamp = (value) =>
-  new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
 export default function EngagementOverviewPage({ sessionId }) {
   const router = useRouter();
   const [launcherOpen, setLauncherOpen] = useState(false);
+  const [activeChapter, setActiveChapter] = useState(null);
 
   const sessionQuery = useQuery(
     ["session-info", sessionId],
@@ -126,6 +237,13 @@ export default function EngagementOverviewPage({ sessionId }) {
   const liveScan = scans.find(isScanLive);
   const featuredScan = liveScan ?? scans[0];
   const remaining = coverage ? coverage.notStarted + coverage.inProgress : 0;
+  const criticalHigh = findings.levels
+    .filter((level) => ["critical", "high"].includes(level.key))
+    .reduce((sum, level) => sum + level.count, 0);
+  /* The severities that actually occur, in canonical order. The findings bar
+     and its key are built from this one list, so segment order, colour and
+     label can never drift apart. */
+  const populatedLevels = findings.levels.filter((level) => level.count > 0);
 
   /* The plan's cases, grouped the way the coverage rows are ordered, so the
      grid and the plan page count the categories in the same sequence. */
@@ -146,63 +264,69 @@ export default function EngagementOverviewPage({ sessionId }) {
     };
     return [...byCategory.keys()]
       .sort((a, b) => rank(a) - rank(b))
-      .map((key) => ({
-        key,
-        label: (coverage?.byCategory ?? []).find((row) => row.key === key)?.label ?? key,
-        cells: byCategory.get(key),
-      }));
+      .map((key) => {
+        const cells = byCategory.get(key);
+        /* A readable bar needs counts, not 19 anonymous squares: count each
+           status once here so the row renders as one labelled shape. */
+        const counts = { passed: 0, failed: 0, blocked: 0, in_progress: 0, skipped: 0, not_started: 0 };
+        for (const cell of cells) counts[cell.status] = (counts[cell.status] ?? 0) + 1;
+        const label =
+          (coverage?.byCategory ?? []).find((row) => row.key === key)?.label ?? key;
+        return {
+          key,
+          /* "Configuration and Deployment Management Testing" truncates to
+             "Configuration and Deployment Man…" in a card; the first two words
+             name the chapter well enough and stay whole. */
+          label: shortChapterLabel(label),
+          counts,
+          total: cells.length,
+        };
+      });
   }, [plan, coverage]);
 
-  const header = (
-    <PageHeader
-      eyebrow="Engagement"
-      title={session?.name || "Engagement"}
-      /* The chips already name the target and the scope; a sentence repeating
-         them is the third place the same fact is written on this screen. */
-      description={session?.description || null}
-      actions={
-        <>
-          <Tooltip title="Reload every number on this page">
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                sessionQuery.refetch();
-                planQuery.refetch();
-                scansQuery.refetch();
-                vulnQuery.refetch();
-              }}
-              aria-label="Reload"
-            />
-          </Tooltip>
+  /* The page's actions ride in the app header, beside the engagement's
+     breadcrumb — the body opens directly on the graph instead of on a band of
+     buttons. Published rather than rendered here because the header belongs to
+     the session layout, a level above this page. */
+  const actions = useMemo(
+    () => (
+      <>
+        <Tooltip title="Reload every number on this page">
           <Button
-            icon={<MessageOutlined />}
-            onClick={() => router.push(`/session/${sessionId}/chat`)}
-          >
-            Agent chat
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlayCircleOutlined />}
-            disabled={!plan}
-            onClick={() => setLauncherOpen(true)}
-          >
-            New scan
-          </Button>
-        </>
-      }
-      meta={
-        <EngagementChips
-          target={plan?.target ?? session?.engagement?.target}
-          scope={plan?.scope ?? session?.engagement?.scope}
-          agentState={session?.agentState}
-        />
-      }
-    />
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              sessionQuery.refetch();
+              planQuery.refetch();
+              scansQuery.refetch();
+              vulnQuery.refetch();
+            }}
+            aria-label="Reload"
+          />
+        </Tooltip>
+        <Button
+          icon={<MessageOutlined />}
+          onClick={() => router.push(`/session/${sessionId}/chat`)}
+        >
+          Agent chat
+        </Button>
+        <Button
+          type="primary"
+          icon={<PlayCircleOutlined />}
+          disabled={!plan}
+          onClick={() => setLauncherOpen(true)}
+        >
+          New scan
+        </Button>
+      </>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessionId, plan, router],
   );
+
+  usePublishHeaderActions(actions);
 
   const shell = (children) => (
     <PageShell>
-      {header}
       {children}
       {launcherOpen && plan && (
         <ScanLauncherModal
@@ -290,142 +414,285 @@ export default function EngagementOverviewPage({ sessionId }) {
 
   return shell(
     <>
-      <div className={styles.grid}>
-        <section className={styles.card}>
-          <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>Coverage</h2>
-            <Link className={styles.cardLink} href={`/session/${sessionId}/test-plan`}>
-              Test plan <ArrowRightOutlined />
-            </Link>
-          </header>
-
-          <div className={styles.coverageBody}>
-            <ProgressRing
-              value={coverage.executed}
-              total={coverage.total}
-              caption="executed"
-            />
-            <div className={styles.coverageCallout}>
-              <span className={styles.calloutNumber}>{remaining}</span>
-              <span className={styles.calloutLabel}>cases still need a result</span>
-              {remaining > 0 && (
-                <button
-                  type="button"
-                  className={styles.inlineAction}
-                  onClick={() => setLauncherOpen(true)}
-                >
-                  Scan remaining cases <ArrowRightOutlined />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <CaseMatrix
-            className={styles.coverageMatrix}
-            rows={caseRows}
-            summary={{
-              passed: coverage.passed,
-              failed: coverage.failed,
-              blocked: coverage.blocked,
-              in_progress: coverage.inProgress,
-              skipped: coverage.skipped,
-              not_started: coverage.notStarted,
-            }}
+      {/* The hero: the engagement as a sphere of chapters, each node a chapter
+          coloured by outcome. The figures ride beside it, so the same data is
+          read two ways — shape first, then number. */}
+      <section className={styles.hero} aria-label="Engagement at a glance">
+        <div className={styles.heroStage}>
+          <AttackSurface
+            findings={findings.ranked}
+            sessionId={sessionId}
+            className={styles.heroCanvas}
           />
-        </section>
+          <div className={styles.heroLegend} aria-hidden="true">
+            {findings.levels
+              .filter((level) => level.count > 0)
+              .map((level) => (
+                <span key={level.key}>
+                  <i className={`${styles.legendDot} ${styles[`legend_${level.key}`]}`} />
+                  {level.label.toLowerCase()}
+                </span>
+              ))}
+          </div>
+        </div>
 
-        <section className={styles.card}>
-          <header className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>Findings</h2>
-            <Link
-              className={styles.cardLink}
-              href={`/session/${sessionId}/vulnerabilities`}
-            >
-              All findings <ArrowRightOutlined />
-            </Link>
-          </header>
-
-          <div className={styles.priorityReadout}>
-            <span className={styles.priorityNumber}>{topFindings.length}</span>
-            <span>
-              critical or high · {findings.total} findings in all
+        <div className={styles.heroFacts}>
+          {/* A status ledger, read top to bottom: the agent's live state, then
+              each measure of the engagement as one row — a state dot, the
+              label, the value, and the bar that is the value drawn to scale.
+              Nothing sits alone in half a box and no figure is stated twice. */}
+          <div className={`${styles.ledgerRow} ${styles.ledgerHead}`}>
+            <span className={styles.ledgerDot} data-live={liveScan ? "yes" : "no"} aria-hidden="true" />
+            <span className={styles.ledgerLabel}>Agent</span>
+            <span className={styles.ledgerValue}>
+              {(session?.agentState ?? "idle").replace(/_/g, " ")}
             </span>
           </div>
 
+          <Link
+            className={styles.ledgerRow}
+            href={`/session/${sessionId}/test-plan`}
+          >
+            <span className={styles.ledgerLabel}>Cases executed</span>
+            <span className={styles.ledgerValue}>
+              <b>{coverage.executed}</b>
+              <span>/{coverage.total}</span>
+            </span>
+            <span className={styles.ledgerBar}>
+              <span className={styles.ledgerTrack} aria-hidden="true">
+                <span
+                  className={styles.ledgerFill}
+                  style={{
+                    width: `${
+                      coverage.total > 0
+                        ? Math.round((coverage.executed / coverage.total) * 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </span>
+              <span className={styles.ledgerScale}>
+                <span>executed</span>
+                <span>{remaining} left</span>
+              </span>
+            </span>
+          </Link>
+
+          <Link
+            className={styles.ledgerRow}
+            href={`/session/${sessionId}/vulnerabilities`}
+          >
+            <span className={styles.ledgerLabel}>Findings</span>
+            <span className={styles.ledgerValue}>
+              <b>{findings.total}</b>
+            </span>
+            <span className={styles.ledgerBar}>
+              <span
+                className={`${styles.ledgerTrack} ${styles.ledgerTrackSplit}`}
+                aria-hidden="true"
+              >
+                {populatedLevels.map((level) => (
+                  <span
+                    key={level.key}
+                    className={`${styles.ledgerSeg} ${styles[`ledger_${level.key}`]}`}
+                    style={{ flexGrow: level.count }}
+                  />
+                ))}
+              </span>
+              {/* Each segment named and counted, so a colour is never guessed:
+                  the bar's own key, read left to right in the bar's own order. */}
+              <span className={styles.ledgerScale}>
+                {populatedLevels.map((level) => (
+                  <span key={level.key} className={styles.ledgerScaleItem}>
+                    <i
+                      className={`${styles.ledgerChip} ${styles[`ledger_${level.key}`]}`}
+                      aria-hidden="true"
+                    />
+                    {level.label.toLowerCase()} {level.count}
+                  </span>
+                ))}
+              </span>
+            </span>
+          </Link>
+
+          <Link
+            className={styles.ledgerRow}
+            href={`/session/${sessionId}/vulnerabilities`}
+            data-empty={criticalHigh > 0 ? "no" : "yes"}
+          >
+            <span className={styles.ledgerLabel}>Critical / high</span>
+            <span className={styles.ledgerValue}>
+              <b>{criticalHigh}</b>
+              <span>/{findings.total}</span>
+            </span>
+            <span className={styles.ledgerBar}>
+              <span className={styles.ledgerTrack} aria-hidden="true">
+                <span
+                  className={`${styles.ledgerFill} ${styles.ledgerFillDanger}`}
+                  style={{
+                    width: `${
+                      findings.total > 0
+                        ? Math.round((criticalHigh / findings.total) * 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </span>
+              <span className={styles.ledgerScale}>
+                <span>of all findings</span>
+              </span>
+            </span>
+          </Link>
+
+          <div className={styles.ledgerFoot}>
+            <ScanStatusPill status={featuredScan?.status ?? "idle"} />
+            {featuredScan ? (
+              <Link
+                className={styles.heroScanLink}
+                href={`/session/${sessionId}/scans/${featuredScan.runId}`}
+              >
+                {liveScan ? "watch run" : "last run"} →
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className={styles.heroScanLink}
+                onClick={() => setLauncherOpen(true)}
+                disabled={!plan}
+              >
+                start a scan →
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className={styles.columns}>
+        {/* Left: the findings that change decisions, worst first. */}
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h2 className={styles.panelTitle}>
+              <span className={styles.panelMark} aria-hidden="true" />
+              Needs attention
+            </h2>
+            <Link
+              className={styles.panelLink}
+              href={`/session/${sessionId}/vulnerabilities`}
+            >
+              {/* The hero already states the total. Here the useful fact is how
+                  many the card is not showing, so the number never repeats. */}
+              {findings.total > topFindings.length
+                ? `+${findings.total - Math.min(topFindings.length, 7)} more →`
+                : "open all →"}
+            </Link>
+          </div>
+
           {topFindings.length === 0 ? (
-            <p className={styles.factMuted}>
+            <p className={styles.panelEmpty}>
               {findings.total > 0
-                ? `${findings.total} lower-priority finding${findings.total === 1 ? "" : "s"}; see the full risk breakdown.`
-                : "No findings recorded yet. Findings appear when scans or the agent report them."}
+                ? "Nothing at critical or high — the full table has the rest."
+                : "Nothing reported yet. Findings appear when scans or the agent report them."}
             </p>
           ) : (
-            <ul className={styles.findingList}>
-              {topFindings.slice(0, 3).map((finding) => (
-                <li key={finding.vulnerabilityId} className={styles.findingItem}>
-                  <span
-                    className={`${styles.severityDot} ${styles[`dot_${String(finding.severity).toLowerCase()}`] ?? ""}`}
-                  />
-                  <Link
-                    className={styles.findingLink}
-                    href={`/session/${sessionId}/vulnerabilities/${finding.vulnerabilityId}`}
-                  >
-                    {finding.title || finding.vulnerabilityId}
-                  </Link>
-                </li>
-              ))}
+            <ul className={styles.board}>
+              {topFindings.slice(0, 7).map((finding, index) => {
+                const sev = String(finding.severity).toLowerCase();
+                const endpoint =
+                  finding.endpoint || finding.service || finding.host;
+                return (
+                  <li key={finding.vulnerabilityId} className={styles.boardItem}>
+                    <Link
+                      className={`${styles.boardCard} ${styles[`board_${sev}`] ?? ""}`}
+                      href={`/session/${sessionId}/vulnerabilities/${finding.vulnerabilityId}`}
+                    >
+                      <span className={styles.boardRank} aria-hidden="true">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className={styles.boardBody}>
+                        <span className={styles.boardTitle}>
+                          {finding.title || finding.vulnerabilityId}
+                        </span>
+                        {endpoint && (
+                          <span className={styles.boardEndpoint}>{endpoint}</span>
+                        )}
+                      </span>
+                      <span className={styles.boardSev}>{sev}</span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
-      </div>
 
-      <section className={styles.card}>
-        <header className={styles.cardHead}>
-          <h2 className={styles.cardTitle}>Scans</h2>
-          <Link className={styles.cardLink} href={`/session/${sessionId}/scans`}>
-            Scan history <ArrowRightOutlined />
-          </Link>
-        </header>
-
-        {!featuredScan ? (
-          <p className={styles.factMuted}>
-            No scans yet. Launch one to start testing {plan?.target || "the target"}.
-          </p>
-        ) : (
-          <div className={styles.scanFeature}>
-            <div className={styles.scanFeatureMain}>
-              <span className={styles.scanFeatureLabel}>
-                {featuredScan.status === "queued"
-                  ? "Waiting in queue"
-                  : liveScan ? "Running now" : "Most recent run"}
-              </span>
-              <Link
-                className={styles.scanName}
-                href={`/session/${sessionId}/scans/${featuredScan.runId}`}
+        {/* Right: the whole plan as one dial, then the chapters as a legend that
+            drives it — the ring states the total, the legend names the parts. */}
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <h2 className={styles.panelTitle}>
+              <span className={styles.panelMark} aria-hidden="true" />
+              Coverage
+            </h2>
+            {remaining > 0 ? (
+              <button
+                type="button"
+                className={styles.panelLink}
+                onClick={() => setLauncherOpen(true)}
               >
-                {scanName(featuredScan, plan?.cases ?? [])}
+                scan remaining →
+              </button>
+            ) : (
+              <Link
+                className={styles.panelLink}
+                href={`/session/${sessionId}/test-plan`}
+              >
+                test plan →
               </Link>
-              <span className={styles.scanMeta}>
-                {scanScopeLabel(featuredScan, plan?.cases ?? [])}
-                {featuredScan.startedAt ? ` · ${shortStamp(featuredScan.startedAt)}` : ""}
-              </span>
-            </div>
-            <ScanStatusPill status={featuredScan.status} />
-            {featuredScan.status === "running" && (
-              <span className={styles.scanProgress}>
-                {scanProgress(featuredScan.testIds, plan?.cases ?? [], {
-                  since: featuredScan.startedAt,
-                }).percent}% tested
-              </span>
             )}
-            <Link
-              className={styles.scanOpen}
-              href={`/session/${sessionId}/scans/${featuredScan.runId}`}
-            >
-              {featuredScan.status === "running" ? "Watch run" : "View run"} <ArrowRightOutlined />
-            </Link>
           </div>
-        )}
-      </section>
+
+          <div className={styles.coverBody}>
+            <CoverageDial
+              rows={caseRows}
+              activeKey={activeChapter}
+              onActivate={setActiveChapter}
+            />
+
+            <ul className={styles.legend}>
+              {caseRows.map((row) => {
+                const settled = settledCount(row.counts);
+                const lit = activeChapter === row.key;
+                return (
+                  <li key={row.key}>
+                    <button
+                      type="button"
+                      className={`${styles.legendRow} ${lit ? styles.legendRowLit : ""}`}
+                      onMouseEnter={() => setActiveChapter(row.key)}
+                      onMouseLeave={() => setActiveChapter(null)}
+                      onFocus={() => setActiveChapter(row.key)}
+                      onBlur={() => setActiveChapter(null)}
+                      onClick={() => router.push(`/session/${sessionId}/test-plan`)}
+                      title={`${row.label} — ${settled}/${row.total} executed, ${row.counts.failed ?? 0} failed, ${row.counts.skipped ?? 0} skipped`}
+                    >
+                      <span
+                        className={`${styles.legendKey} ${
+                          (row.counts.failed ?? 0) > 0 ? styles.legendKeyAlert : ""
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span className={styles.legendName}>{row.label}</span>
+                      <span className={styles.legendCount}>
+                        <b>{settled}</b>
+                        <span>/{row.total}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </section>
+      </div>
     </>,
   );
 }

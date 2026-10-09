@@ -4,6 +4,7 @@ import { AuthContextProvider } from "@/components/common/auth/AuthContext";
 import Loader from "@/components/common/loader/Loader";
 import Sidebar from "@/components/common/Sidebar";
 import HeaderLinks from "@/components/common/HeaderLinks";
+import { HeaderActionsProvider } from "@/components/common/HeaderActions";
 import AgentStreamConnector from "@/components/common/AgentStreamConnector";
 import ModelSetupGate from "@/components/common/ModelSetupGate";
 import MoonBackdrop from "@/components/common/ui/MoonBackdrop";
@@ -34,23 +35,25 @@ const SessionLayout = ({ children, params }) => {
   return (
     <AuthContextProvider>
       <AgentStreamConnector sessionId={session_id} />
-      <div className={styles.sessionPage}>
-        <MoonBackdrop variant="page" grid={false} />
-        <Sidebar
-          sessionId={session_id}
-          workspaceId={sessionInfo?.workspaceId}
-        />
-        <div className={styles.sessionMainArea}>
-          <HeaderLinks
+      <HeaderActionsProvider>
+        <div className={styles.sessionPage}>
+          <MoonBackdrop variant="page" />
+          <Sidebar
             sessionId={session_id}
-            sessionName={currentSession?.name}
-            sessionInfo={sessionInfo}
+            workspaceId={sessionInfo?.workspaceId}
           />
-          <div className={styles.sessionContent}>
-            <ModelSetupGate>{children}</ModelSetupGate>
+          <div className={styles.sessionMainArea}>
+            <HeaderLinks
+              sessionId={session_id}
+              sessionName={currentSession?.name}
+              sessionInfo={sessionInfo}
+            />
+            <div className={styles.sessionContent}>
+              <ModelSetupGate>{children}</ModelSetupGate>
+            </div>
           </div>
         </div>
-      </div>
+      </HeaderActionsProvider>
     </AuthContextProvider>
   );
 };

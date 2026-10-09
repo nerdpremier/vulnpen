@@ -34,6 +34,7 @@ import {
   launchTestRun,
   openReportWord,
   downloadReportDocxFile,
+  downloadReportDraftDocxFile,
   exportReportPdf,
   mapVulnerability,
   remapAllVulnerabilities,
@@ -75,6 +76,7 @@ router.delete("/session/:sessionId/test-plan/runs/:runId", [verifySess], deleteT
 router.get("/session/:sessionId/report", [verifySess], getReport);
 router.post("/session/:sessionId/report/word", [verifySess], openReportWord);
 router.get("/session/:sessionId/report/docx", [verifySess], downloadReportDocxFile);
+router.get("/session/:sessionId/report/draft-docx", [verifySess], downloadReportDraftDocxFile);
 router.get("/session/:sessionId/report/pdf", [verifySess], exportReportPdf);
 router.get("/session/:sessionId/owasp-top10", [verifySess], getOwaspCoverage);
 router.get("/session/:sessionId/files/:filename", [verifySess], getSessionFile);

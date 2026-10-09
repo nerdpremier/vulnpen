@@ -1,96 +1,251 @@
 @import "../_variables";
 
 /* ============================================================================
-   SCANS
-   The page is the list, laid out the way Tenable's scans page is: a folder
-   rail on the left (one folder per status), and one table behind it that
-   carries every scan — the live ones show their progress inside the row,
-   where Nessus puts it, instead of on separate cards above the history.
-
-   The two shapes a case result takes are decided by the data, not by taste:
-   one case is a word, two or more are a proportion bar. `ScanStatus.jsx` keeps
-   the atoms several surfaces share - the lifecycle pill, the progress bar -
-   and this sheet owns the list itself.
+   SCANS — the run history
+   The page opens on the history as one shape (a tower per run along a time
+   axis), then the four figures it stands for, then the records themselves: one
+   row per run with its progress in the row. `ScanStatus.jsx` keeps the atoms
+   several surfaces share; this sheet owns the page.
    ========================================================================== */
 
-/* ---- The Nessus shape: folders on the left, the table beside them --------- */
-.layout {
-  display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
-  align-items: start;
-  gap: 1rem;
+/* ---- The heading ---------------------------------------------------------- */
+.pageHead {
+  margin-bottom: 1.1rem;
 
-  @include responsive(tablet2) {
-    grid-template-columns: 1fr;
+  h1 {
+    margin: 0.25rem 0 0;
+    font-size: clamp(1.5rem, 2.3vw, 2rem);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+    color: var(--moon-text);
   }
 }
 
-.folders {
+.eyebrow {
+  @include eyebrow;
+}
+
+/* ---- The two columns: the radar on the left, the records beside it -------- */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(20rem, 26rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.2rem;
+
+  @include responsive(laptop1) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The radar panel: a square scope, its figures under it, its key at the foot. */
+.stagePanel {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0.45rem;
-  background: var(--moon-surface-1);
   border: 1px solid var(--moon-line-1);
   border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
   box-shadow: var(--moon-inner-top);
+  overflow: hidden;
+}
 
-  /* Narrow screens: the rail becomes a row of chips above the table. */
-  @include responsive(tablet2) {
-    flex-direction: row;
-    flex-wrap: wrap;
+.stage {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: radial-gradient(60% 60% at 50% 50%, var(--moon-surface-2), var(--moon-void));
+  border-bottom: 1px solid var(--moon-line-1);
+  overflow: hidden;
+  @include terminal-panel;
+
+  @include responsive(laptop1) {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+.terrainCanvas {
+  position: absolute;
+  inset: 0;
+
+  canvas {
+    display: block;
+    touch-action: none;
+  }
+}
+
+/* The four figures the shape stands for, in a row under the scope. */
+.stageLedger {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid var(--moon-line-1);
+}
+
+.ledgerItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.6rem 0.35rem;
+
+  & + & {
+    border-left: 1px solid var(--moon-line-1);
+  }
+}
+
+.ledgerValue {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--tone, var(--moon-text));
+}
+
+.ledgerLabel {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moon-text-faint);
+}
+
+.ledgerItem[data-tone="info"] { --tone: var(--moon-info); }
+.ledgerItem[data-tone="success"] { --tone: var(--moon-success); }
+.ledgerItem[data-tone="danger"] { --tone: var(--moon-danger); }
+
+/* What a spoke colour means. */
+.stageKey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+  padding: 0.55rem 0.75rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+  color: var(--moon-text-faint);
+
+  span {
+    display: inline-flex;
+    align-items: center;
     gap: 0.3rem;
   }
 }
 
-.folder {
+.keyDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--tone, var(--moon-text-faint));
+
+  &[data-tone="completed"] { --tone: #4ccf92; }
+  &[data-tone="failed"] { --tone: #e8465a; }
+  &[data-tone="running"] { --tone: #4aa8e8; }
+  &[data-tone="cancelled"] { --tone: #565656; }
+}
+
+/* The hovered run, named in the top-right corner. */
+.runCaption {
+  position: absolute;
+  top: 1rem;
+  right: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  max-width: 46%;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-sm);
+  background: var(--moon-glass-bg-strong, rgba(10, 10, 10, 0.95));
+  backdrop-filter: blur(var(--moon-blur, 12px));
+  pointer-events: none;
+  text-align: right;
+}
+
+.runCaptionState {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runCaptionName {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  color: var(--moon-text-dim);
+}
+
+.runCaptionFoot {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.56rem;
+  color: var(--moon-text-faint);
+}
+
+/* ---- The records column -------------------------------------------------- */
+.records {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The filter row: status buckets on the left, search on the right. */
+.controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  width: 100%;
-  padding: 0.42rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: var(--moon-radius-sm);
-  background: transparent;
+  margin-bottom: 0.8rem;
+}
+
+.folders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--moon-line-2);
+  border-radius: var(--moon-radius-pill);
+  background: var(--moon-surface-1);
   color: var(--moon-text-dim);
-  font-size: 0.8rem;
-  text-align: left;
+  font-size: 0.74rem;
   cursor: pointer;
-  transition: background var(--moon-dur-1) var(--moon-ease-out),
-    color var(--moon-dur-1) var(--moon-ease-out);
+  transition:
+    background var(--moon-dur-2) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out),
+    color var(--moon-dur-2) var(--moon-ease-out);
 
   &:hover {
-    background: var(--moon-surface-3);
     color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-2);
   }
 
   &[data-active] {
-    background: var(--moon-accent-08);
-    border-color: var(--moon-line-2);
     color: var(--moon-text);
-    font-weight: 600;
+    border-color: var(--moon-accent-40);
+    background: var(--moon-accent-08);
+    font-weight: 500;
   }
 
   @include focus-ring(2px);
-
-  @include responsive(tablet2) {
-    width: auto;
-    padding: 0.3rem 0.55rem;
-  }
 }
 
 .folderLabel {
-  flex: 1 1 auto;
   min-width: 0;
   @include truncate(1);
 }
 
 .folderCount {
-  flex: none;
-  min-width: 1.4rem;
-  padding: 0 0.35rem;
+  min-width: 1.3rem;
+  padding: 0 0.3rem;
   font-family: "JetBrains Mono", monospace;
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   text-align: center;
   color: var(--moon-text-mute);
   background: var(--moon-surface-3);
@@ -101,169 +256,36 @@
   }
 }
 
-.panel {
-  overflow: hidden;
-  background: var(--moon-surface-1);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
-  box-shadow: var(--moon-inner-top);
-}
-
-/* Legacy alias while other surfaces still import the old class name. */
-.list {
-  overflow: hidden;
-  background: var(--moon-surface-1);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
-  box-shadow: var(--moon-inner-top);
-}
-
-/* ---- Toolbar: the count, the search and the status filter ---------------- */
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  padding: 0.7rem 1.15rem;
-  border-bottom: 1px solid var(--moon-line-1);
-
-  @include responsive(tablet3) {
-    padding: 0.65rem 0.85rem;
-  }
-}
-
-.barTitle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.82rem;
-  color: var(--moon-text);
-}
-
-.count {
-  min-width: 1.4rem;
-  padding: 0.05rem 0.4rem;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.62rem;
-  font-weight: 400;
-  text-align: center;
-  color: var(--moon-text-mute);
-  background: var(--moon-surface-3);
-  border: 1px solid var(--moon-line-2);
-  border-radius: var(--moon-radius-pill);
-}
-
-/* Only while a filter is on: the total is already on the chip beside it. */
-.barNote {
-  font-size: 0.7rem;
-  color: var(--moon-text-faint);
-}
-
-.barSpacer {
-  flex: 1 1 auto;
-}
-
 .search {
-  max-width: 19rem;
+  /* Shrink into whatever the folder chips leave on the row instead of
+     forcing a wrap: chips + search read as one control strip. */
+  flex: 1 1 12rem;
+  min-width: 9rem;
+  max-width: 24rem;
+  margin-left: auto;
 }
 
-.filter {
-  min-width: 9.5rem;
+/* ---- The records: one row per run, live ones included --------------------- */
+.table {
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  background: var(--moon-surface-1);
+  box-shadow: var(--moon-inner-top);
+  overflow: hidden;
 }
 
-/* Duration and gaps across recent runs — the history below owns exact records. */
-.timelinePanel {
-  padding: 1rem 1.15rem;
-  border-bottom: 1px solid var(--moon-line-1);
-  background: var(--moon-surface-2);
-
-  @include responsive(tablet3) {
-    padding: 0.8rem 0.85rem;
-  }
-}
-
-.timelineHeading {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-  color: var(--moon-text-mute);
-  font-size: 0.68rem;
-
-  span:first-child { @include eyebrow; font-size: 0.58rem; }
-}
-
-/* ---- Why the runs stopped, counted once ---------------------------------- */
-.notice {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.75rem 1.15rem 0.8rem;
-  border-bottom: 1px solid var(--moon-line-1);
-
-  @include responsive(tablet3) {
-    padding: 0.7rem 0.85rem;
-  }
-}
-
-.noticeLabel {
-  @include eyebrow;
-  font-size: 0.58rem;
-}
-
-.noticeRow {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  min-width: 0;
-  font-size: 0.76rem;
-  color: var(--moon-text-dim);
-}
-
-.noticeCount {
-  flex: none;
-  min-width: 1.9rem;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.7rem;
-  color: var(--moon-danger);
-}
-
-.noticeText {
-  min-width: 0;
-  @include truncate(1);
-}
-
-/* ---- Live rows live inside the table now ---------------------------------
-   The pulse below is what still moves: the status dot of a running scan. */
-@keyframes livePulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-
-@include reduced-motion {
-  .row .runDot {
-    animation: none;
-  }
-}
-
-/* ---- The table: one row per scan, live ones included ---------------------- */
 .head,
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1.9fr) minmax(140px, 1fr) 148px 100px 104px 72px;
+  grid-template-columns: minmax(0, 2.1fr) minmax(120px, 0.9fr) 130px 84px 92px 64px;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.7rem 1.15rem;
+  gap: 0.7rem;
+  padding: 0.65rem 0.9rem;
 }
 
 .head {
   @include tableHead;
+  border-bottom: 1px solid var(--moon-line-1);
 
   /* The rows become two-line cards here, so the column labels would point at
      the wrong cells. Every value in them names itself. */
@@ -277,7 +299,6 @@
   border-bottom: 1px solid var(--moon-line-1);
   cursor: pointer;
   color: var(--moon-text);
-  /* The row answers to the pointer; the name inside it is the real link. */
   text-decoration: none;
   transition: background var(--moon-dur-1) var(--moon-ease-out);
 
@@ -294,38 +315,23 @@
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "identity actions"
-      "cases    cases"
+      "runCases runCases"
       "run      when"
       "findings findings";
     row-gap: 0.5rem;
     padding: 0.75rem 0.85rem;
 
-    .identity {
-      grid-area: identity;
-    }
-
-    .cases,
-    .outcome {
-      grid-area: cases;
-    }
-
-    .stateCell {
-      grid-area: run;
-    }
-
+    .identity { grid-area: identity; }
+    .runCases,
+    .caseWord { grid-area: runCases; }
+    .stateCell { grid-area: run; }
     .when {
       grid-area: when;
       align-items: flex-end;
     }
-
     .findings,
-    .findingsEmpty {
-      grid-area: findings;
-    }
-
-    .rowActions {
-      grid-area: actions;
-    }
+    .findingsEmpty { grid-area: findings; }
+    .rowActions { grid-area: actions; }
   }
 }
 
@@ -340,9 +346,6 @@
   min-width: 0;
   font-size: 0.86rem;
   color: var(--moon-text);
-  /* No underline, here or on hover: the row's own tint already says which line
-     the pointer is on, and a rule under one run of a clickable row reads as a
-     second, narrower target. */
   text-decoration: none;
   @include truncate(1);
 
@@ -361,7 +364,7 @@
 }
 
 /* ---- The cases column: a word, or a split -------------------------------- */
-.outcome {
+.caseWord {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -369,28 +372,14 @@
   font-size: 0.78rem;
   color: var(--tone, var(--moon-text-mute));
 
-  &[data-tone="success"] {
-    --tone: var(--moon-success);
-  }
-
-  &[data-tone="danger"] {
-    --tone: var(--moon-danger);
-  }
-
-  &[data-tone="high"] {
-    --tone: var(--moon-high);
-  }
-
-  &[data-tone="info"] {
-    --tone: var(--moon-info);
-  }
-
-  &[data-tone="mute"] {
-    --tone: var(--moon-text-mute);
-  }
+  &[data-tone="success"] { --tone: var(--moon-success); }
+  &[data-tone="danger"] { --tone: var(--moon-danger); }
+  &[data-tone="high"] { --tone: var(--moon-high); }
+  &[data-tone="info"] { --tone: var(--moon-info); }
+  &[data-tone="mute"] { --tone: var(--moon-text-mute); }
 }
 
-.outcomeDot {
+.caseDot {
   flex: none;
   width: 6px;
   height: 6px;
@@ -398,7 +387,7 @@
   background: var(--tone, var(--moon-text-mute));
 }
 
-.cases {
+.runCases {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -411,7 +400,7 @@
   max-width: 15rem;
   height: 5px;
   border-radius: var(--moon-radius-pill);
-  /* The remainder is the track: work this scan never reached. */
+  /* The remainder is the track: work this run never reached. */
   background: var(--moon-surface-3);
   overflow: hidden;
 }
@@ -422,25 +411,11 @@
   min-width: 3px;
   background: var(--tone, transparent);
 
-  &[data-tone="success"] {
-    --tone: var(--moon-success);
-  }
-
-  &[data-tone="danger"] {
-    --tone: var(--moon-danger);
-  }
-
-  &[data-tone="high"] {
-    --tone: var(--moon-high);
-  }
-
-  &[data-tone="mute"] {
-    --tone: var(--moon-text-faint);
-  }
-
-  &[data-tone="none"] {
-    --tone: transparent;
-  }
+  &[data-tone="success"] { --tone: var(--moon-success); }
+  &[data-tone="danger"] { --tone: var(--moon-danger); }
+  &[data-tone="high"] { --tone: var(--moon-high); }
+  &[data-tone="mute"] { --tone: var(--moon-text-faint); }
+  &[data-tone="none"] { --tone: transparent; }
 
   & + & {
     margin-left: 1px;
@@ -462,9 +437,7 @@
   }
 }
 
-/* ---- Findings column: Nessus's Vulnerabilities Found ----------------------
-   One coloured number per severity, highest risk first. Zeroes stay visible
-   but faint so the columns line up across rows. */
+/* ---- Findings column: one coloured number per severity ------------------- */
 .findings {
   display: inline-flex;
   align-items: baseline;
@@ -485,21 +458,10 @@
     opacity: 0.4;
   }
 
-  &[data-tone="critical"] {
-    --tone: var(--moon-danger);
-  }
-
-  &[data-tone="high"] {
-    --tone: var(--moon-high);
-  }
-
-  &[data-tone="medium"] {
-    --tone: var(--moon-warning);
-  }
-
-  &[data-tone="low"] {
-    --tone: var(--moon-info);
-  }
+  &[data-tone="critical"] { --tone: var(--moon-danger); }
+  &[data-tone="high"] { --tone: var(--moon-high); }
+  &[data-tone="medium"] { --tone: var(--moon-warning); }
+  &[data-tone="low"] { --tone: var(--moon-info); }
 
   &[data-tone="info"] {
     --tone: var(--moon-text-faint);
@@ -512,7 +474,7 @@
   color: var(--moon-text-faint);
 }
 
-/* ---- Status cell: the word, plus the motion a live scan carries ---------- */
+/* ---- Status cell: the word, plus the motion a live run carries ----------- */
 .stateCell {
   display: flex;
   flex-direction: column;
@@ -521,14 +483,22 @@
   min-width: 0;
 }
 
-/* The queued slot ("#2 in the queue") under the word. */
 .queueNote {
   font-size: 0.68rem;
   color: var(--moon-text-faint);
 }
 
-/* A running scan's dot is the only thing on the page that pulses: the row
-   itself stays still, the way the rest of the table does. */
+/* A running run's dot is the only thing in the table that pulses. */
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .runState {
   display: inline-flex;
   align-items: center;
@@ -546,21 +516,10 @@
     }
   }
 
-  &[data-tone="success"] {
-    --tone: var(--moon-success);
-  }
-
-  &[data-tone="danger"] {
-    --tone: var(--moon-danger);
-  }
-
-  &[data-tone="warning"] {
-    --tone: var(--moon-warning);
-  }
-
-  &[data-tone="mute"] {
-    --tone: var(--moon-text-mute);
-  }
+  &[data-tone="success"] { --tone: var(--moon-success); }
+  &[data-tone="danger"] { --tone: var(--moon-danger); }
+  &[data-tone="warning"] { --tone: var(--moon-warning); }
+  &[data-tone="mute"] { --tone: var(--moon-text-mute); }
 }
 
 .runDot {
@@ -569,6 +528,12 @@
   height: 6px;
   border-radius: 50%;
   background: var(--tone, var(--moon-text-mute));
+}
+
+@include reduced-motion {
+  .runDot {
+    animation: none;
+  }
 }
 
 .when {
@@ -595,7 +560,7 @@
   gap: 0.3rem;
 }
 
-/* The row's hover actions: run again, stop, delete. Same shape for all, the
+/* The row's hover actions: run again, stop, delete. One shape for all; the
    variant decides the colour the pointer summons. */
 .iconBtn {
   display: inline-flex;
@@ -609,7 +574,8 @@
   background: transparent;
   color: var(--moon-text-faint);
   cursor: pointer;
-  transition: color var(--moon-dur-2) var(--moon-ease-out),
+  transition:
+    color var(--moon-dur-2) var(--moon-ease-out),
     background var(--moon-dur-2) var(--moon-ease-out),
     border-color var(--moon-dur-2) var(--moon-ease-out);
 

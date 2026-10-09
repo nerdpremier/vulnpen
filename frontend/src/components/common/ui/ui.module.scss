@@ -103,11 +103,23 @@
 .grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 0%, transparent 78%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 0%, transparent 78%);
+  background-image: linear-gradient(var(--moon-grid-line, rgba(255, 255, 255, 0.022)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--moon-grid-line, rgba(255, 255, 255, 0.022)) 1px, transparent 1px);
+  background-size: var(--moon-grid-size, 44px) var(--moon-grid-size, 44px);
+}
+
+/* Horizontal scanline wash: one faint line every few pixels, the way a CRT
+   paints. Faint enough that it reads as texture, never as striping. */
+.scanlines {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--moon-scanline, rgba(255, 255, 255, 0.012)) 0px,
+    var(--moon-scanline, rgba(255, 255, 255, 0.012)) 1px,
+    transparent 1px,
+    transparent var(--moon-scanline-size, 3px)
+  );
 }
 
 .grain {
@@ -848,6 +860,21 @@
   }
 }
 
+/* Compact mode prints the count inside its own segment, so the bar alone
+   carries the whole scale and the legend line is not needed. */
+.severitySegCount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-width: 1.1rem;
+  padding: 0 0.35rem;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: #0b0e14;
+}
+
 /* Nothing found yet: the track stays, empty, so the card does not resize the
    moment the first finding lands. */
 .severityEmpty {
@@ -930,7 +957,7 @@
 }
 
 .matrixCount {
-  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
   font-size: 0.72rem;
   color: var(--moon-text-mute);
   text-align: right;

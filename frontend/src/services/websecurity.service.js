@@ -119,6 +119,17 @@ export const downloadReportPdf = (sessionId, { rebuild = false } = {}) =>
 export const downloadReportMarkdown = (sessionId) =>
   fetchReportFile(`/agent/session/${sessionId}/report?download=1`, "report.md");
 
+/**
+ * The draft report: just the findings, no cover, document details, TOC or
+ * terms. A quick .docx a tester can hand around while the formal report is
+ * still being shaped — the same evidence, none of the ceremony.
+ */
+export const downloadReportDraftDocx = (sessionId) =>
+  fetchReportFile(
+    `/agent/session/${sessionId}/report/draft-docx`,
+    "report-draft.docx",
+  );
+
 // --- Scans (Nessus-style execution of WSTG cases) ---------------------
 
 /**

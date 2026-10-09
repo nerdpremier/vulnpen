@@ -3,8 +3,13 @@
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "react-query";
-import { Input, Select } from "antd";
-import { SearchOutlined, RightOutlined } from "@ant-design/icons";
+import { Button, Input, Select, Tooltip } from "antd";
+import {
+  MessageOutlined,
+  ReloadOutlined,
+  RightOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import Link from "next/link";
 import { FiAlertTriangle } from "react-icons/fi";
 import { getVulnerabilities } from "@/services/agent.service";
@@ -12,14 +17,11 @@ import styles from "@/styles/pages/Vulnerabilities.module.scss";
 import {
   AnimatedContent,
   ColumnChart,
-  DonutChart,
   EmptyState,
-  PageHeader,
   PageShell,
   PageState,
-  SeverityBar,
-  SpotlightCard,
 } from "@/components/common/ui";
+import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import {
   compareBySeverity,
   findingsBySeverity,
@@ -34,6 +36,15 @@ const CVSS_BANDS = [
   { key: "high", axis: "high", label: "7.0–8.9", tone: "high", min: 7, max: 9 },
   { key: "critical", axis: "critical", label: "9.0–10", tone: "critical", min: 9, max: 10.1 },
 ];
+
+/** The severity ramp, the one vocabulary every surface shares. */
+const SEVERITY_TONE = {
+  critical: "#ff4d5e",
+  high: "#ff8a3d",
+  medium: "#ffd166",
+  low: "#7fb2ff",
+  info: "#79d1ff",
+};
 
 /** The score the system computed, or null when the finding carries none. */
 function cvssScoreOf(item) {
@@ -96,13 +107,13 @@ export default function VulnerabilitiesPage({ sessionId }) {
       });
   }, [vulnerabilities, search, severity, owaspFilter]);
 
-  /* ---- The summary band: shapes over the same list the table shows --------
-     These read the whole engagement, not the filtered view: a summary that
-     redraws itself every keystroke stops being a reference. */
+  /* ---- The numbers the summary stands for, each stated once ---------------- */
   const severityLevels = useMemo(
     () => findingsBySeverity(vulnerabilities).levels,
     [vulnerabilities],
   );
+  const exploitedCount = vulnerabilities.filter((item) => item.exploited).length;
+  const unverifiedCount = vulnerabilities.length - exploitedCount;
 
   /* Scored findings per band only. Unrated findings stay off the chart — they
      carry no score to bin, and one grey "none" tower dwarfed real bands. */
@@ -123,24 +134,6 @@ export default function VulnerabilitiesPage({ sessionId }) {
     });
     return bands;
   }, [vulnerabilities]);
-
-  const exploitation = useMemo(
-    () => [
-      {
-        key: "exploited",
-        label: "Exploited",
-        tone: "danger",
-        value: vulnerabilities.filter((item) => item.exploited).length,
-      },
-      {
-        key: "unverified",
-        label: "Unverified",
-        tone: "mute",
-        value: vulnerabilities.filter((item) => !item.exploited).length,
-      },
-    ],
-    [vulnerabilities],
-  );
 
   const unratedCount = vulnerabilities.filter((item) => cvssScoreOf(item) == null).length;
 
@@ -167,65 +160,190 @@ export default function VulnerabilitiesPage({ sessionId }) {
     setSeverity("all");
     setOwaspFilter("all");
   };
+
+  const openFinding = (item) =>
+    router.push(`/session/${sessionId}/vulnerabilities/${item.vulnerabilityId}`);
+
+  const actions = useMemo(
+    () => (
+      <>
+        <Tooltip title="Reload the findings">
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => refetch()}
+            aria-label="Reload the findings"
+          />
+        </Tooltip>
+        <Button
+          icon={<MessageOutlined />}
+          onClick={() => router.push(`/session/${sessionId}/chat`)}
+        >
+          Agent chat
+        </Button>
+        <Button
+          type="primary"
+          icon={<SearchOutlined />}
+          onClick={() => {
+            const node = document.querySelector(`.${styles.search} input`);
+            node?.focus();
+          }}
+          disabled={!vulnerabilities.length}
+        >
+          Search findings
+        </Button>
+      </>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessionId, router, vulnerabilities.length],
+  );
+  usePublishHeaderActions(actions);
+
+  if (isLoading) {
+    return (
+      <PageShell>
+        <PageState state="loading" rows={6} />
+      </PageShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <PageShell>
+        <PageState
+          state="error"
+          title="Could not load the findings"
+          description="The findings could not be read. The page keeps polling; retry to see them now."
+          onRetry={() => refetch()}
+        />
+      </PageShell>
+    );
+  }
+
+  if (!vulnerabilities.length) {
+    return (
+      <PageShell>
+        <header className={styles.pageHead}>
+          <span className={styles.eyebrow}>Engagement</span>
+          <h1>Vulnerabilities</h1>
+        </header>
+        <EmptyState
+          icon={<FiAlertTriangle />}
+          title="No vulnerabilities recorded yet"
+          description="Findings appear here once a scan proves one out on the target."
+        />
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
-      <PageHeader
-        eyebrow="Engagement"
-        title="Vulnerabilities"
-      />
+      <header className={styles.pageHead}>
+        <span className={styles.eyebrow}>Engagement</span>
+        <h1>Vulnerabilities</h1>
+      </header>
 
-      {/* Three complementary views: severity, rated CVSS scores and proof of
-          exploitation. The detailed finding inventory lives below. */}
-      {vulnerabilities.length > 0 && (
-        <section className={styles.summaryBand} aria-label="Finding overview">
-          <AnimatedContent delay={0} className={styles.summaryCell}>
-            <SpotlightCard glare className={styles.summaryCard}>
-              <h2 className={styles.summaryTitle}>Severity mix</h2>
-              <div className={styles.summaryBody}>
-                <SeverityBar levels={severityLevels} />
-              </div>
-            </SpotlightCard>
-          </AnimatedContent>
-
-          <AnimatedContent delay={70} className={styles.summaryCell}>
-            <SpotlightCard glare className={styles.summaryCard}>
-              <h2 className={styles.summaryTitle}>CVSS v3.0 base score</h2>
-              <div className={styles.summaryBody}>
-                <ColumnChart
-                  data={scoreBands}
-                  height={104}
-                  label="Rated findings per CVSS v3.0 base score band"
-                />
-                {unratedCount > 0 && (
-                  <span className={styles.summaryFootnote}>
-                    {unratedCount} not rated · excluded from score bands
+      {/* The summary band. The CVSS distribution is the anchcard — the one
+          graphic a tester reads first — so it keeps the widest column and the
+          column chart it has always had; the severity mix and the exploitation
+          proof sit beside it as their own shapes. */}
+      <section className={styles.summaryBand} aria-label="Finding overview">
+        <div className={styles.summaryCell}>
+          <div className={styles.summaryCard}>
+            <h2 className={styles.summaryTitle}>
+              Severity mix
+              <span className={styles.titleCount}>{vulnerabilities.length}</span>
+            </h2>
+            <div className={styles.ridge}>
+              {severityLevels.map((level) => (
+                <button
+                  key={level.key}
+                  type="button"
+                  className={styles.ridgeRow}
+                  data-active={severity === level.key || undefined}
+                  onClick={() =>
+                    setSeverity(severity === level.key ? "all" : level.key)
+                  }
+                >
+                  <span className={styles.ridgeLabel}>{level.label}</span>
+                  <span className={styles.ridgeTrack}>
+                    <span
+                      className={styles.ridgeBar}
+                      style={{
+                        width: `${
+                          (level.count /
+                            Math.max(1, ...severityLevels.map((l) => l.count))) *
+                          100
+                        }%`,
+                        background: SEVERITY_TONE[level.key],
+                      }}
+                    />
                   </span>
-                )}
-              </div>
-            </SpotlightCard>
-          </AnimatedContent>
+                  <span className={styles.ridgeCount}>{level.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
-          <AnimatedContent delay={140} className={styles.summaryCell}>
-            <SpotlightCard glare className={styles.summaryCard}>
-              <h2 className={styles.summaryTitle}>Exploitation</h2>
-              <div className={styles.summaryBody}>
-                <DonutChart
-                  segments={exploitation}
-                  size={118}
-                  thickness={14}
-                  centerValue={vulnerabilities.length}
-                  centerLabel="findings"
-                  legend="inline"
-                  className={styles.donutCentered}
+        <div className={styles.summaryCell}>
+          <div className={styles.summaryCard}>
+            <h2 className={styles.summaryTitle}>CVSS v3.0 base score</h2>
+            <div className={styles.summaryBody}>
+              <ColumnChart
+                data={scoreBands}
+                height={104}
+                label="Rated findings per CVSS v3.0 base score band"
+              />
+              {unratedCount > 0 && (
+                <span className={styles.summaryFootnote}>
+                  {unratedCount} not rated · excluded from score bands
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.summaryCell}>
+          <div className={styles.summaryCard}>
+            <h2 className={styles.summaryTitle}>Exploitation</h2>
+            <div className={styles.exploitSplit}>
+              <span
+                className={styles.exploitBar}
+                role="img"
+                aria-label={`${exploitedCount} exploited, ${unverifiedCount} unverified`}
+              >
+                <span
+                  className={styles.exploitSeg}
+                  data-tone="danger"
+                  style={{
+                    width: `${
+                      vulnerabilities.length
+                        ? (exploitedCount / vulnerabilities.length) * 100
+                        : 0
+                    }%`,
+                  }}
                 />
-              </div>
-            </SpotlightCard>
-          </AnimatedContent>
-        </section>
-      )}
+              </span>
+              <span className={styles.exploitLegend}>
+                <span className={styles.exploitItem}>
+                  <b>{exploitedCount}</b>
+                  <i className={styles.legendDot} data-tone="danger" />
+                  Exploited
+                </span>
+                <span className={styles.exploitItem}>
+                  <b>{unverifiedCount}</b>
+                  <i className={styles.legendDot} data-tone="mute" />
+                  Unverified
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <section className={styles.tableCard}>
-        <div className={styles.toolbar}>
+      {/* The record: the filter, then one row per finding. */}
+      <section className={styles.records} aria-label="Finding records">
+        <div className={styles.controls}>
           <Input
             prefix={<SearchOutlined />}
             placeholder="Search findings"
@@ -242,11 +360,10 @@ export default function VulnerabilitiesPage({ sessionId }) {
             aria-label="Filter by severity"
             options={[
               { value: "all", label: "All severities" },
-              { value: "critical", label: "Critical" },
-              { value: "high", label: "High" },
-              { value: "medium", label: "Medium" },
-              { value: "low", label: "Low" },
-              { value: "info", label: "Info" },
+              ...severityLevels.map((level) => ({
+                value: level.key,
+                label: `${level.label} (${level.count})`,
+              })),
             ]}
           />
           <Select
@@ -257,146 +374,111 @@ export default function VulnerabilitiesPage({ sessionId }) {
             options={owaspOptions}
           />
           {hasFilters && (
-            <button
-              type="button"
-              className={styles.clearFilters}
-              onClick={clearFilters}
-            >
-              Clear filters
-            </button>
+            <Button size="small" type="text" onClick={clearFilters}>
+              Clear
+            </Button>
           )}
         </div>
-        {isLoading ? (
-          <PageState state="loading" rows={5} />
-        ) : isError ? (
-          <PageState
-            state="error"
-            title="Could not load the findings"
-            description="The findings could not be read. The page keeps polling; retry to see them now."
-            onRetry={() => refetch()}
-          />
-        ) : filtered.length === 0 ? (
+
+        {filtered.length === 0 ? (
           <EmptyState
             compact
             icon={<FiAlertTriangle />}
-            title={
-              vulnerabilities.length
-                ? "No findings match these filters"
-                : "No vulnerabilities recorded yet"
-            }
-            description={
-              vulnerabilities.length
-                ? "Widen the severity or OWASP filters, or clear the search box."
-                : undefined
-            }
+            title="No findings match these filters"
+            description="Widen the severity or OWASP filters, or clear the search box."
             actions={
-              vulnerabilities.length ? (
-                <button
-                  type="button"
-                  className={styles.clearFilters}
-                  onClick={clearFilters}
-                >
-                  Clear filters
-                </button>
-              ) : null
+              <Button size="small" onClick={clearFilters}>
+                Clear filters
+              </Button>
             }
           />
         ) : (
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th scope="col">Severity</th>
-                  <th scope="col">Finding</th>
-                  <th scope="col">CVSS v3.0</th>
-                  <th scope="col">Exploitation</th>
-                  <th scope="col">OWASP Top 10:2025</th>
-                  <th scope="col" aria-label="Open" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item, index) => (
-                  <AnimatedContent
-                    key={item.vulnerabilityId}
-                    as="tr"
-                    direction="none"
-                    delay={Math.min(index, 12) * 24}
-                    onClick={() =>
-                      router.push(
-                        `/session/${sessionId}/vulnerabilities/${item.vulnerabilityId}`,
-                      )
+          <div className={styles.table}>
+            <div className={styles.head} aria-hidden="true">
+              <span>Severity</span>
+              <span>Finding</span>
+              <span>CVSS v3.0</span>
+              <span>Exploitation</span>
+              <span>OWASP Top 10:2025</span>
+              <span />
+            </div>
+
+            {filtered.map((item, index) => (
+              <AnimatedContent
+                key={item.vulnerabilityId}
+                className={styles.row}
+                direction="none"
+                delay={Math.min(index, 12) * 22}
+                onClick={() => openFinding(item)}
+              >
+                <span className={styles.identity}>
+                  <SeverityBadge severity={item.severity} />
+                </span>
+
+                <span className={styles.findingCell}>
+                  {/* The title is the real control: the row click is a mouse
+                      convenience, so the link carries the keyboard path. */}
+                  <Link
+                    href={`/session/${sessionId}/vulnerabilities/${item.vulnerabilityId}`}
+                    className={styles.findingTitle}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {item.title}
+                  </Link>
+                  <span className={styles.findingContext}>
+                    {item.contextSummary ||
+                      item.description ||
+                      "No context summary provided"}
+                  </span>
+                </span>
+
+                <span className={styles.scoreCell}>
+                  {item.cvss?.score != null ? (
+                    <>
+                      <b>{Number(item.cvss.score).toFixed(1)}</b>
+                      <span className={styles.scoreVector} title={item.cvss.vector}>
+                        {item.cvss.vector}
+                      </span>
+                    </>
+                  ) : (
+                    <span className={styles.scoreNone}>not rated</span>
+                  )}
+                </span>
+
+                <span className={styles.exploitCell}>
+                  <span
+                    className={`${styles.exploitBadge} ${
+                      item.exploited ? styles.exploited : styles.unverified
+                    }`}
+                    title={
+                      item.exploited
+                        ? "Confirmed by the agent"
+                        : "Seen by the agent, not yet proven exploitable"
                     }
                   >
-                    <td>
-                      <SeverityBadge severity={item.severity} />
-                    </td>
-                    <td>
-                      {/* The title is the real control: the row click is a mouse
-                          convenience, so the link carries the keyboard path,
-                          the focus ring and open-in-new-tab. */}
-                      <Link
-                        href={`/session/${sessionId}/vulnerabilities/${item.vulnerabilityId}`}
-                        className={styles.findingLink}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <strong className={styles.findingTitle}>
-                          {item.title}
-                        </strong>
-                      </Link>
-                      <span className={styles.findingContext}>
-                        {item.contextSummary ||
-                          item.description ||
-                          "No context summary provided"}
-                      </span>
-                    </td>
-                    <td>
-                      {item.cvss?.score != null
-                        ? `${item.cvss.score} (${item.cvss.vector})`
-                        : "not rated"}
-                    </td>
-                    <td>
-                      <span
-                        className={
-                          item.exploited
-                            ? `${styles.exploitBadge} ${styles.exploited}`
-                            : `${styles.exploitBadge} ${styles.unverified}`
-                        }
-                        title={
-                          item.exploited
-                            ? "Confirmed by the agent"
-                            : "Seen by the agent, not yet proven exploitable"
-                        }
-                      >
-                        {item.exploited ? "Exploited" : "Unverified"}
-                      </span>
-                    </td>
-                    <td>
-                      {item.owaspTop10 ? (
-                        <span
-                          className={styles.owaspBadge}
-                          title={
-                            item.owaspRationale || item.owaspTop10Title || ""
-                          }
-                        >
-                          {item.owaspTop10}
-                          {item.owaspTop10Title
-                            ? ` ${item.owaspTop10Title}`
-                            : ""}
-                        </span>
-                      ) : (
-                        <span className={styles.unmapped}>Unmapped</span>
-                      )}
-                    </td>
-                    <td>
-                      <RightOutlined
-                        className={styles.openIcon}
-                        aria-hidden="true"
-                      />
-                    </td>
-                  </AnimatedContent>
-                ))}
-              </tbody>
-            </table>
+                    {item.exploited ? "Exploited" : "Unverified"}
+                  </span>
+                </span>
+
+                <span className={styles.owaspCell}>
+                  {item.owaspTop10 ? (
+                    <span
+                      className={styles.owaspBadge}
+                      title={item.owaspRationale || item.owaspTop10Title || ""}
+                    >
+                      {item.owaspTop10}
+                      {item.owaspTop10Title ? ` ${item.owaspTop10Title}` : ""}
+                    </span>
+                  ) : (
+                    <span className={styles.unmapped}>Unmapped</span>
+                  )}
+                </span>
+
+                <span className={styles.openCell}>
+                  <RightOutlined className={styles.openIcon} aria-hidden="true" />
+                </span>
+              </AnimatedContent>
+            ))}
           </div>
         )}
       </section>

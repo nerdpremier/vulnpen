@@ -40,6 +40,7 @@ import {
   StatStrip,
   StatTile,
 } from "@/components/common/ui";
+import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import { BURP_HANDOFF_KEY } from "@/utils/burpHandoff.mjs";
 import styles from "@/styles/components/BurpProxy.module.scss";
 
@@ -643,6 +644,37 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION, asPage = fal
     }
   );
 
+  /* As a full page, Burp's own controls belong in the shared header slot every
+     session page uses, not in a second header row inside the pane. */
+  const actions = useMemo(
+    () => (
+      <>
+        <Button
+          icon={<ReloadOutlined spin={isFetching} />}
+          onClick={() => refetch()}
+          disabled={isFetching}
+          aria-label="Refresh the proxy history"
+        >
+          Refresh
+        </Button>
+        <Button
+          icon={<SettingOutlined />}
+          onClick={() => {
+            window.dispatchEvent(
+              new CustomEvent("open-settings", {
+                detail: { tab: integration.settingsKey },
+              }),
+            );
+          }}
+        >
+          Check Settings
+        </Button>
+      </>
+    ),
+    [isFetching, refetch, integration.settingsKey],
+  );
+  usePublishHeaderActions(asPage ? actions : null);
+
   const {
     data: interceptData,
     isError: interceptError,
@@ -1038,15 +1070,17 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION, asPage = fal
               onChange={(checked) => interceptMutation.mutate(checked)}
             />
           </div>}
-          <Button
-            icon={<ReloadOutlined spin={isFetching} />}
-            onClick={() => refetch()}
-            disabled={isFetching}
-            size="small"
-            className={styles.refreshBtn}
-          >
-            Refresh
-          </Button>
+          {!asPage && (
+            <Button
+              icon={<ReloadOutlined spin={isFetching} />}
+              onClick={() => refetch()}
+              disabled={isFetching}
+              size="small"
+              className={styles.refreshBtn}
+            >
+              Refresh
+            </Button>
+          )}
         </div>
       </div>
 
