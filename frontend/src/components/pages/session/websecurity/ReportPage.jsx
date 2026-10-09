@@ -4,7 +4,6 @@ import React, { useCallback, useMemo, useState } from "react";
 import { App, Button, Dropdown, Tooltip } from "antd";
 import {
   DownloadOutlined,
-  FileMarkdownOutlined,
   FilePdfOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -15,7 +14,6 @@ import { apiErrorMessage } from "@/utils/apiError";
 import { saveBlob } from "@/utils/download";
 import {
   downloadReportDocx,
-  downloadReportMarkdown,
   downloadReportPdf,
   getWordEditorUrl,
 } from "@/services/websecurity.service";
@@ -28,7 +26,7 @@ import styles from "@/styles/components/Report.module.scss";
  *
  * The editor is the page — no title bar, no toolbar strip above it — so the
  * document's actions ride in the shared header slot: reopen the editor, and
- * export the document in any of the three formats the API holds it in. The
+ * export the document in either of the two formats the API holds it in. The
  * document is deliberately never regenerated after a Word save, and the menu
  * says so, because an operator who does not know that ships a stale report.
  */
@@ -74,12 +72,6 @@ export default function ReportPage({ sessionId }) {
       label: <span className={styles.menuState}>{provenance}</span>,
     },
     { type: "divider" },
-    {
-      key: "md",
-      icon: <FileMarkdownOutlined />,
-      label: "Download Markdown",
-      onClick: () => save("md", downloadReportMarkdown),
-    },
     {
       key: "docx",
       icon: <DownloadOutlined />,
