@@ -32,6 +32,14 @@ services:
     build: ./backend
     cap_add:
       - NET_ADMIN
+    networks:
+      # `default` is how the backend reaches Mongo, Redis and the outside world;
+      # `control` is the only path to the attack box, and it has no gateway;
+      # `fenced` carries no gateway either — it is there so the browser agent
+      # below can reach the fence and nothing else.
+      - default
+      - control
+      - fenced
     environment:
       MONGO_URI: mongodb://mongodb:27017/vulnpen
       REDIS_URL: redis://redis:6379
@@ -41,6 +49,13 @@ services:
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
       NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali,collabora,host.docker.internal}"
+      # The browser agent runs Chromium *in this container*, which has its own
+      # route to the internet, so network isolation alone cannot fence it —
+      # it has to be pointed at the proxy explicitly.
+      MAGNITUDE_PROXY_URL: "${MAGNITUDE_PROXY_URL:-http://egress:3128}"
+      # The kali image starts Burp and its gRPC bridge on :50051; without a
+      # host every burp_* tool reports "not configured".
+      BURP_RPC_HOST: "${BURP_RPC_HOST:-kali}"
       # Report editor (WOPI/Collabora): COLLABORA_URL is server-side discovery
       # (container network), COLLABORA_PUBLIC_URL is the browser iframe address,
       # WOPI_PUBLIC_BASE is how Collabora calls back into the backend.
@@ -109,11 +124,79 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # The egress fence: the only container with a route to the internet, and the
+  # only thing that decides whether a request the agent produced may leave.
+  # `src/egressProxy.ts` — plain HTTP is judged on the wire request, TLS tunnels
+  # are refused. See docs/EGRESS-FENCE.md.
+  egress:
+    container_name: vulnpen-egress
+    build: ./backend
+    # The image's ENTRYPOINT is the backend's own boot script, so it has to be
+    # replaced, not appended to: `command:` alone would run entrypoint.sh with
+    # our arguments and never start the proxy.
+    entrypoint: ["node", "dist/egressProxy.js"]
+    environment:
+      # The engagement's target hosts. Either give the host list directly
+      # (EGRESS_ALLOWLIST) or the engagement's own Target/scope text
+      # (EGRESS_TARGET / EGRESS_SCOPE), which the proxy parses with the same
+      # scope gate the rest of the product uses. With none of the three the
+      # proxy refuses to start rather than passing every request uninspected.
+      EGRESS_ALLOWLIST: "${EGRESS_ALLOWLIST:-}"
+      EGRESS_TARGET: "${EGRESS_TARGET:-}"
+      EGRESS_SCOPE: "${EGRESS_SCOPE:-}"
+      EGRESS_PORT: "3128"
+      # A CONNECT tunnel cannot be inspected. Leave this off unless the box
+      # trusts a CA the proxy can terminate with.
+      EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-0}"
+    networks:
+      - fenced
+      - upstream
+    healthcheck:
+      # Without this, a fence that never served looks exactly like one that
+      # did: `compose up` still reports success and run.sh still prints
+      # "Running". The check also gates kali (see depends_on there), so an
+      # unarmed fence stops the stack instead of silently un-fencing it.
+      test: ["CMD", "node", "-e", "const s=require('net').connect(3128,'127.0.0.1');s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
   kali:
     container_name: vulnpen-kali
     build: ./kali
     image: vulnpen-kali-fixed:latest
-    privileged: true
+    # `privileged: true` also hands over the host's devices and lets the box
+    # rewrite its own routing. The capabilities the tooling actually needs are
+    # named instead.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # sshd listens on :22, a privileged port
+      - NET_ADMIN   # OpenVPN, raw-socket tooling
+      - NET_RAW     # nmap -sS, masscan
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      # Every outbound request goes through the fence. There is no other route:
+      # this container sits only on `control` and `fenced`, both internal.
+      HTTP_PROXY: "http://egress:3128"
+      HTTPS_PROXY: "http://egress:3128"
+      # APT (and the runtime `apti` installer) reads the lowercase names, not
+      # the uppercase ones — without these a runtime tool install has no route.
+      http_proxy: "http://egress:3128"
+      https_proxy: "http://egress:3128"
+      # The target is deliberately NOT in NO_PROXY — it must be reached through
+      # the fence, not around it.
+      NO_PROXY: "localhost,127.0.0.1,kali,backend,mongodb,redis,collabora"
+    networks:
+      - control
+      - fenced
+    depends_on:
+      # Do not start the attack box before the fence that is its only way out.
+      egress:
+        condition: service_healthy
     ports:
       - "127.0.0.1:4242:22"
       - "127.0.0.1:4200:4200"
@@ -129,6 +212,16 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+
+networks:
+  # Both are `internal`: Docker gives them no gateway, so a container on them
+  # cannot reach anything except the other containers on them. That is what
+  # makes the fence the only way out rather than one option among several.
+  control:
+    internal: true
+  fenced:
+    internal: true
+  upstream: {}
 
 volumes:
   mongodb-data:
