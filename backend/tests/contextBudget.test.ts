@@ -369,6 +369,39 @@ test("the working set is a reserve off the window, not a fixed ceiling", async (
   assert.equal(wide.shouldCompact, false, "a 128k model keeps it verbatim");
 });
 
+test("a ceiling declared for the endpoint beats the model table", () => {
+  // The table describes the model; a declared value describes the endpoint this
+  // install actually dials — the same name behind a proxy or a self-hosted
+  // server can hold a different window. Declared wins, and an empty field leaves
+  // the table to answer.
+  assert.equal(getModelMaxOutput(MODEL_REGISTRY_MODEL, 8_000), 8_000);
+  assert.equal(getModelContextLimit(MODEL_REGISTRY_MODEL, 500_000), 500_000);
+  assert.equal(getModelMaxOutput(MODEL_REGISTRY_MODEL), 32_000);
+  assert.equal(getModelContextLimit(MODEL_REGISTRY_MODEL), 200_000);
+});
+
+test("an unknown model gets the install's defaults", () => {
+  assert.equal(getModelContextLimit("some-model-nobody-knows"), 200_000);
+  assert.equal(
+    getModelMaxOutput("some-model-nobody-knows"),
+    32_000,
+    "the ceiling is never unknown, because it is also the reserve the agent plans against",
+  );
+});
+
+test("the reserve follows the declared output ceiling", () => {
+  // Same window, two endpoints: the one that writes less in a turn can carry a
+  // bigger working set, and the 90%-of-window share is what stops the generous
+  // one short.
+  assert.equal(workingSetBudget(200_000, 32_000), 160_000);
+  assert.equal(workingSetBudget(200_000, 8_000), 180_000);
+  assert.equal(
+    workingSetBudget(200_000),
+    160_000,
+    "nothing declared anywhere falls back to the model table's ceiling",
+  );
+});
+
 test("the configured model's window plans a working set at ~80%", () => {
   const configured = MODEL_REGISTRY_MODEL;
   const limit = getModelContextLimit(configured);
@@ -381,10 +414,9 @@ test("the configured model's window plans a working set at ~80%", () => {
   assert.equal(Math.round((workingSetBudget(limit) / limit) * 100), 80);
 });
 
-test("the reserve matches the output ceiling we send with every request", () => {
-  // The promise the reserve is built on: the next turn must have at least as much
-  // room to answer as the provider will let it use. Change the model's output
-  // ceiling and this fails until the reserve follows.
+test("the fallback reserve matches the ceiling the model table knows", () => {
+  // WORKING_SET_RESERVE_TOKENS is only the fallback for a model that declares
+  // nothing anywhere, so it has to stay in step with the model we ship with.
   const ceiling = getModelMaxOutput(MODEL_REGISTRY_MODEL);
   assert.equal(ceiling, 32_000, "max output tokens for the configured model");
   assert.equal(

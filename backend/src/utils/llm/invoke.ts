@@ -150,11 +150,11 @@ export function buildCompletionConfig(
     params.stream_options = { include_usage: true };
   }
 
-  // Only sent for models whose output ceiling we actually know: a wrong
-  // max_tokens is rejected outright by some providers, and leaving it unset is
-  // precisely how every model behaved before this table existed.
-  const maxOutput = getModelMaxOutput(config.model);
-  if (maxOutput) params.max_tokens = maxOutput;
+  // Every request carries the ceiling, because the compaction reserve is built
+  // on it: a turn that may write more than the reserve left free is how a context
+  // window gets overrun. Declared in Settings, else the model table, else the
+  // install default.
+  params.max_tokens = getModelMaxOutput(config.model, config.maxOutputTokens);
 
   if (opts.tools?.length) {
     params.tools = opts.tools;

@@ -10,6 +10,7 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Row,
@@ -86,7 +87,13 @@ const EMPTY_MODEL = {
   apiKey: "",
   baseURL: "",
   reasoningMode: "off",
+  contextWindow: undefined,
+  maxOutputTokens: undefined,
 };
+
+/** 200000 → "200k", the way a spec sheet reads. */
+const formatTokens = (value) =>
+  value >= 1000 ? `${Math.round(value / 1000)}k` : String(value);
 
 const NONE_MODEL_VALUE = "__none__";
 
@@ -130,6 +137,9 @@ const ModelModal = ({
           };
           if (!entry.apiKey) delete entry.apiKey;
           if (!entry.baseURL) delete entry.baseURL;
+          // Empty means "the model table answers" — an absent field, not 0.
+          if (!entry.contextWindow) delete entry.contextWindow;
+          if (!entry.maxOutputTokens) delete entry.maxOutputTokens;
           onSubmit(entry);
         }}
       >
@@ -225,6 +235,39 @@ const ModelModal = ({
               </Form.Item>
             </Col>
           )}
+        </Row>
+
+        <Row gutter={14}>
+          <Col span={needsBaseURL(provider) ? 8 : 12}>
+            <Form.Item
+              label="Context window (tokens)"
+              name="contextWindow"
+              tooltip="Where the agent summarizes. Empty uses the default of 200000."
+            >
+              <InputNumber
+                min={1}
+                max={10000000}
+                step={1000}
+                style={{ width: "100%" }}
+                placeholder="200000 (default)"
+              />
+            </Form.Item>
+          </Col>
+          <Col span={needsBaseURL(provider) ? 8 : 12}>
+            <Form.Item
+              label="Max output (tokens)"
+              name="maxOutputTokens"
+              tooltip="Sent as max_tokens, and the room the agent leaves free for the next turn. Empty uses the default of 32000 — declare it for a model that writes less."
+            >
+              <InputNumber
+                min={1}
+                max={10000000}
+                step={1000}
+                style={{ width: "100%" }}
+                placeholder="32000 (default)"
+              />
+            </Form.Item>
+          </Col>
         </Row>
 
         {browserModelIssue && (
@@ -447,6 +490,10 @@ const ModelsPage = () => {
         <div className={styles.settingsList}>
           {models.map((model) => {
             const isAssigned = protectedIds.has(model.id);
+            const declaredLimits = [
+              model.contextWindow && `${formatTokens(model.contextWindow)} ctx`,
+              model.maxOutputTokens && `${formatTokens(model.maxOutputTokens)} out`,
+            ].filter(Boolean);
             return (
               <div key={model.id} className={styles.settingsListItem}>
                 <div className={styles.settingsListItemHeader}>
@@ -468,6 +515,7 @@ const ModelsPage = () => {
                 <div className={styles.settingsListItemMeta}>
                   {providerLabel(model.provider)} · {model.model} · Reasoning{" "}
                   {(model.reasoningMode || "off").toUpperCase()}
+                  {declaredLimits.length > 0 && ` · ${declaredLimits.join(" · ")}`}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {model.apiKey && <Tag>KEY</Tag>}

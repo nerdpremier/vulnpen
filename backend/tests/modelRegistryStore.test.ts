@@ -201,3 +201,47 @@ test("an unparseable base URL is stored as typed for the provider to report", as
     assert.equal(registry.models[0]?.baseURL, "localhost:11434");
   });
 });
+
+// ─── What the operator declares about an endpoint ───────────────────────
+// These two numbers decide where the agent summarizes and how much room it
+// leaves for the next turn, so they have to survive a save/load round-trip and
+// a nonsense value must never become a plan.
+
+test("a declared window and output ceiling survive the round-trip", async () => {
+  const store = await loadStore();
+  const registry = store.writeModelRegistry(
+    [{ ...preset, contextWindow: 200_000, maxOutputTokens: 32_000 }],
+    {},
+    false,
+  );
+
+  const onDisk = JSON.parse(fs.readFileSync(store.getModelRegistryPath(), "utf-8"));
+  assert.equal(onDisk.models[0].contextWindow, 200_000);
+  assert.equal(onDisk.models[0].maxOutputTokens, 32_000);
+  assert.equal(registry.models[0]?.contextWindow, 200_000);
+});
+
+test("a declared count that cannot be a window is treated as not declared", async () => {
+  const store = await loadStore();
+  const registry = store.writeModelRegistry(
+    [
+      { ...preset, id: "zero", contextWindow: 0, maxOutputTokens: -5 },
+      { ...preset, id: "nan", contextWindow: Number.NaN, maxOutputTokens: "32000" },
+      { ...preset, id: "huge", contextWindow: 1_000, maxOutputTokens: 9_000_000 },
+    ],
+    {},
+    false,
+  );
+
+  const [zero, nan, huge] = registry.models;
+  assert.equal(zero?.contextWindow, undefined, "0 is not a window");
+  assert.equal(zero?.maxOutputTokens, undefined, "-5 is not a ceiling");
+  assert.equal(nan?.contextWindow, undefined, "NaN is not a window");
+  // The form hands back what was typed, so a numeric string is still a number.
+  assert.equal(nan?.maxOutputTokens, 32_000);
+  assert.equal(
+    huge?.maxOutputTokens,
+    1_000,
+    "a ceiling cannot exceed the window it has to fit inside",
+  );
+});

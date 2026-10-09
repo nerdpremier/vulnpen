@@ -29,6 +29,14 @@ export interface ProviderConfig {
   baseURL?: string;
   authMethod?: "api_key" | "oauth" | "subscription";
   oauthAccessToken?: string;
+  /**
+   * What the operator declared about this model in Settings, when they did.
+   * Carried on the config because it belongs to the endpoint, not to the model
+   * name: the same name behind a proxy or a self-hosted server can have a
+   * different window. Absent means "ask the model table".
+   */
+  contextWindow?: number;
+  maxOutputTokens?: number;
 }
 
 export interface ToolCallData {

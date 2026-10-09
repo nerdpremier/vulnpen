@@ -1,5 +1,5 @@
 import { Response, Request } from "express";
-import { getModelContextLimit } from "../utils/modelMetadata";
+import { DEFAULT_CONTEXT_LIMIT, getModelContextLimit } from "../utils/modelMetadata";
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
@@ -314,12 +314,12 @@ export const getHistory = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    let contextLimit = 128_000;
+    let contextLimit = DEFAULT_CONTEXT_LIMIT;
     try {
       // The widget must reflect the model actually driving the loop — the
       // user's assigned orchestrator, not the env default.
       const { config } = await resolveOrchestrator(userId);
-      contextLimit = getModelContextLimit(config.model);
+      contextLimit = getModelContextLimit(config.model, config.contextWindow);
     } catch { /* use default */ }
 
     const latestTokenSnapshot = session.tokenHistory?.[session.tokenHistory.length - 1];

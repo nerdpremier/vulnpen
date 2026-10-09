@@ -296,7 +296,7 @@ export async function runOpenAIResponsesStream(
   // Raw client: observeOpenAI maps Responses API params poorly (no `messages` in trace input).
   // We record a manual generation with Chat Completions–shaped input instead.
   const { instructions, input } = openaiToResponsesInput(opts.messages);
-  const maxOutputTokens = getModelMaxOutput(config.model);
+  const maxOutputTokens = getModelMaxOutput(config.model, config.maxOutputTokens);
   const responsesTools = openaiToResponsesTools(opts.tools);
 
   const params: any = {
@@ -304,9 +304,9 @@ export async function runOpenAIResponsesStream(
     input,
     stream: true,
     reasoning: { effort: reasoningMode, summary: "auto" },
+    max_output_tokens: maxOutputTokens,
     ...(instructions ? { instructions } : {}),
     ...(responsesTools ? { tools: responsesTools, tool_choice: "auto" } : {}),
-    ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {}),
   };
 
   console.log(

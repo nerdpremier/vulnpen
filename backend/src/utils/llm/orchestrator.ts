@@ -154,6 +154,8 @@ export async function presetToProviderConfig(
         baseURL: preset.baseURL || undefined,
         authMethod: "oauth",
         oauthAccessToken: oauthToken,
+        contextWindow: preset.contextWindow,
+        maxOutputTokens: preset.maxOutputTokens,
       };
     }
   }
@@ -166,6 +168,8 @@ export async function presetToProviderConfig(
     apiKey: preset.apiKey || "",
     baseURL: preset.baseURL || undefined,
     authMethod: "api_key",
+    contextWindow: preset.contextWindow,
+    maxOutputTokens: preset.maxOutputTokens,
   };
 }
 

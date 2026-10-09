@@ -84,24 +84,42 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "muse-spark-1.3": 200_000,
 };
 
-// The most the model may write back in one turn. This is not a tuning knob: it is
-// the promise the compaction reserve in services/compaction.service.ts is built
-// on (a prompt must never leave the next turn less room than the provider will
-// let it use), so the two are asserted to be in step. A model with no entry here
-// is asked for no `max_tokens` at all, which is what every model did before this
-// table existed.
+// The most the model may write back in one turn, when it differs from the
+// default below. It is what the compaction reserve in
+// services/compaction.service.ts is built on — a prompt must never leave the next
+// turn less room than the provider will let it use — and it is also the
+// `max_tokens` sent with every request. Record a model here only to correct the
+// default: a model with a real ceiling below 32k (an 8k or 16k model) will be
+// asked for more than it can write unless it is listed.
 // Keep the most specific identifiers first, as above.
 export const MODEL_MAX_OUTPUT_TOKENS: Record<string, number> = {
   "muse-spark-1.3": 32_000,
 };
 
-export const DEFAULT_CONTEXT_LIMIT = 128_000;
+// What a model with no entry here is assumed to hold, and what the agent plans
+// its working set against when Settings declares nothing either. It is the
+// window this installation is built around (a 200k-window model writing up to
+// 32k a turn), not a guess about any particular vendor: a smaller model that is
+// never declared will summarize later than it should, which is why declaring it
+// in Settings is worth doing.
+export const DEFAULT_CONTEXT_LIMIT = 200_000;
+
+// The output ceiling assumed for a model nobody declared anything about. Used
+// both as the `max_tokens` sent with a request and as the floor of the
+// compaction reserve, so the two can never disagree: a prompt never leaves the
+// next turn less room to answer than the request itself allows.
+export const DEFAULT_MAX_OUTPUT_TOKENS = 32_000;
 
 const SORTED_CONTEXT_LIMITS = Object.entries(MODEL_CONTEXT_LIMITS).sort(
   ([a], [b]) => b.length - a.length,
 );
 
-export function getModelContextLimit(model: string): number {
+/**
+ * A `declared` window from Settings wins over this table: it describes the
+ * endpoint this install actually dials, which the model name alone cannot.
+ */
+export function getModelContextLimit(model: string, declared?: number): number {
+  if (declared && declared > 0) return declared;
   const normalized = normalizeModelId(model);
   return (
     SORTED_CONTEXT_LIMITS.find(([key]) => normalized.includes(key))?.[1] ??
@@ -113,8 +131,19 @@ const SORTED_MAX_OUTPUT_TOKENS = Object.entries(MODEL_MAX_OUTPUT_TOKENS).sort(
   ([a], [b]) => b.length - a.length,
 );
 
-/** The model's own output ceiling, or undefined when we do not know it. */
-export function getModelMaxOutput(model: string): number | undefined {
+/**
+ * The model's output ceiling: what Settings declared, else what this table knows
+ * about that model, else DEFAULT_MAX_OUTPUT_TOKENS. It is never undefined — the
+ * ceiling is also the compaction reserve, and a reserve of "unknown" is a plan
+ * that overruns the window. A model whose real ceiling is lower than the default
+ * wants declaring (Settings, or this table), because the ceiling is what the
+ * request asks for.
+ */
+export function getModelMaxOutput(model: string, declared?: number): number {
+  if (declared && declared > 0) return declared;
   const normalized = normalizeModelId(model);
-  return SORTED_MAX_OUTPUT_TOKENS.find(([key]) => normalized.includes(key))?.[1];
+  return (
+    SORTED_MAX_OUTPUT_TOKENS.find(([key]) => normalized.includes(key))?.[1] ??
+    DEFAULT_MAX_OUTPUT_TOKENS
+  );
 }

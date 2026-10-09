@@ -34,7 +34,7 @@ import type { ToolExecutionMode } from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { wasSessionClearedSince } from "./session.helpers";
 import { engagementStateFromSession } from "./engagement-state";
-import { getModelContextLimit } from "../utils/modelMetadata";
+import { getModelContextLimit, getModelMaxOutput } from "../utils/modelMetadata";
 import { normalizeMaxAgentIterations } from "../utils/agentConfig";
 import {
   ApprovalRejectionTracker,
@@ -314,9 +314,12 @@ export async function runAgentLoop(params: {
     await resolveOrchestrator(userId);
 
   // The loop knows the orchestrator's model here, so it injects the context
-  // limit instead of letting the budget re-derive it from the provider config
-  // on every plan call.
-  const contextBudget = new ContextBudget(getModelContextLimit(orchestratorConfig.model));
+  // limit and the output ceiling the endpoint declared instead of letting the
+  // budget re-derive them from the provider config on every plan call.
+  const contextBudget = new ContextBudget(
+    getModelContextLimit(orchestratorConfig.model, orchestratorConfig.contextWindow),
+    getModelMaxOutput(orchestratorConfig.model, orchestratorConfig.maxOutputTokens),
+  );
   const toolSafetyEvaluator = toolExecutionMode === "auto_approve"
     ? createAiToolSafetyEvaluator({
         provider: orchestratorConfig,
@@ -448,7 +451,10 @@ export async function runAgentLoop(params: {
           result.usage.total_tokens ?? 0,
         );
 
-        const contextLimit = getModelContextLimit(orchestratorConfig.model);
+        const contextLimit = getModelContextLimit(
+          orchestratorConfig.model,
+          orchestratorConfig.contextWindow,
+        );
         sse.write("token_usage", {
           totalTokens: promptTokens,
           promptTokens,

@@ -3,7 +3,11 @@ import { invoke_llm } from "../utils/llm/invoke";
 import { getProvider } from "../utils/llm/orchestrator";
 import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
-import { getModelContextLimit } from "../utils/modelMetadata";
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  getModelContextLimit,
+  getModelMaxOutput,
+} from "../utils/modelMetadata";
 import {
   elideMiddle,
   estimateTokens,
@@ -28,17 +32,17 @@ import {
 // fixed fraction of it — the invariant is the room the next turn needs, so the
 // percentage lands where that puts it (~80% of a 200k window, ~69% of a 128k one)
 // instead of being asserted for every model. The reserve is the model's own
-// output ceiling (the `max_tokens` we send with every request, see
-// MODEL_MAX_OUTPUT_TOKENS) plus a margin for the estimate's measured error (~5%
-// high) and a tool result that arrives oversized between planning and the call.
-// The coupling is asserted in tests: raising the model's output ceiling without
-// raising this reserve fails the build, and a model with a smaller ceiling than
-// ours simply compacts later than it must, never past the window. The measured
-// fixed payload is ~7.7k tokens (system prompt ~4.6k + nine core tool schemas
-// ~3.2k); the preserved window is capped at RECENT_WINDOW_TOKEN_BUDGET and the
-// summary at ~SUMMARY_TOKEN_ESTIMATE. Raising this is not "more cost": it trades
-// a few cached-prefix tokens for far fewer (expensive, lossy) summarizer calls.
-const WORKING_SET_MAX_OUTPUT_TOKENS = 32_000;
+// output ceiling — what Settings declares for the endpoint, or the model table's
+// value, and the `max_tokens` we send with every request — plus a margin for the
+// estimate's measured error (~5% high) and a tool result that arrives oversized
+// between planning and the call. WORKING_SET_MAX_OUTPUT_TOKENS is the same
+// default the request itself is capped with, so the reserve can never promise
+// less room than the turn may actually use; the measured fixed payload
+// is ~7.7k tokens (system prompt ~4.6k + nine core tool schemas ~3.2k), the
+// preserved window is capped at RECENT_WINDOW_TOKEN_BUDGET and the summary at
+// ~SUMMARY_TOKEN_ESTIMATE. Raising this is not "more cost": it trades a few
+// cached-prefix tokens for far fewer (expensive, lossy) summarizer calls.
+const WORKING_SET_MAX_OUTPUT_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS;
 const WORKING_SET_RESERVE_MARGIN_TOKENS = 8_000;
 const WORKING_SET_RESERVE_TOKENS =
   WORKING_SET_MAX_OUTPUT_TOKENS + WORKING_SET_RESERVE_MARGIN_TOKENS;
@@ -99,10 +103,17 @@ const MAX_SUMMARIZER_INPUT_CHARS = 60_000;
  * The prompt size at which a compaction becomes worth it, from the model's own
  * window: the window minus the reserve, never below half the window (a small
  * window cannot afford the full reserve) and never above 90% of it.
+ *
+ * `maxOutputTokens` is the ceiling the endpoint declared for this model. It is
+ * the reserve's floor — a prompt may never leave the next turn less room to
+ * answer than the provider will let it use — and it is passed in rather than
+ * looked up here so the caller that already resolved the model pays for one
+ * lookup, not two.
  */
-export function workingSetBudget(limit: number): number {
+export function workingSetBudget(limit: number, maxOutputTokens?: number): number {
   const reserve = Math.min(
-    WORKING_SET_RESERVE_TOKENS,
+    (maxOutputTokens && maxOutputTokens > 0 ? maxOutputTokens : WORKING_SET_MAX_OUTPUT_TOKENS) +
+      WORKING_SET_RESERVE_MARGIN_TOKENS,
     limit * WORKING_SET_MAX_RESERVE_SHARE,
   );
   return Math.min(
@@ -179,11 +190,22 @@ export async function planCompaction(
   lastPromptTokens?: number,
   toolSchemaTokens: number = TOOL_SCHEMA_TOKEN_ESTIMATE,
   contextLimit?: number,
+  maxOutputTokens?: number,
 ): Promise<CompactionPlan> {
-  // The caller who already knows the orchestrator's model injects the limit;
-  // the global provider read is only the fallback for direct callers (tests).
-  const limit = contextLimit ?? getModelContextLimit((await getProvider()).model);
-  const budget = workingSetBudget(limit);
+  // The caller who already knows the orchestrator's model injects the limit and
+  // the output ceiling that endpoint declared; the global provider read is only
+  // the fallback for direct callers (tests), and never happens when a limit was
+  // injected — which is what keeps this seam free of the provider config.
+  const provider = contextLimit === undefined ? await getProvider() : undefined;
+  const limit = provider
+    ? getModelContextLimit(provider.model, provider.contextWindow)
+    : contextLimit!;
+  const budget = workingSetBudget(
+    limit,
+    provider
+      ? getModelMaxOutput(provider.model, provider.maxOutputTokens)
+      : maxOutputTokens,
+  );
 
   const systemMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
   const nonSystem = messages.filter((m) => !m.isSummary && m.role !== "system");
@@ -268,11 +290,15 @@ export class ContextBudget {
   private lastPromptTokens?: number;
 
   /**
-   * The orchestrator's model context limit, when the caller knows it. Passing
-   * it keeps the budget seam free of the global provider config; omit it and
-   * planCompaction falls back to reading the configured provider.
+   * The orchestrator's model context limit and output ceiling, when the caller
+   * knows them. Passing them keeps the budget seam free of the global provider
+   * config; omit them and planCompaction falls back to reading the configured
+   * provider, declared values included.
    */
-  constructor(private readonly contextLimit?: number) {}
+  constructor(
+    private readonly contextLimit?: number,
+    private readonly maxOutputTokens?: number,
+  ) {}
 
   /** Ground-truth prompt size reported by the provider after each call. */
   observe(promptTokens: number): void {
@@ -284,7 +310,13 @@ export class ContextBudget {
     messages: AgentMessageDoc[],
     toolSchemaTokens: number,
   ): Promise<CompactionPlan> {
-    return planCompaction(messages, this.lastPromptTokens, toolSchemaTokens, this.contextLimit);
+    return planCompaction(
+      messages,
+      this.lastPromptTokens,
+      toolSchemaTokens,
+      this.contextLimit,
+      this.maxOutputTokens,
+    );
   }
 
   /**
@@ -363,7 +395,7 @@ const CONVERSATION_PROMPT_OVERHEAD_TOKENS = 500;
 
 async function conversationInputTokenBudget(): Promise<number> {
   const config = await getProvider();
-  const limit = getModelContextLimit(config.model);
+  const limit = getModelContextLimit(config.model, config.contextWindow);
   return Math.floor(limit * CONVERSATION_INPUT_BUDGET_SHARE) - CONVERSATION_PROMPT_OVERHEAD_TOKENS;
 }
 

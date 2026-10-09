@@ -17,6 +17,15 @@ export interface ModelPreset {
   apiKey?: string;
   baseURL?: string;
   reasoningMode?: ModelReasoningMode;
+  /**
+   * What the operator declares about this endpoint, when it differs from what
+   * the model name implies. Both are optional and both are authoritative when
+   * present: the context window decides where the agent summarizes, and the
+   * output ceiling decides the reserve it leaves for the next turn (and the
+   * `max_tokens` sent with every request). Left empty, the model table answers.
+   */
+  contextWindow?: number;
+  maxOutputTokens?: number;
   verifiedAt?: string;
 }
 
@@ -84,6 +93,26 @@ function normalizeStoredModelId(model: unknown): string {
 function normalizeReasoning(value: unknown): ModelReasoningMode {
   const mode = asString(value).toLowerCase();
   return (VALID_REASONING.has(mode) ? mode : "off") as ModelReasoningMode;
+}
+
+/** Far above any model in service, low enough that a typo cannot pass. */
+const MAX_DECLARED_TOKENS = 10_000_000;
+
+/**
+ * A declared token count, or undefined when there isn't a usable one.
+ *
+ * Garbage here is not harmless: a window of 0 makes every prompt look
+ * over-budget and summarizes on the first turn, and a NaN output ceiling makes
+ * the reserve NaN, which is a plan of NaN tokens. A count that is not a positive
+ * whole number is therefore treated as "not declared" — the model table answers
+ * instead — and the ceiling is passed a bound of the window it has to fit inside,
+ * since a model cannot write back more than it can hold.
+ */
+function normalizeTokenCount(value: unknown, max = MAX_DECLARED_TOKENS): number | undefined {
+  const parsed =
+    typeof value === "number" ? value : Number.parseInt(asString(value), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return Math.min(Math.floor(parsed), max);
 }
 
 function parseJson<T>(value: string | undefined, fallback: T): T {
@@ -190,6 +219,8 @@ function sanitizePreset(
       : createId(label, usedIds);
   usedIds.add(id);
 
+  const contextWindow = normalizeTokenCount(raw.contextWindow);
+
   return {
     id,
     label,
@@ -201,6 +232,11 @@ function sanitizePreset(
     // in one place.
     baseURL: rewriteDockerHostBaseURL(asString(raw.baseURL)) || undefined,
     reasoningMode: normalizeReasoning(raw.reasoningMode),
+    contextWindow,
+    maxOutputTokens: normalizeTokenCount(
+      raw.maxOutputTokens,
+      contextWindow ?? MAX_DECLARED_TOKENS,
+    ),
     verifiedAt: asString(raw.verifiedAt) || undefined,
   };
 }
