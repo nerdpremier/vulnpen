@@ -7,11 +7,7 @@ import { stripAnsi, collapseBlankLines } from "../utils/ansi";
 import { parseToolArguments } from "../utils/toolArguments";
 import { elideMiddle } from "../utils/transcript";
 import type { ToolExecutionMode } from "../models/User/User.model";
-import {
-  decideToolConsent,
-  ToolApprovalContext,
-  ToolSafetyEvaluator,
-} from "./tool-approval.service";
+import { decideToolConsent, effectiveSafetyDetail } from "./tool-approval.service";
 
 // The model only ever sees this much of a tool result. Too small and it has to
 // re-run scans to read their own output; too large and every turn pays for it.
@@ -118,12 +114,6 @@ interface ExecutedOutcome {
   toolCallId: string;
   toolName: string;
   result: ToolResult;
-  /**
-   * Set only when the AI reviewer passed the call. Unset (or false, on a
-   * boundary block) means "not an approval outcome", so the approval circuit
-   * breaker ignores the call.
-   */
-  approvalReviewed?: boolean;
 }
 
 export type ToolOutcomeWithResult = Exclude<ToolExecutionResult, { kind: "consent_required" }>;
@@ -264,8 +254,6 @@ export async function executeToolCall(
   ctx: ExecutionContext,
   disableSafetyProtections?: boolean,
   toolExecutionMode?: ToolExecutionMode,
-  toolSafetyEvaluator?: ToolSafetyEvaluator,
-  approvalContext?: ToolApprovalContext,
 ): Promise<ToolExecutionResult> {
   const toolDef = toolRegistry.get(toolCall.name);
 
@@ -309,19 +297,17 @@ export async function executeToolCall(
     };
   }
 
-  const safetyDetail = !disableSafetyProtections ? toolDef.describeSafety?.(args, ctx) : undefined;
+  // The safety-protection setting silences the boundaries the operator finds
+  // noisy — but not the one the product promises is absolute. See
+  // effectiveSafetyDetail: a destructive action against the engagement target is
+  // refused outright whatever the setting says.
+  const safetyDetail = effectiveSafetyDetail(
+    toolDef.describeSafety?.(args, ctx),
+    disableSafetyProtections === true,
+  );
   const safetyTriggered = safetyDetail !== undefined;
   const mode: ToolExecutionMode = toolExecutionMode ?? "auto";
-  const approval = await decideToolConsent({
-    mode,
-    tool: toolDef,
-    args,
-    context: ctx,
-    safetyTriggered,
-    safetyDetail,
-    evaluator: toolSafetyEvaluator,
-    approvalContext,
-  });
+  const approval = decideToolConsent({ mode, safetyTriggered, safetyDetail });
   const needsConsent = approval.requireConsent;
   if (needsConsent) {
     callbacks.onConsentRequired(toolCall.id, toolCall.name, args, safetyTriggered, approval.reason, safetyDetail);
@@ -352,8 +338,8 @@ export async function executeToolCall(
 
   if (approval.denied) {
     const output =
-      `Approve for me denied this approval-boundary request: ${approval.reason}\n` +
-      "Do not retry the same action or bypass the review. Use a materially safer approach, or ask the user.";
+      `This approval-boundary request was denied: ${approval.reason}\n` +
+      "Do not retry the same action or try to route around the boundary. Use a materially safer approach, or ask the user.";
     callbacks.onToolError(toolCall.id, output);
     return {
       kind: "approval_denied",
@@ -364,15 +350,12 @@ export async function executeToolCall(
     };
   }
 
-  const { result, failed } = await runToolDefinition(toolDef, toolCall.id, toolCall.name, args, callbacks, ctx);
+  const { result } = await runToolDefinition(toolDef, toolCall.id, toolCall.name, args, callbacks, ctx);
   return {
     kind: "executed",
     toolCallId: toolCall.id,
     toolName: toolCall.name,
     result,
-    // An execution error is not an approval outcome: leave it unset so the
-    // approval circuit breaker ignores the call.
-    approvalReviewed: failed ? undefined : approval.reviewed,
   };
 }
 
@@ -383,8 +366,6 @@ export async function executeToolCalls(
   ctx: ExecutionContext,
   disableSafetyProtections?: boolean,
   toolExecutionMode?: ToolExecutionMode,
-  toolSafetyEvaluator?: ToolSafetyEvaluator,
-  approvalContext?: ToolApprovalContext,
 ): Promise<ToolExecutionResult[]> {
   // Run sequentially, not Promise.all: tool calls in one turn share the
   // session's shell manager, and two run_bash/shell tools racing would
@@ -399,8 +380,6 @@ export async function executeToolCalls(
         ctx,
         disableSafetyProtections,
         toolExecutionMode,
-        toolSafetyEvaluator,
-        approvalContext,
       ),
     );
   }

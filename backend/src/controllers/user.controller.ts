@@ -407,7 +407,7 @@ export const updateCapabilities = async (req: Request, res: Response) => {
     }
 
     if (toolExecutionMode !== undefined) {
-      if (!["auto", "auto_approve", "requires_consent"].includes(toolExecutionMode)) {
+      if (!["auto", "requires_consent"].includes(toolExecutionMode)) {
         return res.status(400).json({ message: "Invalid tool execution mode" });
       }
       user.configs.toolExecutionMode = toolExecutionMode;

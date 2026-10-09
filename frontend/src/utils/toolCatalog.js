@@ -22,11 +22,12 @@ export const TOOL_LABELS = {
   search_burp_proxy_history: "Burp Proxy History",
   burp_collaborator: "Burp Collaborator",
   browser_action: "Browser Action",
-  magnitude_browser: "Browser Agent",
   update_engagement_state: "Engagement State",
   wstg_test_plan: "WSTG Test Plan",
   map_finding_owasp: "OWASP Mapping",
   generate_pentest_report: "Pentest Report",
+  read_report_document: "Read Report",
+  load_tools: "Load Tools",
 };
 
 // The browser-coupling rule made explicit: tools whose name matches drive the

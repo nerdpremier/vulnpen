@@ -137,7 +137,6 @@ const updateEngagementState: ToolDefinition = {
     },
     required: ["action", "data"],
   },
-  requiresConsent: false,
   timeoutMs: 30_000,
 
   async execute(
