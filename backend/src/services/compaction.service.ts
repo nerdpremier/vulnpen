@@ -23,13 +23,36 @@ import {
 // cached prompt size in lock-step with the summary it produces. The measured
 // prompt projection this plans against lives in context.service.ts.
 
-// Absolute ceiling on the full prompt. Measured fixed payload is ~7.7k tokens
-// (system prompt ~4.6k + nine core tool schemas ~3.2k); the preserved window is
-// capped at RECENT_WINDOW_TOKEN_BUDGET and the summary at ~SUMMARY_TOKEN_ESTIMATE,
-// so 18k leaves roughly 5k of headroom — several tool rounds — before the next
-// summary. Raising this is not "more cost": it trades a few cached-prefix
-// tokens for far fewer (expensive, lossy) summarizer calls.
-const WORKING_SET_TOKEN_BUDGET = 18_000;
+// Working-set ceiling: how big a prompt the agent may carry before paying for a
+// (lossy) summarizer call. The trigger is a RESERVE off the model's window, not a
+// fixed fraction of it — the invariant is the room the next turn needs, so the
+// percentage lands where that puts it (~80% of a 200k window, ~69% of a 128k one)
+// instead of being asserted for every model. The reserve is the model's own
+// output ceiling (the `max_tokens` we send with every request, see
+// MODEL_MAX_OUTPUT_TOKENS) plus a margin for the estimate's measured error (~5%
+// high) and a tool result that arrives oversized between planning and the call.
+// The coupling is asserted in tests: raising the model's output ceiling without
+// raising this reserve fails the build, and a model with a smaller ceiling than
+// ours simply compacts later than it must, never past the window. The measured
+// fixed payload is ~7.7k tokens (system prompt ~4.6k + nine core tool schemas
+// ~3.2k); the preserved window is capped at RECENT_WINDOW_TOKEN_BUDGET and the
+// summary at ~SUMMARY_TOKEN_ESTIMATE. Raising this is not "more cost": it trades
+// a few cached-prefix tokens for far fewer (expensive, lossy) summarizer calls.
+const WORKING_SET_MAX_OUTPUT_TOKENS = 32_000;
+const WORKING_SET_RESERVE_MARGIN_TOKENS = 8_000;
+const WORKING_SET_RESERVE_TOKENS =
+  WORKING_SET_MAX_OUTPUT_TOKENS + WORKING_SET_RESERVE_MARGIN_TOKENS;
+
+// A window too small to give up that reserve still needs a usable working set, so
+// the reserve never takes more than half of it, and no plan may ever claim more
+// than 90% — the hard stop before the provider's own limit.
+const WORKING_SET_MAX_RESERVE_SHARE = 0.5;
+const WORKING_SET_MAX_WINDOW_SHARE = 0.9;
+
+// Absolute ceiling for windows big enough that a reserve-based trigger would
+// carry a prompt no per-turn latency or cost budget should pay for: a 1M window
+// plans 200k here, not 960k.
+const WORKING_SET_TOKEN_BUDGET = 200_000;
 
 // Tool schemas are NOT part of `messages`; everything else is counted from the
 // message list itself (system prompt included). A single honest constant for
@@ -42,20 +65,23 @@ const TOOL_SCHEMA_TOKEN_ESTIMATE = 3_200;
 // budget bounds the rest; MAX stops a run of tiny messages from preserving
 // everything (and therefore summarizing nothing).
 const MIN_PRESERVE_MESSAGES = 4;
-const MAX_PRESERVE_MESSAGES = 12;
-const RECENT_WINDOW_TOKEN_BUDGET = 3_000;
+const MAX_PRESERVE_MESSAGES = 16;
+const RECENT_WINDOW_TOKEN_BUDGET = 6_000;
 
 // Anti-thrash cooldown: after a summary, BOTH enough messages AND enough fresh
 // tokens must accumulate before another is allowed. The token arm matters
 // because the preserved window itself counts as "since the summary" and can
-// satisfy a pure message count while nothing meaningful has happened.
+// satisfy a pure message count while nothing meaningful has happened. It scales
+// with the working set: a fifth of a wide budget is not a trivial amount of work.
 const MIN_MESSAGES_BEFORE_RECOMPACT = 8;
-const MIN_NEW_TOKENS_BEFORE_RECOMPACT = 4_000;
+const MIN_NEW_TOKENS_BEFORE_RECOMPACT = 12_000;
 
 // Projected size of the generated summary, used to estimate the post-compaction
 // prompt (so a compaction that cannot actually free space is refused) and to
-// reset the caller's cached prompt size after a real compaction.
-const SUMMARY_TOKEN_ESTIMATE = 800;
+// reset the caller's cached prompt size after a real compaction. Priced at what
+// a summary that keeps reasoning, leads and open questions actually costs, not at
+// the bare minimum a terse one would.
+const SUMMARY_TOKEN_ESTIMATE = 1_200;
 
 // A compaction must remove at least this fraction of the summarizable history,
 // otherwise the extra LLM call costs more than the tokens it saves and the
@@ -64,11 +90,27 @@ const MIN_COMPACTION_SAVINGS_RATIO = 0.15;
 
 // Ceiling on the transcript handed to the summarizer. The engagement state
 // already carries hosts/ports/vulns/credentials, so the summarizer only needs
-// the narrative; a long 97-case run otherwise ships tens of thousands of chars
-// of tool output to buy a summary that fits in ~1k tokens.
-const MAX_SUMMARIZER_INPUT_CHARS = 24_000;
+// the narrative — but that narrative is what the next run has to reason from, so
+// the ceiling is generous: it is one call either way, and eliding the middle of
+// a long run is what loses the thread that ties two findings together.
+const MAX_SUMMARIZER_INPUT_CHARS = 60_000;
 
-const SUMMARIZE_THRESHOLD = 0.40;
+/**
+ * The prompt size at which a compaction becomes worth it, from the model's own
+ * window: the window minus the reserve, never below half the window (a small
+ * window cannot afford the full reserve) and never above 90% of it.
+ */
+export function workingSetBudget(limit: number): number {
+  const reserve = Math.min(
+    WORKING_SET_RESERVE_TOKENS,
+    limit * WORKING_SET_MAX_RESERVE_SHARE,
+  );
+  return Math.min(
+    limit - reserve,
+    limit * WORKING_SET_MAX_WINDOW_SHARE,
+    WORKING_SET_TOKEN_BUDGET,
+  );
+}
 
 /**
  * Split the summarizable history into what to fold into the summary and what to
@@ -141,7 +183,7 @@ export async function planCompaction(
   // The caller who already knows the orchestrator's model injects the limit;
   // the global provider read is only the fallback for direct callers (tests).
   const limit = contextLimit ?? getModelContextLimit((await getProvider()).model);
-  const budget = Math.min(limit * SUMMARIZE_THRESHOLD, WORKING_SET_TOKEN_BUDGET);
+  const budget = workingSetBudget(limit);
 
   const systemMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
   const nonSystem = messages.filter((m) => !m.isSummary && m.role !== "system");
@@ -196,6 +238,11 @@ export async function planCompaction(
 }
 
 export const COMPACTION_TUNING = {
+  WORKING_SET_MAX_OUTPUT_TOKENS,
+  WORKING_SET_RESERVE_MARGIN_TOKENS,
+  WORKING_SET_RESERVE_TOKENS,
+  WORKING_SET_MAX_RESERVE_SHARE,
+  WORKING_SET_MAX_WINDOW_SHARE,
   WORKING_SET_TOKEN_BUDGET,
   TOOL_SCHEMA_TOKEN_ESTIMATE,
   PRESERVE_RECENT_MESSAGES,
@@ -206,6 +253,7 @@ export const COMPACTION_TUNING = {
   MIN_NEW_TOKENS_BEFORE_RECOMPACT,
   MIN_COMPACTION_SAVINGS_RATIO,
   SUMMARY_TOKEN_ESTIMATE,
+  MAX_SUMMARIZER_INPUT_CHARS,
 } as const;
 
 /**

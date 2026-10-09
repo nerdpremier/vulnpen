@@ -15,7 +15,7 @@ import { buildSystemPrompt, buildVolatileWebAppPrompt } from "../src/utils/assis
 import {
   planCompaction,
   summarizeMessages,
-  COMPACTION_TUNING,
+  workingSetBudget,
 } from "../src/services/compaction.service";
 import {
   messagesToOpenAI,
@@ -140,7 +140,7 @@ async function main(): Promise<void> {
   });
   const realPrompt = cal.usage?.prompt_tokens ?? 0;
   const estimate = estimatePromptTokens(messages) + toolSchemaTokens;
-  const budget = Math.min(getModelContextLimit(cal.model) * 0.4, COMPACTION_TUNING.WORKING_SET_TOKEN_BUDGET);
+  const budget = workingSetBudget(getModelContextLimit(cal.model));
   console.log("\n=== Live context-compaction check (model: " + cal.model + ") ===");
   console.log("budget: " + budget + " tokens");
   console.log(

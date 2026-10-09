@@ -57,6 +57,7 @@ import {
   COMPACTION_TUNING,
   selectPreservedWindow,
   ContextBudget,
+  workingSetBudget,
 } from "../src/services/compaction.service";
 import {
   messagesSinceSummary,
@@ -71,6 +72,18 @@ function turn(i: number, chars: number): AgentMessageDoc {
     content: "C".repeat(chars),
     turnIndex: i,
   });
+}
+
+// The budget is a reserve off the model's window, so a test that asserts on the
+// budget decision states the window it means instead of inheriting whatever
+// model happens to be configured. 36k gives the historical 18k working set.
+const TEST_MODEL_LIMIT = 36_000;
+function planWith(
+  msgs: AgentMessageDoc[],
+  lastPromptTokens?: number,
+  contextLimit: number = TEST_MODEL_LIMIT,
+) {
+  return planCompaction(msgs, lastPromptTokens, undefined, contextLimit);
 }
 
 test("messagesSinceSummary counts only what came after the last summary", () => {
@@ -102,7 +115,7 @@ test("planCompaction refuses to re-summarize right after a summary (cooldown)", 
     turn(1, 4000),
     turn(2, 4000),
   ];
-  const plan = await planCompaction(msgs, 60_000);
+  const plan = await planWith(msgs, 60_000);
   assert.equal(plan.shouldCompact, false);
   assert.equal(plan.reason, "cooldown");
 });
@@ -114,7 +127,7 @@ test("planCompaction refuses a summary that would free nothing", async () => {
     doc({ id: "sys", role: "system", content: "S".repeat(200_000) }),
     ...Array.from({ length: 20 }, (_, i) => turn(i, 5)),
   ];
-  const plan = await planCompaction(msgs, 200_000);
+  const plan = await planWith(msgs, 200_000);
   assert.equal(plan.shouldCompact, false);
   assert.equal(plan.reason, "insufficient-savings");
 });
@@ -124,7 +137,7 @@ test("planCompaction summarizes a long history with no prior summary", async () 
     doc({ id: "sys", role: "system", content: "system prompt " + "S".repeat(6_000) }),
     ...Array.from({ length: 40 }, (_, i) => turn(i, 3_000)),
   ];
-  const plan = await planCompaction(msgs, 40_000);
+  const plan = await planWith(msgs, 40_000);
   assert.equal(plan.shouldCompact, true);
   assert.equal(plan.reason, "over-budget");
   assert.ok(plan.projectedPromptTokens < plan.promptTokens);
@@ -151,7 +164,7 @@ test("the budget counts the real prompt once (no fixed-overhead double count)", 
     doc({ id: "sys", role: "system", content: "S".repeat(30_000) }),
     ...Array.from({ length: 4 }, (_, i) => turn(i, 20)),
   ];
-  const plan = await planCompaction(msgs);
+  const plan = await planWith(msgs);
   assert.equal(plan.shouldCompact, false);
   assert.equal(plan.reason, "within-budget");
   assert.ok(plan.promptTokens < 15_000, "expected an honest count, got " + plan.promptTokens);
@@ -162,7 +175,7 @@ test("compaction lands the prompt well below budget (headroom, not a re-trigger)
     doc({ id: "sys", role: "system", content: "system prompt " + "S".repeat(6_000) }),
     ...Array.from({ length: 30 }, (_, i) => turn(i, 2_000)),
   ];
-  const plan = await planCompaction(msgs);
+  const plan = await planWith(msgs);
   assert.equal(plan.shouldCompact, true);
   assert.equal(plan.reason, "over-budget");
   assert.ok(plan.projectedPromptTokens < plan.budget, "compaction must leave headroom below budget");
@@ -205,7 +218,7 @@ test("the recompaction cooldown also requires new tokens, not just new messages"
     doc({ id: "s1", role: "system", content: "previous summary", isSummary: true }),
     ...Array.from({ length: 10 }, (_, i) => turn(i, 20)),
   ];
-  const plan = await planCompaction(msgs);
+  const plan = await planWith(msgs, undefined, 30_000);
   assert.equal(plan.shouldCompact, false);
   assert.equal(plan.reason, "cooldown");
 });
@@ -312,8 +325,8 @@ test("planCompaction honours an injected context limit without the provider conf
     doc({ id: "sys", role: "system", content: "system " + "S".repeat(2_000) }),
     ...Array.from({ length: 30 }, (_, i) => turn(i, 2_000)),
   ];
-  // A tiny limit forces compaction under a threshold the default budget
-  // (18k working set) would never cross — proving the injected seam binds.
+  // A tiny limit forces compaction under a threshold the default working set
+  // would never cross — proving the injected seam binds.
   const withTinyLimit = await planCompaction(msgs, undefined, 0, 10_000);
   const withHugeLimit = await planCompaction(msgs, undefined, 0, 10_000_000);
   assert.equal(withTinyLimit.shouldCompact, true);
@@ -322,5 +335,49 @@ test("planCompaction honours an injected context limit without the provider conf
     withHugeLimit.budget,
     COMPACTION_TUNING.WORKING_SET_TOKEN_BUDGET,
     "a huge model limit still caps at the working-set budget",
+  );
+});
+
+// ─── The working set scales with the model ──────────────────────────────
+// The regression this locks out: one fixed ceiling for every model, so a 128k
+// model threw away context it could afford to keep and summarized a long run
+// several times over.
+
+test("the working set is a reserve off the window, not a fixed ceiling", async () => {
+  const msgs: AgentMessageDoc[] = [
+    doc({ id: "sys", role: "system", content: "system prompt " + "S".repeat(6_000) }),
+    ...Array.from({ length: 40 }, (_, i) => turn(i, 2_000)),
+  ];
+  const narrow = await planCompaction(msgs, undefined, 0, 32_000);
+  const wide = await planCompaction(msgs, undefined, 0, 128_000);
+
+  assert.equal(
+    wide.budget,
+    128_000 - COMPACTION_TUNING.WORKING_SET_RESERVE_TOKENS,
+    "the trigger is the window minus the reserve, not a fraction of it",
+  );
+  assert.ok(
+    wide.budget > narrow.budget * 3,
+    `four times the window must buy a much bigger working set, got ${narrow.budget} vs ${wide.budget}`,
+  );
+  assert.equal(narrow.shouldCompact, true, "the same history must compact on a 32k model");
+  assert.equal(wide.shouldCompact, false, "a 128k model keeps it verbatim");
+});
+
+test("a small window keeps its reserve proportional instead of losing its working set", () => {
+  // A 32k window cannot give up a 32k reserve, and an 8k one certainly cannot:
+  // the reserve is capped at half the window, so the budget never collapses.
+  assert.equal(workingSetBudget(32_000), 16_000);
+  assert.equal(workingSetBudget(8_000), 4_000);
+  assert.ok(
+    workingSetBudget(1_000_000) <= COMPACTION_TUNING.WORKING_SET_TOKEN_BUDGET,
+    "a huge window still stops at the absolute ceiling",
+  );
+});
+
+test("the summarizer input ceiling leaves the narrative intact", () => {
+  assert.ok(
+    COMPACTION_TUNING.MAX_SUMMARIZER_INPUT_CHARS >= 60_000,
+    "eliding the middle of a long run is what loses the thread between findings",
   );
 });
