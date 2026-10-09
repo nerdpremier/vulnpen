@@ -859,7 +859,8 @@
   :global(.ant-input),
   :global(.ant-input-affix-wrapper),
   :global(.ant-select-selector),
-  :global(.ant-select-single .ant-select-selector) {
+  :global(.ant-select-single .ant-select-selector),
+  :global(.ant-input-number) {
     min-height: 2.25rem !important;
     border-radius: 6px !important;
     background: var(--input-bg) !important;
@@ -868,12 +869,26 @@
     box-shadow: none !important;
   }
 
+  :global(.ant-input-number) {
+    display: flex !important;
+    align-items: center;
+    padding: 0 !important;
+
+    :global(.ant-input-number-input-wrap) {
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+  }
+
   :global(.ant-input:hover),
   :global(.ant-input:focus),
   :global(.ant-input-affix-wrapper:hover),
   :global(.ant-input-affix-wrapper-focused),
   :global(.ant-select:hover .ant-select-selector),
-  :global(.ant-select-focused .ant-select-selector) {
+  :global(.ant-select-focused .ant-select-selector),
+  :global(.ant-input-number:hover),
+  :global(.ant-input-number-focused) {
     border-color: var(--filled-purple-100) !important;
     background: var(--input-bg) !important;
     box-shadow: none !important;
@@ -899,6 +914,7 @@
 
   :global(.ant-input),
   :global(.ant-input-affix-wrapper input),
+  :global(.ant-input-number-input),
   :global(.ant-select-selection-item),
   :global(.ant-select-selection-search-input) {
     color: var(--primary-text) !important;
@@ -906,8 +922,15 @@
 
   :global(.ant-input::placeholder),
   :global(.ant-input-affix-wrapper input::placeholder),
+  :global(.ant-input-number-input::placeholder),
   :global(.ant-select-selection-placeholder) {
     color: var(--secondary-text-500) !important;
+  }
+
+  /* The stepper arrows default to ink-black, which is invisible on this
+     canvas; reclaim the muted tone the rest of the modal uses. */
+  :global(.ant-input-number-handler) {
+    color: var(--secondary-text);
   }
 
   :global(.ant-select-arrow),

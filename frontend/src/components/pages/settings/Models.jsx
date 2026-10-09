@@ -33,6 +33,10 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import {
+  DEFAULT_CONTEXT_LIMIT,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+} from "@/utils/contextBudget";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
@@ -242,14 +246,14 @@ const ModelModal = ({
             <Form.Item
               label="Context window (tokens)"
               name="contextWindow"
-              tooltip="Where the agent summarizes. Empty uses the default of 200000."
+              tooltip={`Where the agent summarizes. Empty uses the default of ${DEFAULT_CONTEXT_LIMIT}.`}
             >
               <InputNumber
                 min={1}
                 max={10000000}
                 step={1000}
                 style={{ width: "100%" }}
-                placeholder="200000 (default)"
+                placeholder={`${DEFAULT_CONTEXT_LIMIT} (default)`}
               />
             </Form.Item>
           </Col>
@@ -257,14 +261,14 @@ const ModelModal = ({
             <Form.Item
               label="Max output (tokens)"
               name="maxOutputTokens"
-              tooltip="Sent as max_tokens, and the room the agent leaves free for the next turn. Empty uses the default of 32000 — declare it for a model that writes less."
+              tooltip={`Sent as max_tokens, and the room the agent leaves free for the next turn. Empty uses the default of ${DEFAULT_MAX_OUTPUT_TOKENS} — declare it for a model that writes less.`}
             >
               <InputNumber
                 min={1}
                 max={10000000}
                 step={1000}
                 style={{ width: "100%" }}
-                placeholder="32000 (default)"
+                placeholder={`${DEFAULT_MAX_OUTPUT_TOKENS} (default)`}
               />
             </Form.Item>
           </Col>

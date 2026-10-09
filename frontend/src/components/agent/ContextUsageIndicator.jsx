@@ -5,6 +5,7 @@ import { useQueryClient } from "react-query";
 import { clearContext } from "@/services/agent.service";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import { useAgentStreamStore } from "@/store/agentStream.store";
+import { DEFAULT_CONTEXT_LIMIT } from "@/utils/contextBudget";
 import styles from "@/styles/components/Chat.module.scss";
 
 function formatTokenCount(n) {
@@ -27,7 +28,7 @@ export default function ContextUsageIndicator({ sessionId }) {
   );
   const {
     totalTokens = 0,
-    contextLimit = 128_000,
+    contextLimit = DEFAULT_CONTEXT_LIMIT,
     promptTokens,
     completionTokens,
     iteration,

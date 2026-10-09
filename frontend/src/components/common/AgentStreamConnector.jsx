@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { getSessionHistory } from "@/services/agent.service";
+import { DEFAULT_CONTEXT_LIMIT } from "@/utils/contextBudget";
 
 
 export default function AgentStreamConnector({ sessionId }) {
@@ -43,7 +44,7 @@ export default function AgentStreamConnector({ sessionId }) {
         if (data.totalTokens != null) {
           setTokenUsage(sessionId, {
             totalTokens: data.totalTokens,
-            contextLimit: data.contextLimit ?? 128_000,
+            contextLimit: data.contextLimit ?? DEFAULT_CONTEXT_LIMIT,
             promptTokens: data.promptTokens ?? undefined,
             completionTokens: data.completionTokens ?? undefined,
           });

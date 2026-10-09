@@ -225,11 +225,14 @@ the post-compaction projection (the anti-thrashing guard against
 summarize → one tool → summarize loops). The working set it plans against is a
 RESERVE off the model's context window (`workingSetBudget`), never one fixed
 number for every model: the reserve is the model's own output ceiling — the
-`max_tokens` sent with every request (`MODEL_MAX_OUTPUT_TOKENS`) — plus a margin
-for the estimate's error, so the invariant is the room the next turn needs to
-answer, and the percentage falls where that puts it (~80% of the configured
-200k window). A wide-context model therefore pays for fewer, less lossy
-summaries.
+`max_tokens` sent with every request — plus a margin for the estimate's error,
+so the invariant is the room the next turn needs to answer, and the percentage
+falls where that puts it (~80% of the configured 200k window). Both numbers come
+from `utils/modelMetadata.ts`, where a value declared for the endpoint in
+Settings wins over the model table, and the table over the install's defaults
+(a 200k window, a 32k ceiling); `ContextBudget` is handed both by the caller
+that already resolved the model, so the budget seam needs no provider config. A
+wide-context model therefore pays for fewer, less lossy summaries.
 
 **VNC config** — the stored VNC settings (`VNC_*` env keys), owned by
 `services/vnc-provisioning.service.ts`: `getVncConfig` (the one
