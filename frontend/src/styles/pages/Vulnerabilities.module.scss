@@ -1137,6 +1137,36 @@
   min-width: 0;
 }
 
+/* The version switcher under the dial: which FIRST version the base score
+   is read in. A hairline segmented control, active chip lit. */
+.cvssVersionSwitch {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.cvssVersionChip {
+  padding: 0.15rem 0.55rem;
+  color: var(--moon-text-mute);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  background: transparent;
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-sm);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+
+  &:hover {
+    color: var(--moon-text);
+    border-color: var(--moon-line-2);
+  }
+}
+
+.cvssVersionChipActive {
+  color: var(--moon-text);
+  background: var(--moon-surface-2);
+  border-color: var(--moon-text-mute);
+}
+
 /* The vector is the score's caption, not a cell in a table. */
 .vectorString {
   max-width: 220px;

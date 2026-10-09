@@ -231,7 +231,9 @@ export interface SessionVulnerabilityDoc {
   /** How the OWASP mapping was decided: official, curated, tester or model. */
   owaspProvenance?: string;
   /** CVSS v3.0 base metrics (FIRST spec) the model rated, with the score the
-   *  system computed from them. Severity always follows the score. */
+   *  system computed from them. Severity always follows the score. The v2 and
+   *  v4 groups carry the same finding rendered in those versions, derived from
+   *  these metrics at rating time. */
   cvss?: {
     av: "N" | "A" | "L" | "P";
     ac: "L" | "H";
@@ -243,6 +245,8 @@ export interface SessionVulnerabilityDoc {
     a: "N" | "L" | "H";
     score: number;
     vector: string;
+    v2?: { score: number; vector: string };
+    v4?: { score: number; vector: string };
   };
   /** Legacy WSTG risk-matrix factors (1–3) kept only for findings recorded
    *  before the CVSS v3.0 rating replaced the likelihood x impact matrix. */
@@ -552,6 +556,14 @@ const SessionVulnerabilitySchema = new Schema(
         a: { type: String, enum: ["N", "L", "H"] },
         score: { type: Number },
         vector: { type: String },
+        v2: {
+          type: { score: { type: Number }, vector: { type: String } },
+          _id: false,
+        },
+        v4: {
+          type: { score: { type: Number }, vector: { type: String } },
+          _id: false,
+        },
       },
       _id: false,
     },

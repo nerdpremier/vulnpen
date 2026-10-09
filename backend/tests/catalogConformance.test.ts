@@ -4,6 +4,11 @@ import {
   OWASP_TOP10_2025,
   cvssBaseScore,
   cvssVectorString,
+  cvssV2BaseScore,
+  cvssV2VectorString,
+  deriveCvssV2Metrics,
+  deriveCvssV4Vector,
+  computeCvssBase,
   cvssQualitativeRating,
   normalizeCvssBaseMetrics,
   parseCvssVector,
@@ -175,6 +180,46 @@ test("the base score equation reproduces the FIRST calculator", () => {
     cvssBaseScore({ ...BASE_METRICS, av: "P", ac: "H", pr: "H", ui: "R", c: "N", i: "N", a: "N" }),
     0.0,
     "no impact is 0.0",
+  );
+});
+
+// Reference vectors from the FIRST CVSS v2.0 guide
+// (https://www.first.org/cvss/v2/guide). Derived from the same v3 metrics:
+// PR→Authentication, C/I/A→none/partial/complete.
+test("the v2.0 base score equation reproduces the FIRST guide", () => {
+  assert.equal(
+    cvssV2BaseScore({ av: "N", ac: "L", au: "N", c: "N", i: "N", a: "C" }),
+    7.8,
+    "AV:N/AC:L/Au:N/C:N/I:N/A:C is 7.8 (CVE-2002-0392)",
+  );
+  assert.equal(
+    cvssV2BaseScore({ av: "N", ac: "L", au: "N", c: "C", i: "C", a: "C" }),
+    10.0,
+    "AV:N/AC:L/Au:N/C:C/I:C/A:C is 10.0 (CVE-2003-0818)",
+  );
+  assert.equal(cvssV2BaseScore({ av: "N", ac: "L", au: "N", c: "N", i: "N", a: "N" }), 0.0);
+});
+
+test("v2.0 and v4.0 are derived from the v3.0 base metrics", () => {
+  const v2 = deriveCvssV2Metrics(BASE_METRICS);
+  assert.deepEqual(v2, { av: "N", ac: "L", au: "N", c: "C", i: "C", a: "C" });
+  assert.equal(cvssV2VectorString(v2), "AV:N/AC:L/Au:N/C:C/I:C/A:C");
+  const v4Vector = deriveCvssV4Vector(BASE_METRICS);
+  assert.equal(
+    v4Vector,
+    "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+  );
+});
+
+test("computeCvssBase scores the finding in all three versions", () => {
+  const scored = computeCvssBase(BASE_METRICS);
+  assert.equal(scored.score, 9.8);
+  assert.equal(scored.v2.score, 10.0);
+  assert.equal(scored.v4.score, 9.3);
+  assert.equal(scored.v2.vector, "AV:N/AC:L/Au:N/C:C/I:C/A:C");
+  assert.equal(
+    scored.v4.vector,
+    "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
   );
 });
 

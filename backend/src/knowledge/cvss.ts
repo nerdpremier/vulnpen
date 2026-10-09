@@ -151,10 +151,108 @@ export function severityFromCvssScore(score: number): "critical" | "high" | "med
   return rating === "none" ? "info" : rating;
 }
 
+/**
+ * CVSS v2.0 base score, derived from the same v3.0 base metrics so a finding
+ * carries one rating rendered in all three versions. The two specs measure
+ * different axes, so the mapping is the closest equivalence, not a rewrite:
+ * v3 PrivilegesRequired becomes v2 Authentication (none→none, low→single,
+ * high→multiple) and v3 C/I/A map N/L/H onto none/partial/complete. The
+ * equation is the FIRST v2.0 guide
+ * (https://www.first.org/cvss/v2/guide), including its f(impact) factor and
+ * round-to-one-decimal (not roundup).
+ */
+export type CvssV2AccessVector = "L" | "A" | "N";
+export type CvssV2AccessComplexity = "L" | "H";
+export type CvssV2Authentication = "N" | "S" | "M";
+export type CvssV2Cia = "N" | "P" | "C";
+
+export interface CvssV2Metrics {
+  av: CvssV2AccessVector;
+  ac: CvssV2AccessComplexity;
+  au: CvssV2Authentication;
+  c: CvssV2Cia;
+  i: CvssV2Cia;
+  a: CvssV2Cia;
+}
+
+const V2_WEIGHTS = {
+  av: { L: 0.395, A: 0.646, N: 1.0 },
+  ac: { L: 0.71, H: 0.35 },
+  au: { N: 0.704, S: 0.56, M: 0.45 },
+  cia: { N: 0, P: 0.275, C: 0.66 },
+} as const;
+
+export function deriveCvssV2Metrics(metrics: CvssBaseMetrics): CvssV2Metrics {
+  return {
+    av: metrics.av === "P" ? "A" : metrics.av,
+    ac: metrics.ac,
+    au: metrics.pr === "N" ? "N" : metrics.pr === "L" ? "S" : "M",
+    c: metrics.c === "H" ? "C" : metrics.c === "L" ? "P" : "N",
+    i: metrics.i === "H" ? "C" : metrics.i === "L" ? "P" : "N",
+    a: metrics.a === "H" ? "C" : metrics.a === "L" ? "P" : "N",
+  };
+}
+
+/** The CVSS v2.0 base score equation, with the spec's f(impact) multiplier. */
+export function cvssV2BaseScore(metrics: CvssV2Metrics): number {
+  const impact = 10.41 * (1 - (1 - V2_WEIGHTS.cia[metrics.c]) * (1 - V2_WEIGHTS.cia[metrics.i]) * (1 - V2_WEIGHTS.cia[metrics.a]));
+  if (impact <= 0) return 0;
+  const exploitability = 20 * V2_WEIGHTS.av[metrics.av] * V2_WEIGHTS.ac[metrics.ac] * V2_WEIGHTS.au[metrics.au];
+  const fImpact = 1.176;
+  const base = (0.6 * impact + 0.4 * exploitability - 1.5) * fImpact;
+  return Math.round(Math.min(base, 10) * 10) / 10;
+}
+
+export function cvssV2VectorString(metrics: CvssV2Metrics): string {
+  return `AV:${metrics.av}/AC:${metrics.ac}/Au:${metrics.au}/C:${metrics.c}/I:${metrics.i}/A:${metrics.a}`;
+}
+
+/**
+ * CVSS v4.0 base score, computed with the FIRST reference implementation
+ * (the cvss4 package) from metrics derived the same way: AV, AC, PR carry
+ * over unchanged; UI R→Y; C/I/A feed VC/VI/VA. AT (exploit maturity) and the
+ * subsequent-system metrics SC/SI/SA cannot be inferred from a v3 rating and
+ * default to N — the same defaults the official calculator applies to
+ * unrated metrics, so v4 lands slightly below v3 when scope change mattered.
+ */
+export interface CvssScoredVersion {
+  score: number;
+  vector: string;
+}
+
+export function deriveCvssV4Vector(metrics: CvssBaseMetrics): string {
+  return (
+    `CVSS:4.0/AV:${metrics.av}/AC:${metrics.ac}/AT:N/PR:${metrics.pr}/UI:${metrics.ui === "R" ? "Y" : "N"}` +
+    `/VC:${metrics.c}/VI:${metrics.i}/VA:${metrics.a}/SC:N/SI:N/SA:N`
+  );
+}
+
+function cvssV4BaseScore(vector: string): number {
+  try {
+    const { calculateBaseScoreV4 } = require("cvss4") as { calculateBaseScoreV4: (vector: string) => number };
+    const score = calculateBaseScoreV4(vector);
+    return typeof score === "number" && score >= 0 ? score : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Score everything at once: metrics → score, vector and severity band. */
 export function computeCvssBase(
   metrics: CvssBaseMetrics,
-): CvssBaseMetrics & { score: number; vector: string; severity: "critical" | "high" | "medium" | "low" | "info" } {
+): CvssBaseMetrics & { score: number; vector: string; severity: "critical" | "high" | "medium" | "low" | "info" } & {
+  v2: CvssScoredVersion;
+  v4: CvssScoredVersion;
+} {
   const score = cvssBaseScore(metrics);
-  return { ...metrics, score, vector: cvssVectorString(metrics), severity: severityFromCvssScore(score) };
+  const v2Metrics = deriveCvssV2Metrics(metrics);
+  const v4Vector = deriveCvssV4Vector(metrics);
+  return {
+    ...metrics,
+    score,
+    vector: cvssVectorString(metrics),
+    severity: severityFromCvssScore(score),
+    v2: { score: cvssV2BaseScore(v2Metrics), vector: cvssV2VectorString(v2Metrics) },
+    v4: { score: cvssV4BaseScore(v4Vector), vector: v4Vector },
+  };
 }
