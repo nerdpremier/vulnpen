@@ -45,15 +45,22 @@ const runPythonScript: ToolDefinition = {
     // script and terminate the heredoc early, executing the rest as shell.
     const delimiter = `PY_EOF_${crypto.randomBytes(8).toString("hex")}`;
 
-    // Persist to disk as a side effect if requested (best-effort, don't block execution)
+    // Persist to disk as a side effect if requested (best-effort — it must not
+    // fail the run — but the file is only reported once it is really written;
+    // pushing the name unconditionally advertised a file that a swallowed
+    // error may never have created).
     if (file_name) {
       const safeName = file_name.replace(/^.*[\\/]/, "");
       if (safeName) {
-        ctx.runCommand(
-          `cat > './${safeName.replace(/'/g, "'\\''")}' << '${delimiter}'\n${script}\n${delimiter}`,
-          10_000,
-        ).catch(() => {});
-        files.push(safeName);
+        try {
+          const { exitCode: writeExit } = await ctx.runCommand(
+            `cat > './${safeName.replace(/'/g, "'\\''")}' << '${delimiter}'\n${script}\n${delimiter}`,
+            10_000,
+          );
+          if (writeExit === 0) files.push(safeName);
+        } catch {
+          // Saving the script for reference is a convenience, not the task.
+        }
       }
     }
 

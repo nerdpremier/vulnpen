@@ -367,6 +367,18 @@ function reportSignature(session: {
     v.cvss?.score,
     v.cvss?.vector,
     v.createdAt,
+    // Everything the document actually renders. Hashing only id/title/severity/
+    // CVSS meant an edit to the evidence, impact, remediation or CWE left the
+    // signature unchanged, so ensureReportDocx served the stale file and the
+    // report no longer matched the tracked findings.
+    v.description,
+    v.contextSummary,
+    v.evidence,
+    v.impact,
+    v.stepsToReproduce,
+    v.remediation,
+    v.cwe,
+    v.wstgId,
   ]);
   const cases = (session.webAppTestPlan?.cases ?? []).map((c) => [c.testId, c.status]);
   return crypto

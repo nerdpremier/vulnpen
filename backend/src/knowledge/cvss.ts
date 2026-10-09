@@ -210,7 +210,7 @@ export function cvssV2VectorString(metrics: CvssV2Metrics): string {
 /**
  * CVSS v4.0 base score, computed with the FIRST reference implementation
  * (the cvss4 package) from metrics derived the same way: AV, AC, PR carry
- * over unchanged; UI R→Y; C/I/A feed VC/VI/VA. AT (exploit maturity) and the
+ * over unchanged; UI R→P; C/I/A feed VC/VI/VA. AT (exploit maturity) and the
  * subsequent-system metrics SC/SI/SA cannot be inferred from a v3 rating and
  * default to N — the same defaults the official calculator applies to
  * unrated metrics, so v4 lands slightly below v3 when scope change mattered.
@@ -221,18 +221,61 @@ export interface CvssScoredVersion {
 }
 
 export function deriveCvssV4Vector(metrics: CvssBaseMetrics): string {
+  // CVSS v4.0 accepts UI:N|P|A. A v3 "UI:R" (required) migrates to v4 "P"
+  // (passive) per the v4 specification's v3.1 migration table — v4 dropped the
+  // v3 "R" token entirely. Emitting "Y" here produced a vector the cvss4
+  // package rejects, so every finding with User Interaction = Required (XSS,
+  // CSRF, phishing) silently scored 0 with a vector no CVSS tool can parse.
   return (
-    `CVSS:4.0/AV:${metrics.av}/AC:${metrics.ac}/AT:N/PR:${metrics.pr}/UI:${metrics.ui === "R" ? "Y" : "N"}` +
+    `CVSS:4.0/AV:${metrics.av}/AC:${metrics.ac}/AT:N/PR:${metrics.pr}/UI:${metrics.ui === "R" ? "P" : "N"}` +
     `/VC:${metrics.c}/VI:${metrics.i}/VA:${metrics.a}/SC:N/SI:N/SA:N`
   );
 }
 
+let cvssV4UnavailableReported = false;
+let cvssV4InvalidVectorReported = false;
+
+/**
+ * CVSS v4.0 base score for a vector, via the `cvss4` package (a declared
+ * dependency — see package.json). A missing or broken package must not score
+ * every finding 0 in silence: it did once, and nothing noticed until the
+ * conformance test compared against the FIRST calculator. Report it once, and
+ * keep the numeric contract so a caller never sees NaN.
+ *
+ * The two failure modes are reported separately on purpose. A rejected vector
+ * (a metric we derived is not valid in v4) used to raise the same "package
+ * unavailable" message as a missing dependency, so a bad mapping hid behind a
+ * bug that had already been fixed.
+ */
 function cvssV4BaseScore(vector: string): number {
+  let calculateBaseScoreV4: (vector: string) => number;
   try {
-    const { calculateBaseScoreV4 } = require("cvss4") as { calculateBaseScoreV4: (vector: string) => number };
+    ({ calculateBaseScoreV4 } = require("cvss4") as {
+      calculateBaseScoreV4: (vector: string) => number;
+    });
+  } catch (err: any) {
+    if (!cvssV4UnavailableReported) {
+      cvssV4UnavailableReported = true;
+      console.error(
+        "[cvss] the cvss4 package is unavailable, so every CVSS v4.0 base score is 0:",
+        err?.message ?? err,
+      );
+    }
+    return 0;
+  }
+
+  try {
     const score = calculateBaseScoreV4(vector);
     return typeof score === "number" && score >= 0 ? score : 0;
-  } catch {
+  } catch (err: any) {
+    if (!cvssV4InvalidVectorReported) {
+      cvssV4InvalidVectorReported = true;
+      console.error(
+        `[cvss] the cvss4 package rejected a derived vector (${vector}), so this finding scores 0 in v4.0. ` +
+          "A metric mapping is invalid — fix deriveCvssV4Vector rather than the score:",
+        err?.message ?? err,
+      );
+    }
     return 0;
   }
 }

@@ -61,9 +61,12 @@ const writeToShell: ToolDefinition = {
       await ctx.writeToShell(shell_id, input);
       await new Promise((r) => setTimeout(r, 300));
       const { data } = await ctx.readShellOutput(shell_id);
-      const lastLines = data.split("\\n").slice(-30).join("\\n");
+      // "\n" — a real newline. Written as "\\n" this split matched nothing,
+      // so the "last 30 lines" cap never applied and the reply printed literal
+      // backslash-n instead of line breaks (read_shell always used "\n").
+      const lastLines = data.split("\n").slice(-30).join("\n");
       return {
-        output: `Input sent to shell ${shell_id}. Recent output:\\n${lastLines}`,
+        output: `Input sent to shell ${shell_id}. Recent output:\n${lastLines}`,
         exitCode: 0,
       };
     } catch (err: any) {

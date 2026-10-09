@@ -3,8 +3,9 @@ import { ToolDefinition } from "../types";
 const spawnShell: ToolDefinition = {
   name: "spawn_shell",
   description:
-    "Create a new persistent named shell on the attack box; returns a shell_id for run_bash (shell_id), " +
-    "write_to_shell and read_shell. For long-running processes, listeners and interactive sessions.",
+    "Create a new persistent named shell on the attack box; returns a shell_id for " +
+    "write_to_shell and read_shell. For long-running processes, listeners and interactive sessions. " +
+    "run_bash always runs a one-off command and does not take a shell_id.",
   parameters: {
     type: "object",
     properties: {
