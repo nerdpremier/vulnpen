@@ -555,17 +555,3 @@
   background: var(--moon-surface-3);
   overflow: hidden;
 }
-
-/* ---- ScanLauncherModal: the selection, drawn ------------------------------ */
-.launchChart {
-  margin-top: 0.7rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid var(--moon-line-1);
-}
-
-.launchChartLabel {
-  display: block;
-  margin-bottom: 0.45rem;
-  @include eyebrow;
-  font-size: 0.58rem;
-}

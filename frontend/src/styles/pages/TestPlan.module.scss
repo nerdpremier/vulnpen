@@ -1917,13 +1917,26 @@
 .scanLauncher {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 0.8rem;
+}
+
+.scanTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.scanSubtitle {
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--moon-text-mute);
 }
 
 .scanField {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .scanFieldLabel {
@@ -1934,48 +1947,196 @@
   color: var(--moon-text-mute, #888);
 }
 
-.scanFieldHint {
-  margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--moon-text-mute, #888);
-
-  strong {
-    color: var(--moon-text);
-    font-weight: 600;
-  }
-}
-
 .scanCasePicker {
   width: 100%;
 }
 
-.policyChoices {
+/* Both choice groups share one row idiom: a recessed row that brightens its
+   hairline on hover and rings itself when chosen. The selected state is the
+   accent ring, never a colour fill, so the dialog stays monochrome — and the
+   control is drawn here, not by antd, so it never borrows antd's default blue.
+   Each row is one line tall: icon, label, an inline hint, and the count (or
+   nothing) on the right, so a group reads top-to-bottom in a single pass. */
+.scanOptions {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.4rem;
+}
 
-  :global(.ant-radio-wrapper) {
-    align-items: flex-start;
-    padding: 0.6rem 0.8rem;
-    border: 1px solid var(--moon-line-1);
-    border-radius: var(--moon-radius-lg);
-    background: var(--moon-surface-1);
-    white-space: normal;
+.scanOption {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  font: inherit;
+  color: var(--moon-text);
+  background: var(--moon-surface-1);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+
+  &:hover {
+    border-color: var(--moon-line-3);
   }
 }
 
-.policyTitle {
-  display: block;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--moon-text);
+.scanOptionIcon {
+  display: inline-flex;
+  flex: none;
+  font-size: 0.9rem;
+  color: var(--moon-text-mute);
 }
 
-.policyHint {
+.scanOptionLabel {
+  flex: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.scanOptionHint {
+  min-width: 0;
+  font-size: 0.74rem;
+  color: var(--moon-text-mute);
+  @include truncate(1);
+}
+
+.scanOptionCount {
+  margin-left: auto;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--moon-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Selected, shared by both choice groups: the accent ring plus a brightened
+   icon. Applies to whichever row carries it. */
+.choiceSelected {
+  border-color: var(--moon-accent) !important;
+  box-shadow: 0 0 0 1px var(--moon-accent-24);
+
+  .scanOptionIcon {
+    color: var(--moon-accent);
+  }
+}
+
+/* The focus panel: what the current selection would actually hit. Two columns
+   so the category chart costs no extra height — the count and scope read on
+   the left, the split sits to its right. */
+.scanFocus {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.38fr);
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--moon-accent-08);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-lg);
+}
+
+.scanFocusText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.scanFocusHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.scanFocusCount {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--moon-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.scanFocusUnit {
+  font-size: 0.8rem;
+  color: var(--moon-text-mute);
+}
+
+.scanFocusTarget {
+  font-size: 0.8rem;
+  color: var(--moon-text);
+  overflow-wrap: anywhere;
+}
+
+.scanFocusScope {
+  display: flex;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--moon-text-mute);
+}
+
+.scanFocusScopeLabel {
+  flex: none;
+  padding-top: 0.14rem;
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+.scanFocusScopeText {
+  min-width: 0;
+  @include truncate(2);
+}
+
+.scanFocusChart {
+  min-width: 0;
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--moon-line-1);
+}
+
+.scanFocusChartLabel {
   display: block;
-  margin-top: 0.15rem;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: var(--moon-text-mute, #888);
+  margin-bottom: 0.3rem;
+  @include eyebrow;
+  font-size: 0.56rem;
+}
+
+/* The approval dot is drawn in CSS so it matches the app's white-on-black
+   checked radio, independent of antd's markup. */
+.choiceRadio {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--moon-line-3);
+  border-radius: 50%;
+  background: var(--moon-surface-2);
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+
+  &::after {
+    content: "";
+    display: block;
+    width: 5px;
+    height: 5px;
+    margin: 4px auto 0;
+    border-radius: 50%;
+    background: var(--moon-accent-ink);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+}
+
+.choiceSelected .choiceRadio {
+  border-color: var(--moon-accent-solid);
+  background: var(--moon-accent-solid);
+
+  &::after {
+    opacity: 1;
+  }
 }
