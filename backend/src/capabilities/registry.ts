@@ -52,12 +52,20 @@ Network capabilities available:
 - exiftool/tshark/binwalk: metadata extraction, packet capture, embedded-file analysis
 - trufflehog/gitleaks: scan repos, archives and config dumps for leaked credentials
 - s3scanner: check S3 buckets found in JS bundles for open access; firefox_decrypt for obtained Firefox profiles
+- amass/dnsrecon/theHarvester/recon-ng: subdomain and OSINT enumeration (WSTG 4.1.x)
+- awscli: aws s3 ls s3://bucket --no-sign-request — test cloud storage reachable from the app (WSTG 4.2.11)
+- namei: namei -l <path> — per-component permissions and symlinks (WSTG 4.2.9)
 Python: paramiko (SSH), dnspython (DNS), impacket (SMB/Kerberos/LDAP), pycryptodome, z3-solver
 
 Web application capabilities available:
 - nikto: nikto -h http://target — web server misconfiguration scanner
 - nuclei: nuclei -u http://target — fast template-based vulnerability scanner
 - commix: commix --url="http://target/page?cmd=id" — command injection
+- zaproxy: OWASP ZAP, the guide's most-recommended tool — zaproxy -cmd -quickurl http://target -quickout out.html (install on demand, it is large)
+- wfuzz: wfuzz -c -z file,<wordlist> http://target/FUZZ — fuzzing with the guide's injection fuzz-string lists
+- dotdotpwn: dotdotpwn -m http -h target -f /etc/passwd — directory traversal (WSTG 4.5.1)
+- padbuster / python-paddingoracle: CBC padding-oracle exploitation (WSTG 4.9.2)
+- inql: inql -t http://target/graphql — GraphQL introspection (WSTG 4.12.1)
 - jwt_tool: python3 jwt_tool.py <token> -T — JWT attack toolkit
 - dalfox (network bucket): dalfox url "http://target/page?q=XSS" — XSS scanning and parameter analysis
 - arjun: arjun -u http://target/page — HTTP parameter discovery
@@ -702,6 +710,161 @@ Python: PyJWT (JWT decode/encode)`,
       installCommand: "python3 -m pip install PyJWT",
       checkCommand: "python3 -c 'import jwt'",
       size: "1 MB",
+    },
+
+    // ── The tools WSTG v4.2 names that the box did not have ────────────────
+    // Each of these appears in a `## Tools` section of the official guide and
+    // had no counterpart here. The heavy one (ZAP) is deliberately
+    // install-on-demand rather than baked into the image.
+    {
+      name: "zaproxy",
+      type: "binary",
+      bucket: "web",
+      label: "OWASP ZAP",
+      description:
+        "OWASP's intercepting proxy and scanner — the single most-recommended tool in the WSTG. " +
+        "Complements Burp: useful for automated passive/active scanning and for the ZAP-specific " +
+        "workflows the guide names (forced browse, access-control testing, session fixation).",
+      usageHint:
+        "zaproxy -cmd -quickurl http://target -quickout /tmp/zap.html   # or run the daemon: zap.sh -daemon -port 8090",
+      installCommand: "apt install -y zaproxy",
+      checkCommand: "which zaproxy || test -x /usr/share/zaproxy/zap.sh",
+      size: "500 MB",
+    },
+    {
+      name: "wfuzz",
+      type: "binary",
+      bucket: "web",
+      label: "Wfuzz",
+      description:
+        "Web fuzzer. WSTG names it for its bundled injection fuzz-string lists (SQL, XML, path traversal) " +
+        "as well as for content and parameter discovery.",
+      usageHint: "wfuzz -c -z file,/usr/share/wfuzz/wordlist/general/common.txt http://target/FUZZ",
+      installCommand: "apt install -y wfuzz",
+      checkCommand: "which wfuzz",
+      size: "15 MB",
+    },
+    {
+      name: "dotdotpwn",
+      type: "binary",
+      bucket: "web",
+      label: "DotDotPwn",
+      description: "Directory-traversal fuzzer (WSTG 4.5.1, testing for path traversal).",
+      usageHint: "dotdotpwn -m http -h target -f /etc/passwd",
+      installCommand: "apt install -y dotdotpwn",
+      checkCommand: "which dotdotpwn",
+      size: "5 MB",
+    },
+    {
+      name: "padbuster",
+      type: "binary",
+      bucket: "web",
+      label: "PadBuster",
+      description:
+        "Padding-oracle exploitation for CBC-encrypted cookies and tokens (WSTG 4.9.2). " +
+        "The guide also names POET and Poracle; PadBuster is the maintained one and is packaged here.",
+      usageHint: "padbuster http://target/page.php?cookie=ABC 16 -encoding 0",
+      installCommand: "apt install -y padbuster",
+      checkCommand: "which padbuster",
+      size: "1 MB",
+    },
+    {
+      name: "paddingoracle",
+      type: "python_package",
+      bucket: "web",
+      label: "python-paddingoracle",
+      description:
+        "Padding-oracle attack helper for Python scripts (WSTG 4.9.2) — the library the guide names " +
+        "when the exploit has to be scripted rather than driven from PadBuster.",
+      installCommand: "python3 -m pip install paddingoracle",
+      checkCommand: "python3 -c 'import paddingoracle'",
+      size: "1 MB",
+    },
+    {
+      name: "inql",
+      type: "binary",
+      bucket: "web",
+      label: "InQL (GraphQL)",
+      description:
+        "GraphQL introspection and attack-surface tooling (WSTG 4.12.1). WSTG names InQL and " +
+        "GraphQL Raider for Burp; this is the CLI, which the agent can drive headlessly.",
+      usageHint: "inql -t http://target/graphql",
+      installCommand: "python3 -m pip install inql",
+      checkCommand: "which inql || python3 -c 'import inql'",
+      size: "10 MB",
+    },
+    {
+      name: "awscli",
+      type: "binary",
+      bucket: "network",
+      label: "AWS CLI",
+      description:
+        "Test cloud storage referenced by the application (WSTG 4.2.11): enumerate buckets and check " +
+        "whether they are world-readable or world-writable. Pairs with s3scanner.",
+      usageHint: "aws s3 ls s3://bucket --no-sign-request",
+      installCommand: "apt install -y awscli",
+      checkCommand: "which aws",
+      size: "50 MB",
+    },
+    {
+      name: "theharvester",
+      type: "binary",
+      bucket: "network",
+      label: "theHarvester",
+      description:
+        "OSINT gathering — emails, hostnames and subdomains from public sources (WSTG 4.1.x " +
+        "information gathering).",
+      usageHint: "theHarvester -d example.com -b all",
+      installCommand: "apt install -y theharvester",
+      checkCommand: "which theHarvester || which theharvester",
+      size: "50 MB",
+    },
+    {
+      name: "amass",
+      type: "binary",
+      bucket: "network",
+      label: "OWASP Amass",
+      description: "DNS enumeration and attack-surface mapping (WSTG 4.1.x).",
+      usageHint: "amass enum -d example.com",
+      installCommand: "apt install -y amass",
+      checkCommand: "which amass",
+      size: "80 MB",
+    },
+    {
+      name: "dnsrecon",
+      type: "binary",
+      bucket: "network",
+      label: "dnsrecon",
+      description: "DNS enumeration: zone transfer, brute force, SRV and reverse lookups (WSTG 4.1.x).",
+      usageHint: "dnsrecon -d example.com -t std",
+      installCommand: "apt install -y dnsrecon",
+      checkCommand: "which dnsrecon",
+      size: "20 MB",
+    },
+    {
+      name: "recon-ng",
+      type: "binary",
+      bucket: "network",
+      label: "Recon-ng",
+      description:
+        "Web reconnaissance framework (WSTG 4.1.x) with modules for hosts, contacts and leaked credentials.",
+      usageHint: "recon-ng -w engagement",
+      installCommand: "apt install -y recon-ng",
+      checkCommand: "which recon-ng",
+      size: "40 MB",
+    },
+    {
+      name: "namei",
+      type: "binary",
+      bucket: "core",
+      label: "namei",
+      description:
+        "Resolve a path component by component, showing permissions and symlinks at each step " +
+        "(WSTG 4.2.9, testing file permissions). Ships with util-linux.",
+      usageHint: "namei -l /var/www/html/index.php",
+      installCommand: "apt install -y util-linux",
+      checkCommand: "which namei",
+      size: "5 MB",
     },
   ],
 };

@@ -64,6 +64,24 @@ RUN apti \
       whatweb \
       libpcap-dev
 
+# -- Layer 3b: the remaining tools WSTG v4.2 names in its `## Tools` sections --
+# These close the gap against the guide's own tool lists (fuzzing with its
+# injection fuzz strings, path traversal, padding-oracle, cloud storage and
+# OSINT enumeration). `kali-linux-headless` below may already pull some of them
+# in; apt is idempotent, so listing them here costs nothing in that case and
+# guarantees them otherwise. OWASP ZAP is deliberately NOT baked in — it is
+# ~500 MB and installs on demand through `run_install_tool` (see
+# src/capabilities/registry.ts).
+RUN apti \
+      wfuzz \
+      dotdotpwn \
+      padbuster \
+      dnsrecon \
+      theharvester \
+      amass \
+      recon-ng \
+      awscli
+
 # -- Layer 4: Desktop / VNC (required for noVNC & GUI access) --
 RUN apti \
       xfce4 xfce4-goodies tightvncserver novnc websockify \
