@@ -77,9 +77,19 @@ export async function verifyModelPreset(model: ModelPreset): Promise<string> {
   return new Date().toISOString();
 }
 
-/** The masked key the client sends back is display output, not a secret. */
+/**
+ * The masked key the client sends back is display output, not a secret. The
+ * literal bullet is not the only shape a mask has taken historically — an
+ * earlier build emitted double-decoded bytes instead — so match the mask by
+ * "starts and ends with a short key-shaped prefix/suffix around a long run of
+ * non-ASCII filler" rather than a single character. Getting this wrong is not
+ * cosmetic: an unrecognized mask is forwarded to the provider verbatim and
+ * fails the save with an opaque transport error.
+ */
 function isMaskedApiKey(apiKey: unknown): apiKey is string {
-  return typeof apiKey === "string" && apiKey.includes("•");
+  if (typeof apiKey !== "string") return false;
+  if (apiKey.includes("•")) return true;
+  return /^[\x21-\x7e]{1,6}[^\x00-\x7f|\s]{6,}[\x21-\x7e]{1,6}$/.test(apiKey);
 }
 
 /**

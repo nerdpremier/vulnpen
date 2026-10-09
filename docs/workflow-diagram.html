@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Leelawadee UI", "Noto Sans Thai", sans-serif;
+    background: #0d0d0f;
+    color: #e8e8ec;
+    padding: 32px;
+  }
+  .wrap { width: 1240px; margin: 0 auto; }
+  h1 { font-size: 26px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+  .sub { text-align: center; color: #9a9aa5; font-size: 14px; margin-bottom: 26px; }
+  .diagram {
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    border: 1px solid #2b2b33;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #141418;
+  }
+  .lane-title {
+    display: flex; align-items: center; justify-content: center;
+    writing-mode: horizontal-tb;
+    font-weight: 700; font-size: 16px;
+    padding: 14px 10px; text-align: center;
+    border-bottom: 1px solid #2b2b33;
+    border-right: 1px solid #2b2b33;
+    background: #1b1b21;
+  }
+  .lane-title:last-of-type { border-bottom: none; }
+  .lane-title .ic { font-size: 22px; display: block; margin-bottom: 6px; }
+  .lane-body {
+    position: relative;
+    border-bottom: 1px solid #2b2b33;
+    border-right: 1px solid #2b2b33;
+    min-height: 118px;
+    padding: 18px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .lane-body:last-of-type { border-bottom: none; }
+  .row5 { background: #141418; }
+
+  .step {
+    position: relative;
+    background: #22222b;
+    border: 1px solid #3a3a46;
+    border-radius: 10px;
+    padding: 12px 14px;
+    width: 250px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  }
+  .step .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #7c6cf0; color: #fff; font-weight: 700; font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .step h3 { font-size: 15px; margin-bottom: 4px; }
+  .step p { font-size: 12.5px; color: #b9b9c4; line-height: 1.45; }
+
+  .user .n { background: #4f9cf9; }
+  .ai   .n { background: #9b6cf0; }
+  .tool .n { background: #e0a34f; }
+  .out  .n { background: #4fc38a; }
+
+  .lane-body.user  { box-shadow: inset 4px 0 0 #4f9cf9; }
+  .lane-body.ai    { box-shadow: inset 4px 0 0 #9b6cf0; }
+  .lane-body.tool  { box-shadow: inset 4px 0 0 #e0a34f; }
+  .lane-body.out   { box-shadow: inset 4px 0 0 #4fc38a; }
+
+  .arrow-right {
+    flex-shrink: 0; color: #6f6f80; font-size: 22px; font-weight: 700;
+  }
+  .legend {
+    margin-top: 18px; display: flex; justify-content: center; gap: 26px;
+    font-size: 13px; color: #9a9aa5;
+  }
+  .legend b { color: #e8e8ec; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ภาพรวมการทำงานของระบบตรวจสอบความปลอดภัยเว็บไซต์</h1>
+  <div class="sub">จากตอนบอกเป้าหมาย จนได้รายงานช่องโหว่ — ทำงานเป็นขั้นตอนอัตโนมัติ</div>
+
+  <div class="diagram">
+    <div class="lane-title user-lane" style="color:#7db4ff"><span><span class="ic">👤</span>ผู้ใช้งาน<br><small style="font-weight:400;color:#9a9aa5">(นักทดสอบ)</small></span></div>
+    <div class="lane-body user">
+      <div class="step user">
+        <span class="n">1</span>
+        <h3>กำหนดงาน &amp; เป้าหมาย</h3>
+        <p>สร้างงานใหม่ แล้วบอกระบบว่าจะตรวจเว็บไซต์ไหน ตรวจขอบเขตไหน</p>
+      </div>
+      <span class="arrow-right">→</span>
+      <div class="step user">
+        <span class="n">6</span>
+        <h3>ติดตามผล &amp; ถาม-ตอบ</h3>
+        <p>ดูความคืบหน้าแบบเรียลไทม์ ทักแชทถาม AI หรือขอทดสอบเพิ่มเติมได้</p>
+      </div>
+      <span class="arrow-right">→</span>
+      <div class="step user">
+        <span class="n">8</span>
+        <h3>รับรายงาน</h3>
+        <p>เปิดรายงานสรุปช่องโหว่ที่จัดรูปเล่มแล้ว แก้ไข/ส่งต่อได้ทันที</p>
+      </div>
+    </div>
+
+    <div class="lane-title" style="color:#b395f5"><span><span class="ic">🤖</span>AI ผู้ช่วย<br><small style="font-weight:400;color:#9a9aa5">(ตัววางแผน)</small></span></div>
+    <div class="lane-body ai">
+      <div class="step ai">
+        <span class="n">2</span>
+        <h3>วางแผนการตรวจ</h3>
+        <p>แปลงเป้าหมายเป็นแผนทดสอบเป็นข้อ ๆ ครอบคลุมประเด็นความปลอดภัยมาตรฐาน</p>
+      </div>
+      <span class="arrow-right">→</span>
+      <div class="step ai">
+        <span class="n">5</span>
+        <h3>รวบรวม &amp; ประเมินผล</h3>
+        <p>จัดกลุ่มสิ่งที่พบ ให้คะแแนนความรุนแรง และตรวจว่าใช้โจมตีได้จริงหรือไม่</p>
+      </div>
+      <span class="arrow-right">→</span>
+      <div class="step ai">
+        <span class="n">7</span>
+        <h3>เขียนรายงาน</h3>
+        <p>สรุปช่องโหว่ทุกจุดเป็นรายงานเอกสารพร้อมคำแนะนำวิธีแก้ไข</p>
+      </div>
+    </div>
+
+    <div class="lane-title" style="color:#eab86b"><span><span class="ic">🛠️</span>เครื่องมือทดสอบ<br><small style="font-weight:400;color:#9a9aa5">(ทำงานอัตโนมัติ)</small></span></div>
+    <div class="lane-body tool">
+      <div class="step tool">
+        <span class="n">3</span>
+        <h3>สแกนตามแผน</h3>
+        <p>รันขั้นตอนตรวจตามที่ AI วางแผนไว้ ทีละข้อจนครบทั้งแผน</p>
+      </div>
+      <span class="arrow-right">→</span>
+      <div class="step tool">
+        <span class="n">4</span>
+        <h3>ทดลองหาช่องโหว่</h3>
+        <p>เปิดเว็บแบบอัตโนมัติ ลองวิธีโจมตีแบบที่แฮ็กเกอร์ใช้ แล้วบันทึกสิ่งที่พบ</p>
+      </div>
+    </div>
+
+    <div class="lane-title" style="color:#7fd6ab"><span><span class="ic">📄</span>ผลลัพธ์</span></div>
+    <div class="lane-body out">
+      <div class="step out">
+        <span class="n">✓</span>
+        <h3>รายการช่องโหว่</h3>
+        <p>แต่ละจุดมีคำอธิบาย ระดับความรุนแรง และหลักฐานว่าทำซ้ำได้จริง</p>
+      </div>
+      <span class="arrow-right">→</span>
+      <div class="step out">
+        <span class="n">✓</span>
+        <h3>รายงานฉบับเต็ม</h3>
+        <p>เอกสารสำเร็จรูปที่ส่งต่อให้ทีมพัฒนาหรือลูกค้าได้ทันที</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span>อ่านตาม <b>หมายเลข 1 → 8</b></span>
+    <span>เลนแนวนอน = <b>ใครทำ</b></span>
+    <span>แถบสีซ้าย: 🔵 ผู้ใช้ · 🟣 AI · 🟠 เครื่องมือ · 🟢 ผลลัพธ์</span>
+  </div>
+</div>
+</body>
+</html>

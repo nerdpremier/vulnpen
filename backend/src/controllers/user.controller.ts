@@ -223,7 +223,7 @@ function modelForClient(model: any) {
   return {
     ...model,
     apiKey: model.apiKey
-      ? `${model.apiKey.slice(0, 4)}${"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢".repeat(8)}${model.apiKey.slice(-4)}`
+      ? `${model.apiKey.slice(0, 4)}${"•".repeat(8)}${model.apiKey.slice(-4)}`
       : undefined,
     hasApiKey: Boolean(model.apiKey),
   };
@@ -445,7 +445,7 @@ export const getModelConfig = async (_req: Request, res: Response) => {
 
     const mask = (key?: string) =>
       key
-        ? `${key.slice(0, 4)}${"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}`
+        ? `${key.slice(0, 4)}${"•".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}`
         : "";
 
     const oauthToken = env.ANTHROPIC_OAUTH_ACCESS_TOKEN || "";

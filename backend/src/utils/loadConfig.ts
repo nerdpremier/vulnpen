@@ -49,6 +49,13 @@ function resolveTomlPath(): string {
 
 let _loaded = false;
 
+/* Keys this process took from .env at boot. reloadEnv may refresh these (the
+   Settings UI writes .env and expects the new value to apply immediately) but
+   must never clobber variables injected by the container environment — in
+   Docker the compose file points SSH_HOST/SSH_PORT at the internal service
+   names, while the mounted .env still carries the host-facing values. */
+const envSourcedKeys = new Set<string>();
+
 function shouldPreserveExistingEnv(key: string): boolean {
   const existing = process.env[key];
   return existing !== undefined && existing !== "";
@@ -96,6 +103,7 @@ export function loadConfig(): void {
       if (!shouldPreserveExistingEnv(key)) {
         process.env[key] = value;
       }
+      envSourcedKeys.add(key);
     }
   }
 
@@ -108,6 +116,8 @@ export function reloadEnv(): void {
 
   const envVars = dotenv.parse(fs.readFileSync(envPath, "utf-8"));
   for (const [key, value] of Object.entries(envVars)) {
-    process.env[key] = value;
+    if (envSourcedKeys.has(key) || !shouldPreserveExistingEnv(key)) {
+      process.env[key] = value;
+    }
   }
 }

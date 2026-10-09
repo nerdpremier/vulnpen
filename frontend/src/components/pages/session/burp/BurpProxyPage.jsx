@@ -15,8 +15,6 @@ import {
   CloseCircleOutlined,
   SafetyCertificateOutlined,
   CheckCircleFilled,
-  ClusterOutlined,
-  UnorderedListOutlined,
 } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import { useQuery, useMutation } from "react-query";
@@ -33,39 +31,9 @@ import {
   getBurpCaStatus,
   configureBurpCa,
 } from "@/services/burp.service";
-import {
-  BarList,
-  DonutChart,
-  SpotlightCard,
-  StatStrip,
-  StatTile,
-} from "@/components/common/ui";
 import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import { BURP_HANDOFF_KEY } from "@/utils/burpHandoff.mjs";
 import styles from "@/styles/components/BurpProxy.module.scss";
-
-/**
- * Response classes, in the order a tester triages them. The counts come from
- * the page of history the table is currently showing — the API returns a page,
- * not a whole-history aggregate — so every graphic built on them says so.
- */
-const RESPONSE_CLASSES = [
-  { key: "2xx", label: "2xx", tone: "success" },
-  { key: "3xx", label: "3xx", tone: "info" },
-  { key: "4xx", label: "4xx", tone: "warning" },
-  { key: "5xx", label: "5xx", tone: "danger" },
-  { key: "none", label: "no response", tone: "mute" },
-];
-
-/** Which class a status code falls in; anything without a code is "none". */
-function classOfStatus(code) {
-  if (!code) return "none";
-  if (code >= 500) return "5xx";
-  if (code >= 400) return "4xx";
-  if (code >= 300) return "3xx";
-  if (code >= 200) return "2xx";
-  return "none";
-}
 
 const BURP_INTEGRATION = {
   key: "burp",
@@ -801,60 +769,6 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION, asPage = fal
     message.success({ content: "Request attached to workspace", duration: 2 });
   }, [integration.shortName, integration.storageKey, router, services, sessionId]);
 
-  /* ---- Traffic summary -----------------------------------------------------
-     Derived from the page of history already in hand (`data.entries`) plus the
-     server's own total. No extra request, and every figure that covers only the
-     loaded page says so, so a chart can never be read as the whole capture. */
-  const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
-
-  const traffic = useMemo(() => {
-    const classCounts = new Map(RESPONSE_CLASSES.map((row) => [row.key, 0]));
-    const hostCounts = new Map();
-
-    for (const entry of entries) {
-      const key = classOfStatus(entry.statusCode);
-      classCounts.set(key, (classCounts.get(key) ?? 0) + 1);
-
-      const host = entry.host || "unknown";
-      const row =
-        hostCounts.get(host) ??
-        { key: host, label: host, value: 0, worst: "2xx", errors: 0 };
-      row.value += 1;
-      const rank = RESPONSE_CLASSES.findIndex((item) => item.key === key);
-      const worstRank = RESPONSE_CLASSES.findIndex((item) => item.key === row.worst);
-      if (rank > worstRank) row.worst = key;
-      if (key === "4xx" || key === "5xx") row.errors += 1;
-      hostCounts.set(host, row);
-    }
-
-    const segments = RESPONSE_CLASSES.map((row) => ({
-      key: row.key,
-      label: row.label,
-      tone: row.tone,
-      value: classCounts.get(row.key) ?? 0,
-    }));
-
-    const hosts = [...hostCounts.values()]
-      .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
-      .slice(0, 5)
-      .map((row) => ({
-        key: row.key,
-        label: row.label,
-        value: row.value,
-        tone: RESPONSE_CLASSES.find((item) => item.key === row.worst)?.tone ?? "mute",
-        hint: `${row.label}: ${row.value} request${
-          row.value === 1 ? "" : "s"
-        } in the loaded page${row.errors ? ` · ${row.errors} error response${row.errors === 1 ? "" : "s"}` : ""}`,
-      }));
-
-    return {
-      segments,
-      hosts,
-      uniqueHosts: hostCounts.size,
-      errors: (classCounts.get("4xx") ?? 0) + (classCounts.get("5xx") ?? 0),
-    };
-  }, [entries]);
-
   const columns = [
     {
       title: "#",
@@ -1132,64 +1046,6 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION, asPage = fal
         <div className={styles.caCheckingBar}>
           <Spin size="small" /> Checking HTTPS interception readiness…
         </div>
-      )}
-
-      {/* The console's own readout. Only on the full page: in the chat rail the
-          table is already squeezed to a column and shapes would cost it rows. */}
-      {asPage && entries.length > 0 && (
-        <section className={styles.trafficSummary} aria-label="Captured traffic summary">
-          <StatStrip className={styles.summaryStrip}>
-            <StatTile
-              label="Captured"
-              value={data?.total ?? entries.length}
-              icon={<ClusterOutlined />}
-              hint="every entry in the proxy history"
-            />
-            <StatTile
-              label="On this page"
-              value={entries.length}
-              icon={<UnorderedListOutlined />}
-              hint={`page ${page} of ${Math.max(1, Math.ceil((data?.total ?? entries.length) / pageSize))}`}
-            />
-            <StatTile
-              label="Hosts"
-              value={traffic.uniqueHosts}
-              hint="distinct hosts in the loaded page"
-            />
-            <StatTile
-              label="Error responses"
-              value={traffic.errors}
-              tone={traffic.errors ? "danger" : "neutral"}
-              icon={<WarningOutlined />}
-              hint="4xx and 5xx in the loaded page"
-            />
-          </StatStrip>
-
-          <div className={styles.trafficGraphics}>
-            <SpotlightCard glare className={styles.trafficCard}>
-              <h3 className={styles.trafficTitle}>
-                Response classes
-                <span className={styles.trafficScope}>loaded page</span>
-              </h3>
-              <DonutChart
-                segments={traffic.segments}
-                size={112}
-                thickness={13}
-                centerValue={entries.length}
-                centerLabel="loaded"
-                legend="inline"
-              />
-            </SpotlightCard>
-
-            <SpotlightCard glare className={styles.trafficCard}>
-              <h3 className={styles.trafficTitle}>
-                Busiest hosts
-                <span className={styles.trafficScope}>loaded page</span>
-              </h3>
-              <BarList items={traffic.hosts} />
-            </SpotlightCard>
-          </div>
-        </section>
       )}
 
       <div className={styles.filterBar}>

@@ -1,0 +1,67 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="vulnpen-workflow" name="Workflow">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="lane1" value="👤 ผู้ใช้งาน (นักทดสอบ)" style="swimlane;html=1;horizontal=0;startSize=140;fontSize=15;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1460" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lane2" value="🤖 AI ผู้ช่วย (ตัววางแผน)" style="swimlane;html=1;horizontal=0;startSize=140;fontSize=15;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="1460" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lane3" value="🛠️ เครื่องมือทดสอบ (อัตโนมัติ)" style="swimlane;html=1;horizontal=0;startSize=140;fontSize=15;fontStyle=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="40" y="360" width="1460" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lane4" value="📄 ผลลัพธ์" style="swimlane;html=1;horizontal=0;startSize=140;fontSize=15;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="520" width="1460" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s1" value="&lt;b&gt;1. กำหนดงาน &amp;amp; เป้าหมาย&lt;/b&gt;&lt;br&gt;สร้างงาน บอกว่าจะตรวจเว็บไซต์ไหน" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="lane1">
+          <mxGeometry x="60" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s6" value="&lt;b&gt;6. ติดตามผล &amp;amp; ถาม-ตอบ&lt;/b&gt;&lt;br&gt;ดูความคืบหน้า ทักแชทถาม AI ได้" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="lane1">
+          <mxGeometry x="840" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s8" value="&lt;b&gt;8. รับรายงาน&lt;/b&gt;&lt;br&gt;เปิดรายงาน แก้ไข/ส่งต่อได้" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="lane1">
+          <mxGeometry x="1200" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s2" value="&lt;b&gt;2. วางแผนการตรวจ&lt;/b&gt;&lt;br&gt;แปลงเป้าหมายเป็นแผนทดสอบเป็นข้อ ๆ" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="lane2">
+          <mxGeometry x="300" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s5" value="&lt;b&gt;5. รวบรวม &amp;amp; ประเมินผล&lt;/b&gt;&lt;br&gt;จัดกลุ่มที่พบ ให้คะแนนความรุนแรง" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="lane2">
+          <mxGeometry x="680" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s7" value="&lt;b&gt;7. เขียนรายงาน&lt;/b&gt;&lt;br&gt;สรุปช่องโหว่ + วิธีแก้ไข" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="lane2">
+          <mxGeometry x="1020" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s3" value="&lt;b&gt;3. สแกนตามแผน&lt;/b&gt;&lt;br&gt;รันขั้นตอนตรวจตามแผนจนครบ" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#d79b00;" vertex="1" parent="lane3">
+          <mxGeometry x="420" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" value="&lt;b&gt;4. ทดลองหาช่องโหว่&lt;/b&gt;&lt;br&gt;เปิดเว็บอัตโนมัติ ลองวิธีโจมตี บันทึกผล" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#d79b00;" vertex="1" parent="lane3">
+          <mxGeometry x="560" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="o1" value="&lt;b&gt;✓ รายการช่องโหว่&lt;/b&gt;&lt;br&gt;คำอธิบาย ระดับรุนแรง หลักฐาน" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="lane4">
+          <mxGeometry x="820" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="o2" value="&lt;b&gt;✓ รายงานฉบับเต็ม&lt;/b&gt;&lt;br&gt;เอกสารส่งต่อทีมพัฒนา/ลูกค้า" style="rounded=1;whiteSpace=wrap;html=1;fontSize=13;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="lane4">
+          <mxGeometry x="1240" y="45" width="200" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s1" target="s2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s2" target="s3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s3" target="s4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s4" target="s5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s5" target="o1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s5" target="s6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s6" target="s7"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" parent="1" source="s7" target="s8"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;" edge="1" parent="1" source="s7" target="o2"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
