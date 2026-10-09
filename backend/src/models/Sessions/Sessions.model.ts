@@ -198,6 +198,23 @@ export interface WebAppRunDoc {
     counts: { passed: number; failed: number; blocked: number; other: number };
   };
   error?: string;
+  /**
+   * The run's own transcript, snapshotted when it settles: the assistant turns
+   * and tool cards between its marker and the next run's. Session messages are
+   * compacted away as the conversation grows, which used to erase a finished
+   * scan's replay; a snapshot taken at settle time survives that.
+   */
+  logSnapshot?: {
+    id: string;
+    role: "assistant" | "tool";
+    content?: string;
+    reasoning?: string;
+    toolCalls?: { id: string; name: string; arguments?: string }[];
+    toolCallId?: string;
+    toolName?: string;
+    files?: string[];
+    timestamp?: Date;
+  }[];
 }
 export interface SessionVulnerabilityDoc {
   vulnerabilityId: string;
@@ -507,9 +524,36 @@ const WebAppRunSchema = new Schema(
       default: undefined,
     },
     error: { type: String },
+    /* The run's own transcript, taken when it settles so compaction cannot
+       erase a finished scan's replay. */
+    logSnapshot: {
+      type: [
+        {
+          id: { type: String },
+          role: { type: String, enum: ["assistant", "tool"] },
+          content: { type: String },
+          reasoning: { type: String },
+          toolCalls: [
+            {
+              id: { type: String },
+              name: { type: String },
+              arguments: { type: String },
+              _id: false,
+            },
+          ],
+          toolCallId: { type: String },
+          toolName: { type: String },
+          files: { type: [String] },
+          timestamp: { type: Date },
+          _id: false,
+        },
+      ],
+      default: undefined,
+    },
   },
   { _id: false },
 );
+
 const SessionVulnerabilitySchema = new Schema(
   {
     vulnerabilityId: { type: String, required: true },

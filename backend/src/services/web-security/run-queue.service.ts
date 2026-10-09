@@ -353,6 +353,7 @@ async function settleRun(
       if (errorMessage) run.error = errorMessage;
     });
     await snapshotRunResult(sessionId, runId);
+    await snapshotRunLog(sessionId, runId);
   } catch (err) {
     console.error(`[wstg-run] failed to settle run ${runId}:`, err);
   }
@@ -389,6 +390,52 @@ export async function snapshotRunResult(
   await mutateRun(sessionId, runId, (record) => {
     record.resultSummary = summary;
   });
+}
+
+/**
+ * Freeze the run's transcript into its own record. Session messages are
+ * compacted as the conversation grows — a marker that compaction folds into a
+ * summary leaves the finished run with an empty replay, so the slice is taken
+ * while the run settles, before any later compaction can reach it. An empty
+ * result writes nothing, so a run whose slice was already gone keeps the
+ * replay endpoint's own answer instead of overriding it with an empty log.
+ */
+export async function snapshotRunLog(
+  sessionId: string,
+  runId: string,
+): Promise<void> {
+  try {
+    const session = await SessionsModel.findOne({ sessionId })
+      .select("messages")
+      .lean();
+    if (!session) return;
+
+    const slice = sliceRunActivity(
+      (session.messages ?? []) as AgentMessageDoc[],
+      runId,
+    );
+    if (slice.length === 0) return;
+
+    const snapshot = slice.map((message) => ({
+      id: message.id,
+      role: message.role === "tool" ? ("tool" as const) : ("assistant" as const),
+      content: message.content ?? undefined,
+      reasoning: message.reasoning,
+      toolCalls: message.toolCalls,
+      toolCallId: message.toolCallId,
+      toolName: message.toolName,
+      files: message.files,
+      timestamp: message.timestamp,
+    }));
+
+    await mutateRun(sessionId, runId, (run) => {
+      run.logSnapshot = snapshot;
+    });
+  } catch (err) {
+    // A missing replay is a degraded page, not a failed scan — the record and
+    // its results are what the rest of the UI reads.
+    console.error(`[wstg-run] failed to snapshot log for run ${runId}:`, err);
+  }
 }
 
 // ─── Stop / cancel ────────────────────────────────────────────────────
@@ -571,10 +618,15 @@ export async function getRunDetail(
   const record = runs.find((entry) => entry.runId === runId);
   const state = stateFor(sessionId);
 
-  const slice = sliceRunActivity(
+  // The live slice while the run is young; the snapshot once it settled.
+  // Compaction folds old markers into a summary, which empties the live slice
+  // of a long finished run — that is what the snapshot covers.
+  const liveSlice: AgentMessageDoc[] = sliceRunActivity(
     (session.messages ?? []) as AgentMessageDoc[],
     runId,
   );
+  const slice: AgentMessageDoc[] =
+    liveSlice.length > 0 ? liveSlice : ((record?.logSnapshot ?? []) as AgentMessageDoc[]);
 
   const plan = session.webAppTestPlan as { cases?: SessionTestCaseDoc[] } | undefined;
   const { cases, findings } = joinRunResults(
@@ -599,7 +651,7 @@ export async function getRunDetail(
     messages: slice.map((message) => ({
       id: message.id,
       role: message.role,
-      content: message.content,
+      content: message.content ?? null,
       reasoning: message.reasoning,
       toolCalls: message.toolCalls?.map((toolCall) => ({
         id: toolCall.id,
@@ -609,7 +661,7 @@ export async function getRunDetail(
       toolCallId: message.toolCallId,
       toolName: message.toolName,
       files: message.files,
-      timestamp: message.timestamp,
+      timestamp: message.timestamp ?? new Date(),
     })),
     cases,
     findings,

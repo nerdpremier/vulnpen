@@ -440,7 +440,17 @@ export async function summarizeMessages(
   const fixedMessages = messages.filter((m) => m.role === "system" && !m.isSummary);
   const nonSystemMessages = messages.filter((m) => !m.isSummary && m.role !== "system");
 
-  const { toSummarize, toPreserve } = selectPreservedWindow(nonSystemMessages);
+  // Run markers are the boundary posts the scan replay slices on. They cost
+  // ~50 chars each and must never be folded into a summary: once a marker is
+  // gone, the finished run's Agent log reads empty forever. Inlined rather
+  // than imported from web-security so this module stays provider-agnostic.
+  const isRunMarker = (m: AgentMessageDoc) =>
+    m.role === "user" && (m.content ?? "").startsWith("[WSTG run ");
+  const pinnedMarkers = nonSystemMessages.filter(isRunMarker);
+
+  const { toSummarize, toPreserve } = selectPreservedWindow(
+    nonSystemMessages.filter((m) => !isRunMarker(m)),
+  );
 
   if (toSummarize.length === 0) {
     return {
@@ -493,7 +503,14 @@ export async function summarizeMessages(
     isSummary: true,
   };
 
-  const result: AgentMessageDoc[] = [...fixedMessages, summaryMessage, ...toPreserve];
+  // Markers are re-inserted between the summary and the preserved window so
+  // the transcript stays chronological; they predate every preserved message.
+  const result: AgentMessageDoc[] = [
+    ...fixedMessages,
+    summaryMessage,
+    ...pinnedMarkers,
+    ...toPreserve,
+  ];
 
   return {
     summaryMessage,
