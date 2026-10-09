@@ -20,6 +20,7 @@ import updateEngagementState from "./handlers/update-engagement-state";
 import wstgTestPlan from "./handlers/wstg-test-plan";
 import mapFindingOwasp from "./handlers/map-finding-owasp";
 import generatePentestReport from "./handlers/generate-pentest-report";
+import readReportDocument from "./handlers/read-report-document";
 import loadTools from "./handlers/load-tools";
 import { DEFERRED_TOOLS } from "./deferred";
 
@@ -88,4 +89,5 @@ toolRegistry.register(updateEngagementState);
 toolRegistry.register(wstgTestPlan);
 toolRegistry.register(mapFindingOwasp);
 toolRegistry.register(generatePentestReport);
+toolRegistry.register(readReportDocument);
 toolRegistry.register(loadTools);

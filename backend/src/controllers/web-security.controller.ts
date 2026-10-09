@@ -40,6 +40,7 @@ import {
   convertReportToPdf,
   ensureReportDocx,
   markReportEditedByWord,
+  readReportSummary,
   reportDocxPath,
   reportDocxStatus,
 } from "../services/web-security/report-docx.service";
@@ -473,7 +474,9 @@ export const getReport = async (req: Request, res: Response) => {
         markdown: report.markdown,
         stats: report.stats,
         findings: report.findings,
-        client: buildClientReport(reportOptions),
+        /* The preview renders the same document the editor holds, down to the
+           summary it was generated with. */
+        client: buildClientReport({ ...reportOptions, summary: readReportSummary(sessionId) }),
       },
     });
   } catch (err: any) {

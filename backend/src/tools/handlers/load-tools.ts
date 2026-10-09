@@ -9,7 +9,8 @@ const loadTools: ToolDefinition = {
     "Deferred tools are not in your tool list until you load them; once loaded they stay loaded. " +
     `Loadable tools: ${Array.from(DEFERRED_TOOLS).join(", ")}. ` +
     "Load them before you need them — Burp tools before proxy-driven or fuzzing work, " +
-    "map_finding_owasp and generate_pentest_report when reporting.",
+    "map_finding_owasp and generate_pentest_report when reporting, and read_report_document before you answer anything about what the " +
+    "report currently says (the tester may have rewritten it in Word).",
   parameters: {
     type: "object",
     properties: {

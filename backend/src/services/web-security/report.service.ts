@@ -54,6 +54,14 @@ export interface ReportOptions {
     description?: string;
     createdAt?: Date;
   };
+  /**
+   * The document's opening summary, written by the model (see
+   * report-summary.service.ts). Absent when the model could not write one, in
+   * which case the report states the counts in its own sentence.
+   */
+  summary?: string;
+  /** Document heading; the draft overrides it. */
+  title?: string;
   target?: string;
   scope?: string;
   client?: string;
@@ -203,34 +211,6 @@ export function buildReportFindings(
         : undefined,
     };
   });
-}
-
-/**
- * The finding document as structured JSON for a report-writing model
- * (/export): the report-relevant fields, projected next to the other finding
- * projections so a new field is added here, not re-listed at a call site.
- */
-export function serializeFindingsForReport(
-  vulnerabilities: SessionVulnerabilityDoc[],
-): Record<string, unknown>[] {
-  return vulnerabilities.map((v) => ({
-    id: v.vulnerabilityId,
-    title: v.title,
-    severity: v.severity,
-    cvss: v.cvss ? { score: v.cvss.score, vector: v.cvss.vector } : undefined,
-    cwe: v.cwe,
-    cve: v.cve,
-    host: v.host,
-    service: v.service,
-    endpoint: v.endpoint,
-    description: v.description,
-    contextSummary: v.contextSummary,
-    evidence: v.evidence,
-    stepsToReproduce: v.stepsToReproduce,
-    impact: v.impact,
-    remediation: v.remediation,
-    exploited: v.exploited,
-  }));
 }
 
 export function computeReportStats(

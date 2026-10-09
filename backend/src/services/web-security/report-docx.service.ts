@@ -1,8 +1,8 @@
 /**
- * Server-side .docx builder for the Thai client report — the same document the
- * frontend preview shows. The generated file is the unit of work for
- * LibreOffice: it is stored per session, opened for editing through WOPI
- * (Collabora) and converted to PDF with soffice.
+ * The server-side .docx builder for the report — the same document the
+ * frontend preview shows: the model's summary, the risk table, one card per
+ * finding. The generated file is the unit of work for LibreOffice: it is stored
+ * per session, opened for editing through WOPI (Collabora) and converted to PDF.
  */
 import fs from "fs";
 import os from "os";
@@ -14,16 +14,13 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
-  Footer,
   HeadingLevel,
   PageBreak,
-  PageNumber,
   Packer,
   Paragraph,
   ShadingType,
   Table,
   TableCell,
-  TableOfContents,
   TableRow,
   TextRun,
   WidthType,
@@ -31,7 +28,16 @@ import {
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import { getDataDir } from "../../utils/loadConfig";
 import type { WebAppTestPlanDoc, SessionVulnerabilityDoc } from "../../models/Sessions/Sessions.model";
-import { buildDraftReport, buildClientReport, type ClientFinding, type ClientReport } from "./client-report.service";
+import {
+  buildDraftReport,
+  buildClientReport,
+  reportSummaryInput,
+  type ClientFinding,
+  type ClientReport,
+} from "./client-report.service";
+import type { ReportOptions } from "./report.service";
+import { generateReportSummary, type ReportSummaryDeps } from "./report-summary.service";
+import { extractDocxText } from "./docx-text.service";
 
 const THAI_FONT = "TH Sarabun New";
 const HEADER_BLUE = "4472C4";
@@ -68,7 +74,7 @@ const numbers = (items: string[]) =>
     (text) =>
       new Paragraph({
         children: [new TextRun({ text, font: THAI_FONT, size: 32 })],
-        numbering: { reference: "client-goals", level: 0 },
+        numbering: { reference: "report-numbers", level: 0 },
         spacing: { after: 80, line: 300 },
       }),
   );
@@ -204,141 +210,32 @@ function blockToDocx(block: ClientReport["body"][number]) {
   }
 }
 
-export async function buildClientDocx(client: ClientReport): Promise<Buffer> {
-  const { frontMatter, body: blocks } = client;
-
-  const cover = [
-    ...Array.from({ length: 6 }, () => new Paragraph({ children: [] })),
-    ...frontMatter.cover.titleLines.map((line, index) =>
-      new Paragraph({
-        children: [new TextRun({ text: line, font: THAI_FONT, size: index === 0 ? 56 : 44, bold: true })],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 200 },
-      }),
-    ),
-    ...Array.from({ length: 3 }, () => new Paragraph({ children: [] })),
-    body(`จัดทำโดย ${frontMatter.cover.preparedBy}`, { alignment: AlignmentType.CENTER }),
-    new Paragraph({ children: [new PageBreak()] }),
-  ];
-
-  const frontMatterChildren = [
-    heading("รายละเอียดเอกสาร", HeadingLevel.HEADING_1),
-    detailTable(frontMatter.documentDetails),
-    new Paragraph({ children: [new PageBreak()] }),
-    heading("รายละเอียดคำย่อในเอกสาร", HeadingLevel.HEADING_1),
-    body(
-      "เพื่อให้ผู้ที่เกี่ยวข้องกับโครงการสามารถศึกษาผลของการทดสอบเจาะระบบจากรายงานฉบับนี้ได้ง่ายขึ้น และเพื่อความเข้าใจที่ตรงกัน ขออนุญาตใช้ชื่อย่อดังนี้",
-    ),
-    detailTable(frontMatter.abbreviations),
-    new Paragraph({ children: [new PageBreak()] }),
-    heading("ประวัติเอกสาร", HeadingLevel.HEADING_1),
-    tableFrom(["ที่", "วันที่", "ชื่อเอกสาร", "เวอร์ชัน", "รายละเอียด"], frontMatter.history),
-    new Paragraph({ children: [new PageBreak()] }),
-    heading("รายชื่อผู้ตรวจสอบระบบ", HeadingLevel.HEADING_1),
-    ...frontMatter.testers.flatMap((tester) => [detailTable(Object.entries(tester)), body("")]),
-    new Paragraph({ children: [new PageBreak()] }),
-    heading("เงื่อนไขการใช้งานและลิขสิทธิ์ทางปัญญา", HeadingLevel.HEADING_1),
-    body(frontMatter.terms),
-    new Paragraph({ children: [new PageBreak()] }),
-    heading("สารบัญ", HeadingLevel.HEADING_1),
-    new TableOfContents("สารบัญ", { hyperlink: true, headingStyleRange: "1-2" }),
-    body(
-      "หมายเหตุ: เมื่อเปิดไฟล์ใน Microsoft Word ให้คลิกขวาที่สารบัญแล้วเลือก Update Field เพื่ออัปเดตเลขหน้า",
-    ),
-    new Paragraph({ children: [new PageBreak()] }),
-  ];
-
-  const bodyChildren = blocks.flatMap((block) => blockToDocx(block));
-
-  const doc = new Document({
-    numbering: {
-      config: [
-        {
-          reference: "client-goals",
-          levels: [{ level: 0, format: "decimal", text: "%1.", alignment: AlignmentType.START }],
-        },
-      ],
-    },
-    styles: { default: { document: { run: { font: THAI_FONT, size: 32 } } } },
-    features: { updateFields: true },
-    sections: [
-      {
-        properties: {},
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({
-                    text: `หน้า ${PageNumber.CURRENT} จาก ${PageNumber.TOTAL_PAGES}  `,
-                    font: THAI_FONT,
-                    size: 24,
-                    color: "595959",
-                  }),
-                ],
-              }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({ text: frontMatter.footerLine, font: THAI_FONT, size: 22, color: "595959" }),
-                ],
-              }),
-            ],
-          }),
-        },
-        children: [...cover, ...frontMatterChildren, ...bodyChildren],
-      },
-    ],
-  });
-
-  return Packer.toBuffer(doc);
-}
-
 /**
- * The draft report: the findings, and nothing else.
+ * Render the report.
  *
- * No cover, no document-details / abbreviations / history / tester tables, no
- * table of contents, no terms, no page-numbering front matter — just a one-line
- * heading, the summary the tester reads first, and one section per finding. It
- * is the same evidence the formal report carries, so a draft can be handed
- * around while the full document is still being shaped.
+ * The document is its own table of contents: a heading, the summary the reader
+ * meets first, the risk counts, then one section per finding. There is no cover,
+ * front matter, table of contents, terms chapter or page-number footer to
+ * render, so there is nothing here that could drift from the findings.
  */
-export async function buildDraftDocx(client: ClientReport): Promise<Buffer> {
-  const { frontMatter, body: blocks } = client;
-
-  const header = [
+export async function buildReportDocx(report: ClientReport): Promise<Buffer> {
+  const children = [
     new Paragraph({
-      children: [
-        new TextRun({
-          text: frontMatter.cover.titleLines[0] ?? "รายงานช่องโหว่",
-          font: THAI_FONT,
-          size: 40,
-          bold: true,
-        }),
-      ],
+      children: [new TextRun({ text: report.title, font: THAI_FONT, size: 40, bold: true })],
       spacing: { after: 120 },
     }),
     new Paragraph({
-      children: [
-        new TextRun({
-          text: `ฉบับร่างสำหรับ ${frontMatter.cover.client} — สรุปช่องโหว่ที่ตรวจพบ`,
-          font: THAI_FONT,
-          size: 26,
-          color: "595959",
-        }),
-      ],
+      children: [new TextRun({ text: report.subtitle, font: THAI_FONT, size: 26, color: "595959" })],
       spacing: { after: 240 },
     }),
+    ...report.body.flatMap((block) => blockToDocx(block)),
   ];
-
-  const bodyChildren = blocks.flatMap((block) => blockToDocx(block));
 
   const doc = new Document({
     numbering: {
       config: [
         {
-          reference: "client-goals",
+          reference: "report-numbers",
           levels: [{ level: 0, format: "decimal", text: "%1.", alignment: AlignmentType.START }],
         },
       ],
@@ -347,7 +244,7 @@ export async function buildDraftDocx(client: ClientReport): Promise<Buffer> {
     sections: [
       {
         properties: {},
-        children: [...header, ...bodyChildren],
+        children,
       },
     ],
   });
@@ -369,7 +266,15 @@ function reportMetaPath(sessionId: string): string {
   return path.join(reportsDir(), `${sessionId}.meta.json`);
 }
 
-function readReportMeta(sessionId: string): { signature?: string; editedByWord?: boolean; fileName?: string } {
+interface ReportMeta {
+  signature?: string;
+  editedByWord?: boolean;
+  fileName?: string;
+  /** The summary the stored document opens with, so the preview matches it. */
+  summary?: string;
+}
+
+function readReportMeta(sessionId: string): ReportMeta {
   try {
     return JSON.parse(fs.readFileSync(reportMetaPath(sessionId), "utf-8"));
   } catch {
@@ -394,6 +299,59 @@ export function reportDocxStatus(sessionId: string): { editedByWord: boolean } {
   return { editedByWord: readReportMeta(sessionId).editedByWord === true };
 }
 
+/**
+ * The summary the stored document was built with. The JSON preview renders the
+ * document, so it has to show the same opening the .docx does rather than a
+ * second, differently-worded one.
+ */
+export function readReportSummary(sessionId: string): string | undefined {
+  return readReportMeta(sessionId).summary;
+}
+
+export interface ReportDocumentReading {
+  fileName: string;
+  /** True once Word saved it: the file is authoritative and never regenerated. */
+  editedByWord: boolean;
+  /** When the document on disk was last written — by the generator or by Word. */
+  savedAt: Date;
+  bytes: number;
+  text: string;
+}
+
+/**
+ * The stored document as text.
+ *
+ * The report is edited in Word, so the document is the record of what it says:
+ * the generator cannot state what the tester rewrote, and the findings it was
+ * built from do not move when the prose does. Undefined when this session has
+ * no document yet.
+ */
+export function readReportDocument(sessionId: string): ReportDocumentReading | undefined {
+  const filePath = reportDocxPath(sessionId);
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return undefined;
+  }
+  const meta = readReportMeta(sessionId);
+  return {
+    fileName: meta.fileName ?? `${sessionId}.docx`,
+    editedByWord: meta.editedByWord === true,
+    savedAt: stat.mtime,
+    bytes: stat.size,
+    text: extractDocxText(fs.readFileSync(filePath)),
+  };
+}
+
+/**
+ * Bumped whenever the document's shape changes, because the fingerprint below
+ * decides whether a stored .docx is still current: without this, a session
+ * whose document was built by an older format keeps being served that older
+ * document forever, and only `rebuild=1` would ever refresh it.
+ */
+const REPORT_FORMAT_VERSION = 2;
+
 /** Fingerprint of the session data the deterministic report is built from. */
 function reportSignature(session: {
   name?: string;
@@ -413,7 +371,16 @@ function reportSignature(session: {
   const cases = (session.webAppTestPlan?.cases ?? []).map((c) => [c.testId, c.status]);
   return crypto
     .createHash("sha1")
-    .update(JSON.stringify({ name: session.name, description: session.description, createdAt: session.createdAt, vulns, cases }))
+    .update(
+      JSON.stringify({
+        format: REPORT_FORMAT_VERSION,
+        name: session.name,
+        description: session.description,
+        createdAt: session.createdAt,
+        vulns,
+        cases,
+      }),
+    )
     .digest("hex");
 }
 
@@ -423,11 +390,16 @@ function reportSignature(session: {
  * Word save arrives the file is authoritative and never regenerated — unless
  * the caller explicitly asks to rebuild, which is the operator's decision to
  * discard their own edits in favour of the engagement's current results.
+ *
+ * A rebuild is also when the model writes the document's opening summary, so a
+ * summary costs one call per version of the findings rather than one per open.
+ * The call is best-effort: when it fails the document is built with its own
+ * summary line and the report still opens.
  */
 export async function ensureReportDocx(
   sessionId: string,
   uid: unknown,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; deps?: ReportSummaryDeps } = {},
 ): Promise<{ filePath: string; fileName: string }> {
   const refreshed = await SessionsModel.findOne({ sessionId, uid })
     .select("name description createdAt vulnerabilities webAppTestPlan")
@@ -445,7 +417,7 @@ export async function ensureReportDocx(
     return { filePath, fileName: meta.fileName ?? `${sessionId}.docx` };
   }
 
-  const client = buildClientReport({
+  const reportOptions: ReportOptions = {
     session: {
       sessionId,
       name: refreshed.name ?? "Engagement",
@@ -454,19 +426,29 @@ export async function ensureReportDocx(
     },
     vulnerabilities: (refreshed.vulnerabilities ?? []) as SessionVulnerabilityDoc[],
     testPlan: (refreshed.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
-  });
+  };
 
-  const buffer = await buildClientDocx(client);
+  const summary = await generateReportSummary(reportSummaryInput(reportOptions), {
+    userId: typeof uid === "string" ? uid : String(uid),
+    sessionId,
+    deps: options.deps,
+  });
+  const report = buildClientReport({ ...reportOptions, summary });
+
+  const buffer = await buildReportDocx(report);
   fs.writeFileSync(filePath, buffer);
-  fs.writeFileSync(reportMetaPath(sessionId), JSON.stringify({ signature, editedByWord: false, fileName: client.fileName }));
-  return { filePath, fileName: client.fileName };
+  fs.writeFileSync(
+    reportMetaPath(sessionId),
+    JSON.stringify({ signature, editedByWord: false, fileName: report.fileName, summary }),
+  );
+  return { filePath, fileName: report.fileName };
 }
 
 /**
- * Build the draft .docx on demand. It is never stored as the working document
- * (Collabora edits the formal report), so every call rebuilds it from the
- * engagement's current findings — a draft that lagged behind the results would
- * be worse than no draft.
+ * Build the draft .docx on demand: the same document, without the model's
+ * summary. It is never stored as the working document (Collabora edits that
+ * one), so every call rebuilds it from the engagement's current findings — a
+ * draft that lagged behind the results would be worse than no draft.
  */
 export async function buildDraftReportDocx(
   sessionId: string,
@@ -488,7 +470,7 @@ export async function buildDraftReportDocx(
     testPlan: (refreshed.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
   });
 
-  const buffer = await buildDraftDocx(client);
+  const buffer = await buildReportDocx(client);
   return { buffer, fileName: client.fileName };
 }
 

@@ -27,6 +27,7 @@ export const BROWSER_TOOL_NAMES = ["browser_action"] as const;
 export const REPORTING_TOOL_NAMES = [
   "map_finding_owasp",
   "generate_pentest_report",
+  "read_report_document",
 ] as const;
 
 /** Tools excluded from the always-loaded schema set until load_tools loads them. */
