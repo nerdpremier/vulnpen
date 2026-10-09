@@ -7,9 +7,8 @@ import type {
 } from "../src/tools/types";
 import {
   ApprovalRejectionTracker,
-  compactApprovalTranscript,
   decideToolConsent,
-  parseToolSafetyAssessment,
+  effectiveSafetyDetail,
 } from "../src/services/tool-approval.service";
 import { executeToolCall } from "../src/services/agent.tools";
 import { buildPendingConsentBatch } from "../src/services/consent-batch";
@@ -18,7 +17,6 @@ const tool: ToolDefinition = {
   name: "run_bash",
   description: "Run a command",
   parameters: { type: "object" },
-  requiresConsent: true,
   async execute() {
     return { output: "ok", exitCode: 0 };
   },
@@ -26,187 +24,41 @@ const tool: ToolDefinition = {
 
 const context = { sessionId: "session-1" } as ExecutionContext;
 
-test("auto mode preserves automatic execution for consent-marked tools", async () => {
-  const result = await decideToolConsent({
-    mode: "auto",
-    tool,
-    args: { command: "pwd" },
-    context,
-    safetyTriggered: false,
-  });
+test("auto mode runs an action the boundary did not flag", () => {
+  const result = decideToolConsent({ mode: "auto", safetyTriggered: false });
   assert.equal(result.requireConsent, false);
+  assert.equal(result.source, "mode");
 });
 
-test("requires consent mode asks for every action", async () => {
-  const result = await decideToolConsent({
-    mode: "requires_consent",
-    tool,
-    args: {},
-    context,
-    safetyTriggered: false,
-  });
+test("requires consent mode asks for every action", () => {
+  const result = decideToolConsent({ mode: "requires_consent", safetyTriggered: false });
   assert.equal(result.requireConsent, true);
   assert.equal(result.source, "mode");
 });
 
-test("built-in safety block still requires review in automatic mode", async () => {
-  let called = false;
-  const result = await decideToolConsent({
-    mode: "auto",
-    tool,
-    args: { command: "rm -rf /" },
-    context,
-    safetyTriggered: true,
-    evaluator: async () => {
-      called = true;
-      return { safe: true, reason: "incorrect" };
-    },
-  });
+test("a boundary-crossing action asks in auto mode too", () => {
+  const result = decideToolConsent({ mode: "auto", safetyTriggered: true });
   assert.equal(result.requireConsent, true);
   assert.equal(result.source, "safety");
-  assert.equal(called, false);
 });
 
-test("Safety-triggered tools are blocked outside explicit safe verdicts", async () => {
-  // Subagents refuse (requireConsent signals the caller to block); the main
-  // agent surfaces a consent prompt. Either way, no silent execution.
-  const modes = ["auto", "auto_approve", "requires_consent"] as const;
-  for (const mode of modes) {
-    const result = await decideToolConsent({
-      mode,
-      tool,
-      args: { command: "rm -rf /" },
-      context,
-      safetyTriggered: true,
-    });
-    assert.equal(result.requireConsent, true, `mode ${mode}`);
+test("no mode turns a destructive target action into a question", () => {
+  // The refusal is not a mode outcome. In neither mode does a destructive
+  // target action become something a person — or, before this mode set was
+  // reduced, a reviewer model — could answer "yes" to.
+  const destructive: SafetyDetail = {
+    kind: "destructive_target",
+    reason: "คำสั่งนี้จะลบข้อมูลบนเป้าหมาย",
+    impact: "ข้อมูลสูญหาย",
+  };
+  for (const mode of ["auto", "requires_consent"] as const) {
+    for (const safetyTriggered of [true, false]) {
+      const result = decideToolConsent({ mode, safetyTriggered, safetyDetail: destructive });
+      assert.equal(result.requireConsent, false, `mode ${mode}`);
+      assert.equal(result.denied, true, `mode ${mode}`);
+      assert.equal(result.source, "boundary", `mode ${mode}`);
+    }
   }
-
-  // auto_approve only bypasses the block on an explicit safe verdict.
-  const approved = await decideToolConsent({
-    mode: "auto_approve",
-    tool,
-    args: { command: "rm -rf /tmp/own-file" },
-    context,
-    safetyTriggered: true,
-    evaluator: async () => ({ safe: true, reason: "Bounded to workspace file." }),
-  });
-  assert.equal(approved.requireConsent, false);
-  assert.equal(approved.reviewed, true);
-
-  // And even the reviewer never runs when safety is not triggered.
-  const unflagged = await decideToolConsent({
-    mode: "auto",
-    tool,
-    args: { command: "pwd" },
-    context,
-    safetyTriggered: false,
-  });
-  assert.equal(unflagged.requireConsent, false);
-});
-
-test("auto approve runs only an explicitly safe AI verdict", async () => {
-  const safe = await decideToolConsent({
-    mode: "auto_approve",
-    tool,
-    args: { command: "pwd" },
-    context,
-    safetyTriggered: false,
-    evaluator: async () => ({
-      safe: true,
-      reason: "Read-only workspace inspection.",
-    }),
-  });
-  const unsafe = await decideToolConsent({
-    mode: "auto_approve",
-    tool,
-    args: { command: "sudo reboot" },
-    context,
-    safetyTriggered: false,
-    evaluator: async () => ({
-      safe: false,
-      reason: "Disruptive system action.",
-    }),
-  });
-  assert.equal(safe.requireConsent, false);
-  assert.equal(safe.reviewed, true);
-  assert.equal(unsafe.requireConsent, false);
-  assert.equal(unsafe.denied, true);
-  assert.match(unsafe.reason, /Disruptive/);
-});
-
-test("approve for me does not review routine actions", async () => {
-  let called = false;
-  const routineTool = { ...tool, requiresConsent: false };
-  const result = await decideToolConsent({
-    mode: "auto_approve",
-    tool: routineTool,
-    args: { command: "pwd" },
-    context,
-    safetyTriggered: false,
-    evaluator: async () => {
-      called = true;
-      return { safe: false, reason: "should not run" };
-    },
-  });
-
-  assert.equal(result.requireConsent, false);
-  assert.equal(result.reviewed, false);
-  assert.equal(called, false);
-});
-
-test("auto approve fails closed when review is unavailable or throws", async () => {
-  const unavailable = await decideToolConsent({
-    mode: "auto_approve",
-    tool,
-    args: {},
-    context,
-    safetyTriggered: false,
-  });
-  const failed = await decideToolConsent({
-    mode: "auto_approve",
-    tool,
-    args: {},
-    context,
-    safetyTriggered: false,
-    evaluator: async () => {
-      throw new Error("provider offline");
-    },
-  });
-  assert.equal(unavailable.requireConsent, true);
-  assert.equal(unavailable.source, "fallback");
-  assert.equal(failed.requireConsent, true);
-  assert.match(failed.reason, /provider offline/);
-});
-
-test("AI response parser accepts strict boolean JSON and rejects ambiguity", () => {
-  assert.deepEqual(
-    parseToolSafetyAssessment('{"safe":true,"reason":"Read only"}'),
-    { safe: true, reason: "Read only" },
-  );
-  assert.throws(
-    () => parseToolSafetyAssessment('{"safe":"true","reason":"maybe"}'),
-    /boolean safe verdict/,
-  );
-  assert.throws(() => parseToolSafetyAssessment("probably safe"), /not JSON/);
-});
-
-test("approval transcript is compact and excludes system instructions", () => {
-  const messages = [
-    { role: "system", content: "secret system prompt" },
-    ...Array.from({ length: 13 }, (_, index) => ({
-      role: index % 2 ? "assistant" : "user",
-      content: `${index}: ${"x".repeat(1_100)}`,
-    })),
-  ];
-  const transcript = compactApprovalTranscript(messages);
-
-  assert.equal(transcript.length, 12);
-  assert.equal(transcript[0].content.startsWith("1:"), true);
-  assert.equal(
-    transcript.every((message) => message.content.length <= 1_000),
-    true,
-  );
 });
 
 test("three consecutive denials interrupt but an approval resets the streak", () => {
@@ -276,7 +128,7 @@ test("a destructive target action is refused in every mode, with no approval pat
     reason: "ส่งคำขอ HTTP ด้วยเมธอด DELETE ไปยังเป้าหมาย",
     impact: "ข้อมูลบนเป้าหมายถูกลบถาวร",
   };
-  const modes = ["auto", "auto_approve", "requires_consent"] as const;
+  const modes = ["auto", "requires_consent"] as const;
   for (const mode of modes) {
     const result = await decideToolConsent({
       mode,
@@ -323,4 +175,51 @@ test("a destructive command is blocked end to end without ever asking for consen
   assert.equal(result.safetyKind, "destructive_target");
   assert.equal(consents.length, 0);
   assert.match(errors.join("\n"), /proof-of-concept boundary/);
+});
+
+test("the safety-protection setting silences prompts, never the absolute refusal", () => {
+  const destructive: SafetyDetail = { kind: "destructive_target", reason: "r", impact: "i" };
+  const box: SafetyDetail = { kind: "dangerous", reason: "r", impact: "i" };
+  const scope: SafetyDetail = { kind: "out_of_scope", reason: "r", impact: "i" };
+
+  // The setting is the operator asking for fewer prompts. It is not the operator
+  // suspending the one promise the product makes absolutely, so a
+  // destructive-target verdict survives it and the noisy ones do not.
+  assert.equal(effectiveSafetyDetail(destructive, true)?.kind, "destructive_target");
+  assert.equal(effectiveSafetyDetail(box, true), undefined);
+  assert.equal(effectiveSafetyDetail(scope, true), undefined);
+
+  // Off by default: every verdict reaches the gate untouched.
+  assert.equal(effectiveSafetyDetail(destructive, false)?.kind, "destructive_target");
+  assert.equal(effectiveSafetyDetail(box, false)?.kind, "dangerous");
+  assert.equal(effectiveSafetyDetail(scope, false)?.kind, "out_of_scope");
+  assert.equal(effectiveSafetyDetail(undefined, false), undefined);
+  assert.equal(effectiveSafetyDetail(undefined, true), undefined);
+});
+
+test("a target DELETE is still refused end to end with safety protections disabled", async () => {
+  const errors: string[] = [];
+  const consents: string[] = [];
+  const callbacks = {
+    onToolStart: () => {},
+    onToolOutput: () => {},
+    onToolDone: () => {},
+    onToolError: (_id: string, error: string) => errors.push(error),
+    onConsentRequired: (id: string) => consents.push(id),
+  };
+  const result = await executeToolCall(
+    "session-1",
+    {
+      id: "call-2",
+      name: "run_bash",
+      arguments: JSON.stringify({ command: "curl -s -X DELETE http://juice-shop:3000/api/Users/7" }),
+    },
+    (callbacks as unknown) as Parameters<typeof executeToolCall>[2],
+    ({ sessionId: "session-1" } as unknown) as ExecutionContext,
+    true,
+    "auto",
+  );
+  assert.equal(result.kind, "boundary_blocked");
+  assert.equal(result.safetyKind, "destructive_target");
+  assert.equal(consents.length, 0);
 });

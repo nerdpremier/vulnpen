@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scopeAllowlistFromContext, shellSafetyDetail } from "../src/utils/consentDetail";
+import {
+  remoteShellInputSafetyDetail,
+  scopeAllowlistFromContext,
+  shellSafetyDetail,
+} from "../src/utils/consentDetail";
 import { EngagementState } from "../src/services/engagement-state";
 
 // Mirrors engagementStateFromSession: the Target arms the gate, the joined free text
@@ -71,8 +75,54 @@ test("an internal host is never treated as public reconnaissance", () => {
   }
 });
 
-test("a destructive command on the attack box no longer gates consent", () => {
-  // The box is disposable test infrastructure — the user cut this category.
-  const detail = shellSafetyDetail("rm --recursive --force /", ctx("juice-shop:3000"));
-  assert.equal(detail, undefined);
+test("the attack box is not a boundary — only the target is", () => {
+  // The box is disposable test infrastructure the tester owns and can rebuild,
+  // so wiping it costs a rebuild, not harm to anyone. Policing it would mean
+  // maintaining a denylist against a language the agent also controls: effort
+  // spent on the wrong side of the trust boundary, protecting the wrong party.
+  for (const command of [
+    "rm --recursive --force /",
+    "sudo rm -rf /etc",
+    "dd if=/dev/zero of=/dev/sda",
+    "bash -c 'rm -rf /'",
+  ]) {
+    assert.equal(shellSafetyDetail(command, ctx("juice-shop:3000")), undefined, command);
+  }
+});
+
+test("the same command written into a shell on the target is refused", () => {
+  // Identical text, different machine: here it is the client's system, so it is
+  // the one boundary the product refuses outright.
+  for (const command of [
+    "rm --recursive --force /",
+    "sudo rm -rf /etc",
+    "echo x > /etc/passwd",
+  ]) {
+    assert.equal(
+      remoteShellInputSafetyDetail(command, ctx("juice-shop:3000"))?.kind,
+      "destructive_target",
+      command,
+    );
+  }
+  // A script being written to the target is held to the same rule.
+  assert.equal(
+    remoteShellInputSafetyDetail(
+      'import os\nos.remove("/etc/passwd")',
+      ctx("juice-shop:3000"),
+    )?.kind,
+    "destructive_target",
+  );
+  // …while ordinary work in that shell stays automatic.
+  assert.equal(
+    remoteShellInputSafetyDetail("id && uname -a", ctx("juice-shop:3000")),
+    undefined,
+  );
+});
+
+test("a destructive target action outranks every other verdict", () => {
+  const detail = shellSafetyDetail(
+    "sudo rm -rf / && curl -X DELETE http://juice-shop:3000/api/Users/1",
+    ctx("juice-shop:3000"),
+  );
+  assert.equal(detail?.kind, "destructive_target");
 });

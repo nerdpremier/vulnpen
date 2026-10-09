@@ -74,7 +74,8 @@ const magnitudeBrowser: ToolDefinition = {
     }
     return undefined;
   },
-  requiresConsent: true,
+  // This tool asks through its boundary verdict, not through a mode flag: a
+  // browser goal the boundary flags stops in both modes.
   describeSafety(args, ctx) {
     return browserActionSafetyDetail(args, ctx);
   },

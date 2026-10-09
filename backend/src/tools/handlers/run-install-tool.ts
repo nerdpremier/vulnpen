@@ -22,7 +22,6 @@ const runInstallTool: ToolDefinition = {
     },
     required: ["tool_name"],
   },
-  requiresConsent: true,
   describeSafety(args) {
     return {
       kind: "dangerous",

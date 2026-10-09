@@ -1,5 +1,6 @@
 import { ExecutionContext, SafetyDetail } from "../tools/types";
 import { isDangerousShellInput } from "./commandSafety";
+import { isDangerousPythonScript } from "./pythonSafety";
 import {
   detectDestructiveBrowserGoal,
   detectDestructiveTargetAction,
@@ -89,9 +90,15 @@ function destructiveTargetDetail(text: string): SafetyDetail | undefined {
 }
 
 /** Combined deterministic boundary for a shell command: destructive target
- *  actions first, then the out-of-scope target check. Destructive patterns on
- *  the attack box itself no longer gate — the box is disposable test
- *  infrastructure, and the user asked for consent to stay quiet about it. */
+ *  actions first, then the out-of-scope target check.
+ *
+ *  The attack box is deliberately NOT a boundary. It is disposable test
+ *  infrastructure that the tester owns and can rebuild, so `rm -rf /` on the box
+ *  is an operational annoyance, not a harm to anyone — and policing it means
+ *  maintaining a denylist against a language the agent also controls. The
+ *  boundary is the engagement target, which is someone else's system.
+ *  `commandSafety` is still the rule set for a shell that lives ON the target
+ *  (see remoteShellInputSafetyDetail), where the same command is target damage. */
 export function shellSafetyDetail(
   text: string,
   ctx: ExecutionContext,
@@ -162,12 +169,18 @@ export function remoteShellInputSafetyDetail(
   text: string,
   ctx: ExecutionContext,
 ): SafetyDetail | undefined {
-  const danger = isDangerousShellInput(text);
-  if (danger.dangerous) {
+  // What goes into a shell on the target may be a command or a script being
+  // written there, and both are target damage when they remove or overwrite
+  // data on it. This is the one place the attack-box rule sets belong: the same
+  // `rm -rf /` that would only cost the tester a rebuild costs the client a
+  // machine.
+  const asCommand = isDangerousShellInput(text);
+  const hit = asCommand.dangerous ? asCommand : isDangerousPythonScript(text);
+  if (hit.dangerous) {
     return {
       kind: "destructive_target",
-      reason: `คำสั่งนี้จะรันบนเครื่องเป้าหมายและเข้าข่ายทำลายระบบ (${danger.reason})`,
-      impact: `${danger.impact} — ${POC_NOTE}`,
+      reason: `คำสั่งหรือสคริปต์นี้จะรันบนเครื่องเป้าหมายและเข้าข่ายทำลายระบบ (${hit.reason})`,
+      impact: `${hit.impact} — ${POC_NOTE}`,
     };
   }
   const target = destructiveTargetDetail(text);

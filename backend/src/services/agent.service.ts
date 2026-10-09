@@ -36,11 +36,7 @@ import { wasSessionClearedSince } from "./session.helpers";
 import { engagementStateFromSession } from "./engagement-state";
 import { getModelContextLimit, getModelMaxOutput } from "../utils/modelMetadata";
 import { normalizeMaxAgentIterations } from "../utils/agentConfig";
-import {
-  ApprovalRejectionTracker,
-  compactApprovalTranscript,
-  createAiToolSafetyEvaluator,
-} from "./tool-approval.service";
+import { ApprovalRejectionTracker } from "./tool-approval.service";
 
 // ─── Agent run state (pause flag, persisted run state) ───────────────
 
@@ -216,8 +212,9 @@ export async function runAgentLoop(params: {
   channel?: string;
   /**
    * Approval mode for this turn, overriding the user's own setting. An
-   * unattended scan passes "auto_approve" so a launched scan finishes without
-   * a human; everything else leaves it undefined and follows the user config.
+   * unattended scan passes "auto" so a launched scan finishes without parking
+   * for a human who is not there; everything else leaves it undefined and
+   * follows the user config.
    */
   toolExecutionMode?: ToolExecutionMode;
 }): Promise<void> {
@@ -320,14 +317,6 @@ export async function runAgentLoop(params: {
     getModelContextLimit(orchestratorConfig.model, orchestratorConfig.contextWindow),
     getModelMaxOutput(orchestratorConfig.model, orchestratorConfig.maxOutputTokens),
   );
-  const toolSafetyEvaluator = toolExecutionMode === "auto_approve"
-    ? createAiToolSafetyEvaluator({
-        provider: orchestratorConfig,
-        userId: session.uid.toString(),
-        abortSignal: params.abortSignal,
-      })
-    : undefined;
-
   try {
     while (iteration < maxAgentIterations) {
       iteration++;
@@ -500,29 +489,16 @@ export async function runAgentLoop(params: {
         executionCtx,
         disableSafetyProtections,
         toolExecutionMode,
-        toolSafetyEvaluator,
-        {
-          workspacePath: envInfo?.workspacePath,
-          engagement: {
-            name: session.name,
-            description: session.description,
-            target: session.engagementContext?.target,
-            scope: session.engagementContext?.scope,
-          },
-          transcript: compactApprovalTranscript(runBuffer.transcript),
-        },
       );
 
       let approvalCircuitOpen = false;
       for (const result of toolResults) {
-        // The circuit breaker counts only real approval outcomes: a review
-        // denial feeds it a rejection, an AI-reviewed execution an approval.
-        // Boundary blocks are not reviews — they are deterministic refusals —
-        // and unreviewed executions never enter the streak.
+        // The circuit breaker counts only clear operator decisions: a refusal
+        // feeds it a rejection. With the reviewer gone there is no
+        // "approved on someone else's authority" case to clear the streak, and
+        // boundary blocks are deterministic refusals, not decisions.
         if (result.kind === "approval_denied") {
           approvalCircuitOpen = approvalRejections.record(true) || approvalCircuitOpen;
-        } else if (result.kind === "executed" && result.approvalReviewed === true) {
-          approvalCircuitOpen = approvalRejections.record(false) || approvalCircuitOpen;
         }
       }
 
@@ -551,7 +527,7 @@ export async function runAgentLoop(params: {
         await setAgentState(sessionId, "idle");
         sse.write("error", {
           message:
-            "Approve for me interrupted this turn after repeated denied approval requests.",
+            "This turn was interrupted after repeated approval requests were denied.",
         });
         sse.end();
         return;

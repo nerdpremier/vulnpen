@@ -14,15 +14,18 @@ When adding or removing an agent tool, update ALL of these locations:
 3. **Availability** (if tool requires config): `backend/src/utils/toolAvailability.ts` — add to unconfigured list when env var is missing
 
 ## Frontend (must stay in sync with registry)
-4. **Sidebar panel**: `frontend/src/components/session/AgentToolsPanel.jsx`
-   - `TOOL_GROUPS` — add the tool name to the appropriate group (or create a new group)
-   - `TOOL_LABELS` — add a human-readable label
-5. **Chat transcript**: `frontend/src/components/pages/session/sessionId/ToolCallBlock.jsx`
-   - `TOOL_LABELS` — add the display label
-   - `formatArgsPreview()` — add a one-liner showing the most useful arg
-   - `getCodePreview()` — optionally add syntax-highlighted preview (for script/command tools)
+4. **Tool catalog**: `frontend/src/utils/toolCatalog.js` — the single frontend
+   source for how a tool call renders. Add:
+   - `TOOL_LABELS` — a human-readable label for the tool name
+   - `formatArgsPreview()` — a one-liner showing the most useful arg
+   - `getCodePreview()` — optionally, a syntax-highlighted preview (for
+     script/command tools)
+   The chat transcript (`frontend/src/components/pages/session/sessionId/ToolCallBlock.jsx`)
+   imports these; it is not edited per tool.
+5. **Browser coupling**: if the tool drives the live Browser Agent panel, make
+   sure its name matches `isBrowserTool()` in the same file.
 
 ## Notes
 - The backend API (`GET /agent/session/:id/agent-tools-config`) dynamically returns all registered tools from `toolRegistry.getAll()`, so the backend side is automatic after step 2.
-- The frontend filters tools through `TOOL_GROUPS` — any tool not listed there won't appear in the sidebar even if the API returns it.
-- If the tool needs consent gating, set `requiresConsent: true` or implement `shouldRequireConsent` in the handler.
+- The tool list in the UI is driven by that API, not by a hardcoded group table: a registered tool appears without any frontend change, and a missing `TOOL_LABELS` entry only means the raw tool name is shown instead of a label.
+- If the tool needs consent gating, implement `describeSafety()`. That verdict is the whole mechanism: in `auto` a flagged action stops for the operator, and every action stops in `requires_consent`. There is no per-tool `requiresConsent` flag any more — it was redundant with the mode and inert in `auto`.

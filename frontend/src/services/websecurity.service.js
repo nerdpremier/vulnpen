@@ -53,11 +53,8 @@ export const removeTestCases = async ({ sessionId, ...body }) => {
 };
 
 // --- OWASP Top 10:2025 ----------------------------------------------
-
-export const getOwaspCoverage = async (sessionId) => {
-  const res = await apiClient.get(`/agent/session/${sessionId}/owasp-top10`);
-  return res.data;
-};
+// Classification is derived from each finding's CWE, so the findings list and
+// the report already carry it; there is no separate coverage endpoint.
 
 export const mapVulnerability = async ({ sessionId, vulnerabilityId, ...body }) => {
   const res = await apiClient.post(

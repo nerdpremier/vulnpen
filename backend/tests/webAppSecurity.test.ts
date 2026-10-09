@@ -4,9 +4,6 @@ import {
   OWASP_TOP10_2025,
   WSTG_CATEGORIES,
   WSTG_TESTS,
-  findWstgTestsForOwasp,
-  getWstgTest,
-  isOwaspTop10Id,
 } from "../src/knowledge";
 import {
   addCatalogueCases,
@@ -26,7 +23,6 @@ import type { WebAppTestPlanDoc } from "../src/models/Sessions/Sessions.model";
 import { mapFindingToOwaspTop10 } from "../src/services/web-security/owasp-mapping.service";
 import { buildWebAppPentestReport } from "../src/services/web-security/report.service";
 import { normalizeVulnerability } from "../src/services/vulnerability.service";
-import { toolRegistry } from "../src/tools/registry";
 import { toolRegistry } from "../src/tools/registry";
 import { buildSystemPrompt, buildVolatileWebAppPrompt } from "../src/utils/assistant/prompts";
 
@@ -67,9 +63,10 @@ test("the WSTG v4.2 catalogue covers every published test case", () => {
     assert.ok(wstg.objective.trim().length > 20, wstg.id);
     assert.ok(wstg.howToTest.trim().length > 40, wstg.id);
     assert.ok(wstg.evidence.trim().length > 10, wstg.id);
-    assert.ok(wstg.owasp.length > 0 && wstg.owasp.every(isOwaspTop10Id), wstg.id);
-    assert.ok(wstg.cwe.length > 0 && wstg.cwe.every((cwe) => /^CWE-\d+$/.test(cwe)), wstg.id);
     assert.ok(wstg.tools.length > 0, wstg.id);
+    // The catalogue carries no classification: OWASP publishes no WSTG-to-CWE
+    // or WSTG-to-Top-10 mapping, so a test case must not smuggle one in.
+    assert.ok(!("owasp" in wstg) && !("cwe" in wstg), `${wstg.id} carries a classification`);
   }
 });
 
@@ -94,45 +91,30 @@ test("the OWASP Top 10:2025 catalogue matches the published release", () => {
     assert.equal(category.rank, index + 1, category.id);
     assert.ok(category.summary.length > 30, category.id);
     assert.ok(category.cwes.length >= 3, category.id);
-    assert.ok(category.wstgFocus.length >= 1, category.id);
     assert.ok(category.detection.length >= 2, category.id);
     assert.ok(category.remediation.length >= 2, category.id);
-    assert.ok(findWstgTestsForOwasp(category.id).length > 0, category.id);
-
-    for (const testId of category.wstgFocus) {
-      const wstg = getWstgTest(testId);
-      assert.ok(wstg, `${category.id} references unknown test ${testId}`);
-      assert.ok(
-        wstg.owasp.includes(category.id),
-        `${testId} does not map back to ${category.id}`,
-      );
-    }
+    assert.ok(
+      category.cwes.every((cwe) => /^CWE-\d+$/.test(cwe)),
+      `${category.id} has a malformed CWE`,
+    );
   }
 });
 
-test("findings map to the Top 10 through the test case that found them", () => {
-  const mapping = mapFindingToOwaspTop10({
-    title: "SQL injection in the product search",
-    wstgId: "4.7.5",
-  });
+test("a finding is classified by its CWE, looked up in the published OWASP lists", () => {
+  const mapping = mapFindingToOwaspTop10({ cwe: "CWE-89" });
   assert.equal(mapping.primary, "A05:2025");
-  assert.equal(mapping.source, "wstg");
-  assert.equal(mapping.confidence, "high");
-  assert.deepEqual(mapping.wstgIds, ["WSTG-INPV-05"]);
-  assert.match(mapping.rationale, /WSTG-INPV-05/);
+  assert.equal(mapping.primaryTitle, "Injection");
+  assert.equal(mapping.source, "cwe");
+  assert.equal(mapping.provenance, "official");
+  assert.match(mapping.rationale, /CWE-89/);
 });
 
-test("an explicit classification outranks every heuristic", () => {
-  const mapping = mapFindingToOwaspTop10({
-    title: "SQL injection in the product search",
-    wstgId: "WSTG-INPV-05",
-    owaspTop10: "a06:2025",
-  });
-  assert.equal(mapping.primary, "A06:2025");
-  assert.equal(mapping.source, "explicit");
-  assert.equal(mapping.confidence, "high");
-  assert.equal(mapping.primaryTitle, "Insecure Design");
-  assert.ok(mapping.related.includes("A05:2025"));
+test("the WSTG case a finding came from never decides its category", () => {
+  // The case is authentication work, but the weakness is an injection: the CWE
+  // is the only thing consulted, so the finding is an Injection finding.
+  const mapping = mapFindingToOwaspTop10({ wstgId: "WSTG-ATHN-04", cwe: "CWE-89" });
+  assert.equal(mapping.primary, "A05:2025");
+  assert.equal(mapping.source, "cwe");
 });
 
 test("a known CWE maps the finding without any model input", () => {
@@ -146,37 +128,29 @@ test("a known CWE maps the finding without any model input", () => {
   assert.match(mapping.rationale, /CWE-639/);
 });
 
-test("findings without deterministic signals stay unmapped for the LLM layer", () => {
+test("a finding with no CWE stays unmapped and says what is missing", () => {
   const mapping = mapFindingToOwaspTop10({
     title: "Stored XSS in the support ticket subject",
     description: "A script payload in the subject executes for the support agent.",
   });
   assert.equal(mapping.primary, undefined);
   assert.equal(mapping.source, "unmapped");
+  assert.match(mapping.rationale, /No CWE is recorded/);
 });
 
-test("an ambiguous CWE refuses to guess and reports its candidates", () => {
-  const mapping = mapFindingToOwaspTop10({
-    title: "Weakness surfaced by an ambiguous weakness id",
-    cwe: "CWE-79",
-  });
-  // CWE-79 is listed under several 2025 categories in the knowledge base, so
-  // the deterministic layer must hand the decision to the LLM classifier.
-  if (mapping.ambiguous?.length) {
-    assert.equal(mapping.primary, undefined);
-    assert.equal(mapping.source, "unmapped");
-    assert.ok(mapping.ambiguous.length > 1);
-  } else {
-    assert.equal(mapping.primary, "A05:2025");
-    assert.equal(mapping.source, "cwe");
-  }
+test("no CWE in the published lists is ambiguous — the lookup is single-valued", () => {
+  const mapping = mapFindingToOwaspTop10({ cwe: "CWE-79" });
+  assert.equal(mapping.primary, "A05:2025");
+  assert.equal(mapping.source, "cwe");
 });
 
-test("an unrecognisable finding is reported as unmapped rather than guessed", () => {
-  const mapping = mapFindingToOwaspTop10({ title: "Phase two walkthrough note" });
+test("a CWE outside the published lists stays unmapped rather than being guessed", () => {
+  // CWE-134 (format string) is a real weakness but appears in none of the ten
+  // OWASP Top 10:2025 lists, so there is no official category to report.
+  const mapping = mapFindingToOwaspTop10({ cwe: "CWE-134" });
   assert.equal(mapping.primary, undefined);
   assert.equal(mapping.source, "unmapped");
-  assert.match(mapping.rationale, /left unmapped/);
+  assert.match(mapping.rationale, /not in the CWE list/);
 });
 
 test("planned findings are classified at ingestion time", () => {
@@ -191,7 +165,7 @@ test("planned findings are classified at ingestion time", () => {
   assert.equal(vulnerability.wstgTitle, "Testing for Stack Traces");
   assert.equal(vulnerability.owaspTop10, "A10:2025");
   assert.equal(vulnerability.owaspTop10Title, "Mishandling of Exceptional Conditions");
-  assert.equal(vulnerability.owaspConfidence, "high");
+  assert.equal(vulnerability.owaspProvenance, "official");
   assert.ok(vulnerability.owaspMappedAt instanceof Date);
 });
 
@@ -792,7 +766,7 @@ test("buildRunInstruction frames the run with a marker, boundary and case detail
   assert.ok(single.includes(`- Tools: ${testCase.tools.join(", ")}`));
   assert.ok(single.includes("without waiting for confirmation"));
   assert.ok(
-    single.includes("reviewed automatically as part of this scan"),
+    single.includes("never stall waiting for approval"),
     "an unattended scan is never told to stop and ask",
   );
 
@@ -801,7 +775,7 @@ test("buildRunInstruction frames the run with a marker, boundary and case detail
     policy: "supervised",
   });
   assert.ok(supervised.includes("request it and continue once approved"));
-  assert.ok(!supervised.includes("reviewed automatically"));
+  assert.ok(!supervised.includes("never stall waiting for approval"));
 
   const plan2 = createTestPlan({ target: "https://app.example.com", testIds: ["WSTG-INFO-02", "WSTG-INFO-03"] }).plan;
   const cases = ["WSTG-INFO-02", "WSTG-INFO-03"].map((id) => findPlanCase(plan2, id)!);

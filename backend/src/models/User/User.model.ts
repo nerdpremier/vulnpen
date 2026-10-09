@@ -12,7 +12,18 @@ export interface ModelPresetDoc {
   isOrchestrator?: boolean;
 }
 
-export type ToolExecutionMode = "auto" | "auto_approve" | "requires_consent";
+/**
+ * How the agent acts. Two modes only:
+ *   - `auto`: tools run; an action that crosses the deterministic approval
+ *     boundary asks. A destructive action against the target is never a
+ *     question — it is refused outright.
+ *   - `requires_consent`: every tool action asks.
+ *
+ * An `auto_approve` mode used to sit between them and sent boundary-crossing
+ * actions to an AI reviewer instead of the operator. It was removed: see
+ * migration 005, which moves any stored value to `auto`.
+ */
+export type ToolExecutionMode = "auto" | "requires_consent";
 
 export function resolveToolExecutionMode(configs?: {
   toolExecutionMode?: ToolExecutionMode;
@@ -134,7 +145,10 @@ const UserSchema = new Schema({
     },
     toolExecutionMode: {
       type: String,
-      enum: ["auto", "auto_approve", "requires_consent"],
+      // Keep in step with ToolExecutionMode. `auto_approve` is gone — a stored
+      // value of it is rewritten by migration 005, and this enum must not
+      // accept it or a stale record would fail every later save.
+      enum: ["auto", "requires_consent"],
     },
     disableSafetyProtections: {
       type: Boolean,

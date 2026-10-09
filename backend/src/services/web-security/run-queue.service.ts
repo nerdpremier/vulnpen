@@ -15,8 +15,9 @@
  *
  * The agent's own safety gates are untouched: a queued scan goes through the
  * same system prompt, boundary checks and consent rules as a chat message. An
- * `unattended` scan only swaps the *human* for the existing Approve-for-me
- * reviewer, exactly the way the user's own "auto_approve" mode does.
+ * `unattended` scan runs in `auto` so nothing waits on an operator who is not
+ * there — but nothing is approved on the agent's behalf either, so a boundary
+ * action still stops the scan rather than being waved through.
  */
 
 import { randomUUID } from "node:crypto";
@@ -273,11 +274,13 @@ async function startRun(
       // Runs live in their own transcript channel: the model sees the history,
       // the chat page's feed does not — the run is watched on the scan page.
       channel: "run",
-      // Unattended scans hand approval-boundary actions to the same reviewer
-      // the user's "Approve for me" mode uses; supervised scans leave the
-      // setting alone so their own mode decides (and may park for a human).
-      toolExecutionMode:
-        runPolicy(run) === "unattended" ? "auto_approve" : undefined,
+      // Unattended scans must not park: there is no operator watching, and a
+      // consent request would sit there until recovery resets it. They run in
+      // "auto", where a boundary-crossing action would normally ask — the
+      // run instruction tells the agent to record the refusal against the case
+      // and move on instead of stopping. Supervised scans leave the setting
+      // alone so the user's own mode decides.
+      toolExecutionMode: runPolicy(run) === "unattended" ? "auto" : undefined,
     });
 
     await finishRun(sessionId, state, run.runId, abortCtrl, runError);
@@ -344,7 +347,15 @@ async function settleRun(
 
   try {
     await mutateRun(sessionId, runId, (run) => {
-      if (run.status !== "running") return; // already stopped/cancelled explicitly
+      // Only a run that already reached a terminal state is left alone. A run
+      // still "queued" must be settled too: startRun validates the plan/cases
+      // *before* it marks the record "running", so a run whose case was removed
+      // while it sat in the queue throws, and a guard on "running" would leave
+      // it queued forever — pump only ever reconciles records that are
+      // "running", and a restart re-arms the same failure.
+      if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
+        return;
+      }
       run.status = settled;
       run.finishedAt = new Date();
       run.durationMs = run.startedAt
@@ -571,8 +582,10 @@ export async function parkedRunContext(
   return {
     runId: run.runId,
     channel: "run",
-    toolExecutionMode:
-      runPolicy(run) === "unattended" ? "auto_approve" : undefined,
+    // Same rule as at launch: an unattended run must not park for a human who
+    // is not there, so it runs in "auto" and the boundary (not a person, and
+    // not a reviewer) decides what stops.
+    toolExecutionMode: runPolicy(run) === "unattended" ? "auto" : undefined,
   };
 }
 

@@ -1,5 +1,5 @@
 import { App, Dropdown, Tooltip } from "antd";
-import { FiZap, FiCheckCircle, FiAlertOctagon } from "react-icons/fi";
+import { FiZap, FiAlertOctagon } from "react-icons/fi";
 import { MdOutlineFrontHand } from "react-icons/md";
 import { RiArrowDownSLine, RiCheckLine } from "react-icons/ri";
 import { useMutation, useQuery, useQueryClient } from "react-query";
@@ -11,14 +11,8 @@ const EXECUTION_MODES = [
   {
     value: "auto",
     label: "Auto run",
-    description: "Run automatically; destructive actions still ask.",
+    description: "Run automatically; actions the system flags still ask.",
     icon: FiZap,
-  },
-  {
-    value: "auto_approve",
-    label: "Approve for me",
-    description: "A reviewer approves boundary-crossing actions.",
-    icon: FiCheckCircle,
   },
   {
     value: "requires_consent",

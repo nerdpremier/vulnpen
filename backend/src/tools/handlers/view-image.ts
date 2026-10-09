@@ -1,7 +1,16 @@
 import { ToolDefinition } from "../types";
 import { invoke_llm } from "../../utils/llm/invoke";
+import { shellSafetyDetail } from "../../utils/consentDetail";
 
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/**
+ * The path is interpolated into a shell command, so it is restricted to the
+ * characters a real path needs. Without this, a path containing `"`, a backtick
+ * or `$( )` ran whatever the agent wrote — and because this tool had no safety
+ * hook, that shell ran *around* the boundary `run_bash` enforces.
+ */
+const SAFE_PATH_RE = /^[A-Za-z0-9._~/ +-]+$/;
 
 const MIME_MAP: Record<string, string> = {
   png: "image/png",
@@ -38,19 +47,29 @@ const viewImage: ToolDefinition = {
   },
   timeoutMs: 120_000,
 
+  describeSafety(args, ctx) {
+    // Reading a file is not itself a boundary, but the tool runs shell on the
+    // work host: check it the same way run_bash is checked so this is not a
+    // second, unguarded way to reach a host or a command the product refuses.
+    return shellSafetyDetail(`stat "${args.image_path ?? ""}"`, ctx);
+  },
+
   async execute(args, ctx) {
     const { image_path, question } = args;
     if (!image_path) {
       return { output: "Error: image_path is required", exitCode: 1 };
     }
-
-    const rawPath =
-      image_path.startsWith("/") || image_path.startsWith("~")
-        ? image_path
-        : image_path;
+    if (!SAFE_PATH_RE.test(image_path)) {
+      return {
+        output:
+          "Error: image_path contains characters that are not valid in a file path. " +
+          "Use a plain path (letters, digits, . _ - / ~ and spaces only).",
+        exitCode: 1,
+      };
+    }
 
     // Replace leading ~ with $HOME so shell expansion works inside double quotes
-    const resolvedPath = rawPath.replace(/^~(?=\/|$)/, "$HOME");
+    const resolvedPath = image_path.replace(/^~(?=\/|$)/, "$HOME");
 
     const { output: sizeOut, exitCode: sizeExit } = await ctx.runCommand(
       `stat -c %s "${resolvedPath}" 2>/dev/null || stat -f %z "${resolvedPath}" 2>/dev/null`,

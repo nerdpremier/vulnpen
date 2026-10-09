@@ -561,6 +561,39 @@ export function caseUpdateError(
   return undefined;
 }
 
+/**
+ * A case that still has findings linked to it cannot simply be dropped: the
+ * finding keeps its wstgId, so the report's coverage table (which lists the
+ * plan's cases) and its findings (which name a case) would disagree with no
+ * way to tell which is right. Symmetric with caseUpdateError — refuse the
+ * change rather than create an untraceable state.
+ */
+export function caseRemovalError(
+  plan: WebAppTestPlanDoc,
+  testIds: unknown[],
+): string | undefined {
+  const wanted = new Set(
+    (Array.isArray(testIds) ? testIds : [])
+      .filter((testId): testId is string => typeof testId === "string" && !!testId.trim())
+      .map((testId) => testId.trim().toUpperCase()),
+  );
+  if (!wanted.size) return undefined;
+
+  const linked = plan.cases.filter(
+    (testCase) =>
+      wanted.has(testCase.testId.toUpperCase()) && testCase.linkedVulnerabilityIds?.length,
+  );
+  if (!linked.length) return undefined;
+
+  return (
+    `Refused: ${linked
+      .map((testCase) => `${testCase.testId} (${testCase.linkedVulnerabilityIds!.length} finding(s))`)
+      .join(", ")} still have findings linked. Removing the case would leave those findings ` +
+    `pointing at a test case the plan no longer holds. Remove the finding first with ` +
+    `update_engagement_state action "remove_finding", or keep the case.`
+  );
+}
+
 /** Look a plan case up by test id, tolerating case differences ("wstg-inpv-05"). */
 export function findPlanCase(
   plan: WebAppTestPlanDoc,
@@ -748,9 +781,11 @@ export function normalizePlanGenerateInput(
  * records who asked for what; the `[WSTG run <runId>]` marker lets the UI
  * slice the transcript into per-run activity feeds.
  *
- * The scan's policy decides the approval paragraph: an unattended scan is
- * reviewed by the Approve-for-me reviewer, so the agent must not stop and wait
- * for a human; a supervised one is told to ask, because someone is watching.
+ * The scan's policy decides the approval paragraph. A supervised run is told to
+ * request approval and carry on once it is granted, because someone is
+ * watching. An unattended run has no one watching, so it is told not to stall:
+ * if a tool would need approval, record why against the case and move on. The
+ * boundary still holds either way — nothing is approved on the agent's behalf.
  */
 export function buildRunInstruction(
   runId: string,
@@ -783,7 +818,7 @@ export function buildRunInstruction(
     "",
     options?.policy === "supervised"
       ? "If a tool needs approval (consent), request it and continue once approved."
-      : "Approval-boundary actions are reviewed automatically as part of this scan: do not stop to ask. If an action is refused, record why against the case and continue with the next one.",
+      : "Nobody is watching this scan, so never stall waiting for approval: if a tool would need approval, record why against the case and continue with the next one. If an action is refused outright, record the refusal and move on too.",
     "",
     "Cases:",
   );

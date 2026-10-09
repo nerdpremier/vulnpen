@@ -8,10 +8,10 @@
 This document records the complete results of a full WSTG v4.2 benchmark run against
 OWASP Juice Shop, intended as the primary evidence set for the project paper.
 
-> **Historical record.** This run predates the risk-matrix rework: findings were
-> rated with a CVSS score and a "critical" severity level, both of which have since
-> been removed from the platform (severity is now derived from the likelihood x
-> impact risk matrix). The numbers below are kept as recorded on the run date.
+> **Historical record.** This run predates the CVSS v4.0 addition: findings are
+> still rated with CVSS (v3.0 base, with v2.0 and v4.0 derived from the same
+> metrics) and severity is derived from the CVSS score, which is the current
+> behaviour. The numbers below are kept as recorded on the run date.
 
 ---
 

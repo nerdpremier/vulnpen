@@ -11,9 +11,9 @@ test("legacy consent remains effective before the migration runs", () => {
   assert.equal(
     resolveToolExecutionMode({
       requireConsentForAllTools: true,
-      toolExecutionMode: "auto_approve",
+      toolExecutionMode: "requires_consent",
     }),
-    "auto_approve",
+    "requires_consent",
   );
   assert.equal(resolveToolExecutionMode({}), "auto");
 });

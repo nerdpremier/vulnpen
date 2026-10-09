@@ -25,7 +25,6 @@ import {
   computeOwaspCoverage,
   getOwaspCategory,
   getWstgTest,
-  normalizeOwaspTop10Id,
 } from "../../knowledge";
 import type { OwaspTop10Id } from "../../knowledge";
 import type {
@@ -87,12 +86,10 @@ export interface ReportFindingsRow {
   endpoint?: string;
   wstgId?: string;
   owaspTop10?: OwaspTop10Id;
-  owaspConfidence?: string;
   exploited: boolean;
   cwe?: string;
   mappingRationale: string;
-  relatedOwasp: OwaspTop10Id[];
-  /** official | curated | tester | model */
+  /** Always "official": the classification is a published-list lookup. */
   owaspProvenance?: string;
   /** CVSS v3.0 base score the system computed from the eight rated metrics. */
   cvss?: { score: number; vector: string };
@@ -170,26 +167,16 @@ function findingSort(a: SessionVulnerabilityDoc, b: SessionVulnerabilityDoc): nu
 
 /**
  * Findings arrive from several sources (agent tool calls and historical
- * backfills) so the classification is recomputed here whenever the stored one
- * is missing or invalid, and is never overwritten when the tester set it.
+ * backfills), so the classification is recomputed here from the finding's CWE
+ * every time. The recomputation is a pure lookup in the published lists, so it
+ * can never disagree with what was stored.
  */
 export function buildReportFindings(
   vulnerabilities: SessionVulnerabilityDoc[],
 ): ReportFindingsRow[] {
   return [...vulnerabilities].sort(findingSort).map((vulnerability, index) => {
     const wstg = vulnerability.wstgId ? getWstgTest(vulnerability.wstgId) : undefined;
-    const stored = normalizeOwaspTop10Id(vulnerability.owaspTop10);
-    const mapping = mapFindingToOwaspTop10({
-      title: vulnerability.title,
-      description: vulnerability.description,
-      contextSummary: vulnerability.contextSummary,
-      evidence: vulnerability.evidence,
-      endpoint: vulnerability.endpoint,
-      service: vulnerability.service,
-      cwe: vulnerability.cwe,
-      wstgId: vulnerability.wstgId,
-      owaspTop10: stored,
-    });
+    const mapping = mapFindingToOwaspTop10({ cwe: vulnerability.cwe });
 
     return {
       id: vulnerability.vulnerabilityId,
@@ -200,12 +187,10 @@ export function buildReportFindings(
       endpoint: vulnerability.endpoint,
       wstgId: wstg?.id ?? vulnerability.wstgId,
       owaspTop10: mapping.primary,
-      owaspConfidence: stored ? "high" : mapping.confidence,
       exploited: !!vulnerability.exploited,
       cwe: normalizeCwe(vulnerability.cwe) || undefined,
-      mappingRationale: vulnerability.owaspRationale || mapping.rationale,
-      relatedOwasp: mapping.related,
-      owaspProvenance: vulnerability.owaspProvenance || mapping.provenance,
+      mappingRationale: mapping.rationale,
+      owaspProvenance: mapping.provenance,
       cvss: vulnerability.cvss
         ? { score: vulnerability.cvss.score, vector: vulnerability.cvss.vector }
         : undefined,
@@ -345,7 +330,7 @@ function executiveSummarySection(options: ReportOptions, findings: ReportFinding
 
   if (stats.unmapped > 0) {
     lines.push(
-      `> ${stats.unmapped} finding(s) could not be mapped to the OWASP Top 10:2025 automatically. They are marked "Unmapped" and need a manual classification before delivery.`,
+      `> ${stats.unmapped} finding(s) carry no CWE, or a CWE that no OWASP Top 10:2025 category lists, so they are reported "Unmapped". Record the weakness id on the finding and the category follows from the official lists.`,
     );
     lines.push("");
   }
@@ -380,7 +365,7 @@ function scopeAndMethodologySection(options: ReportOptions, findings: ReportFind
     "",
     `Testing followed the OWASP Web Security Testing Guide (WSTG) v${WSTG_VERSION} (${WSTG_SOURCE}). Each planned test case carries its WSTG identifier, objective, method and the evidence expected from it; results are tracked per case with the statuses passed, failed, blocked, in progress, skipped and not started.`,
     "",
-    "Findings were mapped to the OWASP Top 10:2025 (https://owasp.org/Top10/2025/) using the following precedence: an explicit tester classification; then this project's curated WSTG-to-Top-10 crosswalk (a mapping maintained here, NOT an OWASP publication); then the CWE identifiers OWASP publishes for each category (an official signal); then an LLM classifier that must state its rationale. Every mapping keeps its source (official, curated, tester or model) and confidence level for audit, and the source is shown on each finding.",
+    "Findings were mapped to the OWASP Top 10:2025 (https://owasp.org/Top10/2025/) from the weakness each finding records: the finding's CWE identifier is looked up in the CWE list OWASP publishes for each category, and the single matching category is used. A finding whose CWE is not in those published lists, or that records no CWE, is reported as Unmapped rather than forced into a category. The mapping is deterministic and uses no heuristics, no hand-maintained crosswalk and no model; each finding states the CWE it was mapped from.",
     "",
   );
 
@@ -493,7 +478,7 @@ function detailedFindingsSection(
       `| CVSS vector | ${finding.cvss ? tableCell(finding.cvss.vector) : "Not rated — all eight base metrics must be recorded"} |`,
     );
     if (vulnerability?.cve) lines.push(`| CVE | ${tableCell(vulnerability.cve)} |`);
-    lines.push(`| OWASP Top 10:2025 | ${owaspTitle(finding.owaspTop10)}${finding.relatedOwasp.length ? ` (also related: ${finding.relatedOwasp.join(", ")})` : ""} |`);
+    lines.push(`| OWASP Top 10:2025 | ${owaspTitle(finding.owaspTop10)} |`);
     lines.push(`| Classification basis | ${tableCell(finding.mappingRationale)} |`);
     lines.push(
       `| WSTG v${WSTG_VERSION} reference | ${wstg ? `${wstg.id} (${wstg.section}) ${wstg.title}` : finding.wstgId ?? "No WSTG test case linked — link the finding to the case that produced it"} |`,
@@ -541,12 +526,8 @@ function detailedFindingsSection(
     }
     if (finding.owaspProvenance) {
       references.push(
-        `- OWASP mapping provenance: ${finding.owaspProvenance}` +
-          (finding.owaspProvenance === "curated"
-            ? " (this project's WSTG-to-Top-10 crosswalk; OWASP publishes no such mapping)"
-            : finding.owaspProvenance === "official"
-              ? " (the CWE list OWASP publishes for this category)"
-              : ""),
+        "- OWASP mapping provenance: official (the CWE list OWASP publishes for this category, " +
+          "https://owasp.org/Top10/2025/)",
       );
     }
     if (references.length) lines.push("**References**", "", ...references, "");
@@ -624,7 +605,7 @@ function owaspMappingSection(stats: ReportStats): string[] {
   const lines: string[] = [
     "## 8. OWASP Top 10:2025 mapping",
     "",
-    'The OWASP Top 10:2025 mapping is recorded on the findings themselves (section 6) and counted per category in section 4.2. A finding is only classified when the evidence supports a category; findings with no well-fitting category are listed as "Unmapped" rather than forced into one. Categories with no findings are omitted here.',
+    "The OWASP Top 10:2025 mapping is recorded on the findings themselves (section 6) and counted per category in section 4.2. Every classification is a lookup of the finding's CWE in the CWE lists OWASP publishes for the 2025 categories — nothing is inferred and no model is involved. A finding whose CWE is missing or is not in any published list is reported \"Unmapped\" rather than forced into a category. Categories with no findings are omitted here.",
     "",
   ];
 

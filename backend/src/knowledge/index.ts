@@ -9,10 +9,17 @@
 import {
   OWASP_TOP10_2025,
   OWASP_TOP10_2025_CWE_SOURCE,
+  OWASP_TOP10_2025_CWE_TOTAL,
   OWASP_TOP10_2025_CWES_RETRIEVED,
   OWASP_TOP10_2025_SOURCE,
   OWASP_TOP10_2025_VERSION,
 } from "./owasp-top10-2025";
+import {
+  allMappedCwes,
+  isMappedCwe,
+  normalizeCwe,
+  owaspCategoriesForCwe,
+} from "./owasp-cwe-index";
 import type {
   OwaspTop10Category,
   OwaspTop10Id,
@@ -37,6 +44,7 @@ import {
 export {
   OWASP_TOP10_2025,
   OWASP_TOP10_2025_CWE_SOURCE,
+  OWASP_TOP10_2025_CWE_TOTAL,
   OWASP_TOP10_2025_CWES_RETRIEVED,
   OWASP_TOP10_2025_SOURCE,
   OWASP_TOP10_2025_VERSION,
@@ -45,6 +53,7 @@ export {
   WSTG_TESTS,
   WSTG_VERSION,
 };
+export { allMappedCwes, isMappedCwe, normalizeCwe, owaspCategoriesForCwe };
 export {
   computeCvssBase,
   cvssBaseScore,
@@ -147,12 +156,6 @@ export function normalizeOwaspTop10Id(value: unknown): OwaspTop10Id | undefined 
 export function getOwaspCategory(value: unknown): OwaspTop10Category | undefined {
   const id = normalizeOwaspTop10Id(value);
   return id ? OWASP_TOP10_2025.find((category) => category.id === id) : undefined;
-}
-
-export function findWstgTestsForOwasp(value: unknown): WstgTest[] {
-  const id = normalizeOwaspTop10Id(value);
-  if (!id) return [];
-  return WSTG_TESTS.filter((test) => test.owasp.includes(id));
 }
 
 export function allWstgTestIds(): string[] {

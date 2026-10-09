@@ -19,6 +19,7 @@ import {
   addTestCase,
   updateTestCase,
   caseUpdateError,
+  caseRemovalError,
   blockedCaseError,
   findDuplicateCases,
   removeCases,
@@ -269,6 +270,8 @@ const wstgTestPlan: ToolDefinition = {
         if (!ids.length) {
           return { output: '"delete_case" requires test_ids (or a single test_id).', exitCode: 1 };
         }
+        const removalRefusal = caseRemovalError(plan, ids);
+        if (removalRefusal) return { output: removalRefusal, exitCode: 1 };
         const removed = removeCases(plan, ids);
         if (!removed) {
           return {
@@ -280,9 +283,6 @@ const wstgTestPlan: ToolDefinition = {
         return {
           output: [
             `Removed ${removed.removed.length} case(s): ${removed.removed.join(", ")}.`,
-            removed.plan.cases.some((testCase) => testCase.linkedVulnerabilityIds?.length)
-              ? "Linked findings are unaffected; remove the stale finding itself with update_engagement_state action \"remove_finding\" if it was not real."
-              : "",
             describeCoverage(removed.plan.cases),
           ].filter(Boolean).join("\n"),
           exitCode: 0,

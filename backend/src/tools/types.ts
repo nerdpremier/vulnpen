@@ -36,7 +36,11 @@ export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, any>;
-  requiresConsent?: boolean;
+  // There is no per-tool consent marker. Whether an action asks is decided by
+  // the user's execution mode and by `describeSafety`: a tool that declares a
+  // boundary verdict asks in both modes, and every action asks in
+  // "requires_consent". An always-ask flag per tool is redundant with that and
+  // was inert in "auto" anyway.
   timeoutMs?: number;
   /**
    * Whether the tool's external dependency (env settings, assigned model, API

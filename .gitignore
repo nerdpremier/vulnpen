@@ -43,4 +43,5 @@ paper-build/
 # ── Local agent/tooling state ──
 /.agents/
 /.zcode/
+/.workbuddy-ai/
 skills-lock.json

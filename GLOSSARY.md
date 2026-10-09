@@ -326,11 +326,22 @@ what the prompt actually sends.
 recording a finding against a WSTG case IS the failed result) and
 `removeSessionFinding` (unlink cases BEFORE pulling the document). The OWASP
 classification write is also owned here: `applyOwaspMapping` is the one
-`vulnerabilities.$...` positional $set (mapping stamp + wstgId→catalog title/
-category resolution, the finding's previous values as fallback). Tools, the
+`vulnerabilities.$...` positional $set (the category, its rationale, the
+mapping stamp, plus a corrected CWE when the tester fixed one). Tools, the
 mapping endpoints and the batch re-classifier call these verbs; they never
 touch the vulnerabilities array shape, re-order the chain, or build the
 array update themselves.
+
+**OWASP classification** — the one mapping from a finding to an OWASP
+Top 10:2025 category, in `services/web-security/owasp-mapping.service.ts`. It
+is a lookup of the finding's CWE in the CWE lists OWASP publishes for the ten
+2025 categories (`knowledge/owasp-cwe-index.ts`), and nothing else: those lists
+are disjoint, so the lookup is single-valued, and there is no second layer to
+fall back to. OWASP publishes no WSTG-to-Top-10 mapping, so a WSTG case never
+decides a category — it is recorded as methodology traceability only — and a
+category is never guessed by a model or picked by hand. A finding with no CWE,
+or a CWE no 2025 list contains, is reported `unmapped`, which is the signal
+that a weakness id still needs recording.
 
 **Scan (WSTG)** — one execution of a set of test-plan cases, launched from the
 web UI rather than by prompting the agent. The product vocabulary is "scan"
@@ -339,10 +350,11 @@ storage vocabulary stays "run" — a scan is a `webAppRuns` record on the sessio
 document, and the engine is
 `services/web-security/run-queue.service.ts` (`enqueueRun`, `pump`, `stopRun`,
 `deleteRun`, `parkedRunContext`). A launch carries a `policy`: `unattended`
-(the default, which passes `toolExecutionMode: "auto_approve"` into
-`initAndRun` so the existing Approve-for-me reviewer clears approval
-boundaries) or `supervised` (leave the user's own mode in charge, so the scan
-may park on consent and wait on its own page). A parked scan keeps both halves
+(the default, which passes `toolExecutionMode: "auto"` into `initAndRun` so the
+scan is not left parked for an operator who is not watching — the instruction
+tells the agent to record a refusal against the case and move on) or
+`supervised` (leave the user's own mode in charge, so the scan may park on
+consent and wait on its own page). A parked scan keeps both halves
 of that identity across the resume — `parkedRunContext` hands the consent
 continuation the scan's own channel and mode — so an unattended scan does not
 silently become supervised, and its activity never leaks into the chat feed.
