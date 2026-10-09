@@ -1,10 +1,11 @@
 /**
  * Deterministic scope gate. Extracts network targets from a command or script
  * and checks them against the engagement allowlist before anything runs.
- * The LLM reviewer (auto_approve) is a second opinion, never the boundary.
+ * This module is the boundary. Nothing downstream — no mode, no reviewer — may
+ * clear a request that crossed it.
  */
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "local"]);
+export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "local"]);
 
 const URL_RE = /\bhttps?:\/\/([a-zA-Z0-9._-]+|\[[0-9a-f:]+\])(:\d+)?(\/|\b|['"<>\s]|$)/gi;
 const IPV4_RE = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g;

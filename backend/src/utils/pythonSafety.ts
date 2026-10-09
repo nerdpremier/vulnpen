@@ -6,7 +6,7 @@ function danger(rule: string, reason: string, impact: string): DangerCheckResult
   return { dangerous: true, rule, reason, impact };
 }
 
-/** Pull double- and single-quoted string literals out of Python source. */
+/** Pull double-, single- and triple-quoted string literals out of Python source. */
 function extractLiterals(source: string): string[] {
   const literals: string[] = [];
   const re = /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')/g;
@@ -17,6 +17,35 @@ function extractLiterals(source: string): string[] {
   }
   return literals;
 }
+
+/** Filesystem roots whose removal takes the attack box with them. */
+const SENSITIVE_PATHS = new Set([
+  "", "/", "~", "$HOME", "/root", "/home", "/etc", "/usr", "/var",
+  "/bin", "/boot", "/lib", "/lib64", "/sbin", "/srv", "/opt", "/sys", "/proc", "/dev",
+]);
+
+/** A literal that names a system root or something inside one. */
+function literalHitsSystemRoot(value: string): boolean {
+  const t = value.replace(/\/+$/, "");
+  if (SENSITIVE_PATHS.has(t)) return true;
+  return [...SENSITIVE_PATHS].some((root) => root.length > 1 && t.startsWith(root + "/"));
+}
+
+/**
+ * Calls that hand a command list to the OS. The list form is the one the shell
+ * rules cannot see: `subprocess.run(["rm", "-rf", "/"])` carries the command
+ * across three separate literals, so the items are rejoined into one line and
+ * checked as a shell command.
+ */
+const COMMAND_LIST_CALL_RE =
+  /\b(?:subprocess\.(?:run|call|check_call|check_output|Popen)|os\.(?:system|popen|execv|execve|execvp|execvpe|spawnv|spawnve|spawnvp|spawnvpe|posix_spawn|posix_spawnp))\s*\(\s*\[([^\]]*)\]/g;
+
+/** Filesystem primitives that remove, truncate or overwrite a path. */
+const DESTRUCTIVE_FS_CALL_RE =
+  /\b(?:os\.(?:remove|unlink|rmdir|removedirs|truncate)|shutil\.rmtree|shutil\.move|pathlib\.Path\s*\([^)]*\)\.unlink)\s*\(([^)]*)\)/g;
+
+/** open(path, "w") — a mode that replaces the file's contents. */
+const OPEN_FOR_WRITE_RE = /\bopen\s*\(\s*([^,)]+)\s*,\s*["'][wax]b?["']/g;
 
 /**
  * Static safety gate for agent-supplied Python scripts. The script runs with
@@ -38,6 +67,20 @@ export function isDangerousPythonScript(source: string): DangerCheckResult {
     }
   }
 
+  // Command lists: ["rm", "-rf", "/"] is the same command as `rm -rf /`.
+  for (const match of source.matchAll(COMMAND_LIST_CALL_RE)) {
+    const joined = extractLiterals(match[1]).join(" ");
+    if (!joined) continue;
+    const shellResult = isDangerousShellInput(joined);
+    if (shellResult.dangerous) {
+      return danger(
+        `python:${shellResult.rule}`,
+        `สคริปต์ Python รันคำสั่งที่อันตรายผ่านรายการอาร์กิวเมนต์ (${shellResult.reason})`,
+        shellResult.impact,
+      );
+    }
+  }
+
   if (/while\s+True\s*:/.test(source) && /\bos\.fork\s*\(/.test(source)) {
     return danger(
       "python:fork-loop",
@@ -46,18 +89,23 @@ export function isDangerousPythonScript(source: string): DangerCheckResult {
     );
   }
 
-  const rmtreeTargets = [...source.matchAll(/shutil\.rmtree\s*\(\s*(f?["']([^"']*)["'])/g)].map((m) => m[2]);
-  for (const target of rmtreeTargets) {
-    const t = target.replace(/\/+$/, "");
-    if (
-      t === "" ||
-      t === "/" ||
-      ["~", "$HOME", "/root", "/home", "/etc", "/usr", "/var", "/bin", "/boot", "/lib", "/sbin", "/srv", "/opt"].includes(t)
-    ) {
+  // Removal, truncation and overwrite of a system path.
+  for (const match of source.matchAll(DESTRUCTIVE_FS_CALL_RE)) {
+    if (extractLiterals(match[1]).some(literalHitsSystemRoot)) {
       return danger(
-        "python:rmtree",
-        "สคริปต์ลบโฟลเดอร์ระบบแบบวนซ้ำ (shutil.rmtree)",
-        "ไฟล์ระบบถูกลบถาวรโดยไม่ถามยืนยัน",
+        "python:remove-system-path",
+        "สคริปต์ลบ ตัดทอน หรือเขียนทับพาธระบบ",
+        "ไฟล์ระบบถูกลบหรือเขียนทับถาวรโดยไม่ถามยืนยัน",
+      );
+    }
+  }
+
+  for (const match of source.matchAll(OPEN_FOR_WRITE_RE)) {
+    if (extractLiterals(match[1]).some(literalHitsSystemRoot)) {
+      return danger(
+        "python:overwrite-system-file",
+        "สคริปต์เปิดไฟล์ระบบเพื่อเขียนทับ",
+        "ไฟล์ระบบถูกเขียนทับถาวร เครื่องทดสอบอาจใช้งานไม่ได้",
       );
     }
   }

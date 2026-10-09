@@ -10,9 +10,9 @@ import { DangerCheckResult } from "./commandSafety";
  * data. commandSafety.ts guards the attack box; this module guards the target.
  *
  * A match never executes silently. It is surfaced to the operator as a
- * `destructive_target` consent request, and the Approve-for-me reviewer rejects
- * it unless the engagement itself carries explicit authorisation for
- * destructive testing.
+ * `destructive_target` verdict, which no mode may turn into a question: the
+ * engagement is proof-of-concept, so destructive testing against the client's
+ * live data is not carried out whatever the operator or their settings say.
  */
 
 const SAFE_RESULT: DangerCheckResult = { dangerous: false, rule: "", reason: "", impact: "" };
@@ -30,15 +30,15 @@ const IMPACT_REMOTE_CONTROL =
 
 /** HTTP DELETE issued by a command-line client or a Python HTTP library. */
 const HTTP_DELETE_VERB_RE =
-  /(?:^|[\s'"=])(?:-X|--request|--method)[=\s]*['"]?DELETE\b|(?:^|\s)http(?:ie)?\s+DELETE\b|\.delete\s*\(|["']method["']\s*[:=]\s*["']DELETE["']/i;
+  /(?:^|[\s'"=])(?:-X|--request|--method)[=\s]*['"]?DELETE\b|(?:^|[\s'"])http(?:ie)?\s+DELETE\b|\.delete\s*\(|\.request\s*\(\s*["']DELETE\b|["']?method["']?\s*[:=]\s*["']?DELETE\b/i;
 
 /** Any HTTP write verb, used together with the delete-endpoint rule. */
 const HTTP_WRITE_VERB_RE =
-  /(?:^|[\s'"=])(?:-X|--request|--method)[=\s]*['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|\s)http(?:ie)?\s+(?:POST|PUT|PATCH|DELETE)\b|\.(?:post|put|patch|delete)\s*\(|["']method["']\s*[:=]\s*["'](?:POST|PUT|PATCH|DELETE)["']/i;
+  /(?:^|[\s'"=])(?:-X|--request|--method)[=\s]*['"]?(?:POST|PUT|PATCH|DELETE)\b|(?:^|[\s'"])http(?:ie)?\s+(?:POST|PUT|PATCH|DELETE)\b|\.(?:post|put|patch|delete)\s*\(|\.request\s*\(\s*["'](?:POST|PUT|PATCH|DELETE)\b|["']?method["']?\s*[:=]\s*["']?(?:POST|PUT|PATCH|DELETE)\b/i;
 
 /** Verbs that replace an existing resource rather than create a new one. */
 const HTTP_OVERWRITE_VERB_RE =
-  /(?:^|[\s'"=])(?:-X|--request|--method)[=\s]*['"]?(?:PUT|PATCH)\b|(?:^|\s)http(?:ie)?\s+(?:PUT|PATCH)\b|\.(?:put|patch)\s*\(|["']method["']\s*[:=]\s*["'](?:PUT|PATCH)["']/i;
+  /(?:^|[\s'"=])(?:-X|--request|--method)[=\s]*['"]?(?:PUT|PATCH)\b|(?:^|[\s'"])http(?:ie)?\s+(?:PUT|PATCH)\b|\.(?:put|patch)\s*\(|\.request\s*\(\s*["'](?:PUT|PATCH)\b|["']?method["']?\s*[:=]\s*["']?(?:PUT|PATCH)\b/i;
 
 /** Endpoints whose whole purpose is to remove or disable a resource. */
 const DELETE_ENDPOINT_RE =
@@ -101,7 +101,31 @@ function rawRequestLineDanger(text: string): DangerCheckResult | undefined {
       IMPACT_DATA_LOSS,
     );
   }
+  // A raw request carries no `-X PUT` for the verb rules to read, so the
+  // overwrite case has to be recognised from the request line itself.
+  if ((method === "PUT" || method === "PATCH") && RESOURCE_ID_RE.test(target)) {
+    return danger(
+      "http:raw-overwrite",
+      "คำขอ HTTP ที่จะส่งถึงเป้าหมายเขียนทับรายการที่มีอยู่แล้ว",
+      IMPACT_OVERWRITE,
+    );
+  }
   return undefined;
+}
+
+/**
+ * Undo the two shapes that hide a verb from a text rule, without changing what
+ * the action is:
+ *   - a command argument list (`["curl","-X","DELETE",url]`) is one command
+ *     spread across several literals, so the quotes around the separators go;
+ *   - SQL block comments are removed with no replacement, so `DEL/**\/ETE FROM`
+ *     reads as `DELETE FROM` instead of slipping past the statement rule.
+ */
+function normalizedForMatching(text: string): string {
+  return text
+    .replace(/"\s*,\s*"/g, " ")
+    .replace(/'\s*,\s*'/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 /**
@@ -110,8 +134,9 @@ function rawRequestLineDanger(text: string): DangerCheckResult | undefined {
  */
 export function detectDestructiveTargetAction(text: string): DangerCheckResult {
   if (!text || typeof text !== "string") return SAFE_RESULT;
+  const probe = normalizedForMatching(text);
 
-  if (METHOD_OVERRIDE_DELETE_RE.test(text)) {
+  if (METHOD_OVERRIDE_DELETE_RE.test(probe)) {
     return danger(
       "http:method-override-delete",
       "คำขอแปลงเมธอดเป็น DELETE ผ่าน method-override ไปยังเป้าหมาย",
@@ -119,10 +144,10 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
     );
   }
 
-  const rawLine = rawRequestLineDanger(text);
+  const rawLine = rawRequestLineDanger(probe);
   if (rawLine) return rawLine;
 
-  if (DESTRUCTIVE_SQL_RE.test(text)) {
+  if (DESTRUCTIVE_SQL_RE.test(probe)) {
     return danger(
       "sql:destructive",
       "มีคำสั่ง SQL ที่ลบหรือเขียนทับข้อมูลบนเป้าหมาย (DROP / TRUNCATE / DELETE FROM / UPDATE)",
@@ -130,7 +155,7 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
     );
   }
 
-  if (TOOL_TARGET_WRITE_RE.test(text)) {
+  if (TOOL_TARGET_WRITE_RE.test(probe)) {
     return danger(
       "tool:target-write",
       "ใช้ความสามารถเปิดเชลล์หรือเขียนไฟล์บนเครื่องเป้าหมาย",
@@ -138,7 +163,7 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
     );
   }
 
-  if (HTTP_DELETE_VERB_RE.test(text)) {
+  if (HTTP_DELETE_VERB_RE.test(probe)) {
     return danger(
       "http:delete-method",
       "ส่งคำขอ HTTP ด้วยเมธอด DELETE ไปยังเป้าหมาย",
@@ -146,7 +171,7 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
     );
   }
 
-  if (HTTP_WRITE_VERB_RE.test(text) && DELETE_ENDPOINT_RE.test(text)) {
+  if (HTTP_WRITE_VERB_RE.test(probe) && DELETE_ENDPOINT_RE.test(probe)) {
     return danger(
       "http:delete-endpoint",
       "เรียกปลายทางที่ทำหน้าที่ลบหรือปิดการใช้งานข้อมูลบนเป้าหมาย",
@@ -154,7 +179,7 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
     );
   }
 
-  if (HTTP_OVERWRITE_VERB_RE.test(text) && RESOURCE_ID_RE.test(text)) {
+  if (HTTP_OVERWRITE_VERB_RE.test(probe) && RESOURCE_ID_RE.test(probe)) {
     return danger(
       "http:overwrite",
       "เขียนทับข้อมูลเดิมบนเป้าหมายด้วย PUT/PATCH ไปยังรายการที่มีอยู่แล้ว",
