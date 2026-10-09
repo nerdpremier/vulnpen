@@ -3,7 +3,7 @@ import remarkGfm from "remark-gfm";
 import styles from "@/styles/components/Chat.module.scss";
 
 /**
- * The result card for a slash command (`/summarize`, `/export`, …).
+ * The result card for a slash command (`/summarize`, `/wstg`, …).
  *
  * The content is transcript-derived — the agent writes it from tool output and
  * model text, both of which contain whatever the target application returned —

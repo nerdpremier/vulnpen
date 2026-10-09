@@ -82,8 +82,8 @@ test("stream opens with ack + streaming result, emits chunks, and completes once
 
 test("ack announces a long-running command without terminating it", () => {
   const { writer, events, ended } = recordingWriter();
-  createSlashReply(writer, "export").ack("Generating report...");
+  createSlashReply(writer, "summarize").ack("Generating summary...");
   assert.deepEqual(events.map(([name]) => name), ["slash_command_ack"]);
-  assert.equal((events[0][1] as SseEventMap["slash_command_ack"]).message, "Generating report...");
+  assert.equal((events[0][1] as SseEventMap["slash_command_ack"]).message, "Generating summary...");
   assert.equal(ended(), false);
 });

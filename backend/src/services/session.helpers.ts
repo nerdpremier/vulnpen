@@ -105,8 +105,8 @@ export async function setEngagementBoundary(
 /**
  * Resets a session's conversation context to a fresh state: messages drop
  * except the original (non-summary) system message, and all run counters go
- * back to zero. The one place that knows the reset payload — both the /clear
- * endpoint and the /clear slash command go through it. Also marks the
+ * back to zero. The one place that knows the reset payload — the clear-context
+ * endpoint (the context indicator's button) goes through it. Also marks the
  * session cleared, so an in-flight run stops flushing its stale tail.
  */
 export async function resetSessionContext(sessionId: string): Promise<void> {

@@ -10,13 +10,10 @@ import { ModelSelector, ReasoningSelector } from "@/components/agent/ModelSelect
 
 const FALLBACK_SLASH_COMMANDS = [
   { name: "summarize", description: "Summarize the entire session so far" },
-  { name: "status", description: "Show current engagement status" },
-  { name: "clear", description: "Clear the conversation context" },
   { name: "help", description: "List all available slash commands" },
-  { name: "targets", description: "Extract and list all targets/IPs" },
-  { name: "export", description: "Export findings as a structured report" },
   { name: "shells", description: "List all shell sessions" },
   { name: "reset", description: "Reset agent state to idle" },
+  { name: "wstg", description: "Create, refresh or show the WSTG test plan" },
 ];
 
 export default function ChatInput({

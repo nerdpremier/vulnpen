@@ -36,7 +36,7 @@ VulnPen's assistant is built around web application security testing. It execute
 | Surface | What it does |
 | --- | --- |
 | Agent tools | `wstg_test_plan` (generate, list, get, update_case, coverage), `map_finding_owasp`, `generate_pentest_report` |
-| Slash commands | `/wstg [target]` (plans the full WSTG catalogue; ask the assistant to restrict categories or add custom cases), `/map`, `/report`, plus general commands (`/summarize`, `/status`, `/clear`, `/help`, `/targets`, `/export`, `/shells`, `/reset`) |
+| Slash commands | `/wstg [target]` (plans the full WSTG catalogue; ask the assistant to restrict categories or add custom cases), plus the chat-side commands with no page or tool behind them (`/summarize`, `/shells`, `/reset`, `/help`) |
 | Session UI | **WSTG Test Plan** view: one **Plan setup** dialog (target, scope, notes and the WSTG categories to cover, with a keep/add/drop preview before saving), a progress bar with the status counts as clickable filters, the cases grouped into collapsible WSTG categories (complete a category in one click), a result control per case with the method and expected evidence on expand, edit and single or selection removal, and the report draft with markdown download |
 | REST API | `GET`/`POST` `/agent/session/:id/test-plan` (`action`: `generate` for the plan setup dialog, `add_case` to complete a category), `PATCH`/`DELETE` `/agent/session/:id/test-plan/cases/:testId`, `POST /agent/session/:id/test-plan/cases/remove`, `GET /agent/session/:id/owasp-top10`, `GET /agent/session/:id/report` (add `?download=1` for markdown), `POST /agent/session/:id/vulnerabilities/:vulnId/map`, `POST /agent/session/:id/vulnerabilities/map-all` |
 
