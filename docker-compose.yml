@@ -40,7 +40,13 @@ services:
       WORKSPACE_DIR: /srv/data/workspaces
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
-      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis}"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,collabora,host.docker.internal}"
+      # Report editor (WOPI/Collabora): COLLABORA_URL is server-side discovery
+      # (container network), COLLABORA_PUBLIC_URL is the browser iframe address,
+      # WOPI_PUBLIC_BASE is how Collabora calls back into the backend.
+      COLLABORA_URL: http://collabora:9980
+      COLLABORA_PUBLIC_URL: http://localhost:9980
+      WOPI_PUBLIC_BASE: http://host.docker.internal:8080/api/wopi/files
     extra_hosts:
       - "host.docker.internal:host-gateway"
     cap_add:
@@ -59,6 +65,8 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_healthy
+      collabora:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
@@ -68,11 +76,26 @@ services:
       start_period: 10s
 
 
-  juice-shop:
-    container_name: vulnpen-juice-shop
-    image: bkimminich/juice-shop:latest
+  # LibreOffice in the browser — the report is opened/edited here like Word.
+  # COLLABORA_URL (server-side) / COLLABORA_PUBLIC_URL (browser iframe) /
+  # WOPI_PUBLIC_BASE (WOPI callback) are set on the backend service above.
+  collabora:
+    container_name: vulnpen-collabora
+    image: collabora/code:latest
+    environment:
+      - aliasgroup1=http://host.docker.internal:8080.*
+      - aliasgroup2=http://backend:8080.*
+      - username=admin
+      - password=${COLLABORA_PASSWORD:-vulnpen-admin}
+      # Every report opens at a literal 100%. Collabora's smart zoom instead
+      # fits the page to the frame width, and Writer's zoom scale tops out at
+      # 170%, so on a wide window the report always opened over-zoomed at that
+      # ceiling and changed size with the window.
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:net.post_allow.host[0]=.+ --o:frame_ancestors=localhost:3000 --o:user_interface.smart_zoom=false --o:user_interface.default_zoom=100
+    cap_add:
+      - MKNOD
     ports:
-      - "127.0.0.1:4000:3000"
+      - "127.0.0.1:9980:9980"
     restart: unless-stopped
 
   frontend:

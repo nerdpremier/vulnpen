@@ -62,12 +62,18 @@ services:
       WORKSPACE_DIR: /kali-data/workspaces
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
-      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali}"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali,collabora,host.docker.internal}"
       # backend/.env carries the host-facing addresses (localhost:<published
       # port>); inside the compose network the kali service is reached by name.
       SSH_HOST: kali
       SSH_PORT: "22"
       VNC_HOST: kali
+      # Report editor (WOPI/Collabora): COLLABORA_URL is server-side discovery
+      # (container network), COLLABORA_PUBLIC_URL is the browser iframe address,
+      # WOPI_PUBLIC_BASE is how Collabora calls back into the backend.
+      COLLABORA_URL: http://collabora:9980
+      COLLABORA_PUBLIC_URL: http://localhost:9980
+      WOPI_PUBLIC_BASE: http://host.docker.internal:8080/api/wopi/files
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -94,16 +100,6 @@ services:
       retries: 24
       start_period: 10s
 
-  juice-shop:
-    container_name: vulnpen-juice-shop
-    build:
-      context: ../juice-shop
-      dockerfile: ../ProjectZ/juice-shop-local.Dockerfile
-    image: projectz-juice-shop-local:20.2.0
-    ports:
-      - "127.0.0.1:4000:3000"
-    restart: unless-stopped
-
   # LibreOffice in the browser — the report is opened/edited here like Word.
   # The backend (host dev mode) is reachable via host.docker.internal; point
   # COLLABORA_URL / WOPI_PUBLIC_BASE on the backend elsewhere to change that.
@@ -123,6 +119,26 @@ services:
       - MKNOD
     ports:
       - "127.0.0.1:9980:9980"
+    restart: unless-stopped
+
+  # The Next.js UI, built into the stack so the whole app runs from Docker.
+  # NEXT_PUBLIC_BACKEND_URI is inlined into the client bundle and used by the
+  # browser, so it points at the host-published backend port, not the service
+  # name — the same address the host dev server used.
+  frontend:
+    container_name: vulnpen-frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI:-http://localhost:8080}
+        NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-LOCAL}
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

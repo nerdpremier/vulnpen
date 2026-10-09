@@ -13,6 +13,7 @@ import {
   isAnthropicApiProvider,
 } from "./provider-config";
 import { resolveInvocationProvider } from "./orchestrator";
+import { toolCallArguments } from "../toolArguments";
 import type {
   FinishReason,
   InvokeOptions,
@@ -77,7 +78,9 @@ function extractToolCalls(
   return message.tool_calls.map((tc) => ({
     id: tc.id,
     name: tc.function.name,
-    arguments: tc.function.arguments,
+    // Some providers omit `arguments` entirely for a no-argument call; an
+    // empty string would fail the session schema's required path.
+    arguments: toolCallArguments(tc.function.arguments),
   }));
 }
 

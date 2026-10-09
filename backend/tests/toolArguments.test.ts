@@ -1,6 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseToolArguments } from "../src/utils/toolArguments";
+import { parseToolArguments, toolCallArguments } from "../src/utils/toolArguments";
+
+test("a no-argument tool call becomes {} rather than an empty string", () => {
+  // "" is what the collector used to produce for a call with no argument
+  // chunks, and Mongoose reads it as a *missing* required value — which made
+  // every later save of that session throw "Session validation failed".
+  assert.equal(toolCallArguments(""), "{}");
+  assert.equal(toolCallArguments("   "), "{}");
+  assert.equal(toolCallArguments(undefined), "{}");
+  assert.equal(toolCallArguments(null), "{}");
+  // Real arguments pass through untouched, including an explicit empty object.
+  assert.equal(toolCallArguments("{}"), "{}");
+  assert.equal(toolCallArguments('{"command":"ls"}'), '{"command":"ls"}');
+  // And the result is always parseable, which the empty string never was.
+  assert.deepEqual(parseToolArguments(toolCallArguments("")).args, {});
+});
 
 test("parses valid tool argument objects without changing them", () => {
   const result = parseToolArguments('{"action":"add_key_discovery","data":{"value":"10.4.0.0/16"}}');

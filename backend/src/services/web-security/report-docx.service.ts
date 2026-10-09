@@ -511,8 +511,54 @@ export function findSoffice(): string | null {
   return process.platform === "win32" ? null : "soffice";
 }
 
-/** Convert the stored .docx to PDF with headless LibreOffice. */
+/**
+ * Convert the stored .docx to PDF. Prefers Collabora's /cool/convert-to
+ * endpoint (always present wherever the report editor runs); falls back to a
+ * local headless LibreOffice for host-run backends without Collabora.
+ */
 export async function convertReportToPdf(docxPath: string): Promise<Buffer> {
+  const collabora = (process.env.COLLABORA_URL || "").replace(/\/$/, "");
+  if (collabora) {
+    try {
+      return await convertViaCollabora(collabora, docxPath);
+    } catch (err) {
+      console.warn(
+        `[report] Collabora PDF conversion failed (${(err as Error)?.message}), falling back to soffice`,
+      );
+    }
+  }
+  return convertViaSoffice(docxPath);
+}
+
+/** POST the .docx to Collabora's convert-to endpoint and return the PDF. */
+async function convertViaCollabora(collaboraBase: string, docxPath: string): Promise<Buffer> {
+  const buffer = fs.readFileSync(docxPath);
+  const form = new FormData();
+  form.append(
+    "data",
+    new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+    path.basename(docxPath),
+  );
+  form.append("format", "pdf");
+  const res = await fetch(`${collaboraBase}/cool/convert-to`, {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!res.ok) {
+    throw new Error(`Collabora convert-to failed with HTTP ${res.status}`);
+  }
+  const pdf = Buffer.from(await res.arrayBuffer());
+  if (pdf.slice(0, 5).toString() !== "%PDF-") {
+    throw new Error("Collabora convert-to did not return a PDF document");
+  }
+  return pdf;
+}
+
+/** Convert with a locally installed headless LibreOffice (host dev mode). */
+async function convertViaSoffice(docxPath: string): Promise<Buffer> {
   const soffice = findSoffice();
   if (!soffice) throw new Error("LibreOffice (soffice) is not installed on the server");
 

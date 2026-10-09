@@ -7,6 +7,7 @@ import {
   VALID_REASONING,
   normalizeModelRegistryInput,
   readModelRegistry,
+  rewriteDockerHostBaseURL,
   slugify,
   writeModelRegistry,
 } from "../utils/modelRegistryStore";
@@ -48,17 +49,15 @@ export async function verifyModelPreset(model: ModelPreset): Promise<string> {
     return new Date().toISOString();
   }
 
-  if (
-    process.env.VULNPEN_DOCKER === "1" &&
-    model.baseURL &&
-    ["localhost", "127.0.0.1", "::1"].includes(new URL(model.baseURL).hostname)
-  ) {
-    throw new Error(
-      "A model running on the Docker host must use host.docker.internal instead of localhost",
-    );
-  }
-
-  const config = await presetToProviderConfig(model);
+  // A loopback base URL was already rewritten to the Docker host alias by the
+  // registry normalizer, so a preset that reached here through saveModels
+  // already points where the container can dial it. Normalizing again keeps a
+  // caller that bypasses the registry probing that same address instead of the
+  // container's own loopback.
+  const config = await presetToProviderConfig({
+    ...model,
+    baseURL: rewriteDockerHostBaseURL(model.baseURL ?? "") || undefined,
+  });
   if (!config.apiKey && config.authMethod !== "oauth" && config.provider !== "ollama") {
     throw new Error("API key is required");
   }

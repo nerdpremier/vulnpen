@@ -92,6 +92,19 @@ test("collector owns the tool-call lifecycle: start, deltas, then done in start 
   assert.equal(doneB.index, 1);
 });
 
+test("a tool call whose provider never sent arguments is stored as {}", () => {
+  // Some models emit a tool call with no argument chunks at all. Joining zero
+  // chunks produced "", which the session schema reads as a missing required
+  // value — breaking every later save of that session.
+  const collector = createStreamCollector(() => {});
+  collector.startToolCall("a", "call-a", "get_engagement_state");
+
+  const result = collector.finish();
+  assert.deepEqual(result.toolCalls, [
+    { id: "call-a", name: "get_engagement_state", arguments: "{}" },
+  ]);
+});
+
 test("collector promotes stop to tool_calls only when calls exist", () => {
   const withCalls = createStreamCollector(() => {});
   withCalls.startToolCall("a", "id", "run_bash");

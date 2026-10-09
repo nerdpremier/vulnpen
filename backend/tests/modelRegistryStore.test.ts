@@ -113,3 +113,91 @@ test("verification timestamps survive registry normalization", async () => {
   assert.equal(registry.models[0]?.verifiedAt, verifiedAt);
   assert.equal(store.readModelRegistry().models[0]?.verifiedAt, verifiedAt);
 });
+
+// ─── Loopback base URLs in Docker ────────────────────────────────────────
+// Inside a container `localhost` is the container, not the host the model
+// server runs on. The address is rewritten instead of rejected.
+
+const localPreset = {
+  id: "local",
+  label: "Local",
+  provider: "openai-compatible",
+  model: "m",
+  baseURL: "http://localhost:11434/v1",
+};
+
+function withDocker<T>(value: string | undefined, run: () => T): T {
+  const previous = process.env.VULNPEN_DOCKER;
+  if (value === undefined) delete process.env.VULNPEN_DOCKER;
+  else process.env.VULNPEN_DOCKER = value;
+  try {
+    return run();
+  } finally {
+    if (previous === undefined) delete process.env.VULNPEN_DOCKER;
+    else process.env.VULNPEN_DOCKER = previous;
+  }
+}
+
+test("a loopback base URL is rewritten to the Docker host alias", async () => {
+  const store = await loadStore();
+
+  withDocker("1", () => {
+    const registry = store.writeModelRegistry([localPreset], {}, false);
+    // Port and path survive; only the host moves.
+    assert.equal(registry.models[0]?.baseURL, "http://host.docker.internal:11434/v1");
+    // And the rewrite reaches the file, so a later load agrees.
+    assert.equal(
+      JSON.parse(fs.readFileSync(store.getModelRegistryPath(), "utf-8")).models[0].baseURL,
+      "http://host.docker.internal:11434/v1",
+    );
+  });
+});
+
+test("every loopback spelling is rewritten, and nothing else is touched", async () => {
+  const store = await loadStore();
+
+  withDocker("1", () => {
+    for (const [input, expected] of [
+      ["http://127.0.0.1:8080/v1", "http://host.docker.internal:8080/v1"],
+      ["http://[::1]:8080/v1", "http://host.docker.internal:8080/v1"],
+      ["https://localhost/v1?a=1", "https://host.docker.internal/v1?a=1"],
+      // No path: no trailing slash is invented.
+      ["http://localhost:11434", "http://host.docker.internal:11434"],
+      // Already correct, a real remote host, and a service on the compose
+      // network all stay exactly as typed.
+      ["http://host.docker.internal:20128/v1", "http://host.docker.internal:20128/v1"],
+      ["https://api.example.com/v1", "https://api.example.com/v1"],
+      ["http://ollama:11434/v1", "http://ollama:11434/v1"],
+    ] as const) {
+      const registry = store.writeModelRegistry(
+        [{ ...localPreset, baseURL: input }],
+        {},
+        false,
+      );
+      assert.equal(registry.models[0]?.baseURL, expected, `rewrite of ${input}`);
+    }
+  });
+});
+
+test("outside Docker a loopback base URL is left alone", async () => {
+  const store = await loadStore();
+
+  // A host-run backend dials the model server over the real loopback.
+  withDocker(undefined, () => {
+    const registry = store.writeModelRegistry([localPreset], {}, false);
+    assert.equal(registry.models[0]?.baseURL, "http://localhost:11434/v1");
+  });
+});
+
+test("an unparseable base URL is stored as typed for the provider to report", async () => {
+  const store = await loadStore();
+
+  withDocker("1", () => {
+    const registry = store.writeModelRegistry(
+      [{ ...localPreset, baseURL: "localhost:11434" }],
+      {},
+      false,
+    );
+    assert.equal(registry.models[0]?.baseURL, "localhost:11434");
+  });
+});

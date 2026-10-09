@@ -1,4 +1,5 @@
 import type { FinishReason, StreamDelta, ToolCallData } from "./types";
+import { toolCallArguments } from "../toolArguments";
 
 // ─── Stream collector ────────────────────────────────────────────────────
 // One owner for the state every provider stream accumulates: text and
@@ -119,7 +120,9 @@ export function createStreamCollector(
         const tc: ToolCallData = {
           id: acc.id,
           name: acc.name,
-          arguments: acc.argParts.join(""),
+          // A call whose provider never sent an argument chunk is a
+          // no-argument call: `{}`, not "". See toolCallArguments.
+          arguments: toolCallArguments(acc.argParts.join("")),
         };
         calls.push(tc);
         emit({ type: "tool_call_done", toolCall: { index: acc.index, ...tc } });

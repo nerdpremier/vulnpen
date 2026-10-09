@@ -30,6 +30,7 @@ ssh-keys/
 /.claude/
 /.codex-tmp/
 /tmp-work/
+/tmp-debug/
 /.freebuff/
 
 # ── Generated deliverables (decks, reports) ──

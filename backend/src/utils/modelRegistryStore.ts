@@ -129,6 +129,41 @@ function createId(label: string, used: Set<string>): string {
   return candidate;
 }
 
+/** The Docker host, as addressed from inside a container. */
+const DOCKER_HOST_ALIAS = "host.docker.internal";
+
+/** Hostnames that mean "this machine" — which inside a container is the
+ *  container, not the Docker host the model server runs on. */
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Point a loopback base URL at the Docker host.
+ *
+ * A model server started on the operator's machine listens on localhost, which
+ * is correct for a host-run backend and wrong for a containerised one: inside
+ * the container `localhost` is the container itself, so inference dies with
+ * ECONNREFUSED. Operators type localhost out of habit, so the stored address is
+ * rewritten rather than rejected — refusing the save left the installation with
+ * a model that could never connect and the operator with no way to tell why.
+ *
+ * Only the hostname moves; scheme, port, path and query are preserved. Anything
+ * that is not an absolute URL, or not loopback, is returned untouched.
+ */
+export function rewriteDockerHostBaseURL(
+  baseURL: string,
+  isDocker = process.env.VULNPEN_DOCKER === "1",
+): string {
+  if (!isDocker || !baseURL) return baseURL;
+  try {
+    const parsed = new URL(baseURL);
+    if (!LOOPBACK_HOSTNAMES.has(parsed.hostname)) return baseURL;
+    parsed.hostname = DOCKER_HOST_ALIAS;
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return baseURL;
+  }
+}
+
 function sanitizePreset(
   raw: Partial<ModelPreset>,
   usedIds: Set<string>,
@@ -161,7 +196,10 @@ function sanitizePreset(
     provider,
     model,
     apiKey: asString(raw.apiKey) || undefined,
-    baseURL: asString(raw.baseURL) || undefined,
+    // Every read and write of a preset passes through here, so rewriting the
+    // loopback address covers the save, the load, and the legacy env migration
+    // in one place.
+    baseURL: rewriteDockerHostBaseURL(asString(raw.baseURL)) || undefined,
     reasoningMode: normalizeReasoning(raw.reasoningMode),
     verifiedAt: asString(raw.verifiedAt) || undefined,
   };

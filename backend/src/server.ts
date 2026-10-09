@@ -24,6 +24,7 @@ import { setupShellWebSocket } from "./services/shell.socket";
 import { sessionLifecycle } from "./services/session.lifecycle";
 import { migrateSessionsToWorkspaces } from "./migrations/001-create-workspaces";
 import { migrateToolExecutionMode } from "./migrations/002-migrate-tool-execution-mode";
+import { repairEmptyToolCallArguments } from "./migrations/003-repair-empty-tool-call-arguments";
 import { startBurpCaWatcher } from "./services/burp-ca.service";
 import { setAgentStateStore } from "./services/agent-state.service";
 
@@ -242,9 +243,16 @@ const initializeApp = async () => {
     const toolModeMigration = await migrateToolExecutionMode(
       mongoose.connection.collection("users"),
     );
+    // An empty tool-call arguments string fails the session schema's required
+    // path on every save of that document, so a session that ever stored one
+    // could no longer open a turn or record a scan. Repair them at boot.
+    const toolArgsMigration = await repairEmptyToolCallArguments(
+      mongoose.connection.collection("sessions") as never,
+    );
     console.log(
       `[startup] Migrations complete: ${workspaceMigration.created} workspace(s), ` +
-      `${toolModeMigration.migrated} consent setting(s) migrated`,
+      `${toolModeMigration.migrated} consent setting(s) migrated, ` +
+      `${toolArgsMigration.repaired} session(s) with empty tool arguments repaired`,
     );
 
     const { resetStuckRunningSessions } = await import("./services/agent-state.service");

@@ -53,6 +53,21 @@ function missingJsonClosers(input: string): string | null {
   return stack.reverse().join("");
 }
 
+/**
+ * The arguments string a tool call must carry.
+ *
+ * A no-argument tool call is `{}`, never an empty string. An empty string is
+ * not merely cosmetic: Mongoose treats `""` as a *missing* value, so a tool
+ * call stored with one fails the session schema's `required` — and because a
+ * turn saves the whole session document, one such historical message made
+ * every later save throw "Session validation failed" and killed the scan. The
+ * assembly seams call this so the empty string is never produced in the first
+ * place; the migration repairs documents that already contain one.
+ */
+export function toolCallArguments(raw: string | null | undefined): string {
+  return typeof raw === "string" && raw.trim() ? raw : "{}";
+}
+
 export function parseToolArguments(rawArguments: string): ParsedToolArguments {
   if (typeof rawArguments !== "string") {
     throw new Error("tool arguments must be a JSON object encoded as a string");

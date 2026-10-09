@@ -300,7 +300,21 @@ const ToolCallSchema = new Schema(
   {
     id: { type: String, required: true },
     name: { type: String, required: true },
-    arguments: { type: String, required: true },
+    /**
+     * A no-argument call stores `{}`. The setter is the storage-boundary
+     * guarantee that an empty string never reaches the document: Mongoose
+     * reads `""` as a missing required value, and because a turn saves the
+     * entire session, one bad tool call made every later save fail with
+     * "Session validation failed" — which is how a single model response
+     * could kill a scan permanently. Documents written before the setter
+     * existed are repaired by migration 003.
+     */
+    arguments: {
+      type: String,
+      required: true,
+      set: (value: unknown) =>
+        typeof value === "string" && value.trim() ? value : "{}",
+    },
   },
   { _id: false },
 );
