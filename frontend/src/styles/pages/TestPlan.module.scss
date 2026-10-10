@@ -89,13 +89,18 @@
   }
 }
 
-/* antd link buttons (e.g. Select all / Clear in Plan setup) default to antd
-   blue — recolour them to the theme. */
-.sectionActions :global(.ant-btn-link) {
+/* The case board's Select all / Clear are antd link buttons, which default to
+   antd blue — recolour them to the theme, and keep the disabled one legible
+   rather than antd's near-black on near-black. */
+.casePickerActions :global(.ant-btn-link) {
   color: var(--moon-text-dim, #999);
 
-  &:hover {
+  &:hover:not(:disabled) {
     color: var(--moon-text, #ddd);
+  }
+
+  &:disabled {
+    color: var(--moon-text-faint, #555);
   }
 }
 
@@ -303,22 +308,6 @@
   }
 }
 
-.sectionHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-
-  h4 {
-    margin: 0;
-  }
-}
-
-.sectionActions {
-  display: flex;
-  gap: 0.25rem;
-}
-
 .categoryPicker {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
@@ -477,7 +466,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 1rem;
-  margin: 0 0 0.5rem;
+  /* The board below zeroes its own bottom margin, so the gap lives here. */
+  margin: 0.85rem 0 0.5rem;
   color: var(--moon-text-dim);
   font-size: 0.75rem;
 }
@@ -1933,210 +1923,125 @@
   color: var(--moon-text-mute);
 }
 
-.scanField {
+/* The name is the one thing typed here, so it gets room to be read back. */
+.scanName :global(.ant-input) {
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+/* The scope control: one label over a row of pills, the same pill the product
+   uses for every other bound. The chosen pill is the only lit thing, so the eye
+   lands on the answer rather than on two competing boxes. */
+.scanScopeField {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
 }
 
 .scanFieldLabel {
-  font-size: 0.66rem;
-  font-weight: 700;
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--moon-text-mute, #888);
+  color: var(--moon-text-faint);
 }
 
-.scanCasePicker {
-  width: 100%;
-}
+/* ---- Case board (shared by Plan setup and the New scan dialog) ---------- */
 
-/* Both choice groups share one row idiom: a recessed row that brightens its
-   hairline on hover and rings itself when chosen. The selected state is the
-   accent ring, never a colour fill, so the dialog stays monochrome — and the
-   control is drawn here, not by antd, so it never borrows antd's default blue.
-   Each row is one line tall: icon, label, an inline hint, and the count (or
-   nothing) on the right, so a group reads top-to-bottom in a single pass. */
-.scanOptions {
+/* A search row over a fixed frame, so a hand-picked set scrolls rather than
+   growing the dialog it sits in. */
+.casePicker {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.6rem;
 }
 
-.scanOption {
+.casePickerBar {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.5rem 0.7rem;
-  text-align: left;
-  font: inherit;
-  color: var(--moon-text);
-  background: var(--moon-surface-1);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-
-  &:hover {
-    border-color: var(--moon-line-3);
-  }
 }
 
-.scanOptionIcon {
-  display: inline-flex;
-  flex: none;
-  font-size: 0.9rem;
-  color: var(--moon-text-mute);
-}
-
-.scanOptionLabel {
-  flex: none;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.scanOptionHint {
+.caseSearch {
+  flex: 1;
   min-width: 0;
-  font-size: 0.74rem;
+}
+
+.casePickerCount {
+  flex: none;
+  font-size: 0.72rem;
+  color: var(--moon-text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.casePickerActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+/* The board frame. Its bottom margin is zeroed because the picker bar sits above
+   it and the caller spaces whatever follows. */
+.caseBoard {
+  margin-bottom: 0;
+}
+
+/* In a dialog with little else in it (New scan: a name and a scope pill row) the
+   board itself scrolls, so the search row stays put while the cases move under it.
+   The cap is measured against the viewport — that dialog's chrome above and below
+   the board is roughly 30rem — so its footer stays on screen. A dialog with heavier
+   chrome (Plan setup, with its engagement fields) instead lets its body scroll. */
+.scanBoard {
+  max-height: clamp(10rem, calc(100vh - 30rem), 20rem);
+  overflow-y: auto;
+}
+
+/* One case's identity line: its code, the result it already holds, and that
+   result in words. The title sits under it so a long title never crowds the
+   code it belongs to. */
+.caseLine {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.caseStatus {
+  font-size: 0.64rem;
+  color: var(--moon-text-faint);
+}
+
+/* What the pills cannot say: the reach of the run and where it lands. The count
+   is already on the chosen pill, so it is not repeated here. */
+.scanReach {
+  margin: 0;
+  font-size: 0.72rem;
   color: var(--moon-text-mute);
   @include truncate(1);
 }
 
-.scanOptionCount {
-  margin-left: auto;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--moon-text);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Selected, shared by both choice groups: the accent ring plus a brightened
-   icon. Applies to whichever row carries it. */
-.choiceSelected {
-  border-color: var(--moon-accent) !important;
-  box-shadow: 0 0 0 1px var(--moon-accent-24);
-
-  .scanOptionIcon {
-    color: var(--moon-accent);
-  }
-}
-
-/* The focus panel: what the current selection would actually hit. Two columns
-   so the category chart costs no extra height — the count and scope read on
-   the left, the split sits to its right. */
-.scanFocus {
-  display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.38fr);
+/* The footer pairs the run's one setting with the buttons: the switch answers
+   "does it stop and ask", the button answers "go". */
+.scanFooter {
+  display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.6rem 0.8rem;
-  background: var(--moon-accent-08);
-  border: 1px solid var(--moon-line-1);
-  border-radius: var(--moon-radius-lg);
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.scanFocusText {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 0;
-}
-
-.scanFocusHead {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.scanFocusCount {
-  font-size: 1.05rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--moon-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.scanFocusUnit {
-  font-size: 0.8rem;
-  color: var(--moon-text-mute);
-}
-
-.scanFocusTarget {
-  font-size: 0.8rem;
-  color: var(--moon-text);
-  overflow-wrap: anywhere;
-}
-
-.scanFocusScope {
-  display: flex;
+.scanApproval {
+  display: inline-flex;
+  align-items: center;
   gap: 0.45rem;
-  margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.4;
+  font-size: 0.75rem;
   color: var(--moon-text-mute);
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.scanFocusScopeLabel {
-  flex: none;
-  padding-top: 0.14rem;
-  @include eyebrow;
-  font-size: 0.56rem;
-}
-
-.scanFocusScopeText {
-  min-width: 0;
-  @include truncate(2);
-}
-
-.scanFocusChart {
-  min-width: 0;
-  padding-left: 0.9rem;
-  border-left: 1px solid var(--moon-line-1);
-}
-
-.scanFocusChartLabel {
-  display: block;
-  margin-bottom: 0.3rem;
-  @include eyebrow;
-  font-size: 0.56rem;
-}
-
-/* The approval dot is drawn in CSS so it matches the app's white-on-black
-   checked radio, independent of antd's markup. */
-.choiceRadio {
-  flex: none;
-  width: 15px;
-  height: 15px;
-  border: 1px solid var(--moon-line-3);
-  border-radius: 50%;
-  background: var(--moon-surface-2);
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-
-  &::after {
-    content: "";
-    display: block;
-    width: 5px;
-    height: 5px;
-    margin: 4px auto 0;
-    border-radius: 50%;
-    background: var(--moon-accent-ink);
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-}
-
-.choiceSelected .choiceRadio {
-  border-color: var(--moon-accent-solid);
-  background: var(--moon-accent-solid);
-
-  &::after {
-    opacity: 1;
-  }
+.scanActions {
+  display: flex;
+  gap: 0.5rem;
 }

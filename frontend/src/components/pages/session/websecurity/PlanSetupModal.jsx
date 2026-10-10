@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Alert, App, Button, Checkbox, Form, Input, Modal } from "antd";
-import { FiChevronDown, FiChevronRight } from "react-icons/fi";
+import { Alert, App, Form, Input, Modal } from "antd";
 import { useMutation } from "react-query";
 import { generateTestPlan } from "@/services/websecurity.service";
 import { apiErrorMessage } from "@/utils/apiError";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
+import CaseBoard from "@/components/pages/session/CaseBoard";
 import styles from "@/styles/pages/TestPlan.module.scss";
 
 /** Every WSTG case of the catalogue, in catalogue order. */
@@ -45,9 +45,9 @@ function previewPlan(plan, catalog, selected) {
 }
 
 /**
- * The one place the plan itself is set up: the engagement it belongs to and the WSTG cases it
- * covers. Categories are dropdowns - tick the whole category or expand it and hand-pick cases.
- * Saving rebuilds the case list from the catalogue, so cases that stay keep their results;
+ * The one place the plan itself is set up: the engagement it belongs to and the WSTG
+ * cases it covers, picked on the same case board the New scan dialog uses. Saving
+ * rebuilds the case list from the catalogue, so cases that stay keep their results;
  * the page mounts this per open, so the form starts from the plan as it is now.
  */
 export default function PlanSetupModal({
@@ -64,12 +64,28 @@ export default function PlanSetupModal({
   const [selected, setSelected] = useState(() =>
     plan ? new Set(plannedCatalogueIds(plan, catalog)) : new Set(allCatalogueIds(catalog)),
   );
-  const [openCategories, setOpenCategories] = useState(() => new Set());
   const isNew = !plan;
   const preview = useMemo(
     () => previewPlan(plan, catalog, selected),
     [plan, catalog, selected],
   );
+
+  // The catalogue as the board wants it, each case carrying the result the plan
+  // already recorded for it — so keeping a case reads as "and keep its result".
+  const groups = useMemo(() => {
+    const status = new Map(
+      (plan?.cases ?? []).map((testCase) => [testCase.testId, testCase.status]),
+    );
+    return (catalog?.categories ?? []).map((category) => ({
+      code: category.code,
+      name: category.name,
+      items: categoryTests(catalog, category.code).map((test) => ({
+        id: test.id,
+        title: test.title,
+        status: status.get(test.id),
+      })),
+    }));
+  }, [catalog, plan]);
 
   const saveMutation = useMutation(generateTestPlan, {
     onSuccess: (data) => {
@@ -96,32 +112,6 @@ export default function PlanSetupModal({
     const testIds = [...selected].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
     return { categories, testIds };
   };
-
-  const toggleId = (id, checked) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-
-  const setCategory = (tests, checked) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const test of tests) {
-        if (checked) next.add(test.id);
-        else next.delete(test.id);
-      }
-      return next;
-    });
-
-  const toggleOpen = (code) =>
-    setOpenCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
 
   const runSave = (values) => {
     const { categories, testIds } = buildSelection();
@@ -152,12 +142,17 @@ export default function PlanSetupModal({
     <Modal
       open
       onCancel={onClose}
+      centered
       title={isNew ? "Set up the test plan" : "Plan setup"}
       width={720}
       okText={isNew ? "Create plan" : "Save plan"}
       okButtonProps={{ disabled: isNew && !selected.size }}
       confirmLoading={saveMutation.isLoading}
       onOk={() => form.submit()}
+      // This dialog carries more chrome than the board has room for on a short
+      // window, so the body scrolls and the header and footer stay put. The cap
+      // leaves the header, footer and padding (about 11rem) plus a little slack.
+      styles={{ body: { maxHeight: "calc(100vh - 13rem)", overflowY: "auto" } }}
     >
       <Form
         form={form}
@@ -187,93 +182,14 @@ export default function PlanSetupModal({
         </div>
 
         <div className={styles.settingsSection}>
-          <div className={styles.sectionHead}>
-            <h4>Categories</h4>
-            <div className={styles.sectionActions}>
-              <Button
-                size="small"
-                type="link"
-                onClick={() => setSelected(new Set(allCatalogueIds(catalog)))}
-              >
-                Select all
-              </Button>
-              <Button size="small" type="link" onClick={() => setSelected(new Set())}>
-                Clear
-              </Button>
-            </div>
-          </div>
+          <h4>Categories</h4>
           <p>
             Tick a category to plan all of its cases, or expand it and pick individual cases.
             Unticking a category or a case drops it from the plan; cases that stay keep the
             results recorded against them.
           </p>
-          <div className={styles.categoryPicker}>
-            {(catalog?.categories ?? []).map((category) => {
-              const tests = categoryTests(catalog, category.code);
-              const picked = tests.filter((test) => selected.has(test.id)).length;
-              const allPicked = tests.length > 0 && picked === tests.length;
-              const isOpen = openCategories.has(category.code);
-              return (
-                <div key={category.code} className={styles.categoryRow}>
-                  <div className={styles.categoryHead}>
-                    <Checkbox
-                      checked={allPicked}
-                      indeterminate={picked > 0 && !allPicked}
-                      onChange={(event) => setCategory(tests, event.target.checked)}
-                    >
-                      <span className={styles.categoryText}>
-                        <span className={styles.categoryName}>
-                          {category.section} {category.name}
-                        </span>
-                        <span className={styles.categoryMeta}>
-                          {picked}/{tests.length} cases
-                        </span>
-                      </span>
-                    </Checkbox>
-                    {/* The share of this category the save would plan. */}
-                    <span
-                      className={styles.categoryBar}
-                      role="img"
-                      aria-label={`${picked} of ${tests.length} ${category.code} cases planned`}
-                      title={`${picked} of ${tests.length} cases planned`}
-                    >
-                      <span
-                        className={styles.categoryBarFill}
-                        style={{
-                          width: `${tests.length ? (picked / tests.length) * 100 : 0}%`,
-                        }}
-                      />
-                    </span>
-                    <button
-                      type="button"
-                      className={styles.categoryToggle}
-                      aria-label={isOpen ? "Hide cases" : "Show cases"}
-                      aria-expanded={isOpen}
-                      onClick={() => toggleOpen(category.code)}
-                    >
-                      {isOpen ? <FiChevronDown /> : <FiChevronRight />}
-                    </button>
-                  </div>
-                  {isOpen && (
-                    <div className={styles.caseList}>
-                      {tests.map((test) => (
-                        <Checkbox
-                          key={test.id}
-                          checked={selected.has(test.id)}
-                          onChange={(event) => toggleId(test.id, event.target.checked)}
-                        >
-                          <span className={styles.caseText}>
-                            <span className={styles.caseId}>{test.id}</span>
-                            <span className={styles.caseName}>{test.title}</span>
-                          </span>
-                        </Checkbox>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+
+          <CaseBoard groups={groups} selected={selected} onChange={setSelected} />
 
           <div className={styles.scopePreview}>
             <span>{preview.total} cases in scope</span>
