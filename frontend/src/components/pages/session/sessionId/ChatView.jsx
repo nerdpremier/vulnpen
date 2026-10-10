@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useCallback, useState, useMemo } from "react"
 import { v4 as uuidv4 } from "uuid";
 import { Button, notification, Tooltip } from "antd";
 import { DownOutlined, MessageOutlined, ReloadOutlined } from "@ant-design/icons";
-import { FiActivity, FiCheckCircle, FiClock, FiXCircle } from "react-icons/fi";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import styles from "@/styles/components/Chat.module.scss";
@@ -18,9 +17,8 @@ import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
 import { buildToolIndex } from "@/utils/toolIndex.mjs";
-import { formatElapsed, summariseSessionActivity } from "@/utils/sessionActivity.mjs";
 import { buildBurpMessage, takeBurpHandoff } from "@/utils/burpHandoff.mjs";
-import { BarList, PageState, StatStrip, StatTile } from "@/components/common/ui";
+import { PageState } from "@/components/common/ui";
 import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import { useQueryClient } from "react-query";
 
@@ -273,17 +271,6 @@ export default function ChatView({ sessionId }) {
     [messages],
   );
 
-  /**
-   * What the agent actually did in this session. A transcript says what was
-   * tried; this says how much of it landed, which tools carried the work and
-   * how long the engagement has been running — the questions a tester asks
-   * before reading a long log, answered without reading it.
-   */
-  const activity = useMemo(
-    () => summariseSessionActivity(messages, toolIndex),
-    [messages, toolIndex],
-  );
-
   const isEmpty = messages.length === 0 && !historyLoading && !historyError;
 
   /* The chat's own controls, in the same header slot every session page uses:
@@ -330,45 +317,6 @@ export default function ChatView({ sessionId }) {
         ref={messagesContainerRef}
         onScroll={updateStickToBottom}
       >
-        {/* The session's readout, at the top of the transcript: it scrolls away
-            with the conversation instead of costing the composer its room. */}
-        {!isEmpty && activity.calls > 0 && (
-          <section className={styles.activitySummary} aria-label="Session activity">
-            <StatStrip className={styles.activityStrip}>
-              <StatTile
-                label="Tool calls"
-                value={activity.calls}
-                icon={<FiActivity />}
-                hint={activity.running ? `${activity.running} running now` : "all settled"}
-              />
-              <StatTile
-                label="Succeeded"
-                value={activity.succeeded}
-                tone="success"
-                icon={<FiCheckCircle />}
-              />
-              <StatTile
-                label="Failed"
-                value={activity.failed}
-                tone={activity.failed ? "danger" : "neutral"}
-                icon={<FiXCircle />}
-              />
-              <StatTile
-                label="Elapsed"
-                value={formatElapsed(activity.elapsedMs)}
-                count={false}
-                icon={<FiClock />}
-              />
-            </StatStrip>
-
-            {activity.tools.length > 1 && (
-              <div className={styles.activityTools}>
-                <h2 className={styles.activityTitle}>Tools carrying the work</h2>
-                <BarList items={activity.tools} />
-              </div>
-            )}
-          </section>
-        )}
         {historyError && messages.length === 0 && (
           <PageState
             state="error"
