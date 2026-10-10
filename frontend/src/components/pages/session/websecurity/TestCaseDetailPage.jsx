@@ -40,7 +40,7 @@ const PILL_TONE = {
 /** Colour accents per body section, echoing the vuln page's severity palette. */
 const SECTION_TONES = {
   Objective: "purple",
-  Method: "blue",
+  "How to test": "blue",
   "Expected evidence": "green",
   Tools: "orange",
   "Observations recorded": "yellow",
@@ -433,7 +433,7 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
         <DocSection label="Objective">
           {testCase.objective || "Not described."}
         </DocSection>
-        <DocSection label="Method">
+        <DocSection label="How to test">
           {testCase.howToTest || "Not described."}
         </DocSection>
         <DocSection label="Expected evidence">
