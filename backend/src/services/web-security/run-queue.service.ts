@@ -87,16 +87,6 @@ async function loadRuns(sessionId: string): Promise<WebAppRunDoc[]> {
   return (session?.webAppRuns as WebAppRunDoc[] | undefined) ?? [];
 }
 
-async function saveRuns(sessionId: string, runs: WebAppRunDoc[]): Promise<void> {
-  const result = await SessionsModel.updateOne(
-    { sessionId },
-    { $set: { webAppRuns: runs } },
-  );
-  if (!result.matchedCount) {
-    throw new Error("Session not found while saving the WSTG run record");
-  }
-}
-
 async function mutateRun(
   sessionId: string,
   runId: string,
@@ -106,7 +96,24 @@ async function mutateRun(
   const run = runs.find((entry) => entry.runId === runId);
   if (!run) return null;
   mutate(run);
-  await saveRuns(sessionId, runs);
+
+  // The write is one positional `$set`, not a whole-array replacement: it
+  // overwrites only the fields this mutator touches and leaves every other
+  // element alone — including one a concurrent enqueue added. The
+  // loadRuns → mutate → saveRuns round trip it replaces could lose that
+  // element (a settling scan racing an enqueue wiped the enqueued run).
+  const update: Record<string, unknown> = {};
+  const doc = run as unknown as Record<string, unknown>;
+  for (const [key, value] of Object.entries(doc)) {
+    update[`webAppRuns.$.${key}`] = value;
+  }
+  const result = await SessionsModel.updateOne(
+    { sessionId, "webAppRuns.runId": runId },
+    { $set: update },
+  );
+  if (!result.matchedCount) {
+    throw new Error(`Session not found while updating run ${runId}`);
+  }
   return run;
 }
 
@@ -149,9 +156,17 @@ export async function enqueueRun(input: EnqueueRunInput): Promise<EnqueueRunResu
     queuedAt: new Date(),
   };
 
-  const runs = await loadRuns(input.sessionId);
-  runs.push(run);
-  await saveRuns(input.sessionId, runs);
+  // One atomic append. The loadRuns → push → saveRuns round trip it replaces
+  // wrote the whole array back from a fresh snapshot, so an enqueue racing a
+  // settling scan could overwrite the settle (or vice versa) and drop the new
+  // run.
+  const result = await SessionsModel.updateOne(
+    { sessionId: input.sessionId },
+    { $push: { webAppRuns: run } },
+  );
+  if (!result.matchedCount) {
+    return { ok: false, missing: input.testIds };
+  }
 
   // A launch from the web UI is an explicit "run now": a chat the user paused
   // earlier must not hold the queue hostage, so clear the parked state before
@@ -708,7 +723,18 @@ export async function recoverStaleRuns(): Promise<void> {
       }
     }
     if (changed) {
-      await saveRuns(sessionId, runs).catch((err) =>
+      // One multi-positional write marks every running run failed without
+      // rewriting the whole array (which would race a concurrent enqueue).
+      await SessionsModel.updateMany(
+        { sessionId, "webAppRuns.status": "running" },
+        {
+          $set: {
+            "webAppRuns.$.status": "failed",
+            "webAppRuns.$.error": "Interrupted by a server restart",
+            "webAppRuns.$.finishedAt": new Date(),
+          },
+        },
+      ).catch((err) =>
         console.error(`[wstg-run] recovery save failed for ${sessionId}:`, err),
       );
     }

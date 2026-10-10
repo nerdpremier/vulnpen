@@ -749,6 +749,8 @@ const SessionSchema = new Schema({
 });
 
 SessionSchema.index({ workspaceId: 1, status: 1 });
+// The session list screen queries by owner, then filters out archives.
+SessionSchema.index({ uid: 1, status: 1 });
 
 export { AgentMessageSchema };
 export default mongoose.model<SessionDoc>("Session", SessionSchema);

@@ -41,6 +41,38 @@ export async function saveSessionPlan(
   }
 }
 
+/**
+ * Apply a per-case change to the plan without rewriting the whole subdocument.
+ *
+ * The alternative — load the plan, mutate it in memory, `saveSessionPlan` — is
+ * a read-modify-write whose write replaces the entire plan, so two concurrent
+ * mutations (a finding recording a failed case while `update_case` touches
+ * another) clobber each other: whichever saves last re-applies its own stale
+ * snapshot. A positional `$set` with an arrayFilters guard changes only the
+ * target case, so a concurrent update to a different case survives.
+ */
+export async function patchSessionPlanCase(
+  sessionId: string,
+  testId: string,
+  $set: Record<string, unknown>,
+): Promise<boolean> {
+  const patch: Record<string, unknown> = {
+    "webAppTestPlan.cases.$[case].updatedAt": new Date(),
+  };
+  for (const [key, value] of Object.entries($set)) {
+    patch[`webAppTestPlan.cases.$[case].${key}`] = value;
+  }
+  const result = await SessionsModel.updateOne(
+    { sessionId, "webAppTestPlan.cases.testId": testId },
+    { $set: patch },
+    { arrayFilters: [{ "case.testId": testId }] },
+  );
+  if (!result.matchedCount) {
+    throw new Error("Session not found while updating the WSTG test plan");
+  }
+  return result.modifiedCount > 0;
+}
+
 export type PlanCaseResolution =
   | { ok: true; testId: string }
   | { ok: false; refusal: string };
@@ -102,7 +134,11 @@ export async function linkFindingToCase(
     addLinkedVulnerabilityId: vulnerabilityId,
   });
   if (!linked) return undefined;
-  await saveSessionPlan(sessionId, linked.plan);
+  const target = linked.testCase;
+  await patchSessionPlanCase(sessionId, target.testId, {
+    status: "failed",
+    linkedVulnerabilityIds: target.linkedVulnerabilityIds,
+  });
   return linked.testCase.testId;
 }
 
@@ -117,17 +153,17 @@ export async function unlinkFindingFromCases(
 ): Promise<boolean> {
   const plan = await loadSessionPlan(sessionId);
   if (!plan?.cases?.length) return false;
-  let unlinked = 0;
-  for (const testCase of plan.cases) {
-    if (testCase.linkedVulnerabilityIds?.includes(vulnerabilityId)) {
-      testCase.linkedVulnerabilityIds = testCase.linkedVulnerabilityIds.filter(
-        (id) => id !== vulnerabilityId,
-      );
-      unlinked += 1;
-    }
+  const unlinked = plan.cases
+    .filter((testCase) => testCase.linkedVulnerabilityIds?.includes(vulnerabilityId))
+    .map((testCase) => testCase.testId);
+  if (!unlinked.length) return false;
+  for (const testId of unlinked) {
+    const caseDoc = findPlanCase(plan, testId);
+    const next = (caseDoc?.linkedVulnerabilityIds ?? []).filter((id) => id !== vulnerabilityId);
+    await patchSessionPlanCase(sessionId, testId, {
+      linkedVulnerabilityIds: next,
+    });
   }
-  if (!unlinked) return false;
-  await saveSessionPlan(sessionId, plan);
   return true;
 }
 

@@ -344,6 +344,102 @@ test("responses pipeline falls back to the last started call on mismatched item 
   ]);
 });
 
+test("responses pipeline keeps parallel function calls' arguments apart", async () => {
+  // Two calls in one turn: argument deltas reference `item_id`, which is the
+  // output item's `id` (`fc_a`/`fc_b`), while `call_id` (`call_a`) is only the
+  // id the result is sent back with. Keying the accumulator by call_id made
+  // every fragment after the first land on the last-started call.
+  const { deltas, onDelta } = recorder();
+  const client = fakeResponsesClient([
+    {
+      type: "response.output_item.added",
+      item: { type: "function_call", id: "fc_a", call_id: "call_a", name: "run_bash" },
+    },
+    {
+      type: "response.output_item.added",
+      item: { type: "function_call", id: "fc_b", call_id: "call_b", name: "run_python_script" },
+    },
+    {
+      type: "response.function_call_arguments.delta",
+      item_id: "fc_a",
+      delta: '{"command":"id"}',
+    },
+    {
+      type: "response.function_call_arguments.delta",
+      item_id: "fc_b",
+      delta: '{"code":"print(1)"}',
+    },
+    { type: "response.completed", response: { status: "completed" } },
+  ]);
+
+  const result = await runOpenAIResponsesStream(
+    client,
+    { ...baseConfig, provider: "openai" },
+    streamingOpts(onDelta),
+    "medium",
+    0,
+  );
+
+  assert.deepEqual(result.toolCalls, [
+    { id: "call_a", name: "run_bash", arguments: '{"command":"id"}' },
+    { id: "call_b", name: "run_python_script", arguments: '{"code":"print(1)"}' },
+  ]);
+});
+
+test("an aborted stream drops a started tool call instead of promoting it", async () => {
+  // Pause/disconnect mid-stream: the call was cut off, so it must not be
+  // reported as a clean tool-call turn the agent loop would execute.
+  const { deltas, onDelta } = recorder();
+  const controller = new AbortController();
+  const { client } = fakeChatClient([
+    {
+      choices: [
+        {
+          delta: {
+            tool_calls: [{ index: 0, id: "tc_0", function: { name: "write_to_shell", arguments: "" } }],
+          },
+        },
+      ],
+    },
+  ]);
+
+  const result = await runChatCompletionsStream(
+    client,
+    baseConfig,
+    { ...streamingOpts(onDelta), abortSignal: controller.signal, onDelta: (d) => {
+      onDelta(d);
+      if (d.type === "tool_call_start") controller.abort();
+    } },
+    "off",
+    0.7,
+    0,
+  );
+
+  assert.deepEqual(result.toolCalls, []);
+  assert.equal(result.finishReason, "stop");
+  assert.ok(
+    !deltas.some((d) => d.type === "tool_call_done"),
+    "an aborted call is never closed with tool_call_done",
+  );
+});
+
+test("collector.abort discards started calls but keeps accumulated text", () => {
+  const { deltas, onDelta } = recorder();
+  const collector = createStreamCollector(onDelta);
+  collector.onText("partial answer");
+  collector.startToolCall("a", "call-a", "run_bash");
+  collector.abort();
+
+  const result = collector.finish();
+  assert.equal(result.content, "partial answer");
+  assert.deepEqual(result.toolCalls, []);
+  assert.equal(result.finishReason, "stop");
+  assert.deepEqual(
+    deltas.map((d) => d.type),
+    ["text", "tool_call_start"],
+  );
+});
+
 // ─── Chat completions pipeline ───────────────────────────────────────────
 
 function fakeChatClient(chunks: any[]): { client: OpenAI; params: any[] } {

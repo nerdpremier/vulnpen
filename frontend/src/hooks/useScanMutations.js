@@ -5,18 +5,18 @@ import { App } from "antd";
 import { deleteScan, launchScan, stopScan } from "@/services/websecurity.service";
 import { apiErrorMessage } from "@/utils/apiError";
 import { useAgentStreamStore } from "@/store/agentStream.store";
-import { scansKey, scanKey, testPlanKey } from "@/utils/scanQueryKeys.mjs";
+import { scansKey, scanKey, testPlanKey, vulnerabilitiesKey } from "@/utils/scanQueryKeys.mjs";
 
 /**
  * What a scan mutation does to the caches, decided once.
  *
  * A scan writes case statuses onto the plan and findings onto the session, so
- * after any launch, stop or delete the list AND the plan go stale. A deleted
- * scan's detail cache is removed outright: its poll has stopped, so a
- * Browser-Back would otherwise re-render a record that no longer exists. A
- * launch also marks the chat's history stale — the scan writes its own
- * transcript channel, and the chat page reloads the store the next time it
- * opens.
+ * after any launch, stop or delete the list, the plan, the findings, and every
+ * case's scan history go stale. A deleted scan's detail cache is removed
+ * outright: its poll has stopped, so a Browser-Back would otherwise re-render a
+ * record that no longer exists. A launch also marks the chat's history stale —
+ * the scan writes its own transcript channel, and the chat page reloads the
+ * store the next time it opens.
  */
 export function invalidateScanCaches(
   queryClient,
@@ -29,6 +29,9 @@ export function invalidateScanCaches(
   queryClient.invalidateQueries(["scan", sessionId]);
   queryClient.invalidateQueries(scansKey(sessionId));
   queryClient.invalidateQueries(testPlanKey(sessionId));
+  // The prefix form (no testId) invalidates every case's scan history at once.
+  queryClient.invalidateQueries(["case-scans", sessionId]);
+  queryClient.invalidateQueries(vulnerabilitiesKey(sessionId));
 }
 
 /**

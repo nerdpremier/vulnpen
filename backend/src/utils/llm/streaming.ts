@@ -87,7 +87,7 @@ export async function runAnthropicThinkingStream(
 
   for await (const event of stream) {
     if (opts.abortSignal?.aborted) {
-      collector.setFinishReason("stop");
+      collector.abort();
       break;
     }
 
@@ -138,6 +138,9 @@ export async function runAnthropicThinkingStream(
     }
   }
 
+  // The abort can arrive on the very last chunk; the per-chunk check above
+  // would miss it, so honour the signal once more before closing the stream.
+  if (opts.abortSignal?.aborted) collector.abort();
   const { content, reasoning, toolCalls, finishReason } = collector.finish();
 
   const elapsed = Date.now() - start;
@@ -360,7 +363,7 @@ export async function runOpenAIResponsesStream(
         completionStartTime = new Date();
       }
       if (opts.abortSignal?.aborted) {
-        collector.setFinishReason("stop");
+        collector.abort();
         break;
       }
 
@@ -378,7 +381,12 @@ export async function runOpenAIResponsesStream(
         case "response.output_item.added": {
           const item = event.item;
           if (item?.type === "function_call") {
-            const key = item.call_id ?? item.id ?? `tc_${responsesToolCallCount++}`;
+            // The argument events carry `item_id`, which names the output
+            // item's `id` (`fc_…`) — not its `call_id` (`call_…`). Key the
+            // accumulator by the item id so a turn with several parallel calls
+            // does not pile every argument fragment onto the last-started one,
+            // and keep `call_id` as the id the result is sent back with.
+            const key = item.id ?? item.call_id ?? `tc_${responsesToolCallCount++}`;
             lastToolCallKey = key;
             collector.startToolCall(key, item.call_id ?? item.id, item.name);
           }
@@ -427,7 +435,10 @@ export async function runOpenAIResponsesStream(
       }
     }
 
-    const { content, reasoning, toolCalls, finishReason } = collector.finish();
+    // The abort can arrive on the very last chunk; the per-chunk check above
+  // would miss it, so honour the signal once more before closing the stream.
+  if (opts.abortSignal?.aborted) collector.abort();
+  const { content, reasoning, toolCalls, finishReason } = collector.finish();
 
     const elapsed = Date.now() - start;
     const result: InvokeResult = {
@@ -507,7 +518,7 @@ export async function runChatCompletionsStream(
 
   for await (const chunk of stream) {
     if (opts.abortSignal?.aborted) {
-      collector.setFinishReason("stop");
+      collector.abort();
       break;
     }
 
@@ -551,6 +562,9 @@ export async function runChatCompletionsStream(
     }
   }
 
+  // The abort can arrive on the very last chunk; the per-chunk check above
+  // would miss it, so honour the signal once more before closing the stream.
+  if (opts.abortSignal?.aborted) collector.abort();
   const { content, reasoning, toolCalls, finishReason } = collector.finish();
 
   const elapsed = Date.now() - start;

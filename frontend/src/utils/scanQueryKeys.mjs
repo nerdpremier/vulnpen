@@ -15,3 +15,9 @@ export const scanKey = (sessionId, runId) => ["scan", sessionId, runId];
 
 /** The session's WSTG test plan — the live source of per-case status. */
 export const testPlanKey = (sessionId) => ["test-plan", sessionId];
+
+/** The session's findings — a scan adds findings, so its list goes stale too. */
+export const vulnerabilitiesKey = (sessionId) => ["vulnerabilities", sessionId];
+
+/** One test case's scan history (the case page's poll). */
+export const caseScansKey = (sessionId, testId) => ["case-scans", sessionId, testId];

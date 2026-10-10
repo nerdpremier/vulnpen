@@ -100,9 +100,11 @@ export function loadConfig(): void {
   if (fs.existsSync(envPath)) {
     const envVars = dotenv.parse(fs.readFileSync(envPath, "utf-8"));
     for (const [key, value] of Object.entries(envVars)) {
-      if (!shouldPreserveExistingEnv(key)) {
-        process.env[key] = value;
-      }
+      // Only a key this process actually adopted from .env belongs in the
+      // refresh set: a key the container already exports (SSH_HOST/SSH_PORT in
+      // Docker) stays the container's, at boot and on every reload alike.
+      if (shouldPreserveExistingEnv(key)) continue;
+      process.env[key] = value;
       envSourcedKeys.add(key);
     }
   }

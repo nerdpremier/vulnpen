@@ -427,7 +427,14 @@ export async function runAgentLoop(params: {
         onDelta: (delta) => forwardStreamDelta(sse, delta),
       });
 
-      const assistantToolCalls = result.toolCalls;
+      // A pause or client disconnect that lands between the stream returning and
+      // here must not run the tools: the turn was cancelled. The collector
+      // already discards a call it saw cut off, but a provider that resolved a
+      // complete call just before the abort still arrives here with tool calls
+      // — drop them before they are recorded, so the transcript never gets an
+      // assistant tool-call turn with no matching tool results, and nothing
+      // executes. The abort branch below reports the pause.
+      const assistantToolCalls = params.abortSignal?.aborted ? [] : result.toolCalls;
 
       if (result.usage) {
         const promptTokens = result.usage.prompt_tokens ?? 0;

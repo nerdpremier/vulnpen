@@ -4,6 +4,7 @@ import {
   buildPendingConsentBatch,
   consentRequiredEvent,
   loadPendingConsent,
+  normalizeApprovedToolCallIds,
   splitConsentBatch,
 } from "../src/services/consent-batch";
 import type { ToolExecutionResult } from "../src/services/agent.tools";
@@ -102,6 +103,22 @@ test("an empty ticked set approves nothing rather than everything", () => {
 
   assert.deepEqual(allowed, []);
   assert.deepEqual(refused.map((item) => item.toolCallId), ["c1", "c2"]);
+});
+
+test("a present but empty toolCallIds survives normalization as [] , never undefined", () => {
+  // The controller used to collapse `[]` to `undefined`, which splitConsentBatch
+  // reads as "the whole batch" — a request with an empty tick list approved
+  // everything. The empty array must pass through intact.
+  assert.deepEqual(normalizeApprovedToolCallIds([], true), []);
+  assert.deepEqual(normalizeApprovedToolCallIds(["c1"], true), ["c1"]);
+  // An absent field is the only "whole batch" signal.
+  assert.equal(normalizeApprovedToolCallIds(undefined, true), undefined);
+  // A non-array body is not a tick list at all.
+  assert.equal(normalizeApprovedToolCallIds("c1", true), undefined);
+  // Non-string entries are dropped, but a present array stays an array.
+  assert.deepEqual(normalizeApprovedToolCallIds([1, "c1", null], true), ["c1"]);
+  // A denial needs no id list.
+  assert.equal(normalizeApprovedToolCallIds(["c1"], false), undefined);
 });
 
 test("ids the parked batch does not contain can only refuse, never add", () => {

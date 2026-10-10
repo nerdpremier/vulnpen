@@ -145,6 +145,13 @@ export default function useAgentStream({
 
   const startStream = useCallback(
     async ({ message, endpoint = "message", burpMeta = null }) => {
+      // One agent stream at a time. Starting a second stream while one is live
+      // would overwrite the abort slot: the old stream would keep emitting into
+      // this message list, and Stop would abort the new one instead. Stop the
+      // previous stream before opening the next.
+      const previous = refs().controllerRef.current;
+      if (previous) previous.abort();
+
       setAgentState("running");
 
       let stream;

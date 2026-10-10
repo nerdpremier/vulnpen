@@ -43,6 +43,13 @@ export interface StreamCollector {
   /** Record a finish reason observed on the stream (caller-owned transitions). */
   setFinishReason(reason: FinishReason): void;
   /**
+   * Mark the stream as aborted (pause, client disconnect). Any tool call that
+   * had started is discarded by `finish()` rather than closed and promoted:
+   * the call was cut off mid-stream, so executing it would run a half-parsed
+   * request.
+   */
+  abort(): void;
+  /**
    * Close the stream: emit one `tool_call_done` per started call in start
    * order, promote stop→tool_calls when calls exist, and return the assembled
    * result fields (empty content and reasoning come back as null).
@@ -63,6 +70,7 @@ export function createStreamCollector(
   const toolCalls = new Map<string, ToolCallAccumulator>();
   let nextIndex = 0;
   let finishReason: FinishReason = "stop";
+  let aborted = false;
 
   const emit = (delta: StreamDelta) => onDelta(delta);
 
@@ -114,7 +122,24 @@ export function createStreamCollector(
       finishReason = reason;
     },
 
+    abort() {
+      aborted = true;
+    },
+
     finish() {
+      // An aborted stream is not a completed turn: whatever tool call had
+      // started was cut off, so drop it instead of closing and promoting it.
+      // The text/reasoning collected so far is still returned — a partial
+      // answer is worth showing, a half-built tool call is not worth running.
+      if (aborted) {
+        return {
+          content: contentParts.join("") || null,
+          reasoning: reasoningParts.join("") || null,
+          toolCalls: [],
+          finishReason: "stop",
+        };
+      }
+
       const calls: ToolCallData[] = [];
       for (const acc of toolCalls.values()) {
         const tc: ToolCallData = {

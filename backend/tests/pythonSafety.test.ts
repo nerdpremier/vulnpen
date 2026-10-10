@@ -40,3 +40,21 @@ test("destructive filesystem primitives in python are caught", () => {
     assert.equal(isDangerousPythonScript(script).dangerous, true, script.split("\n")[0]);
   }
 });
+
+test("write-capable open() modes are caught even when they carry a leading letter", () => {
+  for (const script of [
+    'open("/etc/passwd", "r+").write("x")',
+    'open("/etc/shadow", "a+")',
+    'open("/etc/hosts", "w+b")',
+    'open("/etc/group", "ab")',
+    'open("/etc/hostname", "r+b")',
+    'open("/dev/sda", "r+b")',
+  ]) {
+    const result = isDangerousPythonScript(script);
+    assert.equal(result.dangerous, true, script);
+    assert.ok(
+      result.rule.startsWith("python:"),
+      `expected a python:* rule for ${script}, got "${result.rule}"`,
+    );
+  }
+});

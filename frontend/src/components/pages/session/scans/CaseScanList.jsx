@@ -10,11 +10,13 @@ import { PageState } from "@/components/common/ui";
 import {
   countScanCases,
   formatDuration,
+  formatStamp,
   isScanLive,
   scanCaseStatuses,
   scanName,
 } from "@/utils/scans.mjs";
 import { ScanProgressBar, ScanStatusPill } from "./ScanStatus";
+import { caseScansKey } from "@/utils/scanQueryKeys.mjs";
 import styles from "@/styles/pages/TestPlan.module.scss";
 import detail from "@/styles/pages/ScanDetail.module.scss";
 
@@ -23,12 +25,10 @@ import detail from "@/styles/pages/ScanDetail.module.scss";
  * the scan history. Only this case's scans belong here: the session-wide list
  * lives on the Scans page.
  *
- * The same query key the case page uses for its header badge is derived from
- * the case id, so both consumers share one poll.
+ * The key itself lives in the shared scan-keys module, so an invalidation
+ * written elsewhere (a scan mutation) reaches this poll too.
  */
-export function caseScansQueryKey(sessionId, testId) {
-  return ["case-scans", sessionId, testId];
-}
+export const caseScansQueryKey = caseScansKey;
 
 /**
  * A settled scan's outcome as a strip rather than a sentence: how it ended is
@@ -129,7 +129,7 @@ export default function CaseScanList({ sessionId, testCase, planCases }) {
                 <span className={styles.scanIdentity}>
                   <span className={styles.scanName}>{scanName(scan, planCases)}</span>
                   <span className={styles.scanMeta}>
-                    {new Date(scan.startedAt ?? scan.queuedAt).toLocaleString()}
+                    {formatStamp(scan.startedAt ?? scan.queuedAt)}
                     {scan.durationMs != null ? ` · ${formatDuration(scan.durationMs)}` : ""}
                   </span>
                 </span>

@@ -145,6 +145,22 @@ export function splitConsentBatch(
 }
 
 /**
+ * The request body's `toolCallIds` as `splitConsentBatch` expects it. The only
+ * value that means "the whole batch" is an *absent* field (`undefined`): a
+ * present array — including the empty one — is the operator's ticked set, so it
+ * is preserved verbatim (non-string entries dropped). Collapsing `[]` to
+ * `undefined` here would read an empty tick list as "approve everything".
+ */
+export function normalizeApprovedToolCallIds(
+  raw: unknown,
+  approved: boolean,
+): string[] | undefined {
+  if (!approved) return undefined;
+  if (!Array.isArray(raw)) return undefined;
+  return raw.filter((id): id is string => typeof id === "string");
+}
+
+/**
  * The consent counters' one home — the run loop and the consent resume never
  * $inc them by hand: `approvals`/`denials` feed from the user's response,
  * `circuitOpens` from the approval-rejection streak tripping.

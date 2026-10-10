@@ -129,6 +129,17 @@ const INLINE_CODE_FLAGS: Record<string, string[]> = {
 const EVAL_COMMANDS = new Set(["eval"]);
 
 /**
+ * Program names that execute what is piped into them. A decode-to-shell chain
+ * is destructive because the downloaded/decoded bytes run, so this list is
+ * every interpreter that would do that, tested against the basename of the
+ * command (so `/bin/bash` and `sudo bash` both match).
+ */
+const INTERPRETER_NAMES = new Set([
+  "sh", "bash", "zsh", "dash", "ksh", "ash", "csh", "tcsh", "fish",
+  "python", "python3", "perl", "ruby", "node", "php", "lua",
+]);
+
+/**
  * Calls that hand a string to an interpreter. Only when one is present is it
  * worth reading the code's string literals as commands: `os.system('rm -rf /')`
  * is a command, `print('rm -rf /')` is text.
@@ -189,6 +200,12 @@ export function splitShellSegments(input: string): string[] {
       continue;
     }
     if (ch === ";" || ch === "|" || ch === "\n" || ch === "&") {
+      // `>|` is the noclobber-override redirect, not a pipe: keep the bar with
+      // the `>` so `echo x >| /etc/passwd` stays one segment.
+      if (ch === "|" && current.trimEnd().endsWith(">")) {
+        current += ch;
+        continue;
+      }
       if (current.trim()) segments.push(current.trim());
       current = "";
       continue;
@@ -383,13 +400,73 @@ function isSensitivePath(token: string): boolean {
   if (SENSITIVE_ROOTS.includes(t)) return true;
   // Subtrees of system roots count as system-critical too (/etc/config, /var/log).
   if (SENSITIVE_ROOTS.some((root) => root !== "/" && t.startsWith(root + "/"))) return true;
+  // A glob hides what a token expands to. `rm -rf /*`, `/etc/*`, `$HOME/*`,
+  // `~/*` and even `/e*c` all resolve onto a system root, so judge the shape
+  // of the pattern against the roots rather than the literal text.
+  if (/[*?\[]/.test(t) && globTouchesSensitive(t)) return true;
   return false;
+}
+
+/**
+ * True when a shell glob (with `*`/`?`/`[…]`) could expand to a system root or
+ * a home directory. `*` is allowed to span `/` here: over-matching a glob is
+ * the safe direction for a delete guard.
+ */
+function globTouchesSensitive(pattern: string): boolean {
+  // A trailing `/*` (or `/**`) says "everything under here", so judge the base
+  // directory itself: `$HOME/*` and `~/*` are home-directory wipes, and `/*` is
+  // the filesystem root.
+  const base = pattern.replace(/\/?\*+$/, "").replace(/\/+$/, "");
+  if (base === "") return true;
+  if (HOME_TOKENS.includes(base) || SENSITIVE_ROOTS.includes(base)) return true;
+
+  const source = pattern
+    .replace(/[.+^${}()|\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+  let rx: RegExp;
+  try {
+    rx = new RegExp(`^${source}$`);
+  } catch {
+    return false;
+  }
+  const candidates = ["/", ...SENSITIVE_ROOTS, ...HOME_TOKENS];
+  return candidates.some((candidate) => rx.test(candidate));
 }
 
 function isExactRootPath(token: string): boolean {
   if (token === "/") return true;
   const t = token.replace(/\/+$/, "");
-  return SENSITIVE_ROOTS.includes(t) || HOME_TOKENS.includes(t);
+  if (isBareGlob(t)) return true;
+  if (SENSITIVE_ROOTS.includes(t) || HOME_TOKENS.includes(t)) return true;
+  // `mv /*  /tmp` and `mv $HOME/* …` move the system root's contents.
+  if (/[*?\[]/.test(t) && globTouchesSensitive(t)) return true;
+  return false;
+}
+
+/**
+ * Every redirect write target in a token list, with the operator removed. The
+ * tokenizer leaves a redirect glued to the preceding word (`echo x>/etc/passwd`
+ * tokenizes to `x>/etc/passwd`), so each token is scanned for an unquoted `>`
+ * and everything after it is the target; a bare `>`/`>>`/`>|` token takes the
+ * following token as its target. An operator with nothing after it — a
+ * malformed chain — yields an empty target, which the caller drops.
+ */
+function redirectTargets(tokens: string[]): string[] {
+  const found: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (/^>{1,2}\|?$/.test(token)) {
+      found.push(tokens[i + 1] ?? "");
+      continue;
+    }
+    // The operator may lead the token (`>>/etc/sudoers`) or be glued to a
+    // preceding word (`x>/etc/passwd`); either way everything after it is the
+    // write target.
+    const m = token.match(/^(?:.*[^\s<>])?>{1,2}\|?(.*)$/);
+    if (m) found.push(m[1] ?? "");
+  }
+  return found;
 }
 
 function flagsOf(tokens: string[]): SegmentFlags {
@@ -407,9 +484,19 @@ function flagsOf(tokens: string[]): SegmentFlags {
 function decodeToShell(segment: string): boolean {
   const stages = segment.split("|").map((s) => s.trim());
   if (stages.length < 2) return false;
+  // The final stage may be an absolute path (`/bin/bash`), reached through a
+  // wrapper (`sudo bash`, `env bash`), or carry an argument, so peel those off
+  // before testing for an interpreter instead of anchoring on column 0.
+  const shellAt = (stage: string): boolean => {
+    const tokens = tokenize(stage);
+    for (const start of commandStartIndices(tokens)) {
+      const base = (tokens[start] ?? "").replace(/\\/g, "/").split("/").pop() ?? "";
+      if (INTERPRETER_NAMES.has(base.toLowerCase())) return true;
+    }
+    return false;
+  };
   const decoder = /(^|\s)(base64\s+(-[^-\s]*d|--decode)|xxd\s+-r|openssl\s+enc\s+[^|]*-d|gunzip|zcat)\b/i;
   const fetcher = /^(curl|wget|fetch)\b/i;
-  const shell = /^(sh|bash|zsh|dash|ksh|python3?|perl)\b/i;
   let decodes = false;
   for (let i = 0; i < stages.length; i++) {
     const s = stages[i];
@@ -418,7 +505,7 @@ function decodeToShell(segment: string): boolean {
       // a fetch stage that is not first (e.g. re-download mid-pipe) still counts
       decodes = true;
     }
-    if (decodes && shell.test(s)) return true;
+    if (decodes && shellAt(s)) return true;
   }
   return false;
 }
@@ -483,19 +570,23 @@ function checkTokens(tokens: string[], raw: string): DangerCheckResult {
   ) {
     return danger("redirect:block-device", "เขียนข้อมูลทับดิสก์โดยตรงผ่าน redirect", "ข้อมูลบนดิสก์หายถาวร");
   }
-  // Redirect over a system file: `echo x > /etc/passwd`. The write targets are
-  // the ones meant to be written; a block device is caught above.
-  if (
-    redirectTarget &&
-    isSensitivePath(redirectTarget) &&
-    !SAFE_DEVICE_TARGETS.has(redirectTarget) &&
-    !redirectTarget.startsWith("/dev/fd/")
-  ) {
-    return danger(
-      "redirect:system-file",
-      "เขียนทับไฟล์ระบบผ่าน redirect",
-      "ไฟล์ระบบถูกเขียนทับถาวร เครื่องทดสอบอาจใช้งานไม่ได้",
-    );
+  // The shell accepts a redirect with no space, so `echo x>/etc/passwd` is the
+  // same write as `echo x > /etc/passwd`. The tokenizer keeps `>/etc/passwd`
+  // glued to the previous word, so split the operator out here and test the
+  // path it points at, whether the operator is single (`>`) or doubled (`>>`).
+  for (const target of redirectTargets(tokens)) {
+    const clean = target.replace(/["']/g, "");
+    if (SAFE_DEVICE_TARGETS.has(clean) || clean.startsWith("/dev/fd/")) continue;
+    if (BLOCK_DEVICE.test(clean)) {
+      return danger("redirect:block-device", "เขียนข้อมูลทับดิสก์โดยตรงผ่าน redirect", "ข้อมูลบนดิสก์หายถาวร");
+    }
+    if (isSensitivePath(clean)) {
+      return danger(
+        "redirect:system-file",
+        "เขียนทับไฟล์ระบบผ่าน redirect",
+        "ไฟล์ระบบถูกเขียนทับถาวร เครื่องทดสอบอาจใช้งานไม่ได้",
+      );
+    }
   }
 
   if (cmd === "chmod" || cmd === "chown") {

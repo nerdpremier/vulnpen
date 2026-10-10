@@ -514,21 +514,21 @@ export const mapVulnerability = async (req: Request, res: Response) => {
 
     // The category is never chosen here — it is looked up. A caller may supply a
     // corrected CWE (the tester fixing the weakness id), which is stored on the
-    // finding so the derived category and the finding agree from then on.
+    // finding so the derived category and the finding agree from then on. The
+    // correction is persisted even when the new CWE maps to no OWASP primary:
+    // otherwise the fixed weakness id silently reverts to the old one, and the
+    // category a stale CWE produced survives forever.
     const suppliedCwe = normalizeCwe(req.body?.cwe);
     const cwe = suppliedCwe || target.cwe;
     const mapping = mapFindingToOwaspTop10({ cwe });
 
-    let vulnerability = target;
-    if (mapping.primary) {
-      const patch = await applyOwaspMapping(
-        sessionId,
-        vulnerabilityId,
-        mapping,
-        suppliedCwe ? { cwe: suppliedCwe } : {},
-      );
-      vulnerability = { ...target, ...patch } as SessionVulnerabilityDoc;
-    }
+    const patch = await applyOwaspMapping(
+      sessionId,
+      vulnerabilityId,
+      mapping,
+      suppliedCwe ? { cwe: suppliedCwe } : {},
+    );
+    const vulnerability = { ...target, ...patch } as SessionVulnerabilityDoc;
 
     return res.status(200).json({
       mapping: { ...mapping, description: describeOwaspMapping(mapping) },

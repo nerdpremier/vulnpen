@@ -11,6 +11,7 @@ import {
   runAgentLoop,
 } from "../services/agent.service";
 import { setAgentState, setPaused } from "../services/agent-state.service";
+import { normalizeApprovedToolCallIds } from "../services/consent-batch";
 import { parkedRunContext, pump } from "../services/web-security/run-queue.service";
 import { isRunMarker } from "../services/web-security/scan-results";
 import {
@@ -140,6 +141,14 @@ export const createSession = async (req: Request, res: Response) => {
         createdAt: new Date(),
       });
       await workspace.save();
+    } else {
+      // A client-supplied workspace: only adopt it if it belongs to the caller.
+      // Without the uid guard any logged-in user could create a session in — and
+      // via the work host, execute against — a workspace owned by someone else.
+      const owned = await WorkspaceModel.findOne({ workspaceId, uid: userId }).lean();
+      if (!owned) {
+        return res.status(403).json({ message: "Workspace not found or not owned by you" });
+      }
     }
 
     const sessionId = uuidv4();
@@ -261,15 +270,15 @@ export const respondToConsent = async (req: Request, res: Response) => {
     }
 
     // Optional per-item approval: the ids the operator ticked. An empty array
-    // means "approve none" — it is never read as "approve everything", because
-    // that would turn a mis-rendered checkbox list into a full approval.
+    // Optional per-item approval: the ids the operator ticked. A present array
+    // — including the empty one — is the ticked set ("approve none"), never
+    // "approve everything"; only an absent field means the whole batch. The
+    // normalization lives in the consent-batch module, next to the split that
+    // consumes it, so the two can't disagree.
     if (toolCallIds !== undefined && !Array.isArray(toolCallIds)) {
       return res.status(400).json({ message: "toolCallIds must be an array of tool call ids" });
     }
-    const requestedApprovals =
-      Array.isArray(toolCallIds) && toolCallIds.length
-        ? toolCallIds.filter((id: unknown): id is string => typeof id === "string")
-        : undefined;
+    const requestedApprovals = normalizeApprovedToolCallIds(toolCallIds, approved);
 
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;

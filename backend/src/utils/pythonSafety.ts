@@ -44,8 +44,16 @@ const COMMAND_LIST_CALL_RE =
 const DESTRUCTIVE_FS_CALL_RE =
   /\b(?:os\.(?:remove|unlink|rmdir|removedirs|truncate)|shutil\.rmtree|shutil\.move|pathlib\.Path\s*\([^)]*\)\.unlink)\s*\(([^)]*)\)/g;
 
-/** open(path, "w") — a mode that replaces the file's contents. */
-const OPEN_FOR_WRITE_RE = /\bopen\s*\(\s*([^,)]+)\s*,\s*["'][wax]b?["']/g;
+/** open(path, "w") — a mode that replaces the file's contents. Any mode that
+ * contains "w", "x", "a" or "+" opens the path for writing; only the bare
+ * read forms (r, rb, rt, r+t saved for the + test below) never write. */
+const OPEN_FOR_WRITE_RE =
+  /\bopen\s*\(\s*([^,)]+)\s*,\s*["']([rwxabt+]{1,4})["']/g;
+
+/** True when a Python open() mode can write to the file. */
+function modeWrites(mode: string): boolean {
+  return /[wxa+]/.test(mode);
+}
 
 /**
  * Static safety gate for agent-supplied Python scripts. The script runs with
@@ -100,7 +108,22 @@ export function isDangerousPythonScript(source: string): DangerCheckResult {
     }
   }
 
+  // Raw writes to a block device are the most destructive open() target;
+  // check them before the generic system-root rule so the more specific
+  // reason shows for /dev/sd*.
+  for (const match of source.matchAll(/open\s*\(\s*f?["'](\/dev\/(?:sd|hd|nvme|vd|mmcblk)[^"']*)["']\s*,\s*["']([rwxabt+]{1,4})["']/g)) {
+    const mode = match[2] ?? "";
+    if (!modeWrites(mode)) continue;
+    return danger(
+      "python:block-device",
+      "สคริปต์เขียนข้อมูลทับดิสก์โดยตรง",
+      "ข้อมูลบนดิสก์หายถาวร",
+    );
+  }
+
   for (const match of source.matchAll(OPEN_FOR_WRITE_RE)) {
+    const mode = match[2] ?? "";
+    if (!modeWrites(mode)) continue;
     if (extractLiterals(match[1]).some(literalHitsSystemRoot)) {
       return danger(
         "python:overwrite-system-file",
@@ -108,14 +131,6 @@ export function isDangerousPythonScript(source: string): DangerCheckResult {
         "ไฟล์ระบบถูกเขียนทับถาวร เครื่องทดสอบอาจใช้งานไม่ได้",
       );
     }
-  }
-
-  if (/open\s*\(\s*f?["']\/dev\/(sd|hd|nvme|vd|mmcblk)[^"']*["']\s*,\s*["'][wa+]?b?["']/.test(source)) {
-    return danger(
-      "python:block-device",
-      "สคริปต์เขียนข้อมูลทับดิสก์โดยตรง",
-      "ข้อมูลบนดิสก์หายถาวร",
-    );
   }
 
   if (/\bos\.chmod\s*\(\s*f?["'](\/etc|\/usr|\/var|\/bin|\/boot|\/root|\/home)["']/.test(source) && /0o?777|0o?000/.test(source)) {

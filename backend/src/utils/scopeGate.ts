@@ -7,7 +7,13 @@
 
 export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "local"]);
 
-const URL_RE = /\bhttps?:\/\/([a-zA-Z0-9._-]+|\[[0-9a-f:]+\])(:\d+)?(\/|\b|['"<>\s]|$)/gi;
+/**
+ * Scheme + optional `user[:pass]@` userinfo + host. The userinfo must be
+ * consumed before the host is captured: without it, `http://juice@169.254.169.254/`
+ * would report `juice` as the host and hide the address actually connected to.
+ */
+const URL_RE =
+  /\bhttps?:\/\/(?:[^\s/@]*@)?([a-zA-Z0-9._-]+|\[[0-9a-f:]+\])(:\d+)?(\/|\b|['"<>\s]|$)/gi;
 const IPV4_RE = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g;
 const URL_START_RE = /\bhttps?:\/\/\S+/gi;
 const FLAG_TARGET_RE = /(?:^|\s)(?:-u|--url|--host|-t|--target|--upload-file)\s+['"]?([^\s'"]+)/gi;
@@ -20,7 +26,10 @@ export function extractCommandHosts(text: string): string[] {
   for (const m of text.matchAll(URL_RE)) addHost(hosts, m[1]);
   for (const m of text.matchAll(FLAG_TARGET_RE)) {
     const raw = m[1].replace(/\/+$/, "");
-    addHost(hosts, raw.replace(/^https?:\/\//i, "").split(/[/:]/)[0]);
+    // Drop any `user[:pass]@` userinfo before taking the host, for the same
+    // reason URL_RE consumes it: the connection target is after the `@`.
+    const authority = raw.replace(/^https?:\/\//i, "").split(/[/?#]/)[0].split("@").pop() ?? "";
+    addHost(hosts, authority.split(/[/:]/)[0]);
   }
   // IP literals outside URLs. An address that only appears inside a URL path
   // or query (an OSINT lookup by address, say) is part of that one request, not
