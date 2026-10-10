@@ -13,12 +13,7 @@ import {
 import { FiRefreshCw, FiUpload, FiTrash2, FiWifi, FiWifiOff } from "react-icons/fi";
 import { MdOutlineVpnLock } from "react-icons/md";
 import { useState } from "react";
-import {
-  AnimatedContent,
-  PageState,
-  StatStrip,
-  StatTile,
-} from "@/components/common/ui";
+import { AnimatedContent, PageState } from "@/components/common/ui";
 import styles from "@/styles/components/VPN.module.scss";
 
 /**
@@ -149,12 +144,6 @@ const VPNMainPage = ({ sessionId }) => {
     },
   };
 
-  /* Everything the readout needs is already in the two queries above: how many
-     tunnels are up, how many bundles exist, and whether the tunnel status is
-     readable at all. */
-  const upCount = vpnConnections.length;
-  const idleCount = Math.max(profiles.length - new Set(vpnConnections.map((c) => c.profile_name)).size, 0);
-
   return (
     <div className={styles.vpnContainer}>
       <div className={styles.header}>
@@ -189,35 +178,6 @@ const VPNMainPage = ({ sessionId }) => {
       </div>
 
       <div className={styles.content}>
-        <StatStrip className={styles.readout} role="group" aria-label="VPN state">
-          <StatTile
-            label="Tunnels up"
-            value={upCount}
-            tone={upCount ? "success" : "neutral"}
-            hint={upCount ? "active OpenVPN sessions" : "nothing connected"}
-          />
-          <StatTile
-            label="Profiles"
-            value={profiles.length}
-            hint="uploaded bundles"
-          />
-          <StatTile
-            label="Idle"
-            value={idleCount}
-            hint="profiles with no tunnel"
-          />
-          <StatTile
-            label="Tunnel status"
-            value={vpnStatusUnknown ? "Unknown" : "Readable"}
-            tone={vpnStatusUnknown ? "warning" : "neutral"}
-            hint={
-              vpnStatusUnknown
-                ? "the status call did not answer"
-                : "polled every 5 seconds"
-            }
-          />
-        </StatStrip>
-
         {vpnConnections.length > 0 && (
           <div className={styles.section}>
             <h3 className={styles.sectionTitle}>Active Connections</h3>

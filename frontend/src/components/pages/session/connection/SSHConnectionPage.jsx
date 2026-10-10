@@ -21,7 +21,6 @@ import {
 } from "@/services/workspace.service";
 import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import DirectoryPickerModal from "./DirectoryPickerModal";
-import { AnimatedContent, StatStrip, StatTile } from "@/components/common/ui";
 import styles from "@/styles/pages/Connection.module.scss";
 
 const EMPTY_HOST = { kind: "local", workFolder: "", sshProfileAlias: "" };
@@ -88,17 +87,6 @@ export default function WorkspaceConnectionPage({ sessionId }) {
     ...(draft.kind === "ssh" ? { sshProfileAlias: draft.sshProfileAlias } : {}),
   };
 
-  /* ---- Readout: everything below is derived from state the page already
-     holds, so the band adds no request of its own. ------------------------- */
-
-  const usableProfiles = profiles.filter((profile) => profile.available).length;
-  const folderLeaf =
-    (draft.workFolder || "")
-      .replace(/\/+$/, "")
-      .split("/")
-      .filter(Boolean)
-      .pop() || "Not set";
-
   /* A failed read has no state to report: the alert below carries the failure
      and the header says the state is unknown rather than "setup required". */
   const stateUnknown = Boolean(hostError);
@@ -132,21 +120,6 @@ export default function WorkspaceConnectionPage({ sessionId }) {
     onError: (error) =>
       message.error(error?.response?.data?.message || "Could not save the workspace location"),
   });
-
-  /* The "Test location" outcome as a reading. It has to sit after the mutation
-     it reads, or the render touches `testMutation` before it exists. */
-  const lastTest = testMutation.data;
-  const testReading = testMutation.isLoading
-    ? { value: "Testing", tone: "info", hint: "checking this location" }
-    : lastTest
-      ? lastTest.success
-        ? {
-            value: "Reachable",
-            tone: "success",
-            hint: lastTest.workFolder || draft.workFolder || "location answered",
-          }
-        : { value: "Failed", tone: "danger", hint: "see the message for the reason" }
-      : { value: "Untested", tone: "neutral", hint: "run Test location" };
 
   if (sessionLoading || (workspaceId && hostLoading)) {
     return <div className={styles.center}><Spin /></div>;
@@ -184,7 +157,7 @@ export default function WorkspaceConnectionPage({ sessionId }) {
                 : styles.disconnected
           }`}
         >
-          {/* The dot only pulses when the readout behind it is live. */}
+          {/* The dot only pulses once the workspace is configured and its state is known. */}
           <span
             className={`${styles.statusDot} ${configured && !stateUnknown ? styles.statusDotLive : ""}`}
             aria-hidden="true"
@@ -196,41 +169,6 @@ export default function WorkspaceConnectionPage({ sessionId }) {
               : "Setup required"}
         </div>
       </header>
-
-      {/* Only rendered when the read succeeded: a readout built from a failed
-          read would invent a location the operator does not have. */}
-      {data && (
-        <AnimatedContent direction="up" className={styles.readoutWrap}>
-          <StatStrip className={styles.readout} role="group" aria-label="Workspace location">
-            <StatTile
-              label="Host"
-              value={draft.kind === "local" ? "Local" : "SSH"}
-              hint={
-                draft.kind === "local"
-                  ? "backend host"
-                  : selectedProfile?.label || "no profile selected"
-              }
-            />
-            <StatTile label="Folder" value={folderLeaf} hint={draft.workFolder || "not set"} />
-            <StatTile
-              label="Profiles"
-              value={`${usableProfiles}/${profiles.length}`}
-              tone={profiles.length && usableProfiles < profiles.length ? "warning" : "neutral"}
-              hint={
-                profiles.length
-                  ? "usable SSH profiles"
-                  : "none found in the mounted SSH config"
-              }
-            />
-            <StatTile
-              label="Last test"
-              value={testReading.value}
-              tone={testReading.tone}
-              hint={testReading.hint}
-            />
-          </StatStrip>
-        </AnimatedContent>
-      )}
 
       {hostError && (
         <Alert

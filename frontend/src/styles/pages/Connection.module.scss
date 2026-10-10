@@ -64,17 +64,6 @@
   100% { transform: scale(1.5); opacity: 0; }
 }
 
-/* The readout band: spacing only — the frame, the dividers and the wrapping
-   belong to `StatStrip`. */
-.readoutWrap {
-  max-width: 1100px;
-  margin: 0 auto 1rem;
-}
-
-.readout {
-  width: 100%;
-}
-
 @include reduced-motion {
   .statusDotLive::after {
     animation: none;
