@@ -5,6 +5,11 @@ import { requireActiveSession } from "../services/session.helpers";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
 import { execSSHCommand } from "../services/ssh.service";
 import {
+  getCapabilityByName,
+  getInstallCommandForOS,
+} from "../capabilities/registry";
+import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
+import {
   listSSHProfiles,
   resolveSSHProfile,
   testSSHProfile,
@@ -29,6 +34,45 @@ router.post("/test-ssh", async (_req: Request, res: Response) => {
       success: false,
       message: err.message || "SSH connection failed",
     });
+  }
+});
+
+/**
+ * Install a capability on the SSH box directly, without depending on the
+ * session's work-host kind. The shared cap install path (capabilities.service)
+ * resolves through the session ShellManager, whose target here is a *local*
+ * Windows folder — so installs were landing on the dev machine instead of the
+ * Kali box. Detection (detect-capabilities) had always talked to the box via
+ * ssh.service, so installing through the same ssh.service keeps installs and
+ * detection on the same host.
+ */
+router.post("/install-capability", async (req: Request, res: Response) => {
+  try {
+    const capabilityName = String(req.body?.capabilityName || "").trim();
+    if (!capabilityName) {
+      return res.status(400).json({ message: "capabilityName is required" });
+    }
+    const cap = getCapabilityByName(capabilityName);
+    if (!cap) {
+      return res.status(400).json({ message: `Unknown capability: "${capabilityName}"` });
+    }
+
+    const unameOutput = await execSSHCommand("uname -s", 10_000);
+    const isDarwin = unameOutput.trim().includes("Darwin");
+    const installCommand = buildPrivilegeAwareInstallCommand(
+      getInstallCommandForOS(cap, isDarwin),
+      isDarwin,
+    );
+
+    const output = await execSSHCommand(installCommand, 600_000);
+    const ok = !/^\s*(error|failed|no such)/i.test(output.trim()) && !/[Tt]raceback/.test(output);
+    return res.status(200).json({
+      success: ok,
+      output,
+      message: ok ? `${cap.label} installed successfully` : (output.trim() || "Install command exited with an error"),
+    });
+  } catch (err: any) {
+    return res.status(400).json({ message: err?.message ?? "Install failed" });
   }
 });
 

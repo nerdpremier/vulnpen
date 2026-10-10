@@ -1,6 +1,8 @@
 const PRIVILEGED_PACKAGE_COMMAND =
   /(?:^|(?:&&|\|\||;)\s*)(?:DEBIAN_FRONTEND=\S+\s+)?(?:apt|apt-get|dnf|yum|pacman|zypper)\s+/;
 
+const PIP_COMMAND = /(?:^|(?:&&|\|\||;)\s*)(?:python3?\s+-m\s+)?pip\s+install\b/;
+
 function quoteForShell(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
@@ -14,8 +16,24 @@ export function buildPrivilegeAwareInstallCommand(
   installCommand: string,
   isDarwin: boolean,
 ): string {
-  const command = installCommand.trim();
-  if (!command || isDarwin || !PRIVILEGED_PACKAGE_COMMAND.test(command)) {
+  let command = installCommand.trim();
+  if (!command || isDarwin) {
+    return command;
+  }
+
+  if (PIP_COMMAND.test(command)) {
+    // Debian/Kali's system Python is PEP 668 externally-managed, so a bare
+    // `pip install` is refused. Appending the override keeps registry pip
+    // commands working on the stock Kali image. --ignore-installed is needed
+    // too: pip otherwise tries to uninstall co-installed Kali system packages
+    // (e.g. pyperclip) that carry no RECORD file, aborting the whole install.
+    return command.replace(
+      /(pip\s+install\b)/,
+      "$1 --break-system-packages --ignore-installed",
+    );
+  }
+
+  if (!PRIVILEGED_PACKAGE_COMMAND.test(command)) {
     return command;
   }
 
