@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ShellType, ShellCreator } from "../models/Sessions/Sessions.model";
 import {
   expandLocalFolder,
+  localShellCommand,
   ResolvedWorkHost,
   shellFolderExpression,
   spawnLocalShell,
@@ -414,7 +415,9 @@ export class ShellManager extends EventEmitter {
       const wrappedCommand = `mkdir -p -- ${folderExpression} && cd -- ${folderExpression} && ${escapeForLoginShell(command)}`;
 
       if (this.target!.kind === "local") {
-        const child = spawn("/bin/sh", ["-lc", wrappedCommand], {
+        const localShell = localShellCommand();
+        const arg = localShell === "cmd.exe" ? ["/d", "/s", "/c", wrappedCommand] : ["-lc", wrappedCommand];
+        const child = spawn(localShell, arg, {
           cwd: folder,
           env: process.env,
           stdio: ["ignore", "pipe", "pipe"],

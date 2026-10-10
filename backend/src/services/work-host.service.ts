@@ -236,7 +236,7 @@ export async function testWorkHost(target: ResolvedWorkHost): Promise<CommandRes
     : shellFolderExpression(target.workFolder);
   const command = `mkdir -p -- ${folder} && cd -- ${folder} && touch ${marker} && rm -f ${marker} && printf '%s' "$PWD"`;
   if (target.kind === "local") {
-    const result = await execAsync(command, { shell: "/bin/sh", timeout: 10_000 });
+    const result = await execAsync(command, { shell: localShellCommand(), timeout: 10_000 });
     return { stdout: result.stdout, stderr: result.stderr, code: 0 };
   }
   const ssh = await connectSSH(target.sshConfig!, 10_000);
@@ -365,7 +365,7 @@ export async function execOnResolvedWorkHost(
   if (target.kind === "local") {
     try {
       const result = await execAsync(inFolder, {
-        shell: "/bin/sh",
+        shell: localShellCommand(),
         timeout: timeoutMs > 0 ? timeoutMs : undefined,
         maxBuffer: 16 * 1024 * 1024,
       });
@@ -397,10 +397,22 @@ export async function purgeWorkFolder(target: ResolvedWorkHost, timeoutMs = 300_
   );
 }
 
+/**
+ * The shell to use for *local* work-host commands. The engine runs on
+ * Windows too, where /bin/sh does not exist; prefer Git Bash's sh, then a
+ * plain sh, then cmd.exe so dev-on-Windows and prod-on-Linux both work.
+ */
+export function localShellCommand(): string {
+  if (process.platform === "win32") {
+    return process.env.SHELL || "cmd.exe";
+  }
+  return process.env.SHELL || "/bin/sh";
+}
+
 export function spawnLocalShell(workFolder: string, interactive: boolean) {
   const folder = expandLocalFolder(workFolder);
   fs.mkdirSync(folder, { recursive: true });
-  const shell = process.env.SHELL || "/bin/sh";
+  const shell = localShellCommand();
   return spawn(shell, interactive ? ["-l"] : [], {
     cwd: folder,
     env: { ...process.env, PWD: folder },
