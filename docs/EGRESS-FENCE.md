@@ -72,7 +72,11 @@ destination:
 | A request whose method is `DELETE` does not leave | **100%** — a method is a token, not an interpretation |
 | A write (`POST`/`PUT`/`PATCH`/`DELETE`) to a host outside the engagement does not leave | **100%** |
 | A read of a public host does not leave | allowed by design — a tool download and an OSINT lookup are reconnaissance, not engagement activity |
-| A request to a delete/disable endpoint, a destructive SQL statement, or a sqlmap write flag does not leave | best effort — "this POST removes data" is a judgement about meaning, and a novel endpoint name will not be recognised |
+| A request whose method is not `GET`/`HEAD`/`OPTIONS`/`TRACE`/`POST`/`PUT`/`PATCH` (`MOVE`, `COPY`, `MKCOL`, `PURGE`, an invented verb) does not leave | **100%** — exact token match |
+| A method override (`X-HTTP-Method-Override`, `X-HTTP-Method`, `_method`) that says `DELETE` does not leave, in a header, the query or the body | **100%** for those names |
+| A body the fence cannot read in full (over `maxBody`, default 1 MiB, or a non-identity `Content-Encoding`), an `https:` absolute URL, a `CONNECT` tunnel or an `Upgrade` does not leave | **100%** — refused, never guessed at |
+| Percent-encoded (also double-encoded) or `\uXXXX`-escaped statements and paths are judged in their decoded form | **100%** for those encodings |
+| A request to a delete/disable endpoint (any method inside the engagement; any word in a path segment or query such as `/deleteUser`, `?action=remove`), a GraphQL mutation named `delete*`/`remove*`, a destructive SQL statement, or a sqlmap write flag does not leave | best effort — "this POST removes data" is a judgement about meaning, and a novel endpoint name will not be recognised |
 | Command-level evasion (`sudo`, `bash -c`, `base64 \| sh`, a script on disk) buys nothing | **100%** — the fence never reads the command |
 
 The chokepoint removes the *evasion* problem. It does not remove the *semantics*

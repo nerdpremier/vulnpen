@@ -50,16 +50,50 @@ const HTTP_WRITE_VERB_RE =
 const HTTP_OVERWRITE_VERB_RE =
   /(?:^|[\s'"=])(?:-X|--request|--method)[=\s]*['"]?(?:PUT|PATCH)\b|(?:^|[\s'"])http(?:ie)?\s+(?:PUT|PATCH)\b|\.(?:put|patch)\s*\(|\.request\s*\(\s*["'](?:PUT|PATCH)\b|["']?method["']?\s*[:=]\s*["']?(?:PUT|PATCH)\b/i;
 
-/** Endpoints whose whole purpose is to remove or disable a resource. */
-const DELETE_ENDPOINT_RE =
-  /[/?&=](?:_?delete|_?remove|destroy|deactivate|revoke|purge|trash)(?:[/?&=#'"\s]|$)/i;
+/** Words that make a path segment or query parameter a removal operation. */
+const DELETE_WORDS = new Set([
+  "delete",
+  "remove",
+  "destroy",
+  "deactivate",
+  "disable",
+  "revoke",
+  "purge",
+  "trash",
+  "wipe",
+  "erase",
+]);
+
+const URL_SEGMENT_RE = /[/?&=;]([^/?&=;#\s'"]+)/g;
+
+/**
+ * True when any path segment, query key or query value names a removal
+ * operation: `/delete`, `/deleteUser`, `/delete_user`, `/user-delete`,
+ * `?action=remove`. Segments are split into words on punctuation and on
+ * camelCase boundaries, so `deleted`, `removed` and `undelete` (fields and
+ * states, not operations) are not matched.
+ */
+export function hasDeleteEndpoint(text: string): boolean {
+  for (const match of text.matchAll(URL_SEGMENT_RE)) {
+    const words = match[1]
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/);
+    if (words.some((word) => DELETE_WORDS.has(word))) return true;
+  }
+  return false;
+}
+
+/** A GraphQL mutation whose field removes or disables something. */
+const GRAPHQL_DESTRUCTIVE_RE =
+  /\bmutation\b[^{]*\{[^}]*?\b(?:delete|remove|destroy|drop|purge|wipe|erase|deactivate|disable|revoke|terminate)[A-Za-z0-9_]*\s*[({:]/i;
 
 /** A path segment that points at one existing object (numeric or UUID id). */
 const RESOURCE_ID_RE = /\/\d+(?:[/?&#\s'"]|$)|\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i;
 
 /** Header or form field that turns a harmless verb into DELETE. */
 const METHOD_OVERRIDE_DELETE_RE =
-  /(?:x-http-method-override|x-method-override|_method)["']?\s*[:=]\s*["']?DELETE\b/i;
+  /(?:x-http-method-override|x-http-method|x-method-override|_method)["']?\s*[:=]\s*["']?DELETE\b/i;
 
 /** SQL that removes or rewrites existing data instead of reading it. */
 const DESTRUCTIVE_SQL_RE =
@@ -103,7 +137,7 @@ function rawRequestLineDanger(text: string): DangerCheckResult | undefined {
   }
   if (
     (method === "POST" || method === "PUT" || method === "PATCH") &&
-    DELETE_ENDPOINT_RE.test(target)
+    hasDeleteEndpoint(target)
   ) {
     return danger(
       "http:raw-delete-endpoint",
@@ -181,7 +215,15 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
     );
   }
 
-  if (HTTP_WRITE_VERB_RE.test(probe) && DELETE_ENDPOINT_RE.test(probe)) {
+  if (GRAPHQL_DESTRUCTIVE_RE.test(probe)) {
+    return danger(
+      "graphql:destructive-mutation",
+      "GraphQL mutation ที่ลบหรือปิดการใช้งานข้อมูลบนเป้าหมาย",
+      IMPACT_DATA_LOSS,
+    );
+  }
+
+  if (HTTP_WRITE_VERB_RE.test(probe) && hasDeleteEndpoint(probe)) {
     return danger(
       "http:delete-endpoint",
       "เรียกปลายทางที่ทำหน้าที่ลบหรือปิดการใช้งานข้อมูลบนเป้าหมาย",

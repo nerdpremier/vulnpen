@@ -23,7 +23,7 @@
  *     *evasion* problem, not the *semantics* problem.
  */
 
-import { detectDestructiveTargetAction } from "./targetSafety";
+import { detectDestructiveTargetAction, hasDeleteEndpoint } from "./targetSafety";
 import {
   LOCAL_HOSTS,
   checkScope,
@@ -38,8 +38,10 @@ export interface EgressRequest {
   url: string;
   /** The host the client addressed, from the URL or the Host header. */
   host: string;
-  /** First part of the body, enough to recognise a destructive statement. */
+  /** The whole body. The caller must refuse a body it could not read in full. */
   body?: string;
+  /** Request headers: a method override travels here, not in the request line. */
+  headers?: Record<string, string | string[] | undefined>;
 }
 
 export type EgressDecision =
@@ -86,12 +88,63 @@ function asWireRequest(request: EgressRequest): string {
         }
       })()
     : request.url;
+  const headers = Object.entries(request.headers ?? {})
+    .filter(([name]) => name.toLowerCase() !== "host")
+    .map(([name, value]) => `\n${name}: ${Array.isArray(value) ? value.join(", ") : (value ?? "")}`)
+    .join("");
   const body = request.body ? `\n\n${request.body}` : "";
-  return `${request.method.toUpperCase()} ${path} HTTP/1.1\nHost: ${request.host}${body}`;
+  return `${request.method.toUpperCase()} ${path} HTTP/1.1\nHost: ${request.host}${headers}${body}`;
+}
+
+/** The request line's path and query, which is what names an endpoint. */
+function requestTarget(request: EgressRequest): string {
+  if (!request.url.startsWith("http")) return request.url;
+  try {
+    const parsed = new URL(request.url);
+    return parsed.pathname + parsed.search;
+  } catch {
+    return request.url;
+  }
 }
 
 /** Methods that read. A request that changes state on the other end is not a read. */
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * The only methods that may leave. Anything else (WebDAV MOVE / COPY / MKCOL /
+ * PROPPATCH / LOCK, a cache PURGE, an invented verb) either removes or rewrites
+ * a resource or has no place in a web-application test; a method is a token, so
+ * this is exact. DELETE is absent on purpose and is named by its own rule first.
+ */
+const ALLOWED_METHODS = new Set([...READ_METHODS, "TRACE", "POST", "PUT", "PATCH"]);
+
+function percentDecode(text: string): string {
+  return text
+    .replace(/\+/g, " ")
+    .replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+      try {
+        return decodeURIComponent(run);
+      } catch {
+        return run.replace(/%([0-9a-f]{2})/gi, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+      }
+    });
+}
+
+function unicodeUnescape(text: string): string {
+  return text.replace(/\\u([0-9a-f]{4})/gi, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+/**
+ * The server decodes the request before acting on it, so the rules have to read
+ * what the server will read: `DELETE%20FROM`, `/%64elete`, `"DELETE FROM"`
+ * and a doubly-encoded form are all the same request as their plain spelling.
+ */
+function wireVariants(text: string): string[] {
+  const unescaped = unicodeUnescape(text);
+  const once = percentDecode(unescaped);
+  const twice = percentDecode(once);
+  return [...new Set([text, unescaped, once, twice])];
+}
 
 /**
  * Decide one request.
@@ -114,9 +167,19 @@ export function decideEgressRequest(
 
   // 1. Destructive first, whatever the destination: this is the guarantee the
   //    fence exists for, and it is read off the request rather than a command.
-  const destructive = detectDestructiveTargetAction(wire);
-  if (destructive.dangerous) {
-    return { allow: false, rule: destructive.rule, reason: destructive.reason };
+  for (const variant of wireVariants(wire)) {
+    const destructive = detectDestructiveTargetAction(variant);
+    if (destructive.dangerous) {
+      return { allow: false, rule: destructive.rule, reason: destructive.reason };
+    }
+  }
+
+  if (!ALLOWED_METHODS.has(method)) {
+    return {
+      allow: false,
+      rule: "egress:method",
+      reason: `เมธอด ${method} ไม่อยู่ในชุดที่อนุญาตให้ออกไปยังเป้าหมาย`,
+    };
   }
 
   const reads = READ_METHODS.has(method);
@@ -132,6 +195,19 @@ export function decideEgressRequest(
       rule: "egress:out-of-scope",
       reason: `คำขอจะออกไปยัง ${request.host} ซึ่งอยู่นอกขอบเขตการทดสอบที่กำหนดไว้`,
     };
+  }
+
+  // 2b. Inside the engagement, an endpoint that is a removal operation is refused
+  //     whatever the method: a GET that deletes is still a delete, and the verb
+  //     rules only see a write verb.
+  for (const variant of wireVariants(requestTarget(request))) {
+    if (hasDeleteEndpoint(variant)) {
+      return {
+        allow: false,
+        rule: "http:delete-endpoint",
+        reason: "เรียกปลายทางที่ทำหน้าที่ลบหรือปิดการใช้งานข้อมูลบนเป้าหมาย",
+      };
+    }
   }
 
   // 3. Inside the engagement, a host named in the request still crosses the
