@@ -35,9 +35,6 @@ services:
       REDIS_URL: redis://redis:6379
       CODEX_HOME: /root/.codex
       SSH_CONFIG_FILE: /root/.ssh/config
-      # "Local" work hosts execute in the backend runtime. Keep their folders
-      # on the persistent backend-data volume across rebuilds/restarts.
-      WORKSPACE_DIR: /srv/data/workspaces
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
       NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,collabora,host.docker.internal}"
@@ -49,9 +46,6 @@ services:
       WOPI_PUBLIC_BASE: http://host.docker.internal:8080/api/wopi/files
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    cap_add:
-      # Required only when a workspace selects Local and starts OpenVPN there.
-      - NET_ADMIN
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:6080:6080"

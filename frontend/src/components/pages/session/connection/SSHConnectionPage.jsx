@@ -3,10 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, App, Button, Input, Select, Spin } from "antd";
 import {
-  CloudServerOutlined,
   DesktopOutlined,
   FolderOpenOutlined,
-  LaptopOutlined,
   ReloadOutlined,
   SaveOutlined,
   ThunderboltOutlined,
@@ -23,11 +21,11 @@ import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import DirectoryPickerModal from "./DirectoryPickerModal";
 import styles from "@/styles/pages/Connection.module.scss";
 
-const EMPTY_HOST = { kind: "local", workFolder: "", sshProfileAlias: "" };
+const EMPTY_HOST = { kind: "ssh", workFolder: "", sshProfileAlias: "" };
 
 function toDraft(workHost) {
   return {
-    kind: workHost?.kind === "ssh" ? "ssh" : "local",
+    kind: "ssh",
     workFolder: workHost?.workFolder || "",
     sshProfileAlias: workHost?.sshProfileAlias || "",
   };
@@ -74,17 +72,13 @@ export default function WorkspaceConnectionPage({ sessionId }) {
   );
   const saved = toDraft(data?.workHost);
   const isDirty =
-    saved.kind !== draft.kind ||
     saved.workFolder !== draft.workFolder.trim() ||
-    (draft.kind === "ssh" && saved.sshProfileAlias !== draft.sshProfileAlias);
-  const valid = Boolean(
-    draft.workFolder.trim() &&
-    (draft.kind === "local" || selectedProfile?.available),
-  );
+    saved.sshProfileAlias !== draft.sshProfileAlias;
+  const valid = Boolean(draft.workFolder.trim() && selectedProfile?.available);
   const requestHost = {
-    kind: draft.kind,
+    kind: "ssh",
     workFolder: draft.workFolder.trim(),
-    ...(draft.kind === "ssh" ? { sshProfileAlias: draft.sshProfileAlias } : {}),
+    sshProfileAlias: draft.sshProfileAlias,
   };
 
   /* A failed read has no state to report: the alert below carries the failure
@@ -184,57 +178,32 @@ export default function WorkspaceConnectionPage({ sessionId }) {
       <section className={styles.card}>
         <div className={styles.cardHeader}>
           <div>
-            <h2>Where should this workspace run?</h2>
-            <p>This choice applies to every session in the workspace.</p>
+            <h2>Which attack box should this workspace run on?</h2>
+            <p>Agent commands always run on the attack box over SSH, never inside the VulnPen backend. This choice applies to every session in the workspace.</p>
           </div>
         </div>
 
-        <div className={styles.hostGrid} role="radiogroup" aria-label="Work host">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={draft.kind === "local"}
-            className={`${styles.hostChoice} ${draft.kind === "local" ? styles.hostChoiceSelected : ""}`}
-            onClick={() => setDraft((current) => ({ ...current, kind: "local", sshProfileAlias: "" }))}
-          >
-            <LaptopOutlined />
-            <span><strong>Local</strong><small>Run where the VulnPen backend runs</small></span>
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={draft.kind === "ssh"}
-            className={`${styles.hostChoice} ${draft.kind === "ssh" ? styles.hostChoiceSelected : ""}`}
-            onClick={() => setDraft((current) => ({ ...current, kind: "ssh" }))}
-          >
-            <CloudServerOutlined />
-            <span><strong>Remote host</strong><small>Connect using a profile from your SSH config</small></span>
-          </button>
+        <div className={styles.field}>
+          <label htmlFor="work-host-profile">Attack box (SSH host)</label>
+          <Select
+            id="work-host-profile"
+            value={draft.sshProfileAlias || undefined}
+            placeholder="Choose a host"
+            onChange={(sshProfileAlias) => setDraft((current) => ({ ...current, sshProfileAlias }))}
+            options={profiles.map((profile) => ({
+              value: profile.alias,
+              disabled: !profile.available,
+              label: profile.available
+                ? `${profile.label} — ${profile.username}@${profile.host}:${profile.port}`
+                : `${profile.label} — unavailable`,
+            }))}
+            notFoundContent="No SSH hosts found in the mounted SSH config"
+            className={styles.select}
+            classNames={{ popup: { root: styles.selectPopup } }}
+          />
+          {selectedProfile?.error && <small className={styles.fieldError}>{selectedProfile.error}</small>}
+          <small>Credentials stay in your SSH config or agent — only the profile name is stored.</small>
         </div>
-
-        {draft.kind === "ssh" && (
-          <div className={styles.field}>
-            <label htmlFor="work-host-profile">SSH host</label>
-            <Select
-              id="work-host-profile"
-              value={draft.sshProfileAlias || undefined}
-              placeholder="Choose a host"
-              onChange={(sshProfileAlias) => setDraft((current) => ({ ...current, sshProfileAlias }))}
-              options={profiles.map((profile) => ({
-                value: profile.alias,
-                disabled: !profile.available,
-                label: profile.available
-                  ? `${profile.label} — ${profile.username}@${profile.host}:${profile.port}`
-                  : `${profile.label} — unavailable`,
-              }))}
-              notFoundContent="No SSH hosts found in the mounted SSH config"
-              className={styles.select}
-              classNames={{ popup: { root: styles.selectPopup } }}
-            />
-            {selectedProfile?.error && <small className={styles.fieldError}>{selectedProfile.error}</small>}
-            <small>Credentials stay in your SSH config or agent — only the profile name is stored.</small>
-          </div>
-        )}
 
         <div className={styles.field}>
           <label htmlFor="workspace-folder"><FolderOpenOutlined /> Work folder</label>
@@ -248,7 +217,7 @@ export default function WorkspaceConnectionPage({ sessionId }) {
             />
             <Button
               icon={<FolderOpenOutlined />}
-              disabled={draft.kind === "ssh" && !selectedProfile?.available}
+              disabled={!selectedProfile?.available}
               onClick={() => setShowDirectoryPicker(true)}
             >
               Browse

@@ -1,18 +1,10 @@
 import { Client as SSHClient } from "ssh2";
-import { spawn } from "child_process";
 import { EventEmitter } from "events";
 import { v4 as uuidv4 } from "uuid";
 import { ShellType, ShellCreator } from "../models/Sessions/Sessions.model";
-import {
-  expandLocalFolder,
-  localShellCommand,
-  ResolvedWorkHost,
-  shellFolderExpression,
-  spawnLocalShell,
-} from "./work-host.service";
+import { NO_ATTACK_BOX_MESSAGE, ResolvedWorkHost, shellFolderExpression } from "./work-host.service";
 import {
   escapeForLoginShell,
-  localChannel,
   RECONNECT_BASE_MS,
   RECONNECT_MAX_MS,
   RingBuffer,
@@ -116,12 +108,12 @@ export class ShellManager extends EventEmitter {
       throw error;
     }
 
-    if (this.target.kind === "local") {
-      await import("fs").then(({ promises }) => promises.mkdir(expandLocalFolder(this.target!.workFolder), { recursive: true }));
-      this.connected = true;
-      this.reconnectAttempt = 0;
-      this.emit("connection_status", { sshConnected: false, hostConnected: true, kind: "local" });
-      return;
+    // Defence in depth: the resolver never yields a local target, but nothing
+    // that reaches this manager may spawn a process inside the backend.
+    if (this.target.kind !== "ssh") {
+      const error = new Error(NO_ATTACK_BOX_MESSAGE);
+      this.emit("connection_status", { sshConnected: false, error: error.message });
+      throw error;
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -191,7 +183,6 @@ export class ShellManager extends EventEmitter {
   }
 
   private handleDisconnect(): void {
-    if (this.target?.kind === "local") return;
     this.connected = false;
     this.sshConnection = null;
 
@@ -250,12 +241,6 @@ export class ShellManager extends EventEmitter {
 
   private openChannel(shell: ManagedShell): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this.target?.kind === "local") {
-        const child = spawnLocalShell(this.target.workFolder, shell.type === "pty");
-        this.wireChannel(shell, localChannel(child));
-        resolve();
-        return;
-      }
       if (!this.sshConnection) {
         return reject(new Error("SSH not connected"));
       }
@@ -407,43 +392,8 @@ export class ShellManager extends EventEmitter {
       }
       abortSignal?.addEventListener("abort", onAbort);
 
-      const folder = this.target!.kind === "local"
-        ? expandLocalFolder(this.target!.workFolder)
-        : this.target!.workFolder;
-      const folderExpression = this.target!.kind === "local"
-        ? `'${folder.replace(/'/g, `'\\''`)}'`
-        : shellFolderExpression(folder);
+      const folderExpression = shellFolderExpression(this.target!.workFolder);
       const wrappedCommand = `mkdir -p -- ${folderExpression} && cd -- ${folderExpression} && ${escapeForLoginShell(command)}`;
-
-      if (this.target!.kind === "local") {
-        const localShell = localShellCommand();
-        const arg = localShell === "cmd.exe" ? ["/d", "/s", "/c", wrappedCommand] : ["-lc", wrappedCommand];
-        const child = spawn(localShell, arg, {
-          cwd: folder,
-          env: process.env,
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        const onData = (data: Buffer) => {
-          const text = data.toString();
-          output += text;
-          onChunk?.(text);
-        };
-        child.stdout.on("data", onData);
-        child.stderr.on("data", onData);
-        child.on("error", reject);
-        child.on("close", (code) => {
-          abortSignal?.removeEventListener("abort", onAbort);
-          finish(output, code ?? 0);
-        });
-        abortSignal?.addEventListener("abort", () => child.kill("SIGTERM"), { once: true });
-        if (timeoutMs > 0) {
-          timer = setTimeout(() => {
-            child.kill("SIGTERM");
-            finish(output + `\n[TIMEOUT: command exceeded ${Math.round(timeoutMs / 1000)}s limit]`, 124);
-          }, timeoutMs);
-        }
-        return;
-      }
 
       if (!this.sshConnection) return reject(new Error("SSH not connected"));
       this.sshConnection.exec(wrappedCommand, (err, stream) => {

@@ -177,11 +177,7 @@ router.delete("/:sessionId/ssh-profile", async (req: Request, res: Response) => 
     await sessionLifecycle.destroy(sessionId);
     await WorkspaceModel.updateOne(
       { workspaceId: session.workspaceId, uid: userId, status: "active" },
-      { $set: { workHost: {
-        kind: "local",
-        workFolder: defaultWorkFolder(session.workspaceId),
-        configuredAt: new Date(),
-      } } },
+      { $unset: { workHost: "" } },
     );
     session.connectionState = { sshConnected: false, hostConnected: false };
     await session.save();

@@ -197,19 +197,6 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
     let ssh: SSHClient | null = null;
 
     try {
-      if (target.kind === "local") {
-        const preflight = await execOnWorkHost(
-          session_id,
-          "command -v openvpn >/dev/null 2>&1 && test -c /dev/net/tun",
-          5_000,
-        );
-        if (preflight.code !== 0) {
-          return res.status(400).json({
-            message:
-              "Local VPN requires OpenVPN and /dev/net/tun. Rebuild the backend and start it with NET_ADMIN (the bundled Docker Compose configuration includes both).",
-          });
-        }
-      }
       const remoteDir = `/tmp/vpn-${safeName}`;
       const remotePath = `${remoteDir}/${profile.filename}`;
       if (target.kind === "ssh") {

@@ -1,22 +1,22 @@
-import { exec, spawn } from "child_process";
-import fs from "fs";
-import os from "os";
 import path from "path";
-import { promisify } from "util";
 import { Client as SSHClient } from "ssh2";
 import { EventEmitter } from "events";
 import { PassThrough } from "stream";
 import WorkspaceModel, { WorkHostKind } from "../models/Workspace/Workspace.model";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import { SSHConfig } from "../utils/sshConfig";
-import { resolveSSHProfile, SSHProfileSummary } from "./ssh-profile.service";
+import {
+  hasLegacyConfig,
+  LEGACY_PROFILE_ALIAS,
+  resolveSSHProfile,
+  SSHProfileSummary,
+} from "./ssh-profile.service";
 
-const execAsync = promisify(exec);
 const DEFAULT_WORK_ROOT = process.env.WORKSPACE_DIR || "~/pentest-workspaces";
 
 export interface ResolvedWorkHost {
   workspaceId: string;
-  kind: WorkHostKind;
+  kind: "ssh";
   workFolder: string;
   sshProfileAlias?: string;
   sshConfig?: SSHConfig;
@@ -24,7 +24,7 @@ export interface ResolvedWorkHost {
 }
 
 export interface WorkHostInput {
-  kind: WorkHostKind;
+  kind: "ssh";
   workFolder: string;
   sshProfileAlias?: string;
 }
@@ -42,8 +42,33 @@ export interface DirectoryListing {
   directories: Array<{ name: string; path: string }>;
 }
 
+/**
+ * The agent's commands run on the attack box over SSH and never inside the
+ * backend: the backend holds the model keys, the database credentials and a
+ * direct route to the internet, so it is not disposable test infrastructure and
+ * it sits outside the egress fence that judges the attack box's traffic.
+ */
+export const NO_ATTACK_BOX_MESSAGE =
+  "Agent commands run on the attack box over SSH, never inside the VulnPen backend. " +
+  "Select an SSH profile for this workspace.";
+
 export function defaultWorkFolder(workspaceId: string): string {
   return `${DEFAULT_WORK_ROOT.replace(/\/+$/, "")}/${workspaceId}`;
+}
+
+/** The host a workspace uses: its saved SSH host, else the environment's attack box. */
+export function effectiveWorkHost(
+  workspaceId: string,
+  stored?: { kind: WorkHostKind; workFolder: string; sshProfileAlias?: string },
+): { kind: "ssh"; workFolder: string; sshProfileAlias: string } {
+  if (stored?.kind === "ssh" && stored.sshProfileAlias) {
+    return { kind: "ssh", workFolder: stored.workFolder, sshProfileAlias: stored.sshProfileAlias };
+  }
+  return {
+    kind: "ssh",
+    workFolder: defaultWorkFolder(workspaceId),
+    sshProfileAlias: hasLegacyConfig() ? LEGACY_PROFILE_ALIAS : "",
+  };
 }
 
 export function validateWorkFolder(value: unknown): string {
@@ -71,22 +96,13 @@ export function shellFolderExpression(folder: string): string {
   return shellEscape(folder);
 }
 
-export function expandLocalFolder(folder: string): string {
-  if (folder === "~") return os.homedir();
-  if (folder.startsWith("~/")) return path.join(os.homedir(), folder.slice(2));
-  return folder;
-}
-
 export async function normalizeWorkHost(
   workspaceId: string,
-  input: Partial<WorkHostInput>,
+  input: { kind?: unknown; workFolder?: string; sshProfileAlias?: string },
 ): Promise<WorkHostInput> {
-  const kind = input.kind;
-  if (kind !== "local" && kind !== "ssh") {
-    throw new Error("Work host must be local or ssh");
-  }
+  if (input.kind === "local") throw new Error(NO_ATTACK_BOX_MESSAGE);
+  if (input.kind !== "ssh") throw new Error("Work host must be ssh");
   const workFolder = validateWorkFolder(input.workFolder || defaultWorkFolder(workspaceId));
-  if (kind === "local") return { kind, workFolder };
 
   const sshProfileAlias = String(input.sshProfileAlias || "").trim();
   if (!sshProfileAlias) throw new Error("SSH profile is required for a remote work host");
@@ -94,7 +110,7 @@ export async function normalizeWorkHost(
   if (!profile.summary.available) {
     throw new Error(profile.summary.error || "SSH profile is unavailable");
   }
-  return { kind, workFolder, sshProfileAlias };
+  return { kind: "ssh", workFolder, sshProfileAlias };
 }
 
 export async function resolveWorkspaceWorkHost(workspaceId: string): Promise<ResolvedWorkHost> {
@@ -118,17 +134,19 @@ export async function resolveWorkHostRecords(
     throw new Error("Session does not belong to the resolved workspace");
   }
   const workspaceId = workspace.workspaceId;
-  const stored = workspace.workHost;
-  const kind: WorkHostKind = stored?.kind || "local";
+  // A record saved before local execution was retired is treated as unset, so
+  // the workspace falls back to the environment's attack box instead of the
+  // backend.
+  const stored = workspace.workHost?.kind === "ssh" ? workspace.workHost : undefined;
   const workFolder = validateWorkFolder(stored?.workFolder || defaultWorkFolder(workspaceId));
-  if (kind === "local") return { workspaceId, kind, workFolder };
 
-  const sshProfileAlias = stored?.sshProfileAlias;
-  if (!sshProfileAlias) throw new Error("The workspace has no SSH profile selected");
+  const sshProfileAlias =
+    stored?.sshProfileAlias || (hasLegacyConfig() ? LEGACY_PROFILE_ALIAS : undefined);
+  if (!sshProfileAlias) throw new Error(NO_ATTACK_BOX_MESSAGE);
   const resolved = await profileResolver(sshProfileAlias);
   return {
     workspaceId,
-    kind,
+    kind: "ssh",
     workFolder,
     sshProfileAlias,
     sshConfig: resolved.config,
@@ -217,14 +235,8 @@ export function execSSH(
 
 export async function testWorkHost(target: ResolvedWorkHost): Promise<CommandResult> {
   const marker = ".vulnpen-write-test";
-  const folder = target.kind === "local"
-    ? shellEscape(expandLocalFolder(target.workFolder))
-    : shellFolderExpression(target.workFolder);
+  const folder = shellFolderExpression(target.workFolder);
   const command = `mkdir -p -- ${folder} && cd -- ${folder} && touch ${marker} && rm -f ${marker} && printf '%s' "$PWD"`;
-  if (target.kind === "local") {
-    const result = await execAsync(command, { shell: localShellCommand(), timeout: 10_000 });
-    return { stdout: result.stdout, stderr: result.stderr, code: 0 };
-  }
   const ssh = await connectSSH(target.sshConfig!, 10_000);
   try {
     return await execSSH(ssh, command, 10_000);
@@ -248,33 +260,6 @@ export async function listResolvedWorkHostDirectories(
   requestedPath = "~",
 ): Promise<DirectoryListing> {
   const folder = validateWorkFolder(requestedPath || "~");
-
-  if (target.kind === "local") {
-    const homePath = await fs.promises.realpath(os.homedir());
-    const expanded = expandLocalFolder(folder);
-    let currentPath: string;
-    try {
-      currentPath = await fs.promises.realpath(expanded);
-    } catch (error: any) {
-      if (error?.code === "ENOENT") throw new Error("Directory does not exist");
-      throw error;
-    }
-    const stat = await fs.promises.stat(currentPath);
-    if (!stat.isDirectory()) throw new Error("Path is not a directory");
-
-    const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
-    const directories = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => ({ name: entry.name, path: path.join(currentPath, entry.name) }))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-    return {
-      homePath,
-      currentPath,
-      parentPath: directoryParent(currentPath),
-      directories,
-    };
-  }
-
   const ssh = await connectSSH(target.sshConfig!, 10_000);
   try {
     const expression = shellFolderExpression(folder);
@@ -333,26 +318,9 @@ export async function execOnResolvedWorkHost(
   timeoutMs = 300_000,
   input?: string,
 ): Promise<CommandResult> {
-  const folder = target.kind === "local"
-    ? shellEscape(expandLocalFolder(target.workFolder))
-    : shellFolderExpression(target.workFolder);
+  const folder = shellFolderExpression(target.workFolder);
   const inFolder =
     `${WORK_HOST_PATH_PREFIX}; mkdir -p -- ${folder} && cd -- ${folder} && ${command}`;
-  if (target.kind === "local") {
-    try {
-      const result = await execAsync(inFolder, {
-        shell: localShellCommand(),
-        timeout: timeoutMs > 0 ? timeoutMs : undefined,
-        maxBuffer: 16 * 1024 * 1024,
-      });
-      return { stdout: result.stdout, stderr: result.stderr, code: 0 };
-    } catch (error: any) {
-      if (typeof error?.code === "number") {
-        return { stdout: error.stdout || "", stderr: error.stderr || "", code: error.code };
-      }
-      throw error;
-    }
-  }
   const ssh = await connectSSH(target.sshConfig!);
   try {
     return await execSSH(ssh, inFolder, timeoutMs, input);
@@ -374,32 +342,9 @@ export async function purgeWorkFolder(target: ResolvedWorkHost, timeoutMs = 300_
 }
 
 /**
- * The shell to use for *local* work-host commands. The engine runs on
- * Windows too, where /bin/sh does not exist; prefer Git Bash's sh, then a
- * plain sh, then cmd.exe so dev-on-Windows and prod-on-Linux both work.
- */
-export function localShellCommand(): string {
-  if (process.platform === "win32") {
-    return process.env.SHELL || "cmd.exe";
-  }
-  return process.env.SHELL || "/bin/sh";
-}
-
-export function spawnLocalShell(workFolder: string, interactive: boolean) {
-  const folder = expandLocalFolder(workFolder);
-  fs.mkdirSync(folder, { recursive: true });
-  const shell = localShellCommand();
-  return spawn(shell, interactive ? ["-l"] : [], {
-    cwd: folder,
-    env: { ...process.env, PWD: folder },
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-}
-
-/**
  * Compatibility adapter for older VNC setup code that only needs the small
  * `ssh2.Client` exec/event surface. Commands still route through the selected
- * workspace host (including local), without duplicating transport decisions.
+ * workspace host, without duplicating transport decisions.
  */
 export class WorkHostCommandClient extends EventEmitter {
   constructor(private readonly sessionId: string) {

@@ -120,7 +120,7 @@ export default function DirectoryPickerModal({
       ]}
     >
       <div className={styles.directoryContext}>
-        Browsing <strong>{workHost.kind === "ssh" ? "remote SSH host" : "local host"}</strong>
+        Browsing <strong>the attack box</strong>
         {selectedPath && <span>Current selection: <code>{selectedPath}</code></span>}
       </div>
 

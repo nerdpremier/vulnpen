@@ -232,7 +232,7 @@ async function resolveFromSSHConfig(alias: string): Promise<ResolvedSSHProfile> 
   };
 }
 
-function hasLegacyConfig(): boolean {
+export function hasLegacyConfig(): boolean {
   return Boolean(process.env.SSH_HOST?.trim() && process.env.SSH_USERNAME?.trim());
 }
 

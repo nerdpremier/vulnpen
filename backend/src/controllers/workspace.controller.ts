@@ -6,7 +6,7 @@ import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
 import { listSSHProfiles } from "../services/ssh-profile.service";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import {
-  defaultWorkFolder,
+  effectiveWorkHost,
   listResolvedWorkHostDirectories,
   normalizeWorkHost,
   purgeWorkFolder,
@@ -143,10 +143,7 @@ export const getWorkspaceDetail = async (req: Request, res: Response) => {
       description: workspace.description,
       type: workspace.type,
       createdAt: workspace.createdAt,
-      workHost: workspace.workHost || {
-        kind: "local",
-        workFolder: defaultWorkFolder(workspace.workspaceId),
-      },
+      workHost: effectiveWorkHost(workspace.workspaceId, workspace.workHost),
       sessions,
     });
   } catch (err: any) {
@@ -164,13 +161,9 @@ export const getWorkspaceWorkHost = async (req: Request, res: Response) => {
       .lean();
     if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
-    const workHost = workspace.workHost || {
-      kind: "local",
-      workFolder: defaultWorkFolder(workspaceId),
-    };
     return res.status(200).json({
-      configured: Boolean(workspace.workHost),
-      workHost,
+      configured: workspace.workHost?.kind === "ssh",
+      workHost: effectiveWorkHost(workspaceId, workspace.workHost),
       profiles: await listSSHProfiles(),
     });
   } catch (err: any) {
@@ -186,18 +179,14 @@ export const updateWorkspaceWorkHost = async (req: Request, res: Response) => {
     if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
     const normalized = await normalizeWorkHost(workspaceId, req.body || {});
-    const target: Awaited<ReturnType<typeof resolveWorkspaceWorkHost>> = normalized.kind === "local"
-      ? { workspaceId, ...normalized }
-      : await (async () => {
-          const { resolveSSHProfile } = await import("../services/ssh-profile.service");
-          const profile = await resolveSSHProfile(normalized.sshProfileAlias!);
-          return {
-            workspaceId,
-            ...normalized,
-            sshConfig: profile.config,
-            sshProfile: profile.summary,
-          };
-        })();
+    const { resolveSSHProfile } = await import("../services/ssh-profile.service");
+    const profile = await resolveSSHProfile(normalized.sshProfileAlias!);
+    const target: Awaited<ReturnType<typeof resolveWorkspaceWorkHost>> = {
+      workspaceId,
+      ...normalized,
+      sshConfig: profile.config,
+      sshProfile: profile.summary,
+    };
     const probe = await testWorkHost(target);
     if (probe.code !== 0) {
       return res.status(400).json({ message: probe.stderr || "Could not use this workspace location" });
@@ -231,7 +220,6 @@ export const testWorkspaceWorkHost = async (req: Request, res: Response) => {
     const target: Awaited<ReturnType<typeof resolveWorkspaceWorkHost>> = req.body?.kind
       ? await (async () => {
           const input = await normalizeWorkHost(workspaceId, req.body);
-          if (input.kind === "local") return { workspaceId, ...input };
           const { resolveSSHProfile } = await import("../services/ssh-profile.service");
           const profile = await resolveSSHProfile(input.sshProfileAlias!);
           return {
@@ -270,18 +258,14 @@ export const listWorkspaceWorkHostDirectories = async (req: Request, res: Respon
       ...(req.body?.workHost || {}),
       workFolder: req.body?.path || req.body?.workHost?.workFolder || "~",
     });
-    const target: Awaited<ReturnType<typeof resolveWorkspaceWorkHost>> = input.kind === "local"
-      ? { workspaceId, ...input }
-      : await (async () => {
-          const { resolveSSHProfile } = await import("../services/ssh-profile.service");
-          const profile = await resolveSSHProfile(input.sshProfileAlias!);
-          return {
-            workspaceId,
-            ...input,
-            sshConfig: profile.config,
-            sshProfile: profile.summary,
-          };
-        })();
+    const { resolveSSHProfile } = await import("../services/ssh-profile.service");
+    const profile = await resolveSSHProfile(input.sshProfileAlias!);
+    const target: Awaited<ReturnType<typeof resolveWorkspaceWorkHost>> = {
+      workspaceId,
+      ...input,
+      sshConfig: profile.config,
+      sshProfile: profile.summary,
+    };
 
     return res.status(200).json(
       await listResolvedWorkHostDirectories(target, req.body?.path || "~"),

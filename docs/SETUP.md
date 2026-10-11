@@ -18,13 +18,13 @@ Docker deployment is local-only: application and infrastructure ports bind to
 | P0 | Untrusted SSH server | External SSH profiles require a matching `known_hosts` entry, including nonstandard ports. | Connect once with the normal `ssh alias` command and verify the fingerprint, then retry. |
 | P0 | VPN bundle uses separate certificates, keys, PKCS#12, or credentials | The uploader accepts one `.ovpn`/`.conf` plus up to 15 referenced assets, stores them with restrictive permissions, and uploads them together. | Select all bundle files in the file chooser. Interactive `auth-user-pass` prompts are rejected; include a credentials file or connect manually. |
 | P0 | Stale VPN PID or another OpenVPN process on the work host | Status and disconnect operations only act on PID files and command lines created by VulnPen. | Manage unrelated VPN processes outside VulnPen. |
-| P0 | Browser target is only reachable through the SSH host's VPN | The Browser Agent settings warn that the browser runs beside the backend, not on the SSH work host. | Connect the VPN in the backend/local work host, or expose an HTTP/SOCKS proxy reachable by the backend. |
+| P0 | Browser target is only reachable through the SSH host's VPN | The Browser Agent settings warn that the browser runs beside the backend, not on the SSH work host. | Connect the VPN on the attack box and expose an HTTP/SOCKS proxy reachable by the backend, or use the attack box's own tools instead of the Browser Agent. |
 | P0 | Backend compromise reaches the Docker daemon | The backend no longer mounts the Docker socket or controls work hosts through Docker APIs. | No action required. |
 | P1 | Docker missing, stopped, old, or Compose v1 | The launcher checks Docker Engine 20+, Compose v2, and daemon connectivity. | Install/update Docker Desktop or Docker Engine plus the Compose plugin. |
 | P1 | Port collision | Before a first start, the launcher identifies occupied TCP ports and the owning listener where the OS exposes it. | Stop the listener, then retry. The standard ports are 3000, 8080, 6080, 9020, 27017, and 6379; Kali adds 4200, 4242, and 5901. |
 | P1 | Low disk or memory | The launcher warns below 20 GB free disk or 8 GB RAM. | Free disk, increase Docker Desktop resources, reduce concurrent agents, or avoid the built-in Kali desktop. |
 | P1 | ARM64 host | The launcher warns because some third-party Kali tools are x86_64-only. | Use core mode with an ARM64 work host where possible; install unsupported tools manually or use an x86_64 attack box. |
-| P1 | Rootless Docker | The launcher warns and blocks built-in Kali, which needs privileged networking. | Use core mode with an external SSH work host, or switch to non-rootless Docker. Local OpenVPN also needs `NET_ADMIN` and `/dev/net/tun`. |
+| P1 | Rootless Docker | The launcher warns and blocks built-in Kali, which needs privileged networking. | Use core mode with an external SSH work host, or switch to non-rootless Docker. OpenVPN runs on the attack box, never in the backend. |
 | P1 | Repository or SSH folder permission error | The launcher checks repository writability; workspace selection performs a real create/write/delete probe. Mounts are read-only where possible. | Fix ownership for the clone/workspace. In Docker, use container-visible paths and ensure Docker Desktop can share the directory. |
 | P1 | SSH config split with `Include` | Concrete aliases in common include files and `config.d/*` globs are discovered. Wildcard-only hosts are intentionally not shown. | Select a concrete alias. Set `HOST_SSH_DIR` before start if `.ssh` lives somewhere else. |
 | P1 | Private key outside `.ssh`, encrypted key, or SSH agent | `~/.ssh`, `~/keys`, and `ssh-keys/` are supported; a live `SSH_AUTH_SOCK` is mounted automatically and preferred. | Set `HOST_SSH_KEYS_DIR`, copy a key into `ssh-keys/`, or run `ssh-add` before `./run.sh start`. Never commit keys. |
@@ -36,7 +36,7 @@ Docker deployment is local-only: application and infrastructure ports bind to
 | P2 | SELinux enforcing on Linux | Docker may reject or isolate bind mounts even when Unix ownership looks correct. | Prefer rootless-safe core mode or label the specific repository bind paths for container access according to your distribution policy. Do not disable SELinux globally. |
 | P2 | Air-gapped or intermittently connected host | Existing images and installed models continue to work; first builds, browser downloads, package installs, and hosted model tests need their upstreams. | Pre-pull/build images and preinstall tools while online, then use a reachable local model endpoint. |
 | P2 | Multiple clones running together | The launcher rejects an existing Compose project owned by another working directory; fixed host ports are also checked. | Run one clone at a time unless you deliberately assign unique Compose project names, ports, and frontend/backend URLs. |
-| P2 | Workspace path contains spaces | Local and SSH work folders are shell-quoted and tested before saving. | Select an absolute path (`~` is accepted for SSH). Avoid newline/control characters, which are rejected. |
+| P2 | Workspace path contains spaces | SSH work folders are shell-quoted and tested before saving. | Select an absolute path (`~` is accepted for SSH). Avoid newline/control characters, which are rejected. |
 | P2 | IPv6-only target or unusual DNS | Command execution uses the work host's network and resolver; individual pentest tools determine IPv6 support. | Verify resolution and routing in the workspace terminal, then choose IPv6-capable tool flags. |
 
 ## Normal installation
@@ -52,7 +52,7 @@ via `pnpm run dev` inside `frontend/` (the launcher prints the commands) or
 behind the reverse proxy in the TLS procedure below. Open the frontend URL
 (`http://localhost:3000` in dev), create the installation-owner account, then add
 and verify an orchestrator under **Settings → Models**. Open a workspace's
-**Connection** page and save a local folder or tested SSH alias.
+**Connection** page and save a tested SSH alias for the attack box.
 
 For subsequent starts, use `./run.sh start -q`. Useful diagnostics are:
 

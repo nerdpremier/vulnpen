@@ -1,4 +1,3 @@
-import { ChildProcessWithoutNullStreams } from "child_process";
 import { EventEmitter } from "events";
 
 import { stripAnsi as stripAnsiSequences } from "../utils/ansi";
@@ -80,15 +79,4 @@ export interface RuntimeChannel extends EventEmitter {
   end(): unknown;
   destroy(): unknown;
   setWindow?(rows: number, cols: number, height: number, width: number): unknown;
-}
-
-export function localChannel(child: ChildProcessWithoutNullStreams): RuntimeChannel {
-  const channel = child.stdout as unknown as RuntimeChannel;
-  channel.stderr = child.stderr;
-  channel.write = (data: string) => child.stdin.write(data);
-  channel.end = () => child.stdin.end();
-  channel.destroy = () => child.kill("SIGTERM");
-  child.on("close", (code) => channel.emit("close", code));
-  child.on("error", (error) => channel.emit("error", error));
-  return channel;
 }
