@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import UserModel from "../models/User/User.model";
 import { readEnvFile } from "../utils/envWriter";
+import { createRateLimiter } from "../utils/rateLimiter";
 import {
   readAllowRegistrationFlag,
   resolveRegistrationPolicy,
@@ -86,6 +87,11 @@ export const checkUserSession = async (req: Request, res: Response) => {
 
 export const registerUser = async (req: Request, res: Response) => {
   try {
+    const registerIp = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    if (registerRateLimited(registerIp)) {
+      return res.status(429).json({ message: "Too many registration attempts, please try again later" });
+    }
+
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
@@ -155,25 +161,8 @@ export const getRegistrationStatus = async (_req: Request, res: Response) => {
   }
 };
 
-// Simple in-memory login rate limiter: per-IP, sliding window.
-const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_RATE_MAX = 10;
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-
-const loginRateLimited = (ip: string): boolean => {
-  const now = Date.now();
-  const entry = loginAttempts.get(ip);
-  if (!entry || entry.resetAt <= now) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_RATE_WINDOW_MS });
-    // Opportunistic cleanup of expired entries.
-    for (const [key, value] of loginAttempts) {
-      if (value.resetAt <= now) loginAttempts.delete(key);
-    }
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > LOGIN_RATE_MAX;
-};
+const loginRateLimited = createRateLimiter(10, 15 * 60 * 1000);
+const registerRateLimited = createRateLimiter(10, 60 * 60 * 1000);
 
 export const loginUser = async (req: Request, res: Response) => {
   try {

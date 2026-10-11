@@ -135,6 +135,21 @@ RUN curl -fsSL --retry 3 --retry-delay 5 --max-time 900 -o /opt/burp-rpc.jar "$B
 COPY burp-project-options.sh /usr/local/bin/burp-project-options
 RUN chmod +x /usr/local/bin/burp-project-options && burp-project-options
 
+# -- Layer 7: The Browser Agent's engine --
+# Chromium is what the Browser Agent drives, and it lives on the ATTACK BOX
+# rather than in the backend image, because the work it does depends on this
+# box's network position: the VPN OpenVPN brings up here, and the egress fence
+# every packet has to leave through. The backend launches it over SSH and
+# attaches to it over CDP through a loopback-only tunnel
+# (backend/src/services/remote-browser.service.ts). Running it in the backend
+# put it on the wrong side of both, which is why a target reachable only through
+# this box's VPN could never be opened.
+#
+# It gets its own layer, after everything else, on purpose: adding this one
+# package must not invalidate the desktop and kali-linux-* layers above, which
+# are by far the most expensive ones to rebuild.
+RUN apti chromium
+
 # Entrypoint is copied last on purpose: it changes far more often than the
 # package layers above, and keeping it here means editing it rebuilds in
 # seconds instead of reinstalling Burp, the desktop and the browser stack.

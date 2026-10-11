@@ -347,5 +347,11 @@ if command -v Xvnc >/dev/null 2>&1; then
     fi
 fi
 
+# The Browser Agent's Chromium is deliberately NOT started here. It is launched
+# by the backend over SSH, on demand, so that the launch flags stay owned by the
+# settings the operator controls (the proxy above all) and the existing
+# fingerprint / idle-release / wedge-discard lifecycle keeps working unchanged.
+# See backend/src/services/remote-browser.service.ts.
+
 # Keep the container running
 wait "$SSHD_PID"
