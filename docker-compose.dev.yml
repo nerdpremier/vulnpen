@@ -68,6 +68,13 @@ services:
       SSH_HOST: kali
       SSH_PORT: "22"
       VNC_HOST: kali
+      # The browser agent's Chromium runs on the attack box, driven over CDP
+      # through a loopback-only SSH tunnel the backend opens itself. Its profile
+      # sits on /kali-data — mounted into both containers — so Burp's CA can be
+      # installed into it from here.
+      BROWSER_AGENT_REMOTE: "${BROWSER_AGENT_REMOTE:-true}"
+      BROWSER_AGENT_CDP_PORT: "${BROWSER_AGENT_CDP_PORT:-9222}"
+      BROWSER_AGENT_PROFILE_DIR: "${BROWSER_AGENT_PROFILE_DIR:-/kali-data/chromium-home}"
       # Report editor (WOPI/Collabora): COLLABORA_URL is server-side discovery
       # (container network), COLLABORA_PUBLIC_URL is the browser iframe address,
       # WOPI_PUBLIC_BASE is how Collabora calls back into the backend.

@@ -49,9 +49,9 @@ Two pieces:
   allowlist)`. It reuses the rules that already exist: `detectDestructiveTargetAction`
   for "does this remove or overwrite data" and `isHostInScope` / `checkScope` for
   "is this inside the engagement". Nothing new is invented — only relocated.
-- `src/egressProxy.ts` — the process that calls it. Plain HTTP is fully judged;
-  a `CONNECT` tunnel is refused, because a tunnel is opaque and a fence that
-  lets one through is not a fence for what travels inside it.
+- `src/egressProxy.ts` — the process that calls it. Plain HTTP is fully judged.
+  A `CONNECT` is refused by default; with `EGRESS_ALLOW_TLS=1` the fence
+  terminates the TLS itself and judges the request inside it (see [TLS](#tls)).
 
 ### The fence is not a blanket allowlist
 
@@ -106,6 +106,9 @@ services:
     environment:
       EGRESS_ALLOWLIST: "${EGRESS_ALLOWLIST:-}"   # the engagement target hosts
       EGRESS_PORT: "3128"
+      EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-0}"  # terminate + judge CONNECT (see TLS)
+    volumes:
+      - ./kali-data:/kali-data                    # holds the fence's CA
     networks: [fenced, upstream]
 
   kali:
@@ -126,21 +129,52 @@ nothing else — it has no route to the internet, so the fence is the only way t
 reach the target at all. `NO_PROXY` deliberately does not include the target:
 the target must be reached *through* the fence.
 
-### The browser agent needs the fence too
+### The browser agent is behind the fence too
 
-The browser does not run on the attack box — it runs in the **backend**
-container (that is why the VNC stream is published on the backend's port 6080).
-Network isolation cannot cover it, because the backend also needs Mongo, Redis
-and the model API. It is covered by configuration instead: the browser already
-accepts a proxy, so point it at the fence.
+The browser runs **on the attack box**, alongside the other tools, so the fence
+covers it the same way it covers `curl` or `sqlmap` — by network position, not by
+configuration.
+
+```
+        agent (curl, python, nmap, sqlmap, chromium, a binary it compiled)
+                                  │
+                                  ▼
+                    ┌─────────────────────────┐
+                    │  egress fence (:3128)   │   src/egressProxy.ts
+                    └─────────────────────────┘
+                                  │
+                                  ▼
+                  the engagement target (public internet)
+```
+
+The backend does not run Chromium. It launches it on the attack box over SSH and
+attaches over CDP through a **loopback-only SSH tunnel**, so the browser is a
+process on the fenced box and has no route of its own — exactly like every other
+tool there (`services/remote-browser.service.ts`).
+
+Point it at the fence by name:
 
 ```bash
 MAGNITUDE_PROXY_URL=http://egress:3128
 ```
 
-Set it in the backend's `.env` (or under Settings → Browser agent). Leaving it
-empty means browser traffic leaves the backend container directly and is judged
-by nothing — the one hole the topology does not close by itself.
+This is what `docker-compose.kali.yml` defaults to. The value is addressed the way
+the **attack box** reaches the proxy, not the backend: a host naming the attack
+box itself (`kali`, `localhost`, `$SSH_HOST`) is rewritten to `127.0.0.1` before
+the browser is launched there, and anything else — the fence, an external proxy —
+is passed through unchanged.
+
+Leaving it empty means the browser egresses directly from the attack box. That is
+still inside the fenced network, so it still cannot reach anything: it fails
+rather than silently bypassing the fence.
+
+> **History.** The browser used to run in the backend container, which also needs
+> Mongo, Redis and the model API — so network isolation could not cover it, and
+> the only thing standing between the browser and the internet was this one
+> setting being filled in correctly. Moving the browser to the attack box closed
+> that hole rather than documenting around it.
+
+### Configuring the fence's allowlist
 
 Set the allowlist from the engagement:
 
@@ -154,11 +188,55 @@ like a fence while being none.
 
 ## TLS
 
-Refused by default. The box already trusts the Burp CA
-(`services/burp-ca.service.ts` installs it), so terminating TLS at the fence and
-re-signing with that CA is the path to inspecting HTTPS too — until then,
-`EGRESS_ALLOW_TLS=1` opens tunnels that are **not** inspected, and the two 100%
-rows in the table above stop applying to anything sent inside them.
+Refused by default. A `CONNECT` tunnel is opaque — everything inside it is
+encrypted between the client and the real destination — so a fence that lets one
+through is not a fence for what travels inside it.
+
+`EGRESS_ALLOW_TLS=1` does not change that trade-off; it removes it. The fence
+terminates the TLS itself, decrypts, and hands the plaintext request to **the
+exact same handler** — and therefore the same `decideEgressRequest` — that
+already governs plain HTTP. HTTPS gets the same guarantees HTTP already has; the
+two 100% rows above keep applying inside the "tunnel", because there is no
+longer a tunnel, only a request the fence can read.
+
+How the interception is wired:
+
+- **A CA, generated once** (`src/utils/egressCa.ts`). On the first boot with TLS
+  on, the fence mints a 2048-bit RSA CA and signs a leaf certificate per
+  destination host on demand (with a DNS or IP SAN, cached in memory). The CA is
+  persisted to `/kali-data/egress-ca/{ca.crt,ca.key}` — the bind mount the
+  `egress`, `backend` and `kali` containers share — so it survives restarts and
+  every tool keeps trusting the same one. The **private key never leaves the
+  fence process**; the backend only ever reads the public certificate.
+- **Trust distribution** (`src/services/egress-ca-trust.service.ts`). Every
+  HTTPS client on the attack box has to trust that CA or it fails the handshake
+  on an unknown issuer. Two stores, two paths:
+  - Chromium (the browser agent) reads the profile's NSS database — the same
+    store and `certutil` sequence Burp's CA already uses, installed side by side
+    under `VulnPen Egress Fence CA`.
+  - `curl`, `python`, `nmap`, `sqlmap`, … read the OS trust store. The service
+    copies the CA to `/usr/local/share/ca-certificates/` on the attack box and
+    runs `update-ca-certificates` over SSH. Burp's flow never needed this
+    because Burp validates its own upstream TLS loosely; a plain client pointed
+    at the fence does not.
+
+  A watcher (mirroring `startBurpCaWatcher`) installs the CA as soon as the
+  fence has generated it and re-installs it if the fence's CA ever rotates.
+- **The upstream leg is ordinary TLS.** The fence re-encrypts to the real
+  destination with `rejectUnauthorized: true` — a normal, fully-validated
+  outbound connection. Only the client-facing side is intercepted; the fence
+  never lowers the bar for the connection to the target.
+
+The CA's public certificate is also served unauthenticated at
+`http://egress:3128/__egress_ca__/ca.der`, mirroring Burp's own `/cert`, for any
+client that would rather fetch it than read it off the shared mount.
+
+> **Why this is safe to enable.** Interception does not add a way *around* the
+> fence — the request inside the tunnel is judged by the same rules as a
+> plain-HTTP one, on the same socket the fence already owns. It closes the one
+> hole the opaque-tunnel flag opened: with `EGRESS_ALLOW_TLS=1` and no
+> interception, every rule in the table above stopped applying to anything sent
+> over HTTPS.
 
 ## Verifying it
 
@@ -171,3 +249,12 @@ The suite runs the fence as a real process on a real socket: an allowed request
 is forwarded to an upstream and comes back 200, a `DELETE` and a
 `POST /api/Users/1/delete` come back 403, an out-of-scope host comes back 403,
 and a `CONNECT` tunnel is refused.
+
+With TLS interception on, the same socket-level suite drives real `CONNECT`
+tunnels: it stands up an HTTPS upstream signed by the fence's own CA, opens a
+tunnel through the fence with a client that trusts that CA, and asserts that a
+`GET` is forwarded and comes back 200 while a `DELETE` inside the same tunnel
+comes back 403 — proving the plaintext request is judged by the same rules. It
+also asserts a write to a public out-of-scope host is refused before the fence
+dials anything, and that a private or unidentifiable host's `CONNECT` is refused
+before a handshake is attempted.

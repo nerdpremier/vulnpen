@@ -43,14 +43,42 @@ services:
       REDIS_URL: redis://redis:6379
       CODEX_HOME: /root/.codex
       SSH_CONFIG_FILE: /root/.ssh/config
+      # The attack box as the *backend* reaches it: the Compose service name on
+      # the control network, not the host's published 127.0.0.1:4242 — that
+      # address is loopback on the host and there is nothing behind it inside
+      # this container. Without these two, `buildSSHConfig()` falls through to
+      # the mounted .env, which carries the host-facing values, and every
+      # SSH-dependent feature fails with ECONNREFUSED 127.0.0.1:4242: launching
+      # the browser agent on the attack box, running agent commands there, and
+      # provisioning the desktop. docker-compose.dev.yml sets the same pair.
+      SSH_HOST: kali
+      SSH_PORT: "22"
       WORKSPACE_DIR: /kali-data/workspaces
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
       NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali,collabora,host.docker.internal}"
-      # The browser agent runs Chromium *in this container*, which has its own
-      # route to the internet, so network isolation alone cannot fence it —
-      # it has to be pointed at the proxy explicitly.
+      # The browser agent's Chromium now runs ON THE ATTACK BOX, not here, so it
+      # sits inside the fenced topology like every other tool and the fence
+      # judges its traffic on the wire instead of by configuration. This value is
+      # addressed the way THAT box reaches the proxy — which is why the fence is
+      # named directly rather than Burp, whose own egress would have to be
+      # pointed at the fence separately.
       MAGNITUDE_PROXY_URL: "${MAGNITUDE_PROXY_URL:-http://egress:3128}"
+      # The backend launches that browser over SSH and drives it over CDP
+      # through a loopback-only tunnel, so nothing new is published on any
+      # network. The profile lives on /kali-data, which both containers mount,
+      # so Burp's CA can be installed into it from here.
+      BROWSER_AGENT_REMOTE: "${BROWSER_AGENT_REMOTE:-true}"
+      BROWSER_AGENT_CDP_PORT: "${BROWSER_AGENT_CDP_PORT:-9222}"
+      BROWSER_AGENT_PROFILE_DIR: "${BROWSER_AGENT_PROFILE_DIR:-/kali-data/chromium-home}"
+      # The operator's view of the attack box's desktop. The box's own noVNC port
+      # cannot be published (it is on internal networks only), so the backend
+      # bridges it here: the browser the operator watches runs on that box, and
+      # without this the "Browser Agent" panel and the Desktop tab both embed
+      # `http://localhost:9020`, where nothing listens on the host, and show a
+      # blank frame. See backend/entrypoint.sh.
+      BROWSER_AGENT_DESKTOP_PORT: "${BROWSER_AGENT_DESKTOP_PORT:-9021}"
+      BROWSER_AGENT_DESKTOP_TARGET: "${BROWSER_AGENT_DESKTOP_TARGET:-kali:5989}"
       # The kali image starts Burp and its gRPC bridge on :50051; without a
       # host every burp_* tool reports "not configured".
       BURP_RPC_HOST: "${BURP_RPC_HOST:-kali}"
@@ -64,7 +92,15 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8080:8080"
+      # The backend's own display (Xvfb :99). NOT where the agent's browser runs.
       - "127.0.0.1:6080:6080"
+      # The ATTACK BOX's desktop, bridged by the backend (see backend/entrypoint.sh).
+      # The box itself cannot publish this: it is on `control`/`fenced`, both
+      # internal, and Docker does not apply port mappings for a container the host
+      # has no route into — `NetworkSettings.Ports` stays empty however the
+      # `ports:` block below is written. This is the port the operator's browser
+      # and the "Browser Agent" panel actually open.
+      - "127.0.0.1:9021:9021"
     volumes:
       - ./kali-data:/kali-data
       - backend-data:/srv/data
@@ -124,8 +160,9 @@ services:
 
   # The egress fence: the only container with a route to the internet, and the
   # only thing that decides whether a request the agent produced may leave.
-  # `src/egressProxy.ts` — plain HTTP is judged on the wire request, TLS tunnels
-  # are refused. See docs/EGRESS-FENCE.md.
+  # `src/egressProxy.ts` — plain HTTP is judged on the wire request; when
+  # EGRESS_ALLOW_TLS=1, TLS is terminated here and the request inside it is
+  # judged by the same rules. See docs/EGRESS-FENCE.md.
   egress:
     container_name: vulnpen-egress
     build: ./backend
@@ -143,9 +180,17 @@ services:
       EGRESS_TARGET: "${EGRESS_TARGET:-}"
       EGRESS_SCOPE: "${EGRESS_SCOPE:-}"
       EGRESS_PORT: "3128"
-      # A CONNECT tunnel cannot be inspected. Leave this off unless the box
-      # trusts a CA the proxy can terminate with.
+      # When on, CONNECT tunnels are terminated with the fence's own CA and the
+      # request inside is judged exactly like a plain-HTTP one. The box has to
+      # trust that CA or every HTTPS client errors on it — the backend installs
+      # it from the shared /kali-data mount below (`egress-ca-trust.service.ts`).
       EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-0}"
+      EGRESS_CA_DIR: "/kali-data/egress-ca"
+    volumes:
+      # Holds the fence's CA. Only the fence reads the private key (0600, in the
+      # same directory); the backend reads just the public certificate from this
+      # mount instead of fetching it over the wire.
+      - ./kali-data:/kali-data
     networks:
       - fenced
       - upstream
@@ -174,6 +219,29 @@ services:
       - NET_BIND_SERVICE  # sshd listens on :22, a privileged port
       - NET_ADMIN   # OpenVPN, raw-socket tooling
       - NET_RAW     # nmap -sS, masscan
+      # `cap_drop: ALL` on its own leaves a box that cannot be reached or
+      # logged into at all — the entrypoint runs under `set -e`, so it does not
+      # degrade, it restart-loops. Each of these was measured against the image
+      # with the others absent:
+      #
+      #   CHOWN       `chpasswd` rewrites /etc/shadow through a temp file and
+      #               hands it to the `shadow` group, which is not root's own.
+      #               Without it: "Authentication token manipulation error",
+      #               and the container exits before sshd ever starts.
+      #   SYS_CHROOT  sshd's privilege-separation child chroots into /run/sshd.
+      #               Without it every connection dies right after the TCP
+      #               handshake ("Connection lost before handshake" / ECONNRESET
+      #               from the backend), which reads as an unreachable box.
+      #   SETGID      the same child drops to the `sshd` privsep user; setgroups
+      #   SETUID      fails with EPERM and the child exits 255.
+      #
+      # These are the capabilities OpenSSH and shadow-utils require to work at
+      # all, not privileges the box's tooling needs: NET_ADMIN/NET_RAW above are
+      # still the only ones granted for what the agent runs.
+      - CHOWN
+      - SYS_CHROOT
+      - SETGID
+      - SETUID
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:

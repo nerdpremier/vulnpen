@@ -73,6 +73,34 @@ registry's detection script over SSH, parse, stamp). The registry
 (`capabilities/`) owns the data — commands, script, parsing; controllers map
 HTTP to the two verbs and never exec or write the user config themselves.
 
+## Safety
+
+Two layers guard the engagement target, and they are independent on purpose.
+
+**Target safety rules** — the command-reading boundary, owned by
+`utils/targetSafety.ts`: `detectDestructiveTargetAction` (a shell command, a
+Python script, a shell input or a raw HTTP request) and
+`detectDestructiveBrowserGoal` (a browser goal). A match is a
+`destructive_target` verdict that no execution mode may turn into a consent
+question. This layer reads the *command*, so it is a best-effort judgement
+about meaning; it is the only layer present in the core stack.
+
+**Egress fence** — the wire-level boundary, owned by `utils/egressPolicy.ts`
+(`decideEgressRequest`) and run by `src/egressProxy.ts`
+(`assertEgressProxyArmed` refuses to start unarmed). It judges the request on
+the wire rather than the command, so command-level evasion buys nothing. It is
+wired only in `docker-compose.kali.yml`, where the attack box has no internet
+route of its own, so the fence is its only way out; the browser agent runs **on
+that attack box** (launched by the backend over SSH, attached over CDP through a
+loopback tunnel), so it is fenced by topology and `MAGNITUDE_PROXY_URL` only has
+to name the fence. Plain HTTP is judged on the request line; a `CONNECT` tunnel
+is refused by default, and with `EGRESS_ALLOW_TLS=1` the fence terminates the
+TLS with its own CA (`utils/egressCa.ts`, trust distributed by
+`services/egress-ca-trust.service.ts`) and judges the request inside it by the
+same rules. It reuses the target-safety rules for "does this remove data" and
+the scope gate for "is this inside the engagement" — nothing new is invented,
+only relocated. `docs/EGRESS-FENCE.md` is the contract.
+
 ## Settings
 
 **Model settings** — every mutation of the model registry, owned by
@@ -388,6 +416,105 @@ detail cache is removed outright; a launch also marks the chat history stale).
 Query keys come from `utils/scanQueryKeys.mjs` (`scansKey`, `scanKey`,
 `testPlanKey`) — never hand-build a `["scans", sessionId]` literal, and never
 write a second launch/stop/delete `useMutation` with its own invalidation set.
+
+## Browser
+
+**DOM browser path** — how the browser agent acts on a page: read the interactive
+controls in one `page.evaluate` (`snapshotPage`), then address an element by role
+and accessible name rather than by coordinate (`runDomAction` in
+`services/dom-browser.service.ts`). Magnitude's own loop (`agent.act`) locates
+targets as coordinates through a small vision model, which is why it is not used
+and why the browser agent has no vision dependency: `tests/visionFreeBrowser.test.ts`
+fails if a call to it reappears under `src/` or `scripts/`. A snapshot's element
+ids are per-page-state; the locator is rebuilt from the element's own identity at
+action time, never from the id.
+
+**Shared browser agent** — the one long-lived Chromium the process owns, in
+`services/browser-agent.service.ts`. `ensureBrowserAgent` reuses the live agent
+while its configuration fingerprint is unchanged and rebuilds it otherwise;
+`runBrowserAgentExclusive` serializes every run on one chain, which is why the
+chain is deadline-guarded (`BROWSER_AGENT_RUN_TIMEOUT_MS`) and why a run that
+misses its deadline discards the browser instead of wedging every later call;
+`probeBrowserProxy` refuses a proxy nothing answers on before Chromium is
+launched. `screenshot` is a transcript artifact for the operator — no code path
+reads it back.
+
+**Remote browser** — the Chromium the agent drives runs on the **attack box**,
+not in the backend container (`services/remote-browser.service.ts`). That
+placement is the point: the browser inherits that container's network position —
+the VPN OpenVPN brings up there, and the egress fence every packet has to leave
+through — so a target reachable only through the attack box's VPN can be opened,
+and the browser is fenced by topology rather than by a setting being correct.
+The backend launches it over SSH with the flags the operator's settings imply
+(proxy above all, so Settings still applies), forwards a **loopback-only** SSH
+port to its CDP endpoint, and attaches with `connectOverCDP`. The CDP port is
+never published on a network, because CDP has no authentication. Set
+`BROWSER_AGENT_REMOTE=false` to launch Chromium beside the backend instead —
+only useful when there is no attack box.
+
+**Display names do not cross between the two boxes** — `MAGNITUDE_DISPLAY` names
+a display on the *backend* (its Xvfb is `:99`); the attack box's X server is the
+Xvnc desktop on `:89`. Sending the backend's value to the attack box makes
+Chromium exit at once with "Missing X server or $DISPLAY", so the remote launch
+uses its own setting, `BROWSER_AGENT_DISPLAY` (default `:89`). The same split
+applies to the proxy: see below.
+
+**Proxy addressing across the two boxes** — `MAGNITUDE_PROXY_URL` is written the
+way the **backend** reaches the proxy, and the backend reaches Burp as
+`http://kali:8080`. On the attack box that same listener is simply
+`127.0.0.1:8080`, so `proxyUrlForAttackBox` rewrites a host naming the attack box
+itself (`kali`, `vulnpen-kali`, `localhost`, `$SSH_HOST`) to loopback and passes
+anything else — the egress fence, an external proxy — through unchanged.
+
+The rewrite is not there because `kali` fails to resolve on the attack box: Docker
+registers that name as an alias on the container, so it resolves to the attack
+box's own address and the raw value happens to work. It is there because that is
+an accident of Docker's naming that only lands on the right listener while the
+alias points back at this same box. `127.0.0.1` says what is meant — Burp on
+*this* machine — and keeps meaning it. Burp's CA is fetched over a *different*
+address for the same reason: the backend reads it from `BURP_RPC_HOST:8080`, the
+host its RPC bridge already lives on.
+
+**The value must be exactly `scheme://host:port`** — Chromium's `--proxy-server`
+accepts nothing else. A trailing slash, which is what `URL.href` always appends,
+makes Chromium resolve an *empty* proxy list and every request then fails with
+`net::ERR_NO_SUPPORTED_PROXIES` rather than falling back to a direct connection.
+Because this value goes straight into the launch flags, a proxy configured in
+Settings was unusable and the agent could not reach anything through Burp. So the
+value is rebuilt from its parts rather than stringified; a path is dropped for the
+same reason, since a proxy URL has no meaningful path.
+
+**Profile lock (`SingletonLock`)** — Chromium writes `SingletonLock`,
+`SingletonCookie` and `SingletonSocket` into its `--user-data-dir` and refuses to
+start if one is present. The lock is a symlink embedding the **hostname** of the
+machine holding it, and the browser's profile lives on `/kali-data`, a bind mount
+that deliberately outlives the container. So recreating the attack box — an image
+update, `docker compose up -d --no-deps kali`, a crash — leaves a lock naming a
+host that no longer exists, and Chromium reports "in use by another Chromium
+process (N) on another computer (<old-host>)" and exits. Nothing clears it on its
+own, so the launch removes the three lock files first; it never touches the rest
+of the profile, which holds Burp's CA in its NSS store.
+
+**Action settling** — `runDomAction` returns as soon as the event is dispatched,
+which is *before* the request it started comes back and before most frameworks
+paint the result. Reading the page at that moment describes the state the action
+was meant to replace, so the model sees its own action as having done nothing and
+retries or reports a failure that never happened. Every action that can change the
+page is therefore settled first: a bounded wait for network idle, then for the DOM
+to stop mutating (`MutationObserver`, quiet window). Both are best-effort — a page
+that polls forever never reaches network idle, and refusing to proceed would turn
+a slow page into a broken run. A page that changes with no request and no mutation
+for longer than the quiet window is not covered by any settle heuristic; the
+request-driven case is, and that is what real pages produce.
+
+**Post-action verification** — the result line reports what the *page* did, not
+merely that the event was dispatched. "clicked Sign in" is a statement about the
+attempt, and a no-op click reported as success is worse than an error: the model
+builds on it and the failure only surfaces several steps later as an unexplained
+dead end. `fill` and `select` read the value back, `check` reads `isChecked()`,
+and `click` / `press` / navigation compare a page fingerprint and say
+"the page did not change" when nothing moved. Verification never turns a working
+action into a failed one: if it cannot tell, it says nothing extra.
 
 ## Web surface
 

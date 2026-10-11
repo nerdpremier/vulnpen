@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import { createClient, RedisClientType } from "redis";
@@ -9,7 +10,6 @@ const mongoSanitize = require("express-mongo-sanitize");
 import multer from "multer";
 import RedisStore from "connect-redis";
 import { authRoutes } from "./routes/auth.routes";
-import { taskRoutes } from "./routes/task.routes";
 import { userRoutes } from "./routes/user.routes";
 import { agentRoutes } from "./routes/agent.routes";
 import { shellRoutes } from "./routes/shell.routes";
@@ -28,6 +28,7 @@ import { repairEmptyToolCallArguments } from "./migrations/003-repair-empty-tool
 import { dropLegacyOwaspMappingFields } from "./migrations/004-drop-legacy-owasp-mapping-fields";
 import { retireAutoApproveMode } from "./migrations/005-retire-auto-approve-mode";
 import { startBurpCaWatcher } from "./services/burp-ca.service";
+import { startEgressCaWatcher } from "./services/egress-ca-trust.service";
 import { setAgentStateStore } from "./services/agent-state.service";
 
 declare module "express-session" {
@@ -137,6 +138,15 @@ const initializeApp = async () => {
       methods: "GET,HEAD,OPTIONS,PUT,PATCH,POST,DELETE",
     };
 
+    // The UI (another origin, same site) loads screenshots from this API with <img>,
+    // so CORP must not be the same-origin default. HSTS only means something over HTTPS.
+    app.use(
+      helmet({
+        crossOriginResourcePolicy: { policy: "same-site" },
+        hsts: productionDeployment,
+      }),
+    );
+
     app.use(cors(corsOptions));
     app.options("*", cors(corsOptions));
 
@@ -210,7 +220,6 @@ const initializeApp = async () => {
 
     // Routes
     app.use("/api/auth", authRoutes);
-    app.use("/api/task", taskRoutes);
     app.use("/api/user", userRoutes);
     app.use("/api/agent", agentRoutes);
     app.use("/api/shell", shellRoutes);
@@ -291,6 +300,12 @@ const initializeApp = async () => {
     // profile's trust would otherwise go stale until an operator clicked
     // "Refresh CA trust". Keep it current in the background.
     startBurpCaWatcher();
+
+    // When the egress fence terminates TLS, everything on the attack box has to
+    // trust its CA or every HTTPS handshake fails on an unknown issuer. The CA
+    // is read off the shared mount, so this notices the moment the fence has
+    // generated it and installs it into both stores without an operator action.
+    startEgressCaWatcher();
 
     process.on("SIGTERM", async () => {
       console.log("SIGTERM received. Shutting down gracefully...");

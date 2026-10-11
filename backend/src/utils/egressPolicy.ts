@@ -77,6 +77,29 @@ export function hasDeclaredTarget(allowlist: string[]): boolean {
   return allowlist.some((host) => !LOCAL_HOSTS.has(host.toLowerCase()));
 }
 
+/**
+ * Headers a browser attaches automatically and that are never a connection
+ * target: Chrome's own User-Agent is frozen to a `<major>.0.0.0` form (its
+ * User-Agent Reduction policy — "Chrome/150.0.0.0" is the real value sent by
+ * every request a current Chromium makes), which is a dotted quad `IPV4_RE`
+ * cannot tell apart from an actual address. Scanning them for IP literals
+ * finds the browser's own version number, not a host the request names —
+ * false-flagging a legitimate request to the in-scope host.
+ */
+const CLIENT_METADATA_HEADERS = new Set([
+  "user-agent",
+  "sec-ch-ua",
+  "sec-ch-ua-mobile",
+  "sec-ch-ua-platform",
+  "sec-ch-ua-platform-version",
+  "sec-ch-ua-full-version",
+  "sec-ch-ua-full-version-list",
+  "sec-ch-ua-arch",
+  "sec-ch-ua-bitness",
+  "sec-ch-ua-model",
+  "sec-ch-ua-wow64",
+]);
+
 /** The request as a wire line, which is what the target rules already read. */
 function asWireRequest(request: EgressRequest): string {
   const path = request.url.startsWith("http")
@@ -89,7 +112,10 @@ function asWireRequest(request: EgressRequest): string {
       })()
     : request.url;
   const headers = Object.entries(request.headers ?? {})
-    .filter(([name]) => name.toLowerCase() !== "host")
+    .filter(([name]) => {
+      const lower = name.toLowerCase();
+      return lower !== "host" && !CLIENT_METADATA_HEADERS.has(lower);
+    })
     .map(([name, value]) => `\n${name}: ${Array.isArray(value) ? value.join(", ") : (value ?? "")}`)
     .join("");
   const body = request.body ? `\n\n${request.body}` : "";
