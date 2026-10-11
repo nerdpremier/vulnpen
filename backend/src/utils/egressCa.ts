@@ -12,6 +12,16 @@
  * bind mount `backend` and `kali` already share (`/kali-data`), but nothing
  * outside `egressProxy.ts` needs it: `egress-ca-trust.service.ts` only ever
  * reads the public certificate, to install trust, never the key.
+ *
+ * node-forge carries an unpatched high advisory (GHSA-86w9-cpqp-85rv): RSA
+ * PKCS#1 v1.5 signature *verification* accepts extra nested DigestAlgorithm
+ * elements. Only verification is affected, and this module never verifies a
+ * signature — it generates keys, builds certificates and signs them, so the
+ * vulnerable path is unreachable here. Upstream verification of the real
+ * destination is Node's own TLS stack (`rejectUnauthorized`), and the client
+ * side trusts the CA through the OS/NSS stores, not through forge. With no
+ * fixed release to move to, the finding is recorded in `pnpm.auditConfig`
+ * rather than left to fail the audit gate for every other package.
  */
 import fs from "fs";
 import path from "path";
