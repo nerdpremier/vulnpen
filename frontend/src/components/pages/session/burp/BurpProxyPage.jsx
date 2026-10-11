@@ -32,7 +32,7 @@ import {
   configureBurpCa,
 } from "@/services/burp.service";
 import { usePublishHeaderActions } from "@/components/common/HeaderActions";
-import { BURP_HANDOFF_KEY } from "@/utils/burpHandoff.mjs";
+import { BURP_HANDOFF_KEY, stashBurpHandoff } from "@/utils/burpHandoff.mjs";
 import styles from "@/styles/components/BurpProxy.module.scss";
 
 const BURP_INTEGRATION = {
@@ -762,9 +762,11 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION, asPage = fal
       statusCode: fullRecord.statusCode,
       sourceName: integration.shortName,
     };
-    sessionStorage.setItem(integration.storageKey, JSON.stringify(attachment));
+    stashBurpHandoff(attachment, { key: integration.storageKey });
     // The handoff target is the chat composer, not the session root — the root
     // is the engagement overview now, where nothing would read the attachment.
+    // From the rail panel this push is to the page already on screen and does
+    // nothing; `stashBurpHandoff`'s event is what delivers it there.
     router.push(`/session/${sessionId}/chat`);
     message.success({ content: "Request attached to workspace", duration: 2 });
   }, [integration.shortName, integration.storageKey, router, services, sessionId]);

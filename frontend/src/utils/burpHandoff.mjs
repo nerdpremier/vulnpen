@@ -1,10 +1,39 @@
 /**
  * Burp handoff — the cross-page protocol that carries a request captured in
- * the Burp proxy page into the chat composer. Owns the sessionStorage key and
- * the message builder, so neither surface re-derives the payload format.
+ * the Burp proxy page into the chat composer. Owns the sessionStorage key, the
+ * completion event and the message builder, so neither surface re-derives the
+ * payload format.
  */
 
 export const BURP_HANDOFF_KEY = "burp-to-workspace";
+
+/**
+ * Fired on `window` the moment a handoff is stashed.
+ *
+ * Storage alone is not enough. The Burp rail panel and the chat are both
+ * rendered by the chat route (`/session/[id]/chat`), so "attach to workspace"
+ * from the rail is a push to the page it is already on: nothing remounts,
+ * nothing re-reads storage, and the payload strands — the toast fires and no
+ * attachment ever appears. This event lets a chat that is already mounted pick
+ * it up. When the routes differ (the full Burp page) it is simply unheard, and
+ * the mount-time read still finds the payload in storage.
+ */
+export const BURP_HANDOFF_EVENT = "burp-handoff";
+
+/** Stash a captured request for the chat, and announce it. */
+export function stashBurpHandoff(
+  attachment,
+  { key = BURP_HANDOFF_KEY, storage = sessionStorage, target = window } = {},
+) {
+  storage.setItem(key, JSON.stringify(attachment));
+  target.dispatchEvent(new CustomEvent(BURP_HANDOFF_EVENT));
+}
+
+/** Subscribe to stashed handoffs; returns an unsubscribe function. */
+export function subscribeBurpHandoff(handler, target = window) {
+  target.addEventListener(BURP_HANDOFF_EVENT, handler);
+  return () => target.removeEventListener(BURP_HANDOFF_EVENT, handler);
+}
 
 /**
  * Consume the handoff once: read, remove, parse. Returns null when nothing
