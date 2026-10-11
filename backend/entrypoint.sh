@@ -11,12 +11,27 @@ NOVNC_PORT="${BROWSER_AGENT_NOVNC_PORT:-6080}"
 SCREEN_GEOMETRY="${BROWSER_AGENT_SCREEN:-1280x800x24}"
 WATCHDOG_INTERVAL="${BROWSER_AGENT_WATCHDOG_INTERVAL:-5}"
 
+# The operator's view of the ATTACK BOX's desktop. Empty (the default) means the
+# deployment does not bridge it and this container serves only its own display.
+#
+# Why a second websockify: the agent's Chromium runs on the attack box, and that
+# box is attached to `control` and `fenced` only — both `internal: true`. Docker
+# has no route from the host into an internal network, so it never applies the
+# box's port mapping at all: `NetworkSettings.Ports` reports `{"9020/tcp":[]}`
+# and `docker port` prints nothing, however the compose file is written. The
+# backend sits on `control` too and IS published, so it bridges the box's Xvnc
+# to a port the operator's browser can open. Same websockify, same noVNC assets,
+# no new dependency.
+DESKTOP_PORT="${BROWSER_AGENT_DESKTOP_PORT:-}"
+DESKTOP_TARGET="${BROWSER_AGENT_DESKTOP_TARGET:-kali:5989}"
+
 DISPLAY_NUM="${DISPLAY#:}"
 DISPLAY_NUM="${DISPLAY_NUM%%.*}"
 
 XVFB_PID=""
 X11VNC_PID=""
 WEBSOCKIFY_PID=""
+DESKTOP_WS_PID=""
 
 log() { echo "[vnc-supervisor] $*"; }
 
@@ -142,10 +157,35 @@ start_websockify() {
   return 1
 }
 
+# The operator's view of the attack box. Nothing here depends on the backend's
+# own display, so this is deliberately not tied to Xvfb: the attack box can be up
+# while the backend's framebuffer is not, and vice versa. The target is resolved
+# per connection by websockify, so a box that is down leaves the noVNC page
+# served and reporting a failed connection — which is a far better answer for the
+# operator than a blank iframe.
+desktop_websockify_ready() { alive "$DESKTOP_WS_PID" && port_open "$DESKTOP_PORT"; }
+
+start_desktop_websockify() {
+  if [ -z "$DESKTOP_PORT" ]; then
+    return 1
+  fi
+  websockify --web /usr/share/novnc/ "$DESKTOP_PORT" "$DESKTOP_TARGET" &
+  DESKTOP_WS_PID=$!
+  if wait_for "desktop bridge on :$DESKTOP_PORT" "$DESKTOP_WS_PID" 15 desktop_websockify_ready; then
+    log "attack-box desktop bridge up on :$DESKTOP_PORT -> $DESKTOP_TARGET (pid $DESKTOP_WS_PID)"
+    return 0
+  fi
+  log "attack-box desktop bridge failed to bind :$DESKTOP_PORT"
+  kill "$DESKTOP_WS_PID" 2>/dev/null
+  DESKTOP_WS_PID=""
+  return 1
+}
+
 # Bring the stack up once at boot. Failures are logged but never fatal — the
 # backend API must still start, and the watchdog keeps retrying underneath it.
 start_xvfb && start_x11vnc
 start_websockify
+start_desktop_websockify
 
 # Pre-launch a placeholder Chromium on the display so the noVNC live view shows
 # a real browser from boot instead of a black framebuffer. The browser agent
@@ -197,8 +237,8 @@ launch_placeholder_chromium
 BACKOFF_MAX="${BROWSER_AGENT_BACKOFF_MAX:-60}"
 
 watchdog() {
-  local xvfb_fails=0 x11vnc_fails=0 websockify_fails=0
-  local xvfb_wait=0 x11vnc_wait=0 websockify_wait=0
+  local xvfb_fails=0 x11vnc_fails=0 websockify_fails=0 desktop_ws_fails=0
+  local xvfb_wait=0 x11vnc_wait=0 websockify_wait=0 desktop_ws_wait=0
 
   backoff_for() {
     # 2^failures * interval, capped. Echoes the delay in seconds.
@@ -217,6 +257,25 @@ watchdog() {
     [ "$xvfb_wait" -gt 0 ] && xvfb_wait=$((xvfb_wait - WATCHDOG_INTERVAL))
     [ "$x11vnc_wait" -gt 0 ] && x11vnc_wait=$((x11vnc_wait - WATCHDOG_INTERVAL))
     [ "$websockify_wait" -gt 0 ] && websockify_wait=$((websockify_wait - WATCHDOG_INTERVAL))
+    [ "$desktop_ws_wait" -gt 0 ] && desktop_ws_wait=$((desktop_ws_wait - WATCHDOG_INTERVAL))
+
+    # The desktop bridge is independent of the stack above: it carries the
+    # attack box's screen, not this container's. Checked FIRST, before the Xvfb
+    # block below, because that block ends in `continue` — a backend whose own
+    # display is down must not also stop the operator's view of the attack box
+    # from being supervised.
+    if [ -n "$DESKTOP_PORT" ] && ! alive "$DESKTOP_WS_PID"; then
+      if [ "$desktop_ws_wait" -le 0 ]; then
+        log "attack-box desktop bridge is down; restarting (attempt $((desktop_ws_fails + 1)))"
+        if start_desktop_websockify; then
+          desktop_ws_fails=0
+        else
+          desktop_ws_fails=$((desktop_ws_fails + 1))
+          desktop_ws_wait="$(backoff_for "$desktop_ws_fails")"
+          log "attack-box desktop bridge restart failed; next attempt in ${desktop_ws_wait}s"
+        fi
+      fi
+    fi
 
     if ! alive "$XVFB_PID"; then
       if [ "$xvfb_wait" -le 0 ]; then
@@ -283,11 +342,12 @@ shutdown() {
   trap - EXIT INT TERM
   kill "$WATCHDOG_PID" 2>/dev/null
   kill "$SERVER_PID" 2>/dev/null
-  kill "$X11VNC_PID" "$WEBSOCKIFY_PID" "$XVFB_PID" "$PLACEHOLDER_PID" 2>/dev/null
+  kill "$X11VNC_PID" "$WEBSOCKIFY_PID" "$DESKTOP_WS_PID" "$XVFB_PID" "$PLACEHOLDER_PID" 2>/dev/null
 }
 trap shutdown EXIT INT TERM
 
 log "Browser Agent VNC stack started (display=$DISPLAY, rfb=:$VNC_RFB_PORT, noVNC=:$NOVNC_PORT)"
+[ -n "$DESKTOP_PORT" ] && log "attack-box desktop bridge on :$DESKTOP_PORT -> $DESKTOP_TARGET"
 
 # Run the server as a background child + `wait` rather than `exec`, so this shell
 # stays alive to supervise the VNC stack and can still service signals while the

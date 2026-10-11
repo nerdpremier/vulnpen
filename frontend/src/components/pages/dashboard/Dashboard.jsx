@@ -52,10 +52,7 @@ const DashboardPage = () => {
     }
   );
 
-  const filteredWorkspaces = useMemo(() => {
-    if (!workspacesData) return [];
-    return workspacesData;
-  }, [workspacesData]);
+  const workspaces = workspacesData || [];
 
   // Roll the workspace list up into the header metrics once per change instead
   // of recomputing inside every card.
@@ -102,7 +99,7 @@ const DashboardPage = () => {
     return <Loader />;
   }
 
-  const hasWorkspaces = (workspacesData?.length || 0) > 0;
+  const hasWorkspaces = workspaces.length > 0;
 
   return (
     <>
@@ -154,7 +151,7 @@ const DashboardPage = () => {
             <h2 className={styles.gridTitle}>
               All workspaces
               <span className={styles.gridCount}>
-                {filteredWorkspaces.length}
+                {workspaces.length}
               </span>
             </h2>
             <PrimaryButton
@@ -175,7 +172,7 @@ const DashboardPage = () => {
               description="Your workspaces are unchanged. Retry, or check the backend and reload."
               onRetry={() => refetch()}
             />
-          ) : filteredWorkspaces.length === 0 ? (
+          ) : workspaces.length === 0 ? (
             <EmptyState
               icon={<FiFolder />}
               title={
@@ -186,7 +183,7 @@ const DashboardPage = () => {
               description={
                 hasWorkspaces
                   ? "Nothing to show yet. Create a workspace to get started."
-                  : "A workspace holds one engagement: its target, its sessions and its findings."
+                  : "A workspace holds one engagement: its sessions and findings."
               }
               actions={
                 <PrimaryButton purpleFilled onClick={() => setShow(true)}>
@@ -196,7 +193,7 @@ const DashboardPage = () => {
             />
           ) : (
             <div className={styles.cardGrid}>
-              {filteredWorkspaces.map((workspace, index) => {
+              {workspaces.map((workspace, index) => {
                 const typeConf =
                   TYPE_CONFIG[workspace.type] || TYPE_CONFIG.general;
                 const sessions = workspace.sessions || {};

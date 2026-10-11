@@ -8,6 +8,7 @@ import { App, Button, Tooltip } from "antd";
 import {
   ArrowLeftOutlined,
   DeleteOutlined,
+  FileSearchOutlined,
   RedoOutlined,
   StopOutlined,
 } from "@ant-design/icons";
@@ -259,6 +260,7 @@ export default function ScanDetailPage({ sessionId, runId }) {
         </header>
         <PageState
           state="empty"
+          icon={<FileSearchOutlined />}
           title="This scan is no longer in the history"
           description="It was deleted, or it never belonged to this engagement."
           actions={<Button onClick={backToScans}>Back to My Scans</Button>}

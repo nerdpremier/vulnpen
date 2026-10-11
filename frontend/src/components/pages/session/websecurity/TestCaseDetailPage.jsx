@@ -9,6 +9,7 @@ import {
   ArrowLeftOutlined,
   CaretDownOutlined,
   EditOutlined,
+  FileUnknownOutlined,
   PlayCircleOutlined,
 } from "@ant-design/icons";
 import {
@@ -239,6 +240,7 @@ export default function TestCaseDetailPage({ sessionId, testId }) {
         ) : (
           <PageState
             state="empty"
+            icon={<FileUnknownOutlined />}
             title={`Test case ${caseId} is not in this plan`}
             description="It was removed from the plan. Scans that ran against it keep their own record."
             actions={

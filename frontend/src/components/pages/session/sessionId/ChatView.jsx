@@ -17,7 +17,7 @@ import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
 import { buildToolIndex } from "@/utils/toolIndex.mjs";
-import { buildBurpMessage, takeBurpHandoff } from "@/utils/burpHandoff.mjs";
+import { buildBurpMessage, takeBurpHandoff, subscribeBurpHandoff } from "@/utils/burpHandoff.mjs";
 import { PageState } from "@/components/common/ui";
 import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import { useQueryClient } from "react-query";
@@ -251,14 +251,19 @@ export default function ChatView({ sessionId }) {
 
   const burpPendingProcessed = useRef(false);
   useEffect(() => {
-    if (historyLoading || burpPendingProcessed.current) return;
-    // Consume the cross-page session-storage handoff once history is ready.
-    const parsed = takeBurpHandoff();
-    if (parsed) {
+    // Consume the cross-page handoff. Incoming from another route it is already
+    // in storage by the time this mounts; incoming from the Burp rail panel the
+    // chat is already mounted, so only the event can deliver it (the push is to
+    // the page on screen and remounts nothing).
+    const consume = () => {
+      const parsed = takeBurpHandoff();
+      if (parsed) setBurpAttachment(parsed);
+    };
+    if (!historyLoading && !burpPendingProcessed.current) {
       burpPendingProcessed.current = true;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBurpAttachment(parsed);
+      consume();
     }
+    return subscribeBurpHandoff(consume);
   }, [historyLoading]);
 
   // Tool calls and their results are indexed once per message-list change.
@@ -272,6 +277,23 @@ export default function ChatView({ sessionId }) {
   );
 
   const isEmpty = messages.length === 0 && !historyLoading && !historyError;
+
+  /**
+   * The assistant side only animates once a token actually lands: the streaming
+   * cursor on its text, the spinner on a running tool, "thinking..." on a
+   * reasoning block. Between sending a turn and the first of those — model
+   * latency, or a turn that opens straight into a tool call — the transcript
+   * showed the user's message and then nothing, so a live run looked frozen.
+   * The indicator fills exactly that gap and yields the moment real activity
+   * appears (any message streaming), so it never competes with the cursor or a
+   * tool spinner.
+   */
+  const hasLiveActivity = useMemo(
+    () => messages.some((m) => m.streaming),
+    [messages],
+  );
+  const showWorkingIndicator =
+    agentState === "running" && !hasLiveActivity && !isEmpty;
 
   /* The chat's own controls, in the same header slot every session page uses:
      the live transcript reloads from the server, and the page's other primary
@@ -383,6 +405,21 @@ export default function ChatView({ sessionId }) {
             onDismiss={() => dismissInstallSuggestion(suggestion.name)}
           />
         ))}
+
+        {showWorkingIndicator && (
+          <div
+            className={styles.workingIndicator}
+            role="status"
+            aria-label="The agent is working"
+          >
+            <span className={styles.workingDots} aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            <span className={styles.workingLabel}>Working</span>
+          </div>
+        )}
 
         <div ref={messagesEndRef} />
       </div>

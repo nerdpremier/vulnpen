@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button, Spin } from "antd";
-import { ExclamationCircleOutlined } from "@ant-design/icons";
+import { ExclamationCircleOutlined, InboxOutlined } from "@ant-design/icons";
 import EmptyState from "./EmptyState";
 import styles from "@/styles/components/Page.module.scss";
 
@@ -84,7 +84,7 @@ const PageState = ({
     <EmptyState
       className={className}
       compact={compact}
-      icon={icon}
+      icon={icon ?? <InboxOutlined />}
       title={title}
       description={description}
       actions={actions}

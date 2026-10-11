@@ -151,7 +151,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
         <PageState
           state="error"
           title="Could not load this workspace"
-          description="Its sessions and target are unchanged. Retry, or go back to the workspace list."
+          description="Your sessions and target are still saved. Retry, or go back to the workspace list."
           onRetry={() => refetch()}
           actions={
             <Button type="text" onClick={() => router.push("/dashboard")}>
@@ -239,7 +239,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           <EmptyState
             icon={<PlayCircleOutlined />}
             title="No sessions yet"
-            description="One engagement: its orchestrator, its shells, the WSTG plan and the findings it records."
+            description="Create the first session to start testing this workspace."
             actions={
               <PrimaryButton
                 purpleFilled

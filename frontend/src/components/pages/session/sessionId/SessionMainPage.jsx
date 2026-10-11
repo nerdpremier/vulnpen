@@ -6,7 +6,11 @@ import ChatView from "./ChatView";
 import BrowserAgentPanel from "@/components/session/BrowserAgentPanel";
 import BurpProxyPage from "@/components/pages/session/burp/BurpProxyPage";
 import { useAgentStreamStore } from "@/store/agentStream.store";
-import { isBrowserAgentActive } from "@/utils/browserAgentActivity.mjs";
+import {
+  isBrowserAgentActive,
+  isBrowserUsedInRun,
+  agentOwnsBrowserPanel,
+} from "@/utils/browserAgentActivity.mjs";
 
 // The right rail: one strip split into two halves, BROWSER AGENT above and
 // BURP below. Each half toggles its own panel.
@@ -47,9 +51,23 @@ const SessionMainPage = ({ session_id }) => {
   );
   const browserActive = isBrowserAgentActive(sessionMessages);
 
-  // Fold the live browser view back to the rail once the agent's browser
-  // call finishes — unless the user opened the panel themselves (manualOpenRef
-  // keeps their choice until the agent's next browser action supersedes it).
+  // Whether a run is in flight. `waiting_consent` counts: the agent is still
+  // mid-run, holding a browser it will come back to.
+  const agentState = useAgentStreamStore(
+    (s) => s.sessions[session_id]?.agentState,
+  );
+  const runLive = agentState === "running" || agentState === "waiting_consent";
+
+  // The agent's view follows the RUN, not each call — see agentOwnsBrowserPanel.
+  const agentWantsPanel = agentOwnsBrowserPanel({
+    browserActive,
+    runLive,
+    browserUsed: isBrowserUsedInRun(sessionMessages),
+  });
+
+  // Fold the live browser view back to the rail once the agent's work finishes
+  // — unless the user opened the panel themselves (manualOpenPanel keeps their
+  // choice until the agent's next browser action supersedes it).
   // Derived-state adjustment during render (not an effect) — setState inside
   // an effect body cascades renders.
   const [manualOpenPanel, setManualOpenPanel] = useState(null);
@@ -58,20 +76,24 @@ const SessionMainPage = ({ session_id }) => {
     setActivePanel((prev) => (prev === key ? null : key));
   }, []);
 
-  const [prevBrowserActive, setPrevBrowserActive] = useState(browserActive);
-  if (browserActive !== prevBrowserActive) {
-    setPrevBrowserActive(browserActive);
-    if (browserActive) {
+  const [prevAgentWantsPanel, setPrevAgentWantsPanel] =
+    useState(agentWantsPanel);
+  if (agentWantsPanel !== prevAgentWantsPanel) {
+    setPrevAgentWantsPanel(agentWantsPanel);
+    if (agentWantsPanel) {
       // The agent opening the panel supersedes a previous manual open:
       // when its work finishes the panel must fold back automatically.
       setManualOpenPanel(null);
       setActivePanel("browser");
-    } else if (manualOpenPanel === null) {
-      setActivePanel((prev) => (prev === "browser" ? null : prev));
     } else {
-      // The operator was looking at their own panel when the run ended;
-      // theirs stays open, the agent's view folds away with the run.
-      setManualOpenPanel(null);
+      // The run is over; the next one starts from a clean slate.
+      if (manualOpenPanel === null) {
+        setActivePanel((prev) => (prev === "browser" ? null : prev));
+      } else {
+        // The operator was looking at their own panel when the run ended;
+        // theirs stays open, the agent's view folds away with the run.
+        setManualOpenPanel(null);
+      }
     }
   }
 

@@ -7,6 +7,7 @@ import { useQuery } from "react-query";
 import { Button, Tooltip } from "antd";
 import {
   ArrowRightOutlined,
+  CompassOutlined,
   MessageOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
@@ -66,12 +67,15 @@ function CoverageDial({ rows, activeKey, onActivate }) {
 
   const active = rows.find((row) => row.key === activeKey) ?? null;
 
-  let cursor = -90;
-  const arcs = rows.map((row) => {
-    const span = total > 0 ? (row.total / total) * 360 : 0;
-    const start = cursor;
-    cursor += span;
-    const end = cursor - GAP_DEG;
+  /* Each chapter takes a slice of the ring proportional to its case count.
+     The running position is recomputed from the preceding rows instead of a
+     mutable cursor, so the arc math is a pure function of the input rows. */
+  const perCase = total > 0 ? 360 / total : 0;
+  const arcs = rows.map((row, index) => {
+    const start =
+      -90 + rows.slice(0, index).reduce((sum, r) => sum + r.total, 0) * perCase;
+    const span = row.total * perCase;
+    const end = start + span - GAP_DEG;
     const executed = settledCount(row.counts);
     const passShare = row.total > 0 ? (row.counts.passed ?? 0) / row.total : 0;
     const failShare = row.total > 0
@@ -396,11 +400,12 @@ export default function EngagementOverviewPage({ sessionId }) {
 
   if (!coverage) {
     return shell(
-      <PageState
-        state="empty"
-        title="No test plan yet"
-        description="A plan sets the target, the scope and the WSTG cases an engagement covers — scans, findings and the report all come from it."
-        actions={
+<PageState
+          state="empty"
+          icon={<CompassOutlined />}
+          title="No test plan yet"
+          description="Before the first scan can run, pick which WSTG cases this engagement covers and record the target and scope."
+          actions={
           <Button
             type="primary"
             onClick={() => router.push(`/session/${sessionId}/test-plan`)}

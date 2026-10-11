@@ -6,6 +6,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { getDataDir } from "../utils/loadConfig";
 import { readEnvFile } from "../utils/envWriter";
+import { remoteBrowserEnabled, remoteBrowserHome } from "./remote-browser.service";
 
 const execFileAsync = promisify(execFile);
 const BURP_CA_URL = "http://burpsuite/cert";
@@ -32,7 +33,15 @@ export type BurpCaStatus = {
 
 function getPaths() {
   const root = path.join(getDataDir(), "burp-ca");
-  const browserHome = path.join(getDataDir(), "chromium-home");
+  // The browser runs on the attack box, so its profile — and with it the NSS
+  // store this installs the CA into — lives on the /kali-data bind mount, which
+  // BOTH containers mount at the same path. Writing it from here therefore
+  // reaches the remote browser without an SSH round-trip, and the NSS database
+  // is portable enough (plain files) that the backend's certutil and the attack
+  // box's Chromium agree on it.
+  const browserHome = remoteBrowserEnabled()
+    ? remoteBrowserHome()
+    : path.join(getDataDir(), "chromium-home");
   return {
     root,
     browserHome,
@@ -46,8 +55,32 @@ export function getBurpBrowserHome(): string {
   return getPaths().browserHome;
 }
 
+/**
+ * Where to fetch Burp's CA from.
+ *
+ * Deliberately not simply MAGNITUDE_PROXY_URL. That setting is addressed the way
+ * the BROWSER reaches the proxy, and the browser runs on the attack box — so it
+ * may name a host that only resolves there (or, under the egress fence, the
+ * fence itself rather than Burp at all). The CA has to be fetched from here, so
+ * it is addressed the way the backend reaches Burp: the host its RPC bridge
+ * already lives on, on the proxy listener's port.
+ */
 function proxyUrlFromConfig(): string {
-  return readEnvFile().MAGNITUDE_PROXY_URL?.trim() || "";
+  const env = readEnvFile();
+
+  const explicit = env.BURP_CA_PROXY_URL?.trim();
+  if (explicit) return explicit;
+
+  const burpHost = env.BURP_RPC_HOST?.trim();
+  if (burpHost) {
+    const port = env.BURP_PROXY_PORT?.trim() || "8080";
+    return `http://${burpHost}:${port}`;
+  }
+
+  // Nothing names the attack box's Burp listener — the only setup that looks
+  // like this is a local browser with no attack box, where the browser's own
+  // proxy is the right address after all.
+  return env.MAGNITUDE_PROXY_URL?.trim() || "";
 }
 
 function readMetadata(): BurpCaMetadata | null {

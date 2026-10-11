@@ -89,6 +89,7 @@ export async function verifyModelPreset(model: ModelPreset): Promise<string> {
 function isMaskedApiKey(apiKey: unknown): apiKey is string {
   if (typeof apiKey !== "string") return false;
   if (apiKey.includes("•")) return true;
+  // eslint-disable-next-line no-control-regex
   return /^[\x21-\x7e]{1,6}[^\x00-\x7f|\s]{6,}[\x21-\x7e]{1,6}$/.test(apiKey);
 }
 

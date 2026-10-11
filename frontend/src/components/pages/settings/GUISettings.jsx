@@ -553,9 +553,13 @@ const GUISettingsPage = ({ sessionId }) => {
                 loading={isAutoRunning}
                 disabled={isAutoRunning}
                 onClick={handleAutoSetup}
+                /* In the `icon` prop, not the label: antd replaces the prop's
+                   icon with the spinner while loading, so the play button used
+                   to sit next to the spinner for the whole setup run. */
+                icon={<PlayCircleOutlined />}
                 style={{ height: 34, fontSize: "0.78rem" }}
               >
-                <PlayCircleOutlined /> {isAutoRunning ? "Setting up..." : "Start Auto-Setup"}
+                {isAutoRunning ? "Setting up..." : "Start Auto-Setup"}
               </PrimaryButton>
             </Col>
           </Row>

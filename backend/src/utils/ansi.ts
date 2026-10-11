@@ -1,6 +1,6 @@
 // ANSI escape sequences necessarily contain a control character.
-// eslint-disable-next-line no-control-regex
 export const ANSI_REGEX =
+  // eslint-disable-next-line no-control-regex
   /\x1B\[[0-?]*[-[\]#-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[@-_]|\r(?!\n)/g;
 
 /** Strip escape sequences the model and the chat both choke on. */

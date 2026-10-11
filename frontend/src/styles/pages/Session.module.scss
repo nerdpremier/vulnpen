@@ -1,10 +1,95 @@
 @import "../_variables";
 
+/* The narrow rail: icons only, centred, with the group labels kept as tiny
+   centred eyebrows so the three groups stay distinguishable. Two things reach
+   this state — the tablet3 breakpoint and the user's own collapse — and they
+   have to look identical, so both include this mixin rather than each carrying
+   its own copy of the same rules. */
+@mixin railNarrow {
+  padding: 0.7rem 0.4rem;
+  align-items: center;
+
+  .sidebarTop {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .navRow {
+    justify-content: center;
+    padding: 0.4rem 0.45rem;
+
+    /* The chevron alone carries the link; its `title` / `aria-label` still
+       name it, and it stays a normal-size target. */
+    span {
+      display: none;
+    }
+  }
+
+  .sidebarNav {
+    width: 100%;
+  }
+
+  .navSectionLabel {
+    padding: 0.5rem 0 0.25rem;
+    text-align: center;
+    font-size: 0.5rem;
+    letter-spacing: 0.08em;
+  }
+
+  .tab {
+    justify-content: center;
+    gap: 0;
+    padding: 0.5rem 0;
+  }
+
+  .navText {
+    display: none;
+  }
+
+  /* With no room left of the icon, the badge and the live dot move onto its
+     corner instead of pushing it off centre. */
+  .navBadge {
+    position: absolute;
+    top: 1px;
+    right: 5px;
+    min-width: 0;
+    padding: 0 0.2rem;
+    font-size: 0.5rem;
+  }
+
+  .navLive {
+    position: absolute;
+    top: 5px;
+    right: 7px;
+  }
+}
+
+/* `--moon-rail-w` is the rail's width for this page and the only place that
+   width is decided. The account dock (Common.module.scss) reads the same
+   variable, so collapsing moves both at once instead of leaving the dock
+   hanging over the content at the old width. */
 .sessionPage {
+  --moon-rail-w: var(--moon-sidebar-w);
+
   display: flex;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+
+  @include responsive(laptop1) {
+    --moon-rail-w: 216px;
+  }
+
+  @include responsive(tablet3) {
+    --moon-rail-w: var(--moon-sidebar-w-sm);
+  }
+
+  /* Narrow by choice. A class plus an attribute outranks the plain class in
+     the media queries above, so a collapsed rail stays narrow at every
+     width. */
+  &[data-rail="narrow"] {
+    --moon-rail-w: var(--moon-sidebar-w-sm);
+  }
 }
 
 .sessionMainArea {
@@ -34,8 +119,8 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: var(--moon-sidebar-w);
-  min-width: var(--moon-sidebar-w);
+  width: var(--moon-rail-w, var(--moon-sidebar-w));
+  min-width: var(--moon-rail-w, var(--moon-sidebar-w));
   height: 100vh;
   height: 100dvh;
   flex-shrink: 0;
@@ -44,6 +129,10 @@
   overflow-x: hidden;
   background: var(--moon-night);
   border-right: 1px solid var(--moon-line-1);
+  /* The width is the only thing here that moves the layout, and it is the
+     whole point of the collapse — so it is the only thing animated. */
+  transition: width var(--moon-dur-3) var(--moon-ease-out),
+    min-width var(--moon-dur-3) var(--moon-ease-out);
   @include scrollbar(6px);
 
   &::after {
@@ -62,29 +151,28 @@
     pointer-events: none;
   }
 
-  @include responsive(laptop1) {
-    width: 216px;
-    min-width: 216px;
-  }
-
   @include responsive(tablet3) {
-    width: var(--moon-sidebar-w-sm);
-    min-width: var(--moon-sidebar-w-sm);
-    padding: 0.7rem 0.4rem;
-    align-items: center;
+    @include railNarrow;
   }
+}
+
+/* The same rail, narrowed by the user's toggle rather than by the viewport. */
+.sessionPage[data-rail="narrow"] .sidebar {
+  @include railNarrow;
 }
 
 .sidebarTop {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .navRow {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 0.4rem 0.55rem;
   border-radius: 8px;
   border: none;
@@ -108,6 +196,41 @@
   @include truncate(1);
 }
 
+/* Collapse / expand the rail. Sits with the back link rather than floating on
+   the rail's edge so it is always visible, always in the same place, and
+   reachable by keyboard in both states. */
+.railToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--moon-text-faint);
+  font-size: 15px;
+  cursor: pointer;
+  @include focus-ring(2px);
+  transition: color var(--moon-dur-2) var(--moon-ease-out),
+    background var(--moon-dur-2) var(--moon-ease-out),
+    border-color var(--moon-dur-2) var(--moon-ease-out);
+
+  &:hover {
+    color: var(--moon-text);
+    background: var(--moon-surface-2);
+    border-color: var(--moon-line-1);
+  }
+
+  /* Below tablet3 the rail is narrow because the viewport is, so there is
+     nothing for this button to do. */
+  @include responsive(tablet3) {
+    display: none;
+  }
+}
+
 /* ---- Grouped navigation ---- */
 .sidebarNav {
   display: flex;
@@ -116,10 +239,6 @@
   padding: 0.9rem 0 0.6rem;
   flex: 1 1 auto;
   min-height: 0;
-
-  @include responsive(tablet3) {
-    width: 100%;
-  }
 }
 
 .navSectionLabel {
@@ -130,13 +249,6 @@
 
   &:first-child {
     padding-top: 0.2rem;
-  }
-
-  @include responsive(tablet3) {
-    padding: 0.5rem 0 0.25rem;
-    text-align: center;
-    font-size: 0.5rem;
-    letter-spacing: 0.08em;
   }
 }
 
@@ -207,10 +319,6 @@
   flex: 1;
   min-width: 0;
   @include truncate(1);
-
-  @include responsive(tablet3) {
-    display: none;
-  }
 }
 
 .navBadge {
@@ -252,6 +360,10 @@
 @include reduced-motion {
   .navLive {
     animation: none;
+  }
+
+  .sidebar {
+    transition: none;
   }
 }
 

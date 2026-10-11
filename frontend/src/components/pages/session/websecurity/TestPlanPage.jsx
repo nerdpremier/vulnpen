@@ -14,6 +14,7 @@ import {
   UpOutlined,
   RightOutlined,
   SettingOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import { getTestPlan } from "@/services/websecurity.service";
 import { getSessionInfo } from "@/services/agent.service";
@@ -416,6 +417,10 @@ export default function TestPlanPage({ sessionId }) {
         </Button>
       </>
     ),
+    // The query result object is rebuilt on every render, so the memo keys on
+    // the stable values it reads. The header slot then only moves when the plan
+    // actually changes — keying on planQuery itself would re-render every tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sessionId, plan, planQuery.isError, planQuery.isLoading, router],
   );
   usePublishHeaderActions(actions);
@@ -456,10 +461,11 @@ export default function TestPlanPage({ sessionId }) {
       ) : planQuery.isSuccess && !plan ? (
         <PageState
           state="empty"
+          icon={<UnorderedListOutlined />}
           title="No test plan yet"
-          description={`Pick the WSTG chapters this engagement covers and the plan is built from the ${
+          description={`Pick the WSTG chapters this engagement covers, then set the target and scope. The plan is built from the ${
             catalog?.totalTests ?? 97
-          }-case catalogue, with the target and scope recorded alongside it.`}
+          }-case catalogue.`}
           actions={
             <Button
               type="primary"

@@ -16,7 +16,7 @@ export function buildPrivilegeAwareInstallCommand(
   installCommand: string,
   isDarwin: boolean,
 ): string {
-  let command = installCommand.trim();
+  const command = installCommand.trim();
   if (!command || isDarwin) {
     return command;
   }

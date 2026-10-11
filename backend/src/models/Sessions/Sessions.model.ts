@@ -283,7 +283,6 @@ export interface SessionDoc extends mongoose.Document {
   workspaceId: string;
   name: string;
   description: string;
-  boxId?: mongoose.Types.ObjectId;
   createdAt: Date;
   status: "active" | "archived";
   agentState: AgentState;
@@ -636,7 +635,6 @@ const SessionSchema = new Schema({
   workspaceId: { type: String, default: "" },
   name: { type: String, required: true },
   description: { type: String, default: "" },
-  boxId: { type: mongoose.Types.ObjectId },
   createdAt: { type: Date, default: Date.now },
   status: { type: String, default: "active", enum: ["active", "archived"] },
   agentState: {

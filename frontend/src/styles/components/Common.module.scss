@@ -216,27 +216,54 @@
   flex-shrink: 0;
 }
 
+/* The dock can only hold the avatar once the rail is narrow, so the name and
+   caret go rather than truncate to a sliver. Reached two ways — the tablet3
+   breakpoint and the user collapsing the rail — hence a mixin. */
+@mixin dockNarrow {
+  padding: 0.5rem 0.4rem;
+
+  .username,
+  .accountCaret {
+    display: none;
+  }
+
+  .account {
+    justify-content: center;
+    padding: 0.45rem 0;
+  }
+}
+
 /* Floating dock for the account row: full-width bar pinned to the bottom-left
-   of the sidebar (where Clear context used to live), ChatGPT-style. The width
-   tracks the rail's own breakpoints — a hardcoded 247px floated over the page
-   whenever the rail narrowed. */
+   of the sidebar (where Clear context used to live), ChatGPT-style. Its width
+   comes from `--moon-rail-w`, published on the session page by
+   `Session.module.scss`, so it tracks the rail through every step including
+   the user's collapse — a hardcoded 247px floated over the page whenever the
+   rail narrowed. */
 .accountDock {
   position: fixed;
   left: 0;
   bottom: 0;
-  width: var(--moon-sidebar-w);
+  width: var(--moon-rail-w, var(--moon-sidebar-w));
   padding: 0.5rem 0.75rem;
   z-index: $z-header;
   background: var(--moon-night);
   border-right: 1px solid transparent;
-
-  @include responsive(laptop1) {
-    width: 216px;
-  }
+  transition: width var(--moon-dur-3) var(--moon-ease-out);
 
   @include responsive(tablet3) {
-    width: var(--moon-sidebar-w-sm);
-    padding: 0.5rem 0.4rem;
+    @include dockNarrow;
+  }
+}
+
+/* Narrow because the user said so, at a width where the rail is otherwise
+   wide. */
+:global([data-rail="narrow"]) .accountDock {
+  @include dockNarrow;
+}
+
+@include reduced-motion {
+  .accountDock {
+    transition: none;
   }
 }
 

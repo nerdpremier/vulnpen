@@ -9,6 +9,7 @@ import { Spin, Result, Button, Typography } from "antd";
 import { GlobalOutlined, SettingOutlined, DesktopOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useMemo } from "react";
 import { useQuery } from "react-query";
+import { novncFrameSrc, resolveNovncBase } from "@/utils/novncView.mjs";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI || "http://localhost:8080";
 
@@ -18,6 +19,13 @@ const { Text } = Typography;
  * Live noVNC view of the Magnitude browser agent, rendered as a side panel
  * next to the orchestrator chat. Chromium stays open between runs, so this
  * panel always reflects the browser's latest state.
+ *
+ * Which screen it shows is decided by the API, not here. The agent's Chromium
+ * runs on the attack box, whose desktop is a different VNC stack on a different
+ * port from the backend's own; embedding a hard-coded `localhost:6080` showed
+ * an empty display while the agent worked on the other machine. `novncUrl` is
+ * that answer — with the password the desktop asks for — and the fallback below
+ * only covers the local stack, which really does live on the backend's origin.
  */
 const BrowserAgentPanel = () => {
   const { data: magnitudeConfig, isLoading: configLoading } = useQuery(
@@ -46,15 +54,26 @@ const BrowserAgentPanel = () => {
     }
   );
 
-  const novncUrl = useMemo(() => {
-    if (!vncData?.novncPort) return null;
-    try {
-      const backendOrigin = new URL(BACKEND_URL);
-      return `${backendOrigin.protocol}//${backendOrigin.hostname}:${vncData.novncPort}`;
-    } catch {
-      return `http://localhost:${vncData.novncPort}`;
-    }
-  }, [vncData]);
+  const novncUrl = useMemo(
+    () =>
+      resolveNovncBase({
+        novncUrl: vncData?.novncUrl,
+        novncPort: vncData?.novncPort,
+        backendUrl: BACKEND_URL,
+      }),
+    [vncData]
+  );
+
+  const frameSrc = useMemo(
+    () => novncFrameSrc(novncUrl, vncData?.password),
+    [novncUrl, vncData]
+  );
+
+  /* The two stacks are different machines, so every message that names one has
+     to name the right one — the panel used to blame "the backend's VNC stack"
+     for a stream that was never the backend's. */
+  const onAttackBox = vncData?.workHost === "attack-box";
+  const where = onAttackBox ? "The attack box's desktop" : "The backend's VNC stack";
 
   const panelStyle = {
     display: "flex",
@@ -192,9 +211,10 @@ const BrowserAgentPanel = () => {
     );
   }
 
-  // Headed mode is configured, but the VNC stack in the container is not
-  // serving. The watchdog restarts it automatically; keep polling via
-  // refetchInterval above and offer a manual retry.
+  // Headed mode is configured, but the stack that draws the browser is not
+  // serving. The watchdog restarts the backend's one automatically; the attack
+  // box's is part of its image. Either way this panel keeps polling and offers
+  // a manual retry.
   if (!vncData?.vncRunning) {
     return (
       <div style={panelStyle}>
@@ -203,14 +223,22 @@ const BrowserAgentPanel = () => {
           title="Live Browser View Unavailable"
           subTitle={
             <span>
-              The backend&apos;s VNC stack is not serving on display{" "}
-              <code>{vncData?.display}</code>
+              {where} is not serving on display <code>{vncData?.display}</code>
               {vncData?.novncUp && !vncData?.rfbUp
                 ? " — noVNC is up but the VNC server behind it is down."
                 : " — the stream is starting or has stopped."}
+              {vncData?.note ? (
+                <>
+                  <br />
+                  <br />
+                  {vncData.note}
+                </>
+              ) : null}
               <br />
               <br />
-              It restarts automatically; this panel reconnects on its own.
+              {onAttackBox
+                ? "The desktop starts with the attack box; if it stays down, check that the box is running."
+                : "It restarts automatically; this panel reconnects on its own."}
             </span>
           }
           extra={
@@ -231,6 +259,23 @@ const BrowserAgentPanel = () => {
     );
   }
 
+  /* Says which machine is on screen and whether the agent's browser is on it.
+     Without it the operator cannot tell a desktop that is merely idle from one
+     where the agent is working — the two look identical. */
+  const statusLabel = vncData?.browserRunning
+    ? "agent browser live"
+    : "waiting for the browser";
+  const statusColor = vncData?.browserRunning
+    ? "var(--moon-success, #52c41a)"
+    : "var(--moon-warning, #faad14)";
+  const statusTitle = `${
+    onAttackBox ? "Attack box desktop" : "Backend desktop"
+  } · display ${vncData?.display}${
+    vncData?.browserRunning
+      ? " · the agent's Chromium is open here"
+      : " · the agent's Chromium has not opened here yet"
+  }`;
+
   return (
     <div
       style={{
@@ -243,7 +288,7 @@ const BrowserAgentPanel = () => {
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
           gap: "0.5rem",
           padding: "0.35rem 0.6rem",
           borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
@@ -251,13 +296,48 @@ const BrowserAgentPanel = () => {
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: "0.72rem", opacity: 0.6 }}>Browser model</span>
-        <BrowserModelSelector />
-        <BrowserReasoningSelector />
+        <span
+          title={statusTitle}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.35rem",
+            fontSize: "0.72rem",
+            opacity: 0.75,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: "0.45rem",
+              height: "0.45rem",
+              borderRadius: "50%",
+              background: statusColor,
+              flexShrink: 0,
+            }}
+          />
+          {statusLabel}
+        </span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontSize: "0.72rem", opacity: 0.6 }}>Browser model</span>
+          <BrowserModelSelector />
+          <BrowserReasoningSelector />
+        </span>
       </div>
       <iframe
         id="browser-agent-vnc-panel"
-        src={`${novncUrl}/vnc.html?autoconnect=true&resize=scale`}
+        /* The desktop asks for a password when one was set, exactly as the
+           Desktop tab's frame does; without it noVNC stops at
+           "Authentication required" and the panel looks broken. */
+        src={frameSrc}
         width="100%"
         height="100%"
         frameBorder="0"

@@ -11,6 +11,7 @@ import {
   PlayCircleOutlined,
   RedoOutlined,
   ReloadOutlined,
+  ScanOutlined,
   SearchOutlined,
   StopOutlined,
 } from "@ant-design/icons";
@@ -317,6 +318,7 @@ export default function ScansPage({ sessionId }) {
     return shell(
       <PageState
         state="empty"
+        icon={<ScanOutlined />}
         title="No test plan yet"
         description="A scan runs the cases the plan selects, so the plan comes first."
         actions={
@@ -333,6 +335,7 @@ export default function ScansPage({ sessionId }) {
     return shell(
       <PageState
         state="empty"
+        icon={<ScanOutlined />}
         title="No scans yet"
         description={`A scan runs ${caseCount} case${
           caseCount === 1 ? "" : "s"

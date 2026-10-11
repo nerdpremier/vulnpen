@@ -8,6 +8,7 @@ import { HeaderActionsProvider } from "@/components/common/HeaderActions";
 import AgentStreamConnector from "@/components/common/AgentStreamConnector";
 import ModelSetupGate from "@/components/common/ModelSetupGate";
 import MoonBackdrop from "@/components/common/ui/MoonBackdrop";
+import { useAgentStreamStore } from "@/store/agentStream.store";
 import React, { use } from "react";
 import { useSelector } from "react-redux";
 import { useQuery } from "react-query";
@@ -16,7 +17,7 @@ import styles from "@/styles/pages/Session.module.scss";
 
 const SessionLayout = ({ children, params }) => {
   const { session_id } = use(params);
-  const { user, sessions } = useSelector((state) => state.user);
+  const { user } = useSelector((state) => state.user);
 
   const { data: sessionInfo } = useQuery(
     ["session-info", session_id],
@@ -24,19 +25,26 @@ const SessionLayout = ({ children, params }) => {
     { enabled: !!user && !!session_id, refetchInterval: 10000 }
   );
 
+  // The rail's width is a property of this page, not of the rail component:
+  // the account dock is rendered by the header, outside the rail's subtree,
+  // and has to narrow with it. Publishing it here as `data-rail` gives both
+  // one source — `Session.module.scss` turns it into `--moon-rail-w`.
+  const railNarrow = useAgentStreamStore(
+    (state) => state.sessions[session_id]?.sidebarExpanded === false
+  );
+
   if (!user) {
     return <Loader />;
   }
-
-  // The workspace rail knows the display name; session-info fills the gap when
-  // the session was opened from a deep link.
-  const currentSession = sessions?.find((s) => s.id === session_id);
 
   return (
     <AuthContextProvider>
       <AgentStreamConnector sessionId={session_id} />
       <HeaderActionsProvider>
-        <div className={styles.sessionPage}>
+        <div
+          className={styles.sessionPage}
+          data-rail={railNarrow ? "narrow" : "wide"}
+        >
           <MoonBackdrop variant="page" />
           <Sidebar
             sessionId={session_id}
@@ -45,7 +53,6 @@ const SessionLayout = ({ children, params }) => {
           <div className={styles.sessionMainArea}>
             <HeaderLinks
               sessionId={session_id}
-              sessionName={currentSession?.name}
               sessionInfo={sessionInfo}
             />
             <div className={styles.sessionContent}>

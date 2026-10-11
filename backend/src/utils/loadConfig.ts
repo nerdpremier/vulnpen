@@ -61,6 +61,25 @@ function shouldPreserveExistingEnv(key: string): boolean {
   return existing !== undefined && existing !== "";
 }
 
+/**
+ * Did the *deployment* — not the Settings UI — supply this setting?
+ *
+ * `envSourcedKeys` holds exactly the keys this process adopted from `.env`, so
+ * a key that is set but absent from it was already in the environment when the
+ * process started: the container (compose) or the shell put it there. Those are
+ * the deployment's own decisions and outrank the file the Settings UI edits,
+ * the same rule the boot loop applies to SSH_HOST/SSH_PORT.
+ *
+ * Only meaningful once loadConfig() has run — before that the set is empty and
+ * every exported variable looks like the deployment's. Callers resolve dynamic
+ * settings through `resolveDynamicSetting()` (utils/envWriter.ts), which is
+ * where this distinction is turned into a value.
+ */
+export function isDeploymentPinned(key: string): boolean {
+  const value = process.env[key];
+  return value !== undefined && value !== "" && !envSourcedKeys.has(key);
+}
+
 export function getDataDir(): string {
   return resolveDataDir();
 }

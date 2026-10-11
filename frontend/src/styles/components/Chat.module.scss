@@ -254,6 +254,52 @@
   50% { opacity: 0; }
 }
 
+/* Shown between sending a turn and the first token landing (model latency, or
+   a turn that opens on a tool call), so the assistant side is never blank while
+   the agent works. It yields as soon as any real activity (assistant text,
+   reasoning, a running tool) appears. */
+.workingIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  padding: 0.4rem 0;
+  animation: fadeIn 0.2s ease;
+}
+
+.workingDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+
+  i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--moon-accent);
+    opacity: 0.35;
+    animation: workingBounce 1.2s ease-in-out infinite;
+
+    &:nth-child(2) {
+      animation-delay: 0.16s;
+    }
+
+    &:nth-child(3) {
+      animation-delay: 0.32s;
+    }
+  }
+}
+
+.workingLabel {
+  font-size: 0.78rem;
+  color: var(--secondary-text, #888);
+}
+
+@keyframes workingBounce {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
 .systemMessage {
   align-self: center;
   background: rgba(255, 255, 255, 0.04);

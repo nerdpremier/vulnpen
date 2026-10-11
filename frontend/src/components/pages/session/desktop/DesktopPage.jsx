@@ -12,6 +12,7 @@ import {
 } from "@ant-design/icons";
 import { connectToVNC } from "@/services/infra.service";
 import { getVNCConfig } from "@/services/user.service";
+import { novncFrameSrc, resolveNovncBase } from "@/utils/novncView.mjs";
 import { PageShell, PageState } from "@/components/common/ui";
 import { usePublishHeaderActions } from "@/components/common/HeaderActions";
 import styles from "@/styles/components/Desktop.module.scss";
@@ -110,7 +111,7 @@ export default function DesktopPage({ sessionId }) {
         <PageState
           state="error"
           title="Could not read the desktop configuration"
-          description="This screen cannot tell whether a desktop is installed. Nothing has been changed."
+          description="This screen cannot tell whether a desktop is installed."
           onRetry={() => configQuery.refetch()}
         />
       </PageShell>
@@ -124,7 +125,7 @@ export default function DesktopPage({ sessionId }) {
           state="empty"
           icon={<DesktopOutlined />}
           title="No desktop configured"
-          description="Install a desktop on this host, or point VulnPen at an existing VNC server — both live in Settings → Connection."
+          description="Install a desktop on this host, or point VulnPen at an existing VNC server. Both are set in Settings → Connection."
           actions={
             <Button type="primary" icon={<SettingOutlined />} onClick={openConnectionSettings}>
               Configure the desktop
@@ -165,10 +166,7 @@ export default function DesktopPage({ sessionId }) {
   }
 
   const { vncURL, password } = desktopQuery.data;
-  const base =
-    vncURL?.startsWith("http://") || vncURL?.startsWith("https://")
-      ? vncURL
-      : `http://${vncURL}`;
+  const frameSrc = novncFrameSrc(resolveNovncBase({ novncUrl: vncURL }), password);
 
   return (
     <PageShell
@@ -186,7 +184,7 @@ export default function DesktopPage({ sessionId }) {
         <iframe
           className={styles.canvas}
           title="Remote desktop"
-          src={`${base}/vnc.html?password=${encodeURIComponent(password)}&resize=scale&autoconnect=true`}
+          src={frameSrc}
           allow="fullscreen; clipboard-read; clipboard-write"
           onLoad={() => setFrameReady(true)}
         />

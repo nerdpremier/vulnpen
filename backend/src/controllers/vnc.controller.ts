@@ -6,8 +6,8 @@ import {
   writeVncPasswordCmd,
   hasVncPassword,
   xvncSecurityArgs,
-  isDockerInternalHost,
 } from "../utils/vncSetup";
+import { operatorNovncUrl } from "../services/browser-view.service";
 import {
   getVncConfig,
   updateVncConfig,
@@ -107,10 +107,15 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
                 );
                 await new Promise((resolve) => setTimeout(resolve, 1000));
               }
-              const runtimeHost = isDockerInternalHost(savedHost)
-                ? "localhost"
-                : savedHost;
-              const vncURL = baseUrlOverride || `${runtimeHost}:${savedPort}`;
+              // The address the OPERATOR'S BROWSER opens, not the one this
+              // container uses. Shared with the Browser Agent panel so the two
+              // cannot point at different desktops — and so the backend bridge
+              // for the attack box is applied here too: the box is on internal
+              // networks only, so its own port can never be published, and
+              // `localhost:9020` is nothing on the host. See operatorNovncUrl.
+              const vncURL =
+                baseUrlOverride ||
+                operatorNovncUrl(getVncConfig()).replace(/^https?:\/\//, "");
               console.log(
                 `[connect-vnc] session ${sessionId} -> ${vncURL} (reused live desktop)`
               );
@@ -187,13 +192,10 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
             // The noVNC iframe is loaded by the OPERATOR'S BROWSER, so the URL
-            // must be resolvable from there. A saved host such as "kali" is a
-            // Docker-internal alias no browser can resolve, so it maps to
-            // localhost - where websockify is published in this deployment.
-            const runtimeHost = isDockerInternalHost(savedHost)
-              ? "localhost"
-              : savedHost;
-            const vncURL = baseUrlOverride || `${runtimeHost}:${savedPort}`;
+            // must be resolvable from there — see the note on the branch above.
+            const vncURL =
+              baseUrlOverride ||
+              operatorNovncUrl(getVncConfig()).replace(/^https?:\/\//, "");
             console.log(`[connect-vnc] session ${sessionId} -> ${vncURL}`);
             return res.status(200).json({
               vncURL,

@@ -311,9 +311,14 @@ const ModelModal = ({
                 purpleFilled
                 htmlType="submit"
                 loading={saving}
+                /* The icon belongs in the `icon` prop, not in the label: antd
+                   swaps the prop's icon for the spinner while loading, but an
+                   icon written into the children is just text — so a checkmark
+                   sitting in the label stayed on screen next to the spinner. */
+                icon={<CheckOutlined />}
                 style={{ height: 32, fontSize: "0.75rem" }}
               >
-                <CheckOutlined /> Test &amp; Save
+                Test &amp; Save
               </PrimaryButton>
             </div>
           </Col>

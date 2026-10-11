@@ -1,18 +1,15 @@
 import { Response, Request } from "express";
 import { formatMagnitudeError } from "../utils/magnitudeError";
-import {
-  getBrowserAgentDisplay,
-  getBrowserAgentRfbPort,
-  getBrowserAgentNovncPort,
-} from "../config/constants";
-import { isPortListening } from "../utils/tcpProbe";
+import { getBrowserAgentDisplay } from "../config/constants";
 import { presetToProviderConfig } from "../utils/llm/orchestrator";
 import { isSubscriptionProvider } from "../services/subscription-inference.service";
 import { setBrowserModel } from "../services/model-settings.service";
+import { resolveBrowserView } from "../services/browser-view.service";
 import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
 import {
   buildBrowserAgentConfig,
   ensureBrowserAgent,
+  probeBrowserProxy,
   runBrowserAgentExclusive,
   scheduleBrowserAgentIdleStop,
   stopBrowserAgent,
@@ -22,11 +19,11 @@ import {
   readModelRegistry,
 } from "../utils/modelRegistryStore";
 import { isHostOwner } from "../services/host-owner.service";
-import { readEnvFile, updateEnvVars } from "../utils/envWriter";
+import { isDeploymentPinned } from "../utils/loadConfig";
+import { resolveDynamicSetting, updateEnvVars } from "../utils/envWriter";
 
 export const getMagnitudeConfig = async (_req: Request, res: Response) => {
   try {
-    const env = readEnvFile();
     const modelRegistry = readModelRegistry();
     const owner = await isHostOwner(res.locals.userId);
     const browserModel = modelRegistry.models.find(
@@ -43,12 +40,19 @@ export const getMagnitudeConfig = async (_req: Request, res: Response) => {
         ? browserModel
         : null;
 
+    // The *effective* values, not the raw file: the proxy the browser will be
+    // launched with is resolved through the deployment's pin, and reporting the
+    // file's value instead showed a setting the operator could edit and that
+    // could never take effect.
     return res.status(200).json({
-      enabled: env.MAGNITUDE_ENABLED === "true",
-      proxyUrl: env.MAGNITUDE_PROXY_URL || "",
-      headless: env.MAGNITUDE_HEADLESS !== "false",
-      displayPort: env.MAGNITUDE_DISPLAY || "",
-      configured: env.MAGNITUDE_ENABLED === "true",
+      enabled: resolveDynamicSetting("MAGNITUDE_ENABLED") === "true",
+      proxyUrl: resolveDynamicSetting("MAGNITUDE_PROXY_URL"),
+      // True when the deployment supplies the proxy, so the UI can say where it
+      // comes from rather than offering an edit that would be ignored.
+      proxyPinned: isDeploymentPinned("MAGNITUDE_PROXY_URL"),
+      headless: resolveDynamicSetting("MAGNITUDE_HEADLESS") !== "false",
+      displayPort: resolveDynamicSetting("MAGNITUDE_DISPLAY"),
+      configured: resolveDynamicSetting("MAGNITUDE_ENABLED") === "true",
       browserModelId: visibleBrowserModel?.id || "",
       browserModel: visibleBrowserModel,
       models: visibleModels,
@@ -124,9 +128,7 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "A target URL is required" });
     }
 
-    const env = readEnvFile();
-
-    if (env.MAGNITUDE_ENABLED !== "true") {
+    if (resolveDynamicSetting("MAGNITUDE_ENABLED") !== "true") {
       return res.status(400).json({
         message:
           "Magnitude browser agent is not enabled. Enable it in Settings -> Browser Agent.",
@@ -159,9 +161,10 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
 
     const providerConfig = await presetToProviderConfig(browserModel);
     const { apiKey } = providerConfig;
-    const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
-    const headless = env.MAGNITUDE_HEADLESS !== "false";
-    const display = env.MAGNITUDE_DISPLAY || getBrowserAgentDisplay();
+    const proxyUrl = resolveDynamicSetting("MAGNITUDE_PROXY_URL");
+    const headless = resolveDynamicSetting("MAGNITUDE_HEADLESS") !== "false";
+    const display =
+      resolveDynamicSetting("MAGNITUDE_DISPLAY") || getBrowserAgentDisplay();
     const normalizedDisplay = display.startsWith(":") ? display : `:${display}`;
 
     if (!apiKey) {
@@ -174,11 +177,17 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     // Always ensure DISPLAY is set for the process
     process.env.DISPLAY = normalizedDisplay;
 
+    // Fail here rather than opening a browser that will hang on every request.
+    const proxyProblem = await probeBrowserProxy(proxyUrl);
+    if (proxyProblem) {
+      return res.status(400).json({ message: proxyProblem });
+    }
+
     const llm = await resolveMagnitudeLlmConfig(
       providerConfig,
       browserModel.reasoningMode,
     );
-    const { fingerprint, agentConfig } = buildBrowserAgentConfig({
+    const { fingerprint, agentConfig, launch } = buildBrowserAgentConfig({
       llm,
       headless,
       proxyUrl,
@@ -188,9 +197,16 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
 
     try {
       await runBrowserAgentExclusive(async () => {
-        const agent = await ensureBrowserAgent(fingerprint, agentConfig);
+        const agent = await ensureBrowserAgent(fingerprint, agentConfig, launch);
+        // Only the navigation is carried out here. The goal used to be handed to
+        // agent.act(), which resolves every click target through a vision model;
+        // that loop is now called nowhere in this repository (pinned by
+        // tests/visionFreeBrowser.test.ts). This panel just opens the page in the
+        // shared browser so the live view shows it, and the operator (or the
+        // browser_action tool) drives it through the DOM. `goal` is still required
+        // by the endpoint because the caller states what it intends to do, and the
+        // safety boundary already judged it before this point.
         await agent.nav(targetUrl);
-        await agent.act(goal);
       });
     } catch (agentError: any) {
       // A failed run can leave the browser in a bad state; drop it so the next
@@ -207,7 +223,7 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     // the next run reuses it (or the idle timeout releases it).
     scheduleBrowserAgentIdleStop();
     return res.status(200).json({
-      message: "Browser agent completed the goal successfully",
+      message: `Browser opened at ${targetUrl}`,
       goal,
       targetUrl,
     });
@@ -221,39 +237,36 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
 
 export const getBrowserAgentVNC = async (_req: Request, res: Response) => {
   try {
-    const env = readEnvFile();
-    const magnitudeEnabled = env.MAGNITUDE_ENABLED === "true";
-    const headless = env.MAGNITUDE_HEADLESS !== "false";
-    const display = env.MAGNITUDE_DISPLAY || getBrowserAgentDisplay();
-    const novncPort = String(getBrowserAgentNovncPort());
+    const magnitudeEnabled = resolveDynamicSetting("MAGNITUDE_ENABLED") === "true";
+    const headless = resolveDynamicSetting("MAGNITUDE_HEADLESS") !== "false";
 
     const fs = await import("fs");
     const inDocker = fs.existsSync("/.dockerenv");
 
-    // Probe the stack instead of assuming it is up because we are in Docker.
-    // x11vnc dies whenever Xvfb fails, which leaves websockify happily serving
-    // the noVNC page with nothing behind it — the client then renders a bare
-    // "Failed to connect to server" with no explanation.
-    const [rfbUp, novncUp] = inDocker
-      ? await Promise.all([
-          isPortListening(getBrowserAgentRfbPort()),
-          isPortListening(getBrowserAgentNovncPort()),
-        ])
-      : [false, false];
-
-    const vncRunning = inDocker && rfbUp && novncUp;
+    // Which display to stream is not the backend's to assume: the browser runs
+    // on the attack box whenever remote mode is on, and that box has its own
+    // desktop on its own port. Resolving it here keeps the panel pointing at
+    // the screen the agent is actually on.
+    const view = await resolveBrowserView({ inDocker, magnitudeEnabled, headless });
 
     return res.status(200).json({
       // `available` stays config-intent (headed mode requested); `vncRunning`
       // reports whether the stream is actually serviceable right now.
-      available: magnitudeEnabled && !headless,
+      available: view.available,
       enabled: magnitudeEnabled,
       headless,
-      display,
-      novncPort,
-      vncRunning,
-      rfbUp,
-      novncUp,
+      display: view.display,
+      novncPort: String(view.novncPort),
+      // Where that stream lives. Empty means "derive it from the backend's own
+      // origin", which is what the local stack does.
+      novncUrl: view.novncUrl,
+      password: view.password,
+      vncRunning: view.running,
+      rfbUp: view.rfbUp,
+      novncUp: view.novncUp,
+      workHost: view.workHost,
+      browserRunning: view.browserRunning,
+      note: view.note,
       mode: inDocker ? "docker" : "dev",
     });
   } catch (error) {
