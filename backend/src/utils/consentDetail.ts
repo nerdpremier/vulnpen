@@ -1,6 +1,4 @@
 import { ExecutionContext, SafetyDetail } from "../tools/types";
-import { isDangerousShellInput } from "./commandSafety";
-import { isDangerousPythonScript } from "./pythonSafety";
 import {
   detectDestructiveBrowserGoal,
   detectDestructiveTargetAction,
@@ -74,9 +72,9 @@ function crossingHosts(text: string, ctx: ExecutionContext): string[] {
 }
 
 /**
- * Destructive action against the target of the engagement. Separate from the
- * attack-box rules in commandSafety.ts: deleting a record on the client's system
- * is a different (and much more serious) mistake than wiping the tester's box.
+ * Destructive action against the target of the engagement. Deleting a record on
+ * the client's system is the one harm the product refuses outright; there is no
+ * attack-box rule set (the tester's own box is disposable infrastructure).
  * Returns undefined when the text is only a read or a bounded create.
  */
 function destructiveTargetDetail(text: string): SafetyDetail | undefined {
@@ -92,13 +90,11 @@ function destructiveTargetDetail(text: string): SafetyDetail | undefined {
 /** Combined deterministic boundary for a shell command: destructive target
  *  actions first, then the out-of-scope target check.
  *
- *  The attack box is deliberately NOT a boundary. It is disposable test
- *  infrastructure that the tester owns and can rebuild, so `rm -rf /` on the box
- *  is an operational annoyance, not a harm to anyone — and policing it means
- *  maintaining a denylist against a language the agent also controls. The
- *  boundary is the engagement target, which is someone else's system.
- *  `commandSafety` is still the rule set for a shell that lives ON the target
- *  (see remoteShellInputSafetyDetail), where the same command is target damage. */
+ *  There is no attack-box rule set. The attack box is disposable test
+ *  infrastructure the tester owns, so the boundary is the engagement target —
+ *  someone else's system — and nothing else gets gated. The deletion and
+ *  overwrite rules below are the target's, applied wherever the action lands.
+ */
 export function shellSafetyDetail(
   text: string,
   ctx: ExecutionContext,
@@ -133,63 +129,6 @@ export function scriptSafetyDetail(
     return {
       kind: "out_of_scope",
       reason: `สคริปต์เชื่อมต่อไปยัง ${crossing.join(", ")} ซึ่งอยู่นอกขอบเขตการทดสอบที่กำหนดไว้`,
-      impact: OUT_OF_SCOPE_IMPACT,
-    };
-  }
-  return undefined;
-}
-
-/** Same boundary for shell input typed into a shell on the attack box. */
-export function shellInputSafetyDetail(
-  text: string,
-  ctx: ExecutionContext,
-): SafetyDetail | undefined {
-  const target = destructiveTargetDetail(text);
-  if (target) return target;
-  const crossing = crossingHosts(text, ctx);
-  if (crossing.length) {
-    return {
-      kind: "out_of_scope",
-      reason: `ข้อความที่จะส่งเข้าเชลล์อ้างถึง ${crossing.join(", ")} ซึ่งอยู่นอกขอบเขตการทดสอบที่กำหนดไว้`,
-      impact: OUT_OF_SCOPE_IMPACT,
-    };
-  }
-  return undefined;
-}
-
-/**
- * Same boundary for shell input into a shell that lives on the target (a reverse
- * shell, a caught bind listener, a session on the compromised host). The never
- * touch the target's data rule applies here more than anywhere: an agent that
- * was exempted from every check just because it had a shell was free to wipe the
- * client's machine. The attack-box wording does not apply, so the verdict is
- * reported as a destructive target action instead.
- */
-export function remoteShellInputSafetyDetail(
-  text: string,
-  ctx: ExecutionContext,
-): SafetyDetail | undefined {
-  // What goes into a shell on the target may be a command or a script being
-  // written there, and both are target damage when they remove or overwrite
-  // data on it. This is the one place the attack-box rule sets belong: the same
-  // `rm -rf /` that would only cost the tester a rebuild costs the client a
-  // machine.
-  const asCommand = isDangerousShellInput(text);
-  const hit = asCommand.dangerous ? asCommand : isDangerousPythonScript(text);
-  if (hit.dangerous) {
-    return {
-      kind: "destructive_target",
-      reason: `คำสั่งหรือสคริปต์นี้จะรันบนเครื่องเป้าหมายและเข้าข่ายทำลายระบบ (${hit.reason})`,
-      impact: `${hit.impact} — ${POC_NOTE}`,
-    };
-  }
-  const target = destructiveTargetDetail(text);
-  if (target) return target;
-  const crossing = crossingHosts(text, ctx);
-  if (crossing.length) {
-    return {
-      kind: "out_of_scope",
-      reason: `คำสั่งบนเครื่องเป้าหมายอ้างถึง ${crossing.join(", ")} ซึ่งอยู่นอกขอบเขตการทดสอบที่กำหนดไว้`,
       impact: OUT_OF_SCOPE_IMPACT,
     };
   }

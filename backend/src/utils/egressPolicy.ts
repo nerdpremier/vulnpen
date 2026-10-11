@@ -2,10 +2,10 @@
  * The egress fence: one decision, made on the wire.
  *
  * Every other boundary in VulnPen reads the *command* the agent is about to run
- * (`commandSafety`, `targetSafety`), which means it is reading a language the
- * agent also controls: `sudo rm -rf /`, `bash -c '…'`, `echo cm0 | base64 -d |
- * sh`, a script written to a file and run a moment later. Those all reduce to
- * the same HTTP request in the end.
+ * (`targetSafety`), which means it is reading a language the agent also
+ * controls: `curl -X DELETE …`, `python` calling `requests.delete`, `echo cm0 |
+ * base64 -d | sh` in the browser or Burp. Those all reduce to the same HTTP
+ * request in the end.
  *
  * This module decides on that request instead. The rules are the ones already
  * defined for the target (`detectDestructiveTargetAction`) and for scope

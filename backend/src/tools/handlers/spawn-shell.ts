@@ -4,19 +4,19 @@ const spawnShell: ToolDefinition = {
   name: "spawn_shell",
   description:
     "Create a new persistent named shell on the attack box; returns a shell_id for " +
-    "write_to_shell and read_shell. For long-running processes, listeners and interactive sessions. " +
+    "write_to_shell and read_shell. For long-running processes and interactive sessions. " +
     "run_bash always runs a one-off command and does not take a shell_id.",
   parameters: {
     type: "object",
     properties: {
       label: {
         type: "string",
-        description: "Short label, e.g. 'nmap-scan', 'nc-listener-4444'.",
+        description: "Short label, e.g. 'nmap-scan', 'curl-loop-4444'.",
       },
       purpose: {
         type: "string",
-        enum: ["exploit-box", "reverse-shell", "listener"],
-        description: "'exploit-box' (default) for attack-box commands, 'reverse-shell' for shells receiving reverse connections, 'listener' for netcat/socat listeners.",
+        enum: ["exploit-box"],
+        description: "'exploit-box' (default) for attack-box commands. This is the only supported purpose.",
       },
       rows: {
         type: "number",
@@ -35,6 +35,19 @@ const spawnShell: ToolDefinition = {
     if (!label) return { output: "Error: label is required", exitCode: 1 };
 
     const purpose = args.purpose || "exploit-box";
+    // The only purpose is "exploit-box". A request for a shell on the target
+    // (an old reverse-shell/listener purpose value) is refused outright rather
+    // than silently downgraded: the model must not get a shell whose input is
+    // not the attack box it was told it was given.
+    if (purpose !== "exploit-box") {
+      return {
+        output:
+          `Purpose "${purpose}" is not supported: only "exploit-box" shells ` +
+          "(on the attack box) exist. Restart the session from the attack box if a " +
+          "target shell appears to be needed.",
+        exitCode: 1,
+      };
+    }
 
     try {
       const shellId = await ctx.spawnShell(label, "pty", purpose);

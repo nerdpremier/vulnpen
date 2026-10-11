@@ -29,7 +29,6 @@ import SessionsModel from "../../models/Sessions/Sessions.model";
 import { getDataDir } from "../../utils/loadConfig";
 import type { WebAppTestPlanDoc, SessionVulnerabilityDoc } from "../../models/Sessions/Sessions.model";
 import {
-  buildDraftReport,
   buildClientReport,
   reportSummaryInput,
   type ClientFinding,
@@ -454,36 +453,6 @@ export async function ensureReportDocx(
     JSON.stringify({ signature, editedByWord: false, fileName: report.fileName, summary }),
   );
   return { filePath, fileName: report.fileName };
-}
-
-/**
- * Build the draft .docx on demand: the same document, without the model's
- * summary. It is never stored as the working document (Collabora edits that
- * one), so every call rebuilds it from the engagement's current findings — a
- * draft that lagged behind the results would be worse than no draft.
- */
-export async function buildDraftReportDocx(
-  sessionId: string,
-  uid: unknown,
-): Promise<{ buffer: Buffer; fileName: string }> {
-  const refreshed = await SessionsModel.findOne({ sessionId, uid })
-    .select("name description createdAt vulnerabilities webAppTestPlan")
-    .lean();
-  if (!refreshed) throw new Error("Session not found");
-
-  const client = buildDraftReport({
-    session: {
-      sessionId,
-      name: refreshed.name ?? "Engagement",
-      description: refreshed.description ?? "",
-      createdAt: refreshed.createdAt as unknown as Date,
-    },
-    vulnerabilities: (refreshed.vulnerabilities ?? []) as SessionVulnerabilityDoc[],
-    testPlan: (refreshed.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null,
-  });
-
-  const buffer = await buildReportDocx(client);
-  return { buffer, fileName: client.fileName };
 }
 
 export function findSoffice(): string | null {

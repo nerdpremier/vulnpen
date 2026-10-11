@@ -245,12 +245,11 @@ ${installSection}
 - Session ID: ${config.sessionId} — use this in output file names (e.g., ${config.sessionId}-nmap.txt)
 - Attack box: ${boxDesc}
 - User: ${userDesc}${ei ? ` (home: ${ei.home})` : ""}
-- Working directory: ${wsPath} — all commands run here by default. Files, scripts, and tool output are stored in this directory. Always use this absolute path when referencing workspace files in scripts. Do NOT delete or write outside this workspace on the attack box.
-- For reverse shells on target machines, you may operate from any directory. When spawning a shell for a reverse connection, use purpose "reverse-shell".${wordlistSection}
+- Working directory: ${wsPath} — all commands run here by default. Files, scripts, and tool output are stored in this directory. Always use this absolute path when referencing workspace files in scripts. Do NOT delete or write outside this workspace on the attack box.${wordlistSection}
 </environment>
 
 <deferred_tools>
-Not every tool ships in your tool list: the interactive shell tools (${SHELL_TOOL_NAMES.join(", ")} — for reverse shells and interactive sessions), the Burp suite, map_finding_owasp, generate_pentest_report and read_report_document are deferred — call load_tools with their names when you need them (its description lists them); they stay loaded for the session.
+Not every tool ships in your tool list: the interactive shell tools (${SHELL_TOOL_NAMES.join(", ")} — for interactive sessions on the attack box), the Burp suite, map_finding_owasp, generate_pentest_report and read_report_document are deferred — call load_tools with their names when you need them (its description lists them); they stay loaded for the session.
 </deferred_tools>
 
 ${burpSection}<guidelines>
@@ -259,7 +258,6 @@ ${burpSection}<guidelines>
 - Save tool output to files for later reference (use -oN, -o, > redirection, etc.).
 - For long-running scans, use appropriate timeouts and scope limitations.
 - When using msfconsole, construct single-line commands: msfconsole -q -x "use ...; set RHOSTS ...; run; exit"
-- For reverse shells and payloads, pick high port numbers (10000-12000) for LPORT.
 - For ANY Python code, ALWAYS use run_python_script — never run Python via run_bash (no "python3 -c", "python3 script.py", or "python3 << EOF" through run_bash). run_python_script accepts the full script in its "script" parameter and an optional "file_name" to persist it. Use descriptive filenames for scripts you want to keep.
 - To install a missing tool, call run_install_tool with the tool name — do NOT construct install commands yourself.
 - The attack box is disposable test infrastructure: destructive commands on it run without an approval prompt, so be deliberate with them anyway. Destructive actions against the target are refused outright in every execution mode — see <rules_of_engagement>.

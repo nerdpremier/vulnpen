@@ -177,7 +177,3 @@ export function scheduleBrowserAgentIdleStop(): void {
   }, ms);
   if (typeof idleTimer.unref === "function") idleTimer.unref();
 }
-
-export function hasLiveBrowserAgent(): boolean {
-  return activeAgent !== null;
-}

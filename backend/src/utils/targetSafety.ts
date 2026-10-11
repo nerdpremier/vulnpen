@@ -1,4 +1,13 @@
-import { DangerCheckResult } from "./commandSafety";
+/** Result of a deterministic destructive-action scan. */
+export interface DangerCheckResult {
+  dangerous: boolean;
+  /** Stable rule id, for tests and consent statistics. */
+  rule: string;
+  /** Short Thai reason shown in the consent dialog. */
+  reason: string;
+  /** Short Thai impact statement shown in the consent dialog. */
+  impact: string;
+}
 
 /**
  * Deterministic detector for actions that delete, overwrite or disable data on
@@ -7,7 +16,8 @@ import { DangerCheckResult } from "./commandSafety";
  * VulnPen runs proof-of-concept engagements: a finding is proven with the least
  * invasive evidence available, and the destructive step that would demonstrate
  * the full impact is deliberately not carried out against the client's live
- * data. commandSafety.ts guards the attack box; this module guards the target.
+ * data. This module guards the target; there is no attack-box rule set — the
+ * attack box is the tester's disposable infrastructure.
  *
  * A match never executes silently. It is surfaced to the operator as a
  * `destructive_target` verdict, which no mode may turn into a question: the

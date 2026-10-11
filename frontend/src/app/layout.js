@@ -7,7 +7,6 @@ import "@ant-design/v5-patch-for-react-19";
 // styles
 import "./globals.scss";
 import "antd/dist/reset.css";
-import "@xterm/xterm/css/xterm.css";
 import { Inter } from "next/font/google";
 import QueryClientContext from "@/components/common/auth/QueryClient";
 import StoreProvider from "@/components/common/auth/StoreProvider";

@@ -22,7 +22,8 @@ import {
 
 export { escapeForLoginShell, RingBuffer } from "./shell-io";
 
-export type ShellPurpose = "exploit-box" | "reverse-shell" | "listener";
+/** Shells always live on the attack box; there is no remote-shell path. */
+export type ShellPurpose = "exploit-box";
 
 export interface ShellInfo {
   shellId: string;

@@ -6,8 +6,8 @@ target — and what that guarantee does and does not cover.
 ## The problem it replaces
 
 The other boundaries read the *command* the agent is about to run
-(`utils/commandSafety.ts`, `utils/targetSafety.ts`). That means reading a
-language the agent also controls, and it can always be rephrased:
+(`utils/targetSafety.ts`). That means reading a language the agent also
+controls, and it can always be rephrased:
 
 ```
 rm -rf /data                  →  caught

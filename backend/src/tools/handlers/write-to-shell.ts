@@ -1,39 +1,17 @@
-import { ExecutionContext, ToolDefinition } from "../types";
-import {
-  remoteShellInputSafetyDetail,
-  shellInputSafetyDetail,
-} from "../../utils/consentDetail";
+import { ToolDefinition } from "../types";
 
 /**
- * A shell whose prompt lives on the target (a reverse shell, a caught bind
- * listener, a session on the compromised host) is checked with the target rules;
- * a shell on the attack box is checked with the attack-box rules. Both are gated
- * - an autonomous agent holding a shell on the client's machine is exactly where
- * a silent `rm -rf` does the most damage, and it used to be the one place nothing
- * was checked at all.
+ * Shells spawned by VulnPen always live on the attack box (spawn_shell only
+ * accepts the "exploit-box" purpose), so there is no remote input to gate.
+ * The engagement boundary for what the agent reaches is enforced where commands
+ * and scripts run — see shellSafetyDetail / scriptSafetyDetail.
  */
-function shellBoundary(
-  args: Record<string, any>,
-  ctx: ExecutionContext,
-): ReturnType<typeof shellInputSafetyDetail> {
-  const shellInfo = ctx.getShellInfo(args.shell_id);
-  const onTarget =
-    !shellInfo ||
-    shellInfo.purpose === "reverse-shell" ||
-    shellInfo.purpose === "listener";
-  return onTarget
-    ? remoteShellInputSafetyDetail(args.input ?? "", ctx)
-    : shellInputSafetyDetail(args.input ?? "", ctx);
-}
-
 const writeToShell: ToolDefinition = {
   name: "write_to_shell",
   description:
-    "Send input to an existing persistent shell. Use this for interactive programs, " +
-    "sending commands to a reverse shell caught by netcat, responding to prompts, " +
-    "or any scenario where you need to type into a running shell. " +
-    "Commands typed into a shell on the target are still bound by the engagement rules: " +
-    "never delete, overwrite or disable data, accounts or configuration on the target.",
+    "Send input to an existing persistent shell on the attack box. Use this for " +
+    "interactive programs, responding to prompts, long-running processes, or any " +
+    "scenario where you need to type into a running shell.",
   parameters: {
     type: "object",
     properties: {
@@ -49,9 +27,6 @@ const writeToShell: ToolDefinition = {
     required: ["shell_id", "input"],
   },
   timeoutMs: 30_000,
-  describeSafety(args, ctx) {
-    return shellBoundary(args, ctx);
-  },
   async execute(args, ctx) {
     const { shell_id, input } = args;
     if (!shell_id) return { output: "Error: shell_id is required", exitCode: 1 };

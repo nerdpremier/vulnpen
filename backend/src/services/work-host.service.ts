@@ -215,20 +215,6 @@ export function execSSH(
   });
 }
 
-export async function ensureWorkFolder(target: ResolvedWorkHost): Promise<void> {
-  if (target.kind === "local") {
-    await fs.promises.mkdir(expandLocalFolder(target.workFolder), { recursive: true });
-    return;
-  }
-  const ssh = await connectSSH(target.sshConfig!);
-  try {
-    const result = await execSSH(ssh, `mkdir -p -- ${shellFolderExpression(target.workFolder)}`, 10_000);
-    if (result.code !== 0) throw new Error(result.stderr || "Could not create work folder");
-  } finally {
-    ssh.end();
-  }
-}
-
 export async function testWorkHost(target: ResolvedWorkHost): Promise<CommandResult> {
   const marker = ".vulnpen-write-test";
   const folder = target.kind === "local"
@@ -326,16 +312,6 @@ export async function execOnWorkHost(
   input?: string,
 ): Promise<CommandResult> {
   const target = await resolveSessionWorkHost(sessionId);
-  return execOnResolvedWorkHost(target, command, timeoutMs, input);
-}
-
-export async function execOnWorkspaceHost(
-  workspaceId: string,
-  command: string,
-  timeoutMs = 300_000,
-  input?: string,
-): Promise<CommandResult> {
-  const target = await resolveWorkspaceWorkHost(workspaceId);
   return execOnResolvedWorkHost(target, command, timeoutMs, input);
 }
 

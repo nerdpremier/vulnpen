@@ -199,11 +199,6 @@ function categoryOrder(code: string): number {
   return CATEGORY_ORDER.get(code) ?? CATEGORY_ORDER.size;
 }
 
-/** A test id that does not belong to the static WSTG catalogue (e.g. CUSTOM-01). */
-export function isCustomTestId(testId: string): boolean {
-  return !getWstgTest(testId);
-}
-
 /**
  * Create a SessionTestCaseDoc for a custom case that is not part of the WSTG
  * catalogue. The testId is not validated against the catalogue: the caller may

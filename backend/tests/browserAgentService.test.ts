@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   buildBrowserAgentConfig,
   parseViewport,
-  hasLiveBrowserAgent,
 } from "../src/services/browser-agent.service";
 import type { BrowserAgentRuntimeConfig } from "../src/services/browser-agent.service";
 
@@ -98,8 +97,4 @@ test("fingerprint changes when anything baked into the agent changes", () => {
     screen: "1024x768x24",
   }).fingerprint;
   assert.notEqual(base, screen);
-});
-
-test("no agent is live before any run", () => {
-  assert.equal(hasLiveBrowserAgent(), false);
 });

@@ -5,7 +5,6 @@ import {
   rawRequestSafetyDetail,
   scopeAllowlistFromContext,
   scriptSafetyDetail,
-  shellInputSafetyDetail,
   shellSafetyDetail,
 } from "../src/utils/consentDetail";
 import { EngagementState } from "../src/services/engagement-state";
@@ -51,7 +50,7 @@ test("every execution path reaches the scope gate", () => {
     "python script",
   );
   assert.equal(
-    shellInputSafetyDetail(`nmap -sV ${outside}`, context)?.kind,
+    shellSafetyDetail(`nmap -sV ${outside}`, context)?.kind,
     "out_of_scope",
     "shell input",
   );

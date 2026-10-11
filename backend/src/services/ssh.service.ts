@@ -73,11 +73,3 @@ export async function execSSHCommand(command: string, timeoutMs?: number): Promi
       });
   });
 }
-
-export async function getIfConfigKali(): Promise<string> {
-  return execSSHCommand("ifconfig");
-}
-
-export async function runCommandOnKali(command: string): Promise<string> {
-  return execSSHCommand(command);
-}

@@ -4,8 +4,7 @@ const readShell: ToolDefinition = {
   name: "read_shell",
   description:
     "Read recent output from a persistent shell. Use this to check the progress of " +
-    "long-running commands, see if a netcat listener caught a connection, or monitor " +
-    "any background process running in a shell.",
+    "long-running commands, or monitor any background process running in a shell.",
   parameters: {
     type: "object",
     properties: {
