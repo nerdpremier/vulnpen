@@ -26,16 +26,13 @@ import {
   compareBySeverity,
   findingsBySeverity,
 } from "@/utils/findings.mjs";
-
-/** CVSS v3.0 base-score bands, the same cut points the severity ramp uses.
-    The axis reads the full band name; the numeric span lives in the tooltip. */
-const CVSS_BANDS = [
-  { key: "none", axis: "0.0", label: "0.0 (None)", tone: "mute", min: 0, max: 0.1 },
-  { key: "low", axis: "low", label: "0.1–3.9", tone: "low", min: 0.1, max: 4 },
-  { key: "medium", axis: "medium", label: "4.0–6.9", tone: "medium", min: 4, max: 7 },
-  { key: "high", axis: "high", label: "7.0–8.9", tone: "high", min: 7, max: 9 },
-  { key: "critical", axis: "critical", label: "9.0–10", tone: "critical", min: 9, max: 10.1 },
-];
+import {
+  cvssBandsFor,
+  cvssScoreFor,
+  cvssVersionFor,
+  cvssVersionLabel,
+} from "@/utils/cvssVersion.mjs";
+import useCvssVersion from "@/hooks/useCvssVersion";
 
 /** The severity ramp, the one vocabulary every surface shares. */
 const SEVERITY_TONE = {
@@ -45,12 +42,6 @@ const SEVERITY_TONE = {
   low: "#7fb2ff",
   info: "#79d1ff",
 };
-
-/** The score the system computed, or null when the finding carries none. */
-function cvssScoreOf(item) {
-  const score = item?.cvss?.score;
-  return typeof score === "number" && Number.isFinite(score) ? score : null;
-}
 
 function SeverityBadge({ severity }) {
   const value = severity || "info";
@@ -62,6 +53,9 @@ export default function VulnerabilitiesPage({ sessionId }) {
   const [search, setSearch] = useState("");
   const [severity, setSeverity] = useState("all");
   const [owaspFilter, setOwaspFilter] = useState("all");
+  /* The engagement-wide CVSS version. Picked inside a finding, read here, so
+     the header, the chart and every row agree with the dial they open onto. */
+  const [cvssVersionId] = useCvssVersion();
   const { data, isLoading, isError, refetch } = useQuery(
     ["vulnerabilities", sessionId],
     () => getVulnerabilities(sessionId),
@@ -115,13 +109,16 @@ export default function VulnerabilitiesPage({ sessionId }) {
   const exploitedCount = vulnerabilities.filter((item) => item.exploited).length;
   const unverifiedCount = vulnerabilities.length - exploitedCount;
 
-  /* Scored findings per band only. Unrated findings stay off the chart — they
-     carry no score to bin, and one grey "none" tower dwarfed real bands. */
+  /* Scored findings per band only, read in the chosen version. Unrated findings
+     stay off the chart — they carry no score to bin, and one grey "none" tower
+     dwarfed real bands. The bands themselves follow the version: v2.0 has no
+     "None" band and folds the top of the scale into High. */
+  const bands = useMemo(() => cvssBandsFor(cvssVersionId), [cvssVersionId]);
   const scoreBands = useMemo(() => {
-    const scored = vulnerabilities.filter((item) => cvssScoreOf(item) != null);
-    const bands = CVSS_BANDS.map((band) => {
+    const scored = vulnerabilities.filter((item) => cvssScoreFor(item, cvssVersionId) != null);
+    return bands.map((band) => {
       const value = scored.filter((item) => {
-        const score = cvssScoreOf(item);
+        const score = cvssScoreFor(item, cvssVersionId);
         return score >= band.min && score < band.max;
       }).length;
       return {
@@ -132,10 +129,13 @@ export default function VulnerabilitiesPage({ sessionId }) {
         title: `CVSS ${band.label}: ${value} finding${value === 1 ? "" : "s"}`,
       };
     });
-    return bands;
-  }, [vulnerabilities]);
+  }, [vulnerabilities, cvssVersionId, bands]);
 
-  const unratedCount = vulnerabilities.filter((item) => cvssScoreOf(item) == null).length;
+  const unratedCount = vulnerabilities.filter(
+    (item) => cvssScoreFor(item, cvssVersionId) == null,
+  ).length;
+
+  const versionLabel = cvssVersionLabel(cvssVersionId);
 
   const owaspOptions = useMemo(() => {
     const seen = new Map();
@@ -287,12 +287,12 @@ export default function VulnerabilitiesPage({ sessionId }) {
 
         <div className={styles.summaryCell}>
           <div className={styles.summaryCard}>
-            <h2 className={styles.summaryTitle}>CVSS v3.0 base score</h2>
+            <h2 className={styles.summaryTitle}>{versionLabel} base score</h2>
             <div className={styles.summaryBody}>
               <ColumnChart
                 data={scoreBands}
                 height={104}
-                label="Rated findings per CVSS v3.0 base score band"
+                label={`Rated findings per ${versionLabel} base score band`}
               />
               {unratedCount > 0 && (
                 <span className={styles.summaryFootnote}>
@@ -397,7 +397,7 @@ export default function VulnerabilitiesPage({ sessionId }) {
             <div className={styles.head} aria-hidden="true">
               <span>Severity</span>
               <span>Finding</span>
-              <span>CVSS v3.0</span>
+              <span>{versionLabel}</span>
               <span>Exploitation</span>
               <span>OWASP Top 10:2025</span>
               <span />
@@ -433,16 +433,19 @@ export default function VulnerabilitiesPage({ sessionId }) {
                 </span>
 
                 <span className={styles.scoreCell}>
-                  {item.cvss?.score != null ? (
-                    <>
-                      <b>{Number(item.cvss.score).toFixed(1)}</b>
-                      <span className={styles.scoreVector} title={item.cvss.vector}>
-                        {item.cvss.vector}
-                      </span>
-                    </>
-                  ) : (
-                    <span className={styles.scoreNone}>not rated</span>
-                  )}
+                  {(() => {
+                    const version = cvssVersionFor(item, cvssVersionId);
+                    return version ? (
+                      <>
+                        <b>{version.score.toFixed(1)}</b>
+                        <span className={styles.scoreVector} title={version.vector}>
+                          {version.vector}
+                        </span>
+                      </>
+                    ) : (
+                      <span className={styles.scoreNone}>not rated</span>
+                    );
+                  })()}
                 </span>
 
                 <span className={styles.exploitCell}>
