@@ -19,6 +19,10 @@ RUN sed -i "s/initSetting('resize', 'off')/initSetting('resize', 'scale')/" /usr
 WORKDIR /usr/src/backend
 
 COPY package.json pnpm-lock.yaml* ./
+# pnpm applies the lockfile's patchedDependencies from ./patches at install
+# time, so the patch files have to be present before install, not just in the
+# later COPY . .
+COPY patches ./patches
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # Install Patchright Chromium for Magnitude browser agent

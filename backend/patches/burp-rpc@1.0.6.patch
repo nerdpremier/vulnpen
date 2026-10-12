@@ -1,0 +1,44 @@
+diff --git a/dist/client.d.ts b/dist/client.d.ts
+index 6c490c8e8f3dd4b6d73f38a5d24ae21cd823d514..6681ff05ac16d76b567b65adab63ab1f4ea46c08 100644
+--- a/dist/client.d.ts
++++ b/dist/client.d.ts
+@@ -108,6 +108,18 @@ export interface BurpClientOptions {
+      * @defaultValue `15000` (15 seconds)
+      */
+     deadlineMs?: number;
++    /**
++     * Largest reply the channel will accept, in bytes. A full proxy-history
++     * reply is one message, so the gRPC default of 4 MB rejects a populated
++     * History; raise it when reading history.
++     * @defaultValue `67108864` (64 MB)
++     */
++    maxReceiveMessageLength?: number;
++    /**
++     * Largest message the channel will send, in bytes.
++     * @defaultValue `67108864` (64 MB)
++     */
++    maxSendMessageLength?: number;
+ }
+ /**
+  * gRPC client for controlling Burp Suite remotely.
+diff --git a/dist/client.js b/dist/client.js
+index a68ebd2cf79cb94b1d3f1a2485465359048d7ea0..743a0eacd5ce8e4f88e879b6be940327f186c142 100644
+--- a/dist/client.js
++++ b/dist/client.js
+@@ -240,7 +240,15 @@ class BurpClient {
+         const host = options.host ?? "localhost";
+         const port = options.port ?? 50051;
+         this.defaultDeadlineMs = options.deadlineMs ?? 15000;
+-        this.grpcClient = new BurpConnectorService(`${host}:${port}`, grpc.credentials.createInsecure());
++        // A single proxy-history reply carries every entry in one message, and a
++        // busy History is far past gRPC's 4 MB default receive cap — Burp answers
++        // RESOURCE_EXHAUSTED and the page shows nothing. The cap is a channel
++        // option, so it has to be set here, where the channel is built.
++        const channelOptions = {
++            "grpc.max_receive_message_length": options.maxReceiveMessageLength ?? 64 * 1024 * 1024,
++            "grpc.max_send_message_length": options.maxSendMessageLength ?? 64 * 1024 * 1024,
++        };
++        this.grpcClient = new BurpConnectorService(`${host}:${port}`, grpc.credentials.createInsecure(), channelOptions);
+     }
+     callOpts(overrideMs) {
+         const ms = overrideMs ?? this.defaultDeadlineMs;

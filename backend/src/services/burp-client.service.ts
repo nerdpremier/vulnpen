@@ -14,6 +14,15 @@ export type OpenedBurpClient =
 // too tight for anything past a LAN round trip.
 export const BURP_PING_TIMEOUT_MS = 5000;
 
+/**
+ * Largest gRPC message this client will accept, in bytes. A full proxy-history
+ * reply is one message and a busy History runs past gRPC's 4 MB default — Burp
+ * then answers RESOURCE_EXHAUSTED and the history page reads as "broken". 64 MB
+ * clears any History a human would scroll; the burp-rpc patch lets the value
+ * reach the channel (the library otherwise hardcodes it and drops the option).
+ */
+export const BURP_MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
+
 export const BURP_NOT_CONFIGURED_MSG =
   "Burp RPC is not configured. Set BURP_RPC_HOST and BURP_RPC_PORT in Settings.";
 
@@ -41,7 +50,12 @@ export async function openBurpClient(): Promise<OpenedBurpClient> {
   const { BurpClient } = await import("burp-rpc");
   return {
     ok: true,
-    client: new BurpClient({ host: config.host, port: config.port }),
+    client: new BurpClient({
+      host: config.host,
+      port: config.port,
+      maxReceiveMessageLength: BURP_MAX_MESSAGE_BYTES,
+      maxSendMessageLength: BURP_MAX_MESSAGE_BYTES,
+    }),
     config,
   };
 }

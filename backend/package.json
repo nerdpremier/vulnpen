@@ -122,6 +122,9 @@
       "protobufjs@8": "8.8.0",
       "@opentelemetry/propagator-jaeger": "2.12.0",
       "ip-address@5": "10.7.3"
+    },
+    "patchedDependencies": {
+      "burp-rpc@1.0.6": "patches/burp-rpc@1.0.6.patch"
     }
   }
 }
