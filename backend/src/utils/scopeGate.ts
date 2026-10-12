@@ -18,13 +18,32 @@ const IPV4_RE = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g;
 const URL_START_RE = /\bhttps?:\/\/\S+/gi;
 const FLAG_TARGET_RE = /(?:^|\s)(?:-u|--url|--host|-t|--target|--upload-file)\s+['"]?([^\s'"]+)/gi;
 
+/**
+ * Strip `-x <url>` / `--proxy[=]<url>` flags before scanning for hosts: the
+ * proxy is the attack box's *way out* (the egress fence at `http://egress:3128`),
+ * not a destination the command itself connects to. Without this, an ordinary
+ * scan recipe — `P="-x http://egress:3128"; curl $P "$B/"` — reads `egress` as
+ * an out-of-scope host and asks the operator to approve every single request.
+ * The *consumed URL of the flag* is removed; the flag name alone is kept, so
+ * `curl -x` without an argument still reads as itself, not a host. A leading
+ * quote is allowed so a flag stored in a shell variable (`P="-x url"`) is
+ * stripped too, not only a bare `curl -x url`.
+ */
+function withoutProxyFlags(text: string): string {
+  return text.replace(
+    /(?:^|[\s"'=])(?:--proxy(?:-url)?|-x|--proxytunnel|--noproxy)(?:[=\s])(\S+)/gi,
+    (match, arg: string) => match.replace(arg, " "),
+  );
+}
+
 /** Pull hostnames/IPs a command will connect to. Deliberately precise: URLs,
  *  IP literals, and explicit target flags — not every bare word. */
 export function extractCommandHosts(text: string): string[] {
   if (!text) return [];
   const hosts = new Set<string>();
-  for (const m of text.matchAll(URL_RE)) addHost(hosts, m[1]);
-  for (const m of text.matchAll(FLAG_TARGET_RE)) {
+  const probe = withoutProxyFlags(text);
+  for (const m of probe.matchAll(URL_RE)) addHost(hosts, m[1]);
+  for (const m of probe.matchAll(FLAG_TARGET_RE)) {
     const raw = m[1].replace(/\/+$/, "");
     // Drop any `user[:pass]@` userinfo before taking the host, for the same
     // reason URL_RE consumes it: the connection target is after the `@`.
@@ -35,7 +54,7 @@ export function extractCommandHosts(text: string): string[] {
   // or query (an OSINT lookup by address, say) is part of that one request, not
   // a second connection target. An address that is itself a URL host, including
   // one nested in a query parameter, is already captured by URL_RE above.
-  const withoutUrls = text.replace(URL_START_RE, " ");
+  const withoutUrls = probe.replace(URL_START_RE, " ");
   for (const m of withoutUrls.matchAll(IPV4_RE)) addHost(hosts, m[1]);
   return [...hosts];
 }

