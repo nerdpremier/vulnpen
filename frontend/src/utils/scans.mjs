@@ -375,12 +375,16 @@ export function scanStartedAt(scan) {
 /**
  * A stamp as the scan surfaces print it: "Jan 3, 14:05" — short enough for a
  * timeline axis or a details card, exact enough to hover a relative "4m ago"
- * against. Missing stamps read as an em dash, like every other absent value.
+ * against. Accepts either an epoch number or an ISO/date string — Date fields
+ * cross the API as ISO strings — and missing stamps read as an em dash, like
+ * every other absent value.
  */
 export function formatStamp(at) {
-  const stamp = Number(at);
+  if (at === undefined || at === null || at === "") return "—";
+  const date = new Date(at);
+  const stamp = date.getTime();
   if (!Number.isFinite(stamp) || stamp <= 0) return "—";
-  return new Date(stamp).toLocaleString(undefined, {
+  return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -393,11 +397,14 @@ export function formatStamp(at) {
  * "2h ago", "3d ago", then the date itself once a week has passed and a reader
  * would be counting backwards.
  *
- * Rounds down, so the number never claims more time has passed than it has, and
- * a future stamp (a clock skew) reads "just now" rather than a negative age.
+ * Accepts either an epoch number or an ISO/date string. Rounds down, so the
+ * number never claims more time has passed than it has, and a future stamp (a
+ * clock skew) reads "just now" rather than a negative age.
  */
 export function formatAgo(at, now = Date.now()) {
-  const stamp = Number(at);
+  if (at === undefined || at === null || at === "") return "—";
+  const date = new Date(at);
+  const stamp = date.getTime();
   if (!Number.isFinite(stamp) || stamp <= 0) return "—";
 
   const seconds = Math.floor((Number(now) - stamp) / 1000);
@@ -408,7 +415,7 @@ export function formatAgo(at, now = Date.now()) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(stamp).toLocaleDateString();
+  return date.toLocaleDateString();
 }
 
 /**

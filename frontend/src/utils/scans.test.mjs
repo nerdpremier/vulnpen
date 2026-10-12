@@ -405,6 +405,17 @@ test("formatStamp prints the short stamp the scan surfaces share", () => {
   assert.equal(formatStamp(null), "—");
   assert.equal(formatStamp(0), "—");
   assert.equal(formatStamp(undefined), "—");
+  // The API serializes Date fields as ISO strings; the reader must accept them.
+  const iso = new Date(2026, 1, 14, 14, 5).toISOString();
+  assert.equal(formatStamp(iso), new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+  assert.equal(formatStamp("not-a-date"), "—");
+});
+
+test("formatAgo reads ISO date strings like the API sends them", () => {
+  const now = new Date(2026, 1, 14, 12, 0, 30).getTime();
+  assert.equal(formatAgo(new Date(now - 90_000).toISOString(), now), "1m ago");
+  assert.equal(formatAgo("not-a-date"), "—");
+  assert.equal(formatAgo(""), "—");
 });
 
 test("isScanLive is the one predicate for 'still moving'", () => {
