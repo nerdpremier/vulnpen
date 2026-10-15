@@ -10,7 +10,7 @@ const runBash: ToolDefinition = {
     "stdout+stderr are returned. Use this for all CLI tools (nmap, gobuster, sqlmap, " +
     "ffuf, curl, etc.). For long-running or interactive tasks, load the deferred shell tools " +
     "(spawn_shell + write_to_shell + read_shell) via load_tools and use those instead. " +
-    "Proof-of-concept engagement: destructive commands against the target are refused outright (see <rules_of_engagement>).",
+    "Proof-of-concept engagement: destructive commands against the target stop for operator approval (see <rules_of_engagement>).",
   parameters: {
     type: "object",
     properties: {

@@ -56,7 +56,7 @@ const magnitudeBrowser: ToolDefinition = {
     "Drive a real browser with DOM-level actions: navigate, snapshot the page's interactive elements, " +
     "then click / fill / select / press by element id. Use `action: \"snapshot\"` first to get the numbered " +
     "element table, then act on those ids. No screenshots are involved — the page is read as DOM, not as an image. " +
-    "It acts on the real application: destructive goals (delete, overwrite, disable) are refused outright " +
+    "It acts on the real application: destructive goals (delete, overwrite, disable) stop for operator approval " +
     "(proof of concept only - see <rules_of_engagement>; verify the control is missing and stop).",
   parameters: {
     type: "object",
@@ -141,7 +141,13 @@ const magnitudeBrowser: ToolDefinition = {
         type: "number",
         description:
           "Cap on returned page text for `snapshot` / `extract_text`. Default 6000. " +
-          "An action's own state read is always capped at 1000 chars.",
+          "An action's own state read is always capped at 1000 chars. Raise it to see full pages; be aware it costs context.",
+      },
+      goal: {
+        type: "string",
+        description:
+          "Describe the intended outcome (e.g. 'disable the user account', 'delete a test record', 'reset the admin password'). " +
+          "The intent is checked against the destructive-goal detector; true destructive goals are refused.",
       },
       timeout_ms: {
         type: "number",

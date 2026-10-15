@@ -202,10 +202,16 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
         // agent.act(), which resolves every click target through a vision model;
         // that loop is now called nowhere in this repository (pinned by
         // tests/visionFreeBrowser.test.ts). This panel just opens the page in the
-        // shared browser so the live view shows it, and the operator (or the
-        // browser_action tool) drives it through the DOM. `goal` is still required
-        // by the endpoint because the caller states what it intends to do, and the
-        // safety boundary already judged it before this point.
+        // shared browser so the live view shows it, and the operator drives it
+        // from there with the mouse and keyboard.
+        //
+        // `goal` is required because the caller states the intent, but nothing
+        // here judges it: this is the operator's own browser on their own
+        // workstation, the route is host-owner only, and the agent's
+        // browser_action tool — which does pass its goal and URL through the
+        // boundary — is not used on this path. The destination is still bound by
+        // the egress fence, which judges the wire request rather than the words
+        // in a goal.
         await agent.nav(targetUrl);
       });
     } catch (agentError: any) {

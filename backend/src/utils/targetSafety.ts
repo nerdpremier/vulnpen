@@ -7,6 +7,14 @@ export interface DangerCheckResult {
   reason: string;
   /** Short Thai impact statement shown in the consent dialog. */
   impact: string;
+  /**
+   * True when the hit is a *replacement* rather than a removal (`PUT`/`PATCH`
+   * onto an existing resource, `UPDATE … SET`). A replacement is gated because
+   * it destroys the original value, but it is not the one action the product
+   * refuses to let a person authorise, so the consent dialog names it
+   * differently and the fence treats it as a boundary rather than a deletion.
+   */
+  overwrite?: boolean;
 }
 
 /**
@@ -20,15 +28,28 @@ export interface DangerCheckResult {
  * attack box is the tester's disposable infrastructure.
  *
  * A match never executes silently. It is surfaced to the operator as a
- * `destructive_target` verdict, which no mode may turn into a question: the
- * engagement is proof-of-concept, so destructive testing against the client's
- * live data is not carried out whatever the operator or their settings say.
+ * `destructive_target` verdict, which stops the call for approval in every
+ * mode — including `auto`, where the agent otherwise works unsupervised.
+ *
+ * This is a text rule over the command the agent wrote, so it is a *judgement
+ * about meaning* and inherits the limits of one: a payload that merely contains
+ * the word `delete`, or prose quoting a statement, reads the same as the real
+ * thing, and an inventively named endpoint reads as nothing at all. That is why
+ * it asks rather than refuses: the operator sees the command and the reason and
+ * decides. The layer that judges the actual wire request (`egressPolicy`) is
+ * the one that can carry a hard guarantee, and it does not read text the agent
+ * controls.
  */
 
 const SAFE_RESULT: DangerCheckResult = { dangerous: false, rule: "", reason: "", impact: "" };
 
 function danger(rule: string, reason: string, impact: string): DangerCheckResult {
   return { dangerous: true, rule, reason, impact };
+}
+
+/** A replacement of existing data rather than a removal of it. */
+function overwrite(rule: string, reason: string, impact: string): DangerCheckResult {
+  return { dangerous: true, rule, reason, impact, overwrite: true };
 }
 
 const IMPACT_DATA_LOSS =
@@ -64,24 +85,88 @@ const DELETE_WORDS = new Set([
   "erase",
 ]);
 
-const URL_SEGMENT_RE = /[/?&=;]([^/?&=;#\s'"]+)/g;
+const URL_SEGMENT_RE = /([/?&=;])([^/?&=;#\s'"]+)/g;
 
 /**
- * True when any path segment, query key or query value names a removal
- * operation: `/delete`, `/deleteUser`, `/delete_user`, `/user-delete`,
- * `?action=remove`. Segments are split into words on punctuation and on
- * camelCase boundaries, so `deleted`, `removed` and `undelete` (fields and
- * states, not operations) are not matched.
+ * Query keys that hold an *operation* rather than data, so the value beside
+ * them is judged like a path segment (`?action=remove`). Every other value is
+ * what the caller searched for, filtered by or echoed — `?q=delete` is a search
+ * for a word, not a request that removes anything — and is deliberately left
+ * alone. Only the method (a token) and the path (a name) carry the 100%
+ * guarantees; value judgement is the best-effort half of this rule.
+ */
+const OPERATION_KEY_WORDS = new Set([
+  "action",
+  "op",
+  "operation",
+  "cmd",
+  "command",
+  "method",
+  "do",
+  "func",
+  "task",
+]);
+
+/**
+ * The target a request names — the URL, and nothing else. Used by the endpoint
+ * rules, which must not be tripped by a payload carried alongside: a POST body
+ * containing `q=delete` is a probe of a search endpoint, not a call to one that
+ * removes data. Verb rules (`-X PUT`, `.delete(`) still read the whole command,
+ * because there the verb *is* the operation the agent asked for.
+ */
+function endpointTarget(text: string): string {
+  const tokens: string[] = text.match(/https?:\/\/\S+/gi) ?? [];
+  // A path-shaped token (`/api/Users/1/delete`, `/rest/user/remove`) covers the
+  // shapes that carry no absolute URL: a raw request line, a Python call, a
+  // bare curl path. A body parameter (`q=delete`, `action=remove`) has no
+  // leading slash and is not an endpoint, so it is not read.
+  for (const match of text.matchAll(/(?:^|[\s'"=,(\[])(\/[^\s'"\],)]*)/g)) {
+    tokens.push(match[1]);
+  }
+  return tokens.join(" ");
+}
+
+/**
+ * True when the request *names* a removal operation: a path segment
+ * (`/delete`, `/deleteUser`, `/delete_user`, `/user-delete`) or a query key,
+ * plus the value of an operation key (`?action=remove`).
+ *
+ * Segments are split into words on punctuation and on camelCase boundaries, so
+ * `deleted` and `removed` (fields and states, not operations) are not matched.
+ *
+ * A query *value* under an ordinary key is not judged — it is data the caller
+ * chose, not the name of the thing being called. `?q=delete` is a search for a
+ * word; refusing it cost the agent every read of a page, filter or product
+ * whose parameter merely spelled one. See OPERATION_KEY_WORDS.
  */
 export function hasDeleteEndpoint(text: string): boolean {
+  let lastKey: string | null = null;
   for (const match of text.matchAll(URL_SEGMENT_RE)) {
-    const words = match[1]
-      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-      .toLowerCase()
-      .split(/[^a-z0-9]+/);
-    if (words.some((word) => DELETE_WORDS.has(word))) return true;
+    const separator = match[1];
+    const token = match[2];
+    if (separator === "=") {
+      // Value slot: only an operation key puts an operation here.
+      const isOperationValue =
+        lastKey !== null &&
+        OPERATION_KEY_WORDS.has(lastKey) &&
+        namesRemoval(token);
+      lastKey = null;
+      if (isOperationValue) return true;
+      continue;
+    }
+    if (namesRemoval(token)) return true;
+    lastKey = separator === "/" ? null : token.toLowerCase();
   }
   return false;
+}
+
+/** One path segment, query key or query value, split into words and checked. */
+function namesRemoval(token: string): boolean {
+  const words = token
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/);
+  return words.some((word) => DELETE_WORDS.has(word));
 }
 
 /** A GraphQL mutation whose field removes or disables something. */
@@ -148,7 +233,7 @@ function rawRequestLineDanger(text: string): DangerCheckResult | undefined {
   // A raw request carries no `-X PUT` for the verb rules to read, so the
   // overwrite case has to be recognised from the request line itself.
   if ((method === "PUT" || method === "PATCH") && RESOURCE_ID_RE.test(target)) {
-    return danger(
+    return overwrite(
       "http:raw-overwrite",
       "คำขอ HTTP ที่จะส่งถึงเป้าหมายเขียนทับรายการที่มีอยู่แล้ว",
       IMPACT_OVERWRITE,
@@ -223,7 +308,11 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
     );
   }
 
-  if (HTTP_WRITE_VERB_RE.test(probe) && hasDeleteEndpoint(probe)) {
+  // The endpoint rules read the *target* the request names, never the body.
+  // A payload is not an instruction: `-d 'q=delete'` and a POST body carrying
+  // the word are evidence the operator is collecting, and reading the whole
+  // probe flagged every one of them as an endpoint that removes data.
+  if (HTTP_WRITE_VERB_RE.test(probe) && hasDeleteEndpoint(endpointTarget(probe))) {
     return danger(
       "http:delete-endpoint",
       "เรียกปลายทางที่ทำหน้าที่ลบหรือปิดการใช้งานข้อมูลบนเป้าหมาย",
@@ -232,7 +321,7 @@ export function detectDestructiveTargetAction(text: string): DangerCheckResult {
   }
 
   if (HTTP_OVERWRITE_VERB_RE.test(probe) && RESOURCE_ID_RE.test(probe)) {
-    return danger(
+    return overwrite(
       "http:overwrite",
       "เขียนทับข้อมูลเดิมบนเป้าหมายด้วย PUT/PATCH ไปยังรายการที่มีอยู่แล้ว",
       IMPACT_OVERWRITE,

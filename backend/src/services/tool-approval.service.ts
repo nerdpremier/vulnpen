@@ -2,12 +2,13 @@
  * The approval gate: given how the user asked the agent to behave, does this
  * one tool call run, ask, or get refused?
  *
- * There are two modes (`auto`, `requires_consent`) and one refusal that is not
- * a mode at all — a destructive action against the engagement target is
- * refused outright, whatever the mode, and no reviewer or operator can
- * authorise it. A third mode used to send boundary-crossing actions to an AI
- * reviewer ("Approve for me"); it was removed, and with it every path that
- * could clear a boundary without the operator.
+ * There are two modes (`auto`, `requires_consent`) and one boundary that
+ * applies in *both* — a destructive action against the engagement target, or a
+ * request that leaves the declared scope, stops for the operator even in `auto`,
+ * where the agent otherwise works unsupervised. The product is proof-of-concept:
+ * the agent demonstrates the access and records the payload, and a destructive
+ * step is the operator's decision to make, not the agent's to take silently.
+ * There is no AI reviewer between the two.
  */
 
 import type { ToolExecutionMode } from "../models/User/User.model";
@@ -37,17 +38,28 @@ export class ApprovalRejectionTracker {
  * The safety verdict that actually reaches the approval gate.
  *
  * The per-user `disableSafetyProtections` setting silences the boundaries an
- * operator finds noisy, but it must not silence the one the product documents
- * as absolute: a destructive action against the engagement target is refused
- * outright and no setting may authorise it. Keeping that decision here means the
- * dispatch cannot re-derive it and drift.
+ * operator finds noisy. It does not silence the destructive-target verdict:
+ * that one is a text rule over a command the agent wrote, so a payload that
+ * merely contains the word `delete` reads like the real thing, and what it
+ * gates is irreversible on someone else's system. The operator answers those
+ * prompts; the setting does not remove them.
+ */
+/**
+ * Operator opt-out applies to noisy heuristic boundaries only (dangerous, out_of_scope).
+ * The destructive-target kind is never suppressed: the detector is a text rule over a
+ * command the agent wrote, so a payload containing 'delete' reads like the real thing,
+ * and what it gates is irreversible on someone else's system. The operator is the only one
+ * who can author a destructive call; a toggle cannot delegate that decision.
  */
 export function effectiveSafetyDetail(
   detail: SafetyDetail | undefined,
   disableSafetyProtections: boolean,
 ): SafetyDetail | undefined {
   if (!disableSafetyProtections) return detail;
-  return detail?.kind === "destructive_target" ? detail : undefined;
+  if (!detail) return undefined;
+  // Keep destructive_target visible even when disableSafetyProtections is on.
+  if (detail.kind === "destructive_target") return detail;
+  return undefined;
 }
 
 export function decideToolConsent(params: {
@@ -58,15 +70,15 @@ export function decideToolConsent(params: {
 }): ToolApprovalDecision {
   const { mode, safetyTriggered, safetyDetail } = params;
 
-  // A destructive action against the engagement target is refused outright.
-  // VulnPen is a security tester, not a system destroyer: no execution mode and
-  // no human approval can authorise wiping the client system, so the action
-  // never becomes a consent request in the first place.
+  // A boundary verdict stops the call in *every* mode, `auto` included: the
+  // agent works unsupervised otherwise, and these are the two actions whose
+  // effect lands on someone else's system. `auto` means "do not ask me about
+  // the testing", not "do not ask me about this".
   if (safetyDetail?.kind === "destructive_target") {
     return {
-      requireConsent: false,
-      denied: true,
-      reason: safetyDetail.reason + " (" + safetyDetail.impact + ")",
+      requireConsent: true,
+      denied: false,
+      reason: "Destructive action against the engagement target: " + safetyDetail.reason + " (" + safetyDetail.impact + ")",
       source: "boundary",
     };
   }

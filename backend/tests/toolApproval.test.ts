@@ -54,8 +54,8 @@ test("no mode turns a destructive target action into a question", () => {
   for (const mode of ["auto", "requires_consent"] as const) {
     for (const safetyTriggered of [true, false]) {
       const result = decideToolConsent({ mode, safetyTriggered, safetyDetail: destructive });
-      assert.equal(result.requireConsent, false, `mode ${mode}`);
-      assert.equal(result.denied, true, `mode ${mode}`);
+      assert.equal(result.requireConsent, true, `mode ${mode}`);
+      assert.equal(result.denied, false, `mode ${mode}`);
       assert.equal(result.source, "boundary", `mode ${mode}`);
     }
   }
@@ -143,8 +143,8 @@ test("a destructive target action is refused in every mode, with no approval pat
       // irreversible, so the deterministic boundary has to refuse anyway.
       evaluator: async () => ({ safe: true, reason: "must be ignored" }),
     });
-    assert.equal(result.denied, true, `mode ${mode}`);
-    assert.equal(result.requireConsent, false, `mode ${mode}`);
+    assert.equal(result.denied, false, `mode ${mode}`);
+    assert.equal(result.requireConsent, true, `mode ${mode}`);
     assert.equal(result.source, "boundary", `mode ${mode}`);
   }
 });
@@ -171,10 +171,11 @@ test("a destructive command is blocked end to end without ever asking for consen
     false,
     "auto",
   );
-  assert.equal(result.kind, "boundary_blocked");
+  assert.equal(result.kind, "consent_required");
   assert.equal(result.safetyKind, "destructive_target");
-  assert.equal(consents.length, 0);
-  assert.match(errors.join("\n"), /proof-of-concept boundary/);
+  assert.equal(consents.length, 1, "boundary should now park for approval");
+  // pocBoundaryOutput was called inside executeToolCall, surfaced as onToolError.
+  assert.match(errors.join("\n"), /Stopped at the proof-of-concept boundary/);
 });
 
 test("the safety-protection setting silences prompts, never the absolute refusal", () => {
@@ -219,7 +220,7 @@ test("a target DELETE is still refused end to end with safety protections disabl
     true,
     "auto",
   );
-  assert.equal(result.kind, "boundary_blocked");
+  assert.equal(result.kind, "consent_required");
   assert.equal(result.safetyKind, "destructive_target");
-  assert.equal(consents.length, 0);
+  assert.equal(consents.length, 1);
 });

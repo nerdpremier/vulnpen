@@ -16,7 +16,7 @@ const burpIntruder: ToolDefinition = {
     "fuzzing parameters with wordlists, enumerating valid IDs/tokens, or testing multiple injection " +
     "points simultaneously. Provide a raw HTTP request and optionally specify byte-offset insertion " +
     "points where Intruder will place payloads. " +
-    "Proof-of-concept engagement: destructive steps are refused outright (see <rules_of_engagement>) — proving that a control is missing is the finding.",
+    "Proof-of-concept engagement: destructive steps stop for operator approval (see <rules_of_engagement>) — proving that a control is missing is the finding.",
   parameters: {
     type: "object",
     properties: {

@@ -386,8 +386,8 @@ consent and wait on its own page). A parked scan keeps both halves
 of that identity across the resume — `parkedRunContext` hands the consent
 continuation the scan's own channel and mode — so an unattended scan does not
 silently become supervised, and its activity never leaks into the chat feed.
-The agent's gates are never bypassed by either policy: a destructive action
-against the target is still refused outright.
+Neither policy bypasses the agent's gates: a destructive action against the
+target still stops for the operator instead of running in either case.
 
 `scan-results.ts` owns every pure projection the scan pages read: `selectRuns`
 (the history a view shows), `decorateRun` (its queue position — through
