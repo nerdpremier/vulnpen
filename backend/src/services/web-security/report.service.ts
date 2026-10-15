@@ -239,7 +239,7 @@ function severityCountsLine(stats: ReportStats): string {
   const parts = SEVERITY_ORDER.filter((severity) => stats.bySeverity[severity] > 0).map(
     (severity) => `${stats.bySeverity[severity]} ${severity}`,
   );
-  return parts.length ? parts.join(", ") : "no findings recorded";
+  return parts.length ? parts.join(", ") : "ไม่พบช่องโหว่ที่บันทึกไว้";
 }
 
 function owaspTitle(id?: OwaspTop10Id): string {
@@ -250,93 +250,94 @@ function owaspTitle(id?: OwaspTop10Id): string {
 function introductionSection(options: ReportOptions): string[] {
   const generatedAt = options.generatedAt ?? new Date();
   const rows = [
-    `| Client | ${tableCell(options.client ?? "Not specified")} |`,
-    `| Target | ${tableCell(options.target ?? "Not specified")} |`,
-    `| Engagement type | ${tableCell(options.testType ?? "Grey-box web application penetration test")} |`,
-    `| Testing window | ${tableCell(options.testingWindow ?? formatDate(generatedAt))} |`,
-    `| Tester | ${tableCell(options.tester ?? "Not specified")} |`,
-    `| Classification | ${tableCell(options.classification ?? "Confidential")} |`,
+    `| ลูกค้า | ${tableCell(options.client ?? "ไม่ระบุ")} |`,
+    `| เป้าหมาย | ${tableCell(options.target ?? "ไม่ระบุ")} |`,
+    `| รูปแบบการทดสอบ | ${tableCell(options.testType ?? "การทดสอบเจาะระบบเว็บแอปพลิเคชันแบบทราบข้อมูลบางส่วน (Grey-box)")} |`,
+    `| ช่วงเวลาทดสอบ | ${tableCell(options.testingWindow ?? formatDate(generatedAt))} |`,
+    `| ผู้ทดสอบ | ${tableCell(options.tester ?? "ไม่ระบุ")} |`,
+    `| ชั้นความลับ | ${tableCell(options.classification ?? "Confidential")} |`,
   ];
   if (options.session.createdAt) {
-    rows.push(`| Session created | ${formatDate(options.session.createdAt)} |`);
+    rows.push(`| วันที่สร้างเซสชัน | ${formatDate(options.session.createdAt)} |`);
   }
-  rows.push(`| Report generated | ${formatDate(generatedAt)} |`);
+  rows.push(`| วันที่ออกรายงาน | ${formatDate(generatedAt)} |`);
   if (options.version) {
-    rows.push(`| Report version | ${tableCell(options.version)} |`);
+    rows.push(`| เวอร์ชันรายงาน | ${tableCell(options.version)} |`);
   }
   rows.push(
-    `| Standards applied | OWASP WSTG v${WSTG_VERSION} (methodology, risk rating, report structure), OWASP Top 10:2025 (risk mapping), CWE (weakness classification) |`,
+    `| มาตรฐานที่อ้างอิง | OWASP WSTG v${WSTG_VERSION} (วิธีการทดสอบ การให้ระดับความเสี่ยง โครงสร้างรายงาน), OWASP Top 10:2025 (การจัดหมวดความเสี่ยง), CWE (การจำแนกประเภทจุดอ่อน) |`,
   );
 
   return [
-    "## 1. Introduction",
+    "## 1. บทนำ",
     "",
-    "### 1.1 Engagement details",
+    "### 1.1 ข้อมูลการว่าจ้าง",
     "",
-    "| Field | Value |",
+    "| หัวข้อ | รายละเอียด |",
     "| --- | --- |",
     ...rows,
     "",
-    "### 1.2 Disclaimer",
+    "### 1.2 ข้อจำกัดความรับผิดชอบ",
     "",
-    "This test is a point-in-time assessment; the environment may have changed since it was run. There is no guarantee that every possible security issue has been identified, or that new vulnerabilities have not since been discovered. This report is a guiding document, not a warranty of the state of the systems tested.",
+    "การทดสอบนี้เป็นการประเมิน ณ จุดเวลาหนึ่ง สภาพแวดล้อมอาจเปลี่ยนแปลงไปนับตั้งแต่การทดสอบ ไม่มีการรับประกันว่าจะพบปัญหาความปลอดภัยที่เป็นไปได้ทั้งหมด หรือจะไม่มีช่องโหว่ใหม่ที่ถูกค้นพบในภายหลัง รายงานฉบับนี้เป็นเอกสารประกอบการดำเนินงาน ไม่ใช่การรับประกันสภาพของระบบที่ทดสอบ",
     "",
   ];
 }
 
 function executiveSummarySection(options: ReportOptions, findings: ReportFindingsRow[], stats: ReportStats): string[] {
-  const lines: string[] = ["## 2. Executive summary", ""];
+  const lines: string[] = ["## 2. บทสรุปผู้บริหาร", ""];
   const urgentCount = stats.bySeverity.critical + stats.bySeverity.high;
 
   lines.push(
-    `A web application security assessment of ${options.target || options.session.name} was performed using the OWASP Web Security Testing Guide v${WSTG_VERSION}. ${stats.totalFindings} security finding(s) were recorded (${severityCountsLine(stats)}).`,
+    `การประเมินความปลอดภัยของเว็บแอปพลิเคชัน ${options.target || options.session.name} ดำเนินการตาม OWASP Web Security Testing Guide v${WSTG_VERSION} พบช่องโหว่ด้านความปลอดภัยที่บันทึกไว้ ${stats.totalFindings} รายการ (${severityCountsLine(stats)})`,
   );
   lines.push("");
 
   if (stats.exploited > 0) {
     lines.push(
-      `${stats.exploited} finding(s) were exploited during the assessment, which means the impact is demonstrated rather than theoretical.`,
+      `มีช่องโหว่ ${stats.exploited} รายการที่ถูกใช้ประโยชน์ (exploited) ระหว่างการทดสอบ ซึ่งหมายความว่าผลกระทบได้รับการพิสูจน์แล้ว ไม่ใช่เพียงข้อสันนิษฐาน`,
     );
     lines.push("");
   }
 
   if (urgentCount > 0) {
     lines.push(
-      `The engagement identified ${urgentCount} critical or high severity issue(s). These should be treated as release-blocking until remediated or formally accepted.`,
+      `การทดสอบครั้งนี้พบประเด็นระดับวิกฤตหรือสูงรวม ${urgentCount} รายการ ควรถือเป็นประเด็นที่ปิดกั้นการปล่อยระบบ (release-blocking) จนกว่าจะแก้ไขหรือยอมรับความเสี่ยงอย่างเป็นทางการ`,
     );
     lines.push("");
   } else if (stats.totalFindings > 0) {
     lines.push(
-      "No critical or high severity issues were identified within the tested scope. The remaining findings are medium, low or informational and indicate hardening opportunities.",
+      "ไม่พบประเด็นระดับวิกฤตหรือสูงภายในขอบเขตที่ทดสอบ ช่องโหว่ที่เหลืออยู่ในระดับปานกลาง ต่ำ หรือข้อมูลข่าวสาร ซึ่งเป็นโอกาสในการเสริมความแข็งแกร่งของระบบ",
     );
     lines.push("");
   }
 
   const top = findings.slice(0, 5);
   if (top.length) {
-    lines.push("**Principal findings**", "");
+    lines.push("**ช่องโหว่หลักที่พบ**", "");
     for (const finding of top) {
       lines.push(
-        `- **F-${String(finding.index).padStart(3, "0")} ${finding.title}** (${finding.severity}${finding.cvss ? `, CVSS v3.0 base score ${finding.cvss.score}` : ""}) — ${finding.host}${finding.endpoint ? ` ${finding.endpoint}` : ""}. ${owaspTitle(finding.owaspTop10)}.`,
+        `- **F-${String(finding.index).padStart(3, "0")} ${finding.title}** (${finding.severity}${finding.cvss ? `, คะแนนฐาน CVSS v3.0 ${finding.cvss.score}` : ""}) — ${finding.host}${finding.endpoint ? ` ${finding.endpoint}` : ""}. ${owaspTitle(finding.owaspTop10)}.`,
       );
     }
     lines.push("");
   }
 
   lines.push(
-    `**Test coverage:** ${stats.coverage.executed} of ${stats.coverage.total} planned WSTG test cases were executed (${stats.coverage.percentExecuted}%). ${stats.coverage.notStarted} test case(s) were not executed in this window; they are listed in section 7 and any residual risk from them is unverified.`,
+    `**ความครอบคลุมการทดสอบ:** ดำเนินการทดสอบตามแผน WSTG แล้ว ${stats.coverage.executed} จาก ${stats.coverage.total} เคส (${stats.coverage.percentExecuted}%) ยังไม่ได้ดำเนินการ ${stats.coverage.notStarted} เคสในรอบนี้ รายการเหล่านี้ปรากฏในหัวข้อ 7 และความเสี่ยงที่เหลืออยู่จากเคสเหล่านั้นยังไม่ได้รับการยืนยัน`,
   );
   lines.push("");
 
   if (stats.unmapped > 0) {
     lines.push(
-      `> ${stats.unmapped} finding(s) carry no CWE, or a CWE that no OWASP Top 10:2025 category lists, so they are reported "Unmapped". Record the weakness id on the finding and the category follows from the official lists.`,
+      `> มีช่องโหว่ ${stats.unmapped} รายการที่ไม่มี CWE หรือมี CWE ที่ไม่ตรงกับหมวดใดใน OWASP Top 10:2025 จึงรายงานเป็น "Unmapped" ให้บันทึกรหัสจุดอ่อน (CWE) บนช่องโหว่ แล้วหมวดจะตามมาจากรายการทางการเอง`,
     );
     lines.push("");
   }
 
   lines.push(
-    "> This executive summary is generated from recorded evidence. Every statement must be verified against the detailed findings before the report is issued.",
+    "> บทสรุปผู้บริหารฉบับนี้สร้างจากหลักฐานที่บันทึกไว้ ทุกข้อความต้องได้รับการตรวจสอบเทียบกับรายละเอียดช่องโหว่ก่อนนำส่งรายงาน",
+    "",
   );
   return lines;
 }
@@ -344,44 +345,44 @@ function executiveSummarySection(options: ReportOptions, findings: ReportFinding
 function scopeAndMethodologySection(options: ReportOptions, findings: ReportFindingsRow[]): string[] {
   const hosts = Array.from(new Set(findings.map((finding) => finding.host).filter(Boolean)));
   const lines: string[] = [
-    "## 3. Scope, methodology and limitations",
+    "## 3. ขอบเขต วิธีการทดสอบ และข้อจำกัด",
     "",
-    "### 3.1 In scope",
+    "### 3.1 ขอบเขตการทดสอบ",
     "",
     options.scope || options.target
       ? `${options.scope || options.target}`
-      : "No scope statement was recorded in this session.",
+      : "ไม่มีการระบุขอบเขตการทดสอบไว้ในเซสชันนี้",
     "",
   ];
 
   if (hosts.length) {
-    lines.push("Assets touched during testing:", "");
+    lines.push("ทรัพย์สิน (asset) ที่ถูกแตะต้องระหว่างการทดสอบ:", "");
     for (const host of hosts) lines.push(`- ${host}`);
     lines.push("");
   }
 
   lines.push(
-    "### 3.2 Methodology",
+    "### 3.2 วิธีการทดสอบ",
     "",
-    `Testing followed the OWASP Web Security Testing Guide (WSTG) v${WSTG_VERSION} (${WSTG_SOURCE}). Each planned test case carries its WSTG identifier, objective, method and the evidence expected from it; results are tracked per case with the statuses passed, failed, blocked, in progress, skipped and not started.`,
+    `การทดสอบดำเนินตาม OWASP Web Security Testing Guide (WSTG) v${WSTG_VERSION} (${WSTG_SOURCE}) แต่ละเคสที่วางแผนไว้จะมีรหัส WSTG วัตถุประสงค์ วิธีการ และหลักฐานที่คาดหวัง ผลลัพธ์ถูกติดตามเป็นรายเคสด้วยสถานะ passed, failed, blocked, in progress, skipped และ not started`,
     "",
-    "Findings were mapped to the OWASP Top 10:2025 (https://owasp.org/Top10/2025/) from the weakness each finding records: the finding's CWE identifier is looked up in the CWE list OWASP publishes for each category, and the single matching category is used. A finding whose CWE is not in those published lists, or that records no CWE, is reported as Unmapped rather than forced into a category. The mapping is deterministic and uses no heuristics, no hand-maintained crosswalk and no model; each finding states the CWE it was mapped from.",
+    "การจัดหมวดช่องโหว่เข้ากับ OWASP Top 10:2025 (https://owasp.org/Top10/2025/) ทำจากจุดอ่อนที่ช่องโหว่แต่ละรายการบันทึกไว้ โดยนำรหัส CWE ของช่องโหว่ไปค้นหาในรายการ CWE ที่ OWASP เผยแพร่สำหรับแต่ละหมวด แล้วใช้หมวดที่ตรงกันเพียงหนึ่งเดียว ช่องโหว่ที่ CWE ไม่อยู่ในรายการที่เผยแพร่ หรือไม่ได้บันทึก CWE จะรายงานเป็น Unmapped แทนการบังคับจัดเข้าหมวด การจัดหมวดนี้เป็นแบบกำหนดแน่นอน (deterministic) ไม่ใช้ฮิวริสติก ไม่ใช้ตารางเทียบที่ดูแลด้วยมือ และไม่ใช้โมเดล โดยช่องโหว่แต่ละรายการจะระบุ CWE ที่ใช้จัดหมวด",
     "",
   );
 
   if (options.tools?.length) {
-    lines.push(`Tools and techniques used: ${options.tools.join(", ")}.`, "");
+    lines.push(`เครื่องมือและเทคนิคที่ใช้: ${options.tools.join(", ")}.`, "");
   }
 
   if (options.engagementNotes) {
-    lines.push("### 3.3 Engagement notes", "", options.engagementNotes, "");
+    lines.push("### 3.3 บันทึกการว่าจ้าง", "", options.engagementNotes, "");
   }
 
   lines.push(
-    `### ${options.engagementNotes ? "3.4" : "3.3"} Assumptions and limitations`,
+    `### ${options.engagementNotes ? "3.4" : "3.3"} สมมติฐานและข้อจำกัด`,
     "",
     options.limitations ||
-      "Findings are limited to the scope, credentials and time window available for this assessment. Untested or blocked test cases are recorded in section 7 and represent unverified risk rather than confirmed absence of a vulnerability.",
+      "ช่องโหว่ที่รายงานจำกัดอยู่ที่ขอบเขต ข้อมูลรับรอง และช่วงเวลาที่มีสำหรับการประเมินครั้งนี้ เคสที่ยังไม่ได้ทดสอบหรือถูกบล็อกจะบันทึกไว้ในหัวข้อ 7 และถือเป็นความเสี่ยงที่ยังไม่ได้รับการยืนยัน มิใช่การยืนยันว่าไม่มีช่องโหว่",
     "",
   );
 
@@ -390,11 +391,11 @@ function scopeAndMethodologySection(options: ReportOptions, findings: ReportFind
 
 function riskSummarySection(findings: ReportFindingsRow[], stats: ReportStats): string[] {
   const lines: string[] = [
-    "## 4. Risk summary",
+    "## 4. สรุปความเสี่ยง",
     "",
-    "### 4.1 Findings by severity",
+    "### 4.1 ช่องโหว่จำแนกตามระดับความรุนแรง",
     "",
-    "| Severity | Findings | Exploited |",
+    "| ระดับความรุนแรง | จำนวนช่องโหว่ | ถูกใช้ประโยชน์ |",
     "| --- | --- | --- |",
   ];
   for (const severity of SEVERITY_ORDER) {
@@ -403,19 +404,19 @@ function riskSummarySection(findings: ReportFindingsRow[], stats: ReportStats): 
       `| ${severity} | ${rows.length} | ${rows.filter((row) => row.exploited).length} |`,
     );
   }
-  lines.push(`| **Total** | **${stats.totalFindings}** | **${stats.exploited}** |`, "");
+  lines.push(`| **รวม** | **${stats.totalFindings}** | **${stats.exploited}** |`, "");
 
   lines.push(
-    "### 4.2 Findings by OWASP Top 10:2025 category",
+    "### 4.2 ช่องโหว่จำแนกตามหมวด OWASP Top 10:2025",
     "",
-    "| OWASP Top 10:2025 | Category | Findings |",
+    "| OWASP Top 10:2025 | หมวด | จำนวนช่องโหว่ |",
     "| --- | --- | --- |",
   );
   for (const category of stats.byOwasp) {
     lines.push(`| ${category.id} | ${category.title} | ${category.findings} |`);
   }
   if (stats.unmapped > 0) {
-    lines.push(`| — | Unmapped (needs manual classification) | ${stats.unmapped} |`);
+    lines.push(`| — | Unmapped (ต้องจัดหมวดด้วยมือ) | ${stats.unmapped} |`);
   }
   lines.push("");
   return lines;
@@ -423,13 +424,13 @@ function riskSummarySection(findings: ReportFindingsRow[], stats: ReportStats): 
 
 function findingsSummarySection(findings: ReportFindingsRow[]): string[] {
   const lines: string[] = [
-    "## 5. Findings summary",
+    "## 5. สรุปช่องโหว่ที่พบ",
     "",
-    "| ID | Severity | CVSS v3.0 | Title | Affected asset | WSTG | OWASP Top 10:2025 |",
+    "| รหัส | ระดับความรุนแรง | CVSS v3.0 | ชื่อช่องโหว่ | ทรัพย์สินที่กระทบ | WSTG | OWASP Top 10:2025 |",
     "| --- | --- | --- | --- | --- | --- | --- |",
   ];
   if (!findings.length) {
-    lines.push("| — | — | — | No findings were recorded in this session | — | — | — |");
+    lines.push("| — | — | — | ไม่พบช่องโหว่ที่บันทึกไว้ในเซสชันนี้ | — | — | — |");
   }
   for (const finding of findings) {
     lines.push(
@@ -446,15 +447,15 @@ function detailedFindingsSection(
 ): string[] {
   const byId = new Map(vulnerabilities.map((vulnerability) => [vulnerability.vulnerabilityId, vulnerability]));
   const lines: string[] = [
-    "## 6. Detailed findings",
+    "## 6. รายละเอียดช่องโหว่ที่ตรวจพบ",
     "",
-    "*Evidence below is redacted for secrets, tokens, keys and card-like numbers before it enters the report (WSTG Reporting: mask sensitive data). Verify the redaction before delivery.*",
+    "*หลักฐานด้านล่างถูกปิดบังข้อมูลอ่อนไหว (รหัสผ่าน โทเคน คีย์ และตัวเลขที่คล้ายเลขบัตร) ก่อนเข้าสู่รายงาน (ตามคำแนะนำด้านการรายงานของ WSTG: ให้ปิดบังข้อมูลอ่อนไหว) โปรดตรวจสอบการปิดบังอีกครั้งก่อนนำส่ง*",
     "",
   ];
 
   if (!findings.length) {
     lines.push(
-      "No findings were recorded during this assessment. Coverage in section 7 shows which test cases support that statement.",
+      "ไม่พบช่องโหว่ที่บันทึกไว้ระหว่างการทดสอบครั้งนี้ ความครอบคลุมในหัวข้อ 7 แสดงว่าเคสทดสอบใดสนับสนุนข้อสรุปนี้",
       "",
     );
     return lines;
@@ -466,55 +467,55 @@ function detailedFindingsSection(
     const category = getOwaspCategory(finding.owaspTop10);
 
     lines.push(`### 6.${finding.index} F-${String(finding.index).padStart(3, "0")} — ${finding.title}`, "");
-    lines.push("| Attribute | Value |", "| --- | --- |");
-    lines.push(`| Severity | ${finding.severity}${finding.exploited ? " (exploited)" : ""} |`);
+    lines.push("| หัวข้อ | รายละเอียด |", "| --- | --- |");
+    lines.push(`| ระดับความรุนแรง | ${finding.severity}${finding.exploited ? " (exploited)" : ""} |`);
 
-    lines.push(`| Affected asset | ${tableCell(finding.host)}${finding.endpoint ? ` — ${tableCell(finding.endpoint)}` : vulnerability?.service ? ` — ${tableCell(vulnerability.service)}` : ""} |`);
-    lines.push(`| CWE | ${finding.cwe ?? "Not recorded"} |`);
+    lines.push(`| ทรัพย์สินที่กระทบ | ${tableCell(finding.host)}${finding.endpoint ? ` — ${tableCell(finding.endpoint)}` : vulnerability?.service ? ` — ${tableCell(vulnerability.service)}` : ""} |`);
+    lines.push(`| CWE | ${finding.cwe ?? "ไม่ได้บันทึก"} |`);
     // The score was computed from the eight CVSS v3.0 base metrics; see
     // Appendix B for the methodology.
     lines.push(
-      `| CVSS v3.0 base score | ${finding.cvss ? `${finding.cvss.score} (${finding.severity})` : "Not rated"} |`,
-      `| CVSS vector | ${finding.cvss ? tableCell(finding.cvss.vector) : "Not rated — all eight base metrics must be recorded"} |`,
+      `| คะแนนฐาน CVSS v3.0 | ${finding.cvss ? `${finding.cvss.score} (${finding.severity})` : "ไม่ได้ประเมิน"} |`,
+      `| เวกเตอร์ CVSS | ${finding.cvss ? tableCell(finding.cvss.vector) : "ไม่ได้ประเมิน — ต้องบันทึกเมทริกฐานทั้งแปดตัว"} |`,
     );
     if (vulnerability?.cve) lines.push(`| CVE | ${tableCell(vulnerability.cve)} |`);
     lines.push(`| OWASP Top 10:2025 | ${owaspTitle(finding.owaspTop10)} |`);
-    lines.push(`| Classification basis | ${tableCell(finding.mappingRationale)} |`);
+    lines.push(`| เกณฑ์การจัดหมวด | ${tableCell(finding.mappingRationale)} |`);
     lines.push(
-      `| WSTG v${WSTG_VERSION} reference | ${wstg ? `${wstg.id} (${wstg.section}) ${wstg.title}` : finding.wstgId ?? "No WSTG test case linked — link the finding to the case that produced it"} |`,
+      `| อ้างอิง WSTG v${WSTG_VERSION} | ${wstg ? `${wstg.id} (${wstg.section}) ${wstg.title}` : finding.wstgId ?? "ยังไม่ได้เชื่อมโยงเคสทดสอบ WSTG — ให้เชื่อมช่องโหว่กับเคสที่ทำให้พบ"} |`,
     );
     lines.push("");
 
-    lines.push("**Description**", "");
+    lines.push("**คำอธิบาย**", "");
     lines.push(
-      vulnerability?.description || vulnerability?.contextSummary || "No description was recorded for this finding.",
+      vulnerability?.description || vulnerability?.contextSummary || "ไม่ได้บันทึกคำอธิบายสำหรับช่องโหว่นี้",
       "",
     );
 
     if (vulnerability?.contextSummary && vulnerability.contextSummary !== vulnerability.description) {
-      lines.push("**Context**", "", vulnerability.contextSummary, "");
+      lines.push("**บริบท**", "", vulnerability.contextSummary, "");
     }
 
     if (wstg) {
-      lines.push("**How it was tested (WSTG method)**", "", `${wstg.objective} ${wstg.howToTest}`, "");
+      lines.push("**วิธีการทดสอบ (ตาม WSTG)**", "", `${wstg.objective} ${wstg.howToTest}`, "");
     }
 
-    lines.push("**Evidence**", "");
+    lines.push("**หลักฐาน**", "");
     lines.push("```text");
-    lines.push(maskSensitive((vulnerability?.evidence || "No raw evidence was captured.").trim()));
+    lines.push(maskSensitive((vulnerability?.evidence || "ไม่ได้เก็บหลักฐานดิบไว้").trim()));
     lines.push("```", "");
 
     if (vulnerability?.stepsToReproduce?.length) {
-      lines.push("**Steps to reproduce**", "");
+      lines.push("**ขั้นตอนการทำซ้ำ**", "");
       vulnerability.stepsToReproduce.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
       lines.push("");
     }
 
-    lines.push("**Impact**", "", vulnerability?.impact || "Impact was not recorded. Assess and complete before delivery.", "");
+    lines.push("**ผลกระทบ**", "", vulnerability?.impact || "ไม่ได้บันทึกผลกระทบ ต้องประเมินและเติมให้ครบก่อนนำส่ง", "");
     lines.push(
-      "**Remediation**",
+      "**แนวทางแก้ไข**",
       "",
-      vulnerability?.remediation || category?.remediation.map((item) => `- ${item}`).join("\n") || "Remediation was not recorded.",
+      vulnerability?.remediation || category?.remediation.map((item) => `- ${item}`).join("\n") || "ไม่ได้บันทึกแนวทางแก้ไข",
       "",
     );
 
@@ -526,22 +527,22 @@ function detailedFindingsSection(
     }
     if (finding.owaspProvenance) {
       references.push(
-        "- OWASP mapping provenance: official (the CWE list OWASP publishes for this category, " +
+        "- OWASP mapping provenance: official (รายการ CWE ที่ OWASP เผยแพร่สำหรับหมวดนี้ " +
           "https://owasp.org/Top10/2025/)",
       );
     }
-    if (references.length) lines.push("**References**", "", ...references, "");
+    if (references.length) lines.push("**เอกสารอ้างอิง**", "", ...references, "");
   }
 
   return lines;
 }
 
 function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
-  const lines: string[] = ["## 7. WSTG v" + WSTG_VERSION + " test coverage", ""];
+  const lines: string[] = ["## 7. ความครอบคลุมการทดสอบตาม WSTG v" + WSTG_VERSION, ""];
 
   if (!plan || !plan.cases?.length) {
     lines.push(
-      "No WSTG test plan was recorded for this session, so coverage cannot be evidenced. Generate a plan with the wstg_test_plan tool and re-run the assessment to produce a coverage-backed report.",
+      "ไม่มีการบันทึกแผนการทดสอบ WSTG สำหรับเซสชันนี้ จึงไม่สามารถแสดงหลักฐานความครอบคลุมได้ ให้สร้างแผนด้วยเครื่องมือ wstg_test_plan แล้วรันการประเมินใหม่เพื่อให้ได้รายงานที่อ้างอิงความครอบคลุมได้",
       "",
     );
     return lines;
@@ -549,9 +550,9 @@ function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
 
   const coverage = computeCoverage(plan.cases);
   lines.push(
-    `Plan source: ${TEST_PLAN_SOURCE}, generated ${formatDate(plan.createdAt)}. Executed ${coverage.executed}/${coverage.total} cases (${coverage.percentExecuted}%): ${coverage.passed} passed, ${coverage.failed} failed, ${coverage.blocked} blocked, ${coverage.inProgress} in progress, ${coverage.skipped} skipped, ${coverage.notStarted} not started.`,
+    `แหล่งที่มาของแผน: ${TEST_PLAN_SOURCE}, สร้างเมื่อ ${formatDate(plan.createdAt)} ดำเนินการแล้ว ${coverage.executed}/${coverage.total} เคส (${coverage.percentExecuted}%): passed ${coverage.passed}, failed ${coverage.failed}, blocked ${coverage.blocked}, in progress ${coverage.inProgress}, skipped ${coverage.skipped}, not started ${coverage.notStarted}`,
     "",
-    "| WSTG section | Category | Planned | Executed | Passed | Failed | Blocked |",
+    "| หมวด WSTG | หมวด | วางแผน | ดำเนินการ | passed | failed | blocked |",
     "| --- | --- | --- | --- | --- | --- | --- |",
   );
   for (const row of coverage.byCategory) {
@@ -564,10 +565,10 @@ function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
 
   const failed = plan.cases.filter((testCase) => testCase.status === "failed");
   if (failed.length) {
-    lines.push("### 7.1 Tests that produced findings", "");
+    lines.push("### 7.1 เคสทดสอบที่ทำให้พบช่องโหว่", "");
     for (const testCase of failed) {
       lines.push(
-        `- ${testCase.testId} (${testCase.section}) ${testCase.title}; linked findings: ${testCase.linkedVulnerabilityIds?.length ? testCase.linkedVulnerabilityIds.join(", ") : "none recorded"}`,
+        `- ${testCase.testId} (${testCase.section}) ${testCase.title}; ช่องโหว่ที่เชื่อมโยง: ${testCase.linkedVulnerabilityIds?.length ? testCase.linkedVulnerabilityIds.join(", ") : "ไม่มีที่บันทึกไว้"}`,
       );
     }
     lines.push("");
@@ -575,25 +576,25 @@ function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
 
   const blocked = plan.cases.filter((testCase) => testCase.status === "blocked");
   if (blocked.length) {
-    lines.push("### 7.2 Blocked test cases", "");
+    lines.push("### 7.2 เคสทดสอบที่ถูกบล็อก", "");
     for (const testCase of blocked) {
-      lines.push(`- ${testCase.testId} ${testCase.title} — ${testCase.notes || "reason not recorded"}`);
+      lines.push(`- ${testCase.testId} ${testCase.title} — ${testCase.notes || "ไม่ได้บันทึกเหตุผล"}`);
     }
     lines.push("");
   }
 
   const notStarted = plan.cases.filter((testCase) => testCase.status === "not_started");
   if (notStarted.length) {
-    lines.push("### 7.3 Not tested (residual risk)", "");
+    lines.push("### 7.3 ยังไม่ได้ทดสอบ (ความเสี่ยงที่เหลืออยู่)", "");
     lines.push(
-      "The following planned test cases were not executed. They are unverified, not negative results:",
+      "เคสทดสอบที่วางแผนไว้ดังต่อไปนี้ยังไม่ได้ดำเนินการ ถือเป็นความเสี่ยงที่ยังไม่ได้รับการยืนยัน ไม่ใช่ผลลัพธ์เชิงลบ:",
       "",
     );
     for (const testCase of notStarted.slice(0, 60)) {
       lines.push(`- ${testCase.testId} (${testCase.section}) ${testCase.title}`);
     }
     if (notStarted.length > 60) {
-      lines.push(`- ...and ${notStarted.length - 60} further cases listed in the session test plan.`);
+      lines.push(`- ...และอีก ${notStarted.length - 60} เคสที่เหลืออยู่ในแผนการทดสอบของเซสชัน`);
     }
     lines.push("");
   }
@@ -603,15 +604,15 @@ function wstgCoverageSection(plan?: WebAppTestPlanDoc | null): string[] {
 
 function owaspMappingSection(stats: ReportStats): string[] {
   const lines: string[] = [
-    "## 8. OWASP Top 10:2025 mapping",
+    "## 8. การจัดหมวดตาม OWASP Top 10:2025",
     "",
-    "The OWASP Top 10:2025 mapping is recorded on the findings themselves (section 6) and counted per category in section 4.2. Every classification is a lookup of the finding's CWE in the CWE lists OWASP publishes for the 2025 categories — nothing is inferred and no model is involved. A finding whose CWE is missing or is not in any published list is reported \"Unmapped\" rather than forced into a category. Categories with no findings are omitted here.",
+    "การจัดหมวดตาม OWASP Top 10:2025 บันทึกไว้บนช่องโหว่แต่ละรายการเอง (หัวข้อ 6) และนับแยกตามหมวดในหัวข้อ 4.2 ทุกการจัดหมวดคือการนำ CWE ของช่องโหว่ไปค้นหาในรายการ CWE ที่ OWASP เผยแพร่สำหรับหมวดปี 2025 — ไม่มีการอนุมาน และไม่ใช้โมเดล ช่องโหว่ที่ไม่มี CWE หรือมี CWE ที่ไม่อยู่ในรายการที่เผยแพร่ จะรายงานเป็น \"Unmapped\" แทนการบังคับจัดเข้าหมวด หมวดที่ไม่มีช่องโหว่จะไม่แสดงในที่นี้",
     "",
   ];
 
   const affected = stats.byOwasp.filter((entry) => entry.findings > 0);
   if (affected.length) {
-    lines.push("Programme-level guidance for the categories present:", "");
+    lines.push("แนวทางระดับโครงการสำหรับหมวดที่พบ:", "");
     for (const entry of affected) {
       const category = getOwaspCategory(entry.id);
       if (!category) continue;
@@ -629,16 +630,16 @@ function recommendationsSection(
   vulnerabilities: SessionVulnerabilityDoc[],
 ): string[] {
   const byId = new Map(vulnerabilities.map((vulnerability) => [vulnerability.vulnerabilityId, vulnerability]));
-  const lines: string[] = ["## 9. Recommendations", ""];
+  const lines: string[] = ["## 9. ข้อเสนอแนะ", ""];
   const label = (finding: ReportFindingsRow) =>
     `**F-${String(finding.index).padStart(3, "0")} ${finding.title}** (${finding.host}${finding.endpoint ? ` ${finding.endpoint}` : ""})`;
   const remediation = (finding: ReportFindingsRow) =>
-    byId.get(finding.id)?.remediation || "No remediation recorded — define one before delivery.";
+    byId.get(finding.id)?.remediation || "ไม่ได้บันทึกแนวทางแก้ไข — ต้องกำหนดก่อนนำส่ง";
 
   const groups: Array<{ title: string; severities: Severity[] }> = [
-    { title: "### 9.1 Immediate (within 7 days)", severities: ["critical", "high"] },
-    { title: "### 9.2 Short term (within 30 days)", severities: ["medium"] },
-    { title: "### 9.3 Hardening backlog (next release cycle)", severities: ["low", "info"] },
+    { title: "### 9.1 เร่งด่วน (ภายใน 7 วัน)", severities: ["critical", "high"] },
+    { title: "### 9.2 ระยะสั้น (ภายใน 30 วัน)", severities: ["medium"] },
+    { title: "### 9.3 งานเสริมความแข็งแกร่ง (รอบการปล่อยถัดไป)", severities: ["low", "info"] },
   ];
 
   for (const group of groups) {
@@ -647,8 +648,8 @@ function recommendationsSection(
     if (!rows.length) {
       lines.push(
         group.severities.includes("critical")
-          ? "- No critical or high severity findings are outstanding."
-          : "- Nothing outstanding in this band.",
+          ? "- ไม่มีช่องโหว่ระดับวิกฤตหรือสูงที่ค้างอยู่"
+          : "- ไม่มีรายการค้างในระดับนี้",
       );
     }
     for (const finding of rows) {
@@ -657,28 +658,28 @@ function recommendationsSection(
     lines.push("");
   }
 
-  lines.push("### 9.4 Process recommendations", "");
+  lines.push("### 9.4 ข้อเสนอแนะด้านกระบวนการ", "");
   lines.push(
-    "- Re-run the WSTG v" + WSTG_VERSION + " test plan after remediation and attach the updated coverage table to the next report version.",
+    "- รันแผนการทดสอบ WSTG v" + WSTG_VERSION + " ซ้ำหลังการแก้ไข และแนบตารางความครอบคลุมที่อัปเดตไว้กับรายงานเวอร์ชันถัดไป",
   );
   lines.push(
-    "- Close the not-tested cases in section 7.3 in the next testing window; they are unverified risk, not clean results.",
+    "- ปิดเคสที่ยังไม่ได้ทดสอบในหัวข้อ 7.3 ในการทดสอบรอบถัดไป เคสเหล่านี้เป็นความเสี่ยงที่ยังไม่ได้รับการยืนยัน ไม่ใช่ผลลัพธ์ที่สะอาด",
   );
   lines.push(
-    "- Keep the OWASP Top 10:2025 mapping on every tracked finding so that risk reporting stays comparable across releases.",
+    "- เก็บบันทึกการจัดหมวด OWASP Top 10:2025 ไว้บนทุกช่องโหว่ที่ติดตาม เพื่อให้การรายงานความเสี่ยงเปรียบเทียบกันได้ข้ามเวอร์ชัน",
   );
   lines.push("");
   return lines;
 }
 
 function appendixSection(plan?: WebAppTestPlanDoc | null): string[] {
-  const lines: string[] = ["## 10. Appendix A — Test case inventory", ""];
+  const lines: string[] = ["## 10. ภาคผนวก A — รายการเคสทดสอบ", ""];
 
   if (!plan?.cases?.length) {
-    lines.push("No test plan was recorded for this session.", "");
+    lines.push("ไม่มีการบันทึกแผนการทดสอบสำหรับเซสชันนี้", "");
   } else {
     lines.push(
-      "| WSTG ID | Section | Test case | Status | Observations | Linked findings |",
+      "| รหัส WSTG | หมวด | เคสทดสอบ | สถานะ | ข้อสังเกต | ช่องโหว่ที่เชื่อมโยง |",
       "| --- | --- | --- | --- | --- | --- |",
     );
     for (const testCase of plan.cases) {
@@ -688,17 +689,17 @@ function appendixSection(plan?: WebAppTestPlanDoc | null): string[] {
     }
     lines.push("");
     lines.push(
-      "This inventory is the WSTG v4.2 checklist for the engagement. The published checklist lives at https://github.com/OWASP/wstg/tree/master/checklist. Coverage is measured against the in-scope cases, and a case that could not apply is recorded blocked, never counted as a pass. On a re-test, compare each case against its previous run and summarise what changed.",
+      "รายการนี้คือเช็กลิสต์ WSTG v4.2 สำหรับการว่าจ้างครั้งนี้ เช็กลิสต์ทางการอยู่ที่ https://github.com/OWASP/wstg/tree/master/checklist ความครอบคลุมวัดจากเคสที่อยู่ในขอบเขต และเคสที่ไม่สามารถนำมาใช้ได้จะบันทึกเป็น blocked ไม่นับเป็น passed ในการทดสอบซ้ำ ให้เทียบแต่ละเคสกับผลการรันครั้งก่อนหน้าและสรุปสิ่งที่เปลี่ยนแปลง",
       "",
     );
   }
 
   lines.push(
-    "## 11. Appendix B - Risk rating methodology (CVSS v3.0)",
+    "## 11. ภาคผนวก B - วิธีการให้ระดับความเสี่ยง (CVSS v3.0)",
     "",
-    "The engagement follows the WSTG Reporting guidance (OWASP WSTG v" + WSTG_VERSION + ") for what a finding must record; the severity rating itself is the Common Vulnerability Scoring System version 3.0, as published by FIRST. The tester rates the eight base metrics — Attack Vector (AV), Attack Complexity (AC), Privileges Required (PR), User Interaction (UI), Scope (S), Confidentiality (C), Integrity (I) and Availability (A) — and the base score is computed from them with the FIRST equation. A declared severity word is never accepted on its own; severity always follows the computed score. Only the Base Score group is used: Temporal and Environmental metrics are out of scope for this report.",
+    "การว่าจ้างครั้งนี้ดำเนินตามคำแนะนำด้านการรายงานของ WSTG (OWASP WSTG v" + WSTG_VERSION + ") ว่าช่องโหว่ต้องบันทึกอะไร ส่วนการให้ระดับความรุนแรงใช้ Common Vulnerability Scoring System เวอร์ชัน 3.0 ตามที่ FIRST เผยแพร่ ผู้ทดสอบให้คะแนนเมทริกฐานทั้งแปดตัว — Attack Vector (AV), Attack Complexity (AC), Privileges Required (PR), User Interaction (UI), Scope (S), Confidentiality (C), Integrity (I) และ Availability (A) — แล้วคะแนนฐานคำนวณจากเมทริกเหล่านั้นด้วยสมการของ FIRST จะไม่ยอมรับคำบอกระดับความรุนแรงที่ระบุมาลอย ๆ ระดับความรุนแรงจะตามมาจากคะแนนที่คำนวณได้เสมอ ใช้เฉพาะกลุ่ม Base Score เท่านั้น ส่วน Temporal และ Environmental อยู่นอกขอบเขตของรายงานฉบับนี้",
     "",
-    "| Metric | Values |",
+    "| เมทริก | ค่า |",
     "| --- | --- |",
     "| Attack Vector (AV) | Network (N), Adjacent (A), Local (L), Physical (P) |",
     "| Attack Complexity (AC) | Low (L), High (H) |",
@@ -709,38 +710,38 @@ function appendixSection(plan?: WebAppTestPlanDoc | null): string[] {
     "| Integrity (I) | None (N), Low (L), High (H) |",
     "| Availability (A) | None (N), Low (L), High (H) |",
     "",
-    "The vector string recorded on each finding (for example `CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H`) makes every rating reproducible: entering it into the official calculator at https://www.first.org/cvss/calculator/3.0 returns exactly the score and severity printed in this report.",
+    "สตริงเวกเตอร์ที่บันทึกไว้บนช่องโหว่แต่ละรายการ (ตัวอย่าง `CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H`) ทำให้ทุกการให้คะแนนสามารถทำซ้ำได้: การนำไปกรอกในเครื่องคิดเลขทางการที่ https://www.first.org/cvss/calculator/3.0 จะได้คะแนนและระดับความรุนแรงตรงกับที่พิมพ์ในรายงานฉบับนี้",
     "",
-    "| Base score | Qualitative severity |",
+    "| คะแนนฐาน | ระดับความรุนแรงเชิงคุณภาพ |",
     "| --- | --- |",
-    "| 0.0 | None — recorded as Informational |",
+    "| 0.0 | None — บันทึกเป็น Informational |",
     "| 0.1 – 3.9 | Low |",
     "| 4.0 – 6.9 | Medium |",
     "| 7.0 – 8.9 | High |",
     "| 9.0 – 10.0 | Critical |",
     "",
-    "| Severity | Response |",
+    "| ระดับความรุนแรง | การตอบสนอง |",
     "| --- | --- |",
-    "| Critical | Remediate urgently, out of the normal cycle; treat as an active exposure until fixed. |",
-    "| High | Remediate urgently on the current cycle; treat as an active exposure until fixed. |",
-    "| Medium | Remediate on a planned cycle. |",
-    "| Low | Harden opportunistically. |",
-    "| Informational | No action required; recorded for completeness. |",
+    "| Critical | แก้ไขโดยเร่งด่วน นอกวงรอบปกติ ปฏิบัติเสมือนเป็นความเสี่ยงที่เปิดอยู่จนกว่าจะแก้ไข |",
+    "| High | แก้ไขโดยเร่งด่วนในวงรอบปัจจุบัน ปฏิบัติเสมือนเป็นความเสี่ยงที่เปิดอยู่จนกว่าจะแก้ไข |",
+    "| Medium | แก้ไขในวงรอบที่วางแผนไว้ |",
+    "| Low | เสริมความแข็งแกร่งเมื่อมีโอกาส |",
+    "| Informational | ไม่ต้องดำเนินการ บันทึกไว้เพื่อความครบถ้วน |",
     "",
-    "## 12. Appendix C - Glossary and references",
+    "## 12. ภาคผนวก C - คำย่อและเอกสารอ้างอิง",
     "",
-    "| Term | Meaning |",
+    "| คำย่อ | ความหมาย |",
     "| --- | --- |",
-    "| WSTG | OWASP Web Security Testing Guide — the test methodology applied here. |",
-    "| WSTG ID | Identifier of a single WSTG test case, e.g. WSTG-INPV-05. |",
-    "| OWASP Top 10:2025 | OWASP's 2025 awareness list of the ten most critical web application security risks. |",
-    "| CVSS v3.0 | Common Vulnerability Scoring System version 3.0 (FIRST) — the base score the severity of each finding is computed from. |",
-    "| CWE | Common Weakness Enumeration identifier for the underlying weakness class. |",
-    "| IDOR | Insecure Direct Object Reference — accessing objects by manipulating identifiers. |",
-    "| SSRF | Server-Side Request Forgery — the server fetches a URL controlled by the attacker. |",
-    "| CSRF | Cross-Site Request Forgery — state change forced through a victim's session. |",
+    "| WSTG | OWASP Web Security Testing Guide — วิธีการทดสอบที่ใช้ในรายงานฉบับนี้ |",
+    "| WSTG ID | รหัสของเคสทดสอบ WSTG หนึ่งรายการ เช่น WSTG-INPV-05 |",
+    "| OWASP Top 10:2025 | รายการตระหนักรู้สิบความเสี่ยงความปลอดภัยของเว็บแอปพลิเคชันที่สำคัญที่สุดของ OWASP ประจำปี 2025 |",
+    "| CVSS v3.0 | Common Vulnerability Scoring System เวอร์ชัน 3.0 (FIRST) — คะแนนฐานที่ใช้คำนวณระดับความรุนแรงของแต่ละช่องโหว่ |",
+    "| CWE | Common Weakness Enumeration — รหัสจำแนกประเภทจุดอ่อนที่เป็นต้นเหตุ |",
+    "| IDOR | Insecure Direct Object Reference — การเข้าถึงออบเจกต์โดยการดัดแปลงตัวระบุ |",
+    "| SSRF | Server-Side Request Forgery — เซิร์ฟเวอร์ดึง URL ที่ผู้โจมตีควบคุม |",
+    "| CSRF | Cross-Site Request Forgery — การบังคับเปลี่ยนสถานะผ่านเซสชันของเหยื่อ |",
     "",
-    "**References**",
+    "**เอกสารอ้างอิง**",
     "",
     `- OWASP Web Security Testing Guide v${WSTG_VERSION}: ${WSTG_SOURCE}`,
     "- OWASP Top 10:2025: https://owasp.org/Top10/2025/",
@@ -751,7 +752,7 @@ function appendixSection(plan?: WebAppTestPlanDoc | null): string[] {
     "",
     "---",
     "",
-    "*This draft was generated by the assistant from session evidence, the session WSTG test plan and the OWASP Top 10:2025 mapping. Review every section, complete anything marked as not recorded, and remove this note before issuing the report.*",
+    "*ฉบับร่างนี้สร้างโดยผู้ช่วยจากหลักฐานในเซสชัน แผนการทดสอบ WSTG ของเซสชัน และการจัดหมวด OWASP Top 10:2025 โปรดตรวจสอบทุกหัวข้อ เติมส่วนที่ระบุว่ายังไม่ได้บันทึกให้ครบ และลบหมายเหตุนี้ก่อนนำส่งรายงาน*",
     "",
   );
   return lines;
@@ -768,25 +769,29 @@ export function buildWebAppPentestReport(options: ReportOptions): WebAppPentestR
   const vulnerabilities = options.vulnerabilities ?? [];
   const findings = buildReportFindings(vulnerabilities);
   const stats = computeReportStats(findings, options.testPlan);
-  const title = `${options.session.name} — Web Application Penetration Testing Report (draft)`;
+  const title = `${options.session.name} — รายงานการทดสอบเจาะระบบเว็บแอปพลิเคชัน (ฉบับร่าง)`;
+
+  // The major sections, each preceded by a rule so the rendered draft has
+  // visible rhythm between chapters rather than one unbroken column of text.
+  const sections: string[][] = [
+    introductionSection(resolved),
+    executiveSummarySection(resolved, findings, stats),
+    scopeAndMethodologySection(resolved, findings),
+    riskSummarySection(findings, stats),
+    findingsSummarySection(findings),
+    detailedFindingsSection(findings, vulnerabilities),
+    wstgCoverageSection(options.testPlan),
+    owaspMappingSection(stats),
+    recommendationsSection(findings, vulnerabilities),
+    appendixSection(options.testPlan),
+  ];
 
   const markdown = [
     `# ${title}`,
     "",
-    `*Draft generated ${formatDate(generatedAt)} from session evidence using ${TEST_PLAN_SOURCE} and the OWASP Top 10:2025. Review before delivery.*`,
+    `*ฉบับร่างสร้างเมื่อ ${formatDate(generatedAt)} จากหลักฐานในเซสชัน โดยใช้ ${TEST_PLAN_SOURCE} และ OWASP Top 10:2025 โปรดตรวจสอบก่อนนำส่ง*`,
     "",
-    "---",
-    "",
-    ...introductionSection(resolved),
-    ...executiveSummarySection(resolved, findings, stats),
-    ...scopeAndMethodologySection(resolved, findings),
-    ...riskSummarySection(findings, stats),
-    ...findingsSummarySection(findings),
-    ...detailedFindingsSection(findings, vulnerabilities),
-    ...wstgCoverageSection(options.testPlan),
-    ...owaspMappingSection(stats),
-    ...recommendationsSection(findings, vulnerabilities),
-    ...appendixSection(options.testPlan),
+    ...sections.flatMap((section) => ["---", "", ...section]),
   ].join("\n");
 
   return {

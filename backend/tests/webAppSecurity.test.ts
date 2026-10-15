@@ -135,7 +135,7 @@ test("a finding with no CWE stays unmapped and says what is missing", () => {
   });
   assert.equal(mapping.primary, undefined);
   assert.equal(mapping.source, "unmapped");
-  assert.match(mapping.rationale, /No CWE is recorded/);
+  assert.match(mapping.rationale, /ไม่ได้บันทึก CWE/);
 });
 
 test("no CWE in the published lists is ambiguous — the lookup is single-valued", () => {
@@ -150,7 +150,7 @@ test("a CWE outside the published lists stays unmapped rather than being guessed
   const mapping = mapFindingToOwaspTop10({ cwe: "CWE-134" });
   assert.equal(mapping.primary, undefined);
   assert.equal(mapping.source, "unmapped");
-  assert.match(mapping.rationale, /not in the CWE list/);
+  assert.match(mapping.rationale, /ไม่อยู่ในรายการ CWE/);
 });
 
 test("planned findings are classified at ingestion time", () => {
@@ -447,21 +447,21 @@ test("the report draft is complete enough to hand to a reviewer", () => {
 
   const markdown = report.markdown;
   for (const heading of [
-    "# Shop review — Web Application Penetration Testing Report (draft)",
-    "## 1. Introduction",
-    "### 1.1 Engagement details",
-    "### 1.2 Disclaimer",
-    "## 2. Executive summary",
-    "## 3. Scope, methodology and limitations",
-    "## 4. Risk summary",
-    "## 5. Findings summary",
-    "## 6. Detailed findings",
-    "## 7. WSTG v4.2 test coverage",
-    "## 8. OWASP Top 10:2025 mapping",
-    "## 9. Recommendations",
-    "## 10. Appendix A — Test case inventory",
-    "## 11. Appendix B - Risk rating methodology (CVSS v3.0)",
-    "## 12. Appendix C - Glossary and references",
+    "# Shop review — รายงานการทดสอบเจาะระบบเว็บแอปพลิเคชัน (ฉบับร่าง)",
+    "## 1. บทนำ",
+    "### 1.1 ข้อมูลการว่าจ้าง",
+    "### 1.2 ข้อจำกัดความรับผิดชอบ",
+    "## 2. บทสรุปผู้บริหาร",
+    "## 3. ขอบเขต วิธีการทดสอบ และข้อจำกัด",
+    "## 4. สรุปความเสี่ยง",
+    "## 5. สรุปช่องโหว่ที่พบ",
+    "## 6. รายละเอียดช่องโหว่ที่ตรวจพบ",
+    "## 7. ความครอบคลุมการทดสอบตาม WSTG v4.2",
+    "## 8. การจัดหมวดตาม OWASP Top 10:2025",
+    "## 9. ข้อเสนอแนะ",
+    "## 10. ภาคผนวก A — รายการเคสทดสอบ",
+    "## 11. ภาคผนวก B - วิธีการให้ระดับความเสี่ยง (CVSS v3.0)",
+    "## 12. ภาคผนวก C - คำย่อและเอกสารอ้างอิง",
   ]) {
     assert.ok(markdown.includes(heading), `missing heading: ${heading}`);
   }
@@ -475,7 +475,7 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   assert.match(markdown, /Unmapped/);
   assert.match(markdown, /OWASP WSTG v4\.2/);
   assert.ok(
-    markdown.includes("| CVSS v3.0 base score | 9.8 (critical) |"),
+    markdown.includes("| คะแนนฐาน CVSS v3.0 | 9.8 (critical) |"),
     "the computed CVSS base score is reported",
   );
   assert.ok(
@@ -484,7 +484,7 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   );
   assert.ok(!/likelihood x impact/.test(markdown), "the retired risk matrix is gone from the report");
   assert.match(markdown, /Use parameterised queries\./);
-  assert.match(markdown, /2 of 97 planned WSTG test cases were executed/);
+  assert.match(markdown, /2 จาก 97 เคส/);
 });
 
 test("a finding is accepted without OWASP or CWE and stays unmapped", () => {

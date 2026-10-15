@@ -223,23 +223,23 @@ test("the report follows the WSTG Reporting structure and cites its sources", ()
   });
 
   const headings = [
-    "## 1. Introduction",
-    "### 1.1 Engagement details",
-    "### 1.2 Disclaimer",
-    "## 2. Executive summary",
-    "## 11. Appendix B - Risk rating methodology (CVSS v3.0)",
-    "## 12. Appendix C - Glossary and references",
+    "## 1. บทนำ",
+    "### 1.1 ข้อมูลการว่าจ้าง",
+    "### 1.2 ข้อจำกัดความรับผิดชอบ",
+    "## 2. บทสรุปผู้บริหาร",
+    "## 11. ภาคผนวก B - วิธีการให้ระดับความเสี่ยง (CVSS v3.0)",
+    "## 12. ภาคผนวก C - คำย่อและเอกสารอ้างอิง",
   ];
   for (const heading of headings) {
     assert.ok(report.markdown.includes(heading), "missing " + heading);
   }
 
-  assert.ok(report.markdown.includes("WSTG Reporting guidance"), "WSTG Reporting is cited");
+  assert.ok(report.markdown.includes("คำแนะนำด้านการรายงานของ WSTG"), "WSTG Reporting is cited");
   assert.ok(report.markdown.includes("https://www.first.org/cvss/calculator/3.0"), "the FIRST calculator is cited");
   assert.ok(!report.markdown.includes("Hunter2"), "the secret is masked in the report");
   assert.ok(/password=\[REDACTED\]/i.test(report.markdown), "the masked secret is present");
   assert.ok(report.findings[0].owaspProvenance, "the finding records a mapping provenance");
-  assert.ok(report.markdown.includes("| CVSS v3.0 base score | 9.8 (critical) |"), "the base score is reported");
+  assert.ok(report.markdown.includes("| คะแนนฐาน CVSS v3.0 | 9.8 (critical) |"), "the base score is reported");
   assert.ok(
     report.markdown.includes("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"),
     "the vector string is reported so the score is reproducible",

@@ -296,6 +296,10 @@ async function startRun(
       // and move on instead of stopping. Supervised scans leave the setting
       // alone so the user's own mode decides.
       toolExecutionMode: runPolicy(run) === "unattended" ? "auto" : undefined,
+      // And the loop enforces it: in "auto" a boundary verdict still asks, so
+      // without this flag an unattended run parks on the very consent request
+      // this comment says must not happen.
+      unattended: runPolicy(run) === "unattended",
     });
 
     await finishRun(sessionId, state, run.runId, abortCtrl, runError);
@@ -573,6 +577,13 @@ export interface ParkedRunContext {
   channel: string;
   /** The approval mode the scan was launched with, for its continuation. */
   toolExecutionMode?: ToolExecutionMode;
+  /**
+   * No operator is watching this run, so a boundary-crossing action must be
+   * recorded against the case rather than parked. Without this the run parks on
+   * `waiting_consent` — exactly the state the launch comment says cannot
+   * happen — and sits there until recovery resets it.
+   */
+  unattended?: boolean;
 }
 
 /**
@@ -594,13 +605,17 @@ export async function parkedRunContext(
   );
   if (!run) return null;
 
+  const unattended = runPolicy(run) === "unattended";
   return {
     runId: run.runId,
     channel: "run",
     // Same rule as at launch: an unattended run must not park for a human who
     // is not there, so it runs in "auto" and the boundary (not a person, and
-    // not a reviewer) decides what stops.
-    toolExecutionMode: runPolicy(run) === "unattended" ? "auto" : undefined,
+    // not a reviewer) decides what stops. `unattended` carries that decision
+    // into the loop, which records a boundary-crossing action as a refusal
+    // instead of parking on it.
+    toolExecutionMode: unattended ? "auto" : undefined,
+    unattended,
   };
 }
 

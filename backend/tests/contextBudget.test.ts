@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { messagesToOpenAI } from "../src/services/context.service";
+import { CHARS_PER_TOKEN_ESTIMATE, TOOL_OUTPUT_MAX_CHARS } from "../src/utils/transcript";
 import type { AgentMessageDoc } from "../src/models/Sessions/Sessions.model";
 
 function doc(p: Partial<AgentMessageDoc>): AgentMessageDoc {
@@ -21,15 +22,19 @@ test("old oversized tool results collapse to a small head+tail stub", () => {
   assert.match(tool!.content!, /elided from context/);
 });
 
-test("recent tool results are capped at the recent ceiling", () => {
-  const big = "B".repeat(12000);
+test("a fresh tool result is cut only at the tool layer's ceiling", () => {
+  // The renderer must not re-cut a fresh result below what the tool layer
+  // already sized (TOOL_OUTPUT_MAX_CHARS). It used to cap at 2,500 chars, which
+  // hid the middle of a scan from the model that had asked for it.
+  const big = "B".repeat(40_000);
   const msgs: AgentMessageDoc[] = [
     doc({ id: "a", role: "assistant", content: "", toolCalls: [{ id: "c2", name: "run_bash", arguments: "{}" }] }),
     doc({ toolCallId: "c2", toolName: "run_bash", content: big }),
   ];
   const out = messagesToOpenAI(msgs) as Array<{ role: string; content?: string }>;
   const tool = out.find((m) => m.role === "tool");
-  assert.ok(tool!.content!.length < 6500);
+  assert.ok(tool!.content!.length > 2_500, "the ceiling is not the old 2,500");
+  assert.ok(tool!.content!.length <= TOOL_OUTPUT_MAX_CHARS + 200, "still bounded");
   assert.ok(tool!.content!.startsWith("BBBB"));
   assert.ok(tool!.content!.endsWith("BBBB"));
 });
@@ -102,15 +107,24 @@ test("messagesSinceSummary counts only what came after the last summary", () => 
   assert.equal(messagesSinceSummary([turn(1, 10), turn(2, 10)]), 2);
 });
 
-test("estimatePromptTokens respects the tool-output caps instead of raw content", () => {
+test("estimatePromptTokens prices the rendered prompt, not raw stored content", () => {
   const big = "R".repeat(60_000);
   const msgs: AgentMessageDoc[] = [
     doc({ id: "a", role: "assistant", content: "", toolCalls: [{ id: "c9", name: "run_bash", arguments: "{}" }] }),
     doc({ toolCallId: "c9", toolName: "run_bash", content: big }),
   ];
-  // Raw content alone is ~17k tokens; the rendered prompt is capped at ~700.
+  // Raw content alone is ~17k tokens; the rendered prompt is cut at the tool
+  // layer's ceiling (12k chars ≈ 3.4k tokens), and the estimate must agree with
+  // what messagesToOpenAI actually emits.
+  const rendered = messagesToOpenAI(msgs).find((m: any) => m.role === "tool");
   const tokens = estimatePromptTokens(msgs);
-  assert.ok(tokens < 1_500, `expected a capped estimate, got ${tokens}`);
+  assert.ok(tokens < 5_000, `expected the estimate to follow the cap, got ${tokens}`);
+  // Within a per-message overhead of the rendered content, not the raw 17k.
+  const renderedTokens = (rendered?.content as string).length / CHARS_PER_TOKEN_ESTIMATE;
+  assert.ok(
+    Math.abs(tokens - renderedTokens) < 50,
+    `estimate ${tokens} should track the rendered ${Math.round(renderedTokens)}`,
+  );
 });
 
 test("planCompaction refuses to re-summarize right after a summary (cooldown)", async () => {

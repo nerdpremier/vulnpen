@@ -3,6 +3,7 @@ import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import {
   CHARS_PER_TOKEN_ESTIMATE,
   elideMiddle,
+  TOOL_OUTPUT_MAX_CHARS,
 } from "../utils/transcript";
 
 // ─── Budget model ──────────────────────────────────────────────────────────
@@ -50,7 +51,11 @@ const STALE_TOOL_CALL_ARGS_CHARS = 200;
 // Even fresh (recent-window) tool results get a ceiling: one oversized scan
 // dump inside the recent window can blow the whole working-set budget on its
 // own. Past this size the head+tail keep the opening status and final verdict.
-const RECENT_TOOL_RESULT_MAX_CHARS = 2_500;
+// A fresh (recent-window) tool result is NOT cut here any further than the tool
+// layer already cut it (TOOL_OUTPUT_MAX_CHARS): the model asked for that output,
+// and a smaller second cap silently hid the middle of a scan — the region where
+// the interesting lines are. The ceiling is real, it just lives in one place.
+const RECENT_TOOL_RESULT_MAX_CHARS = TOOL_OUTPUT_MAX_CHARS;
 
 // ─── Context window rules ─────────────────────────────────────────────────
 // One owner for the elision policy: the token estimator and the prompt

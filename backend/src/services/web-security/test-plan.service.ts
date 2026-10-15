@@ -813,7 +813,7 @@ export function buildRunInstruction(
     "",
     options?.policy === "supervised"
       ? "If a tool needs approval (consent), request it and continue once approved."
-      : "Nobody is watching this scan, so never stall waiting for approval: if a tool would need approval, record why against the case and continue with the next one. If an action is refused outright, record the refusal and move on too.",
+      : "Nobody is watching this scan, so never stall waiting for approval: if a tool would need approval, record why against the case and continue with the next one. If an action is stopped at the boundary, record the refusal and move on; do not carry it out.",
     "",
     "Cases:",
   );

@@ -14,8 +14,9 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
-  HeadingLevel,
+  Footer,
   PageBreak,
+  PageNumber,
   Packer,
   Paragraph,
   ShadingType,
@@ -23,6 +24,7 @@ import {
   TableCell,
   TableRow,
   TextRun,
+  VerticalAlign,
   WidthType,
 } from "docx";
 import SessionsModel from "../../models/Sessions/Sessions.model";
@@ -39,8 +41,18 @@ import { generateReportSummary, type ReportSummaryDeps } from "./report-summary.
 import { extractDocxText } from "./docx-text.service";
 
 const THAI_FONT = "TH Sarabun New";
-const HEADER_BLUE = "4472C4";
-const LABEL_BLUE = "5B9BD5";
+const MONO_FONT = "Consolas";
+
+/** The report's palette: one deep navy for structure, one light blue for rules. */
+const BRAND = "1F4E79";
+const BRAND_MID = "2E74B5";
+const BRAND_TEXT = "1F3864";
+const RULE = "B4C6E7";
+const LABEL_FILL = "EAF1FA";
+const ZEBRA = "F5F8FC";
+const GRID = "D6DCE4";
+const EVIDENCE_FILL = "F5F5F5";
+
 const BAND_FILL = { red: "C00000", orange: "ED7D31", yellow: "FFC000", grey: "A6A6A6" };
 const BAND_TEXT = { red: "FFFFFF", orange: "FFFFFF", yellow: "000000", grey: "FFFFFF" };
 
@@ -51,12 +63,13 @@ const body = (text: string, extra: Record<string, unknown> = {}) =>
     ...extra,
   });
 
-const heading = (text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) =>
-  new Paragraph({
-    text,
-    heading: level,
-    spacing: { before: 240, after: 160 },
-  });
+/**
+ * A heading. Levels are the report's own styles (see reportStyles) rather than
+ * Word's built-ins: the document is Thai, so every heading must name the Thai
+ * font explicitly instead of falling back to the theme's Calibri.
+ */
+const heading = (text: string, style: "ReportH1" | "ReportH2" | "ReportH3") =>
+  new Paragraph({ text, style, keepNext: true });
 
 const bullets = (items: string[]) =>
   items.map(
@@ -68,16 +81,27 @@ const bullets = (items: string[]) =>
       }),
   );
 
-const numbers = (items: string[]) =>
-  items.map(
+/**
+ * Word counts a numbered list by the concrete numbering instance it references,
+ * so two lists that share a reference keep counting as one. Each list here takes
+ * its own instance, which restarts it at 1 — the counter is reset per document
+ * in buildReportDocx.
+ */
+let numberListInstance = 0;
+
+const numbers = (items: string[]) => {
+  const instance = numberListInstance++;
+  return items.map(
     (text) =>
       new Paragraph({
         children: [new TextRun({ text, font: THAI_FONT, size: 32 })],
-        numbering: { reference: "report-numbers", level: 0 },
+        numbering: { reference: "report-numbers", level: 0, instance },
         spacing: { after: 80, line: 300 },
       }),
   );
+};
 
+/** A table cell: bold-on-a-fill for headers/labels, plain otherwise. */
 const cell = (
   text: unknown,
   { fill, color = "000000", bold = false, width }: { fill?: string; color?: string; bold?: boolean; width?: number } = {},
@@ -85,44 +109,88 @@ const cell = (
   new TableCell({
     shading: fill ? { type: ShadingType.CLEAR, fill } : undefined,
     width: width ? { size: width, type: WidthType.PERCENTAGE } : undefined,
+    verticalAlign: VerticalAlign.CENTER,
+    margins: { top: 60, bottom: 60, left: 120, right: 120 },
     children: [
       new Paragraph({
         children: [new TextRun({ text: String(text ?? "—"), font: THAI_FONT, size: 30, bold, color })],
-        spacing: { after: 40 },
+        spacing: { after: 0, line: 280 },
       }),
     ],
   });
 
+/** The cell borders of a grid table — a light rule instead of Word's black. */
+const GRID_BORDERS = {
+  top: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+  bottom: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+  left: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+  right: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+  insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+  insideVertical: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+};
+
+/** A grid table: navy header row, zebra body, light rules. */
 const tableFrom = (headers: string[], rows: string[][]) =>
   new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: GRID_BORDERS,
     rows: [
       new TableRow({
         tableHeader: true,
-        children: headers.map((h) => cell(h, { fill: HEADER_BLUE, color: "FFFFFF", bold: true })),
+        children: headers.map((h) => cell(h, { fill: BRAND, color: "FFFFFF", bold: true })),
       }),
-      ...rows.map((row) => new TableRow({ children: row.map((value) => cell(value)) })),
+      ...rows.map(
+        (row, index) =>
+          new TableRow({
+            children: row.map((value) =>
+              cell(value, index % 2 === 1 ? { fill: ZEBRA } : {}),
+            ),
+          }),
+      ),
     ],
   });
 
+/**
+ * A label/value table with no outer grid: the label column is a soft blue
+ * block and the values sit on the same line, so a finding's attributes read as
+ * a form rather than a spreadsheet.
+ */
 const detailTable = (pairs: [string, string][]) =>
   new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: RULE },
+      insideVertical: { style: BorderStyle.NONE, size: 0, color: "auto" },
+    },
     rows: pairs.map(
       ([label, value]) =>
         new TableRow({
-          children: [cell(label, { fill: LABEL_BLUE, color: "FFFFFF", bold: true, width: 28 }), cell(value, { width: 72 })],
+          children: [
+            cell(label, { fill: LABEL_FILL, color: BRAND_TEXT, bold: true, width: 28 }),
+            cell(value, { width: 72 }),
+          ],
         }),
     ),
+  });
+
+/** A bold, brand-coloured label that opens a block inside a finding card. */
+const fieldLabel = (text: string) =>
+  new Paragraph({
+    children: [new TextRun({ text, font: THAI_FONT, size: 32, bold: true, color: BRAND_TEXT })],
+    spacing: { before: 160, after: 80 },
+    keepNext: true,
   });
 
 function findingCard(finding: ClientFinding) {
   const fill = BAND_FILL[finding.band] ?? BAND_FILL.grey;
   const color = BAND_TEXT[finding.band] ?? "FFFFFF";
   const children: (Paragraph | Table)[] = [
-    heading(`${finding.code} — ${finding.title}`, HeadingLevel.HEADING_2),
+    heading(`${finding.code} — ${finding.title}`, "ReportH2"),
     detailTable([
-      ["หัวข้อ :", `${finding.code} — ${finding.title}`],
       ["OWASP Top 10:2025 :", finding.owasp],
       ["เป้าหมายการทดสอบ :", finding.goal],
       ["รูปแบบการทดสอบ :", finding.method],
@@ -131,11 +199,12 @@ function findingCard(finding: ClientFinding) {
     body(""),
     new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: GRID_BORDERS,
       rows: [
         new TableRow({
           tableHeader: true,
           children: ["ระดับความเสี่ยง", "คะแนนฐาน CVSS v3.0", "เวกเตอร์ CVSS v3.0"].map((h) =>
-            cell(h, { fill: "70AD47", color: "FFFFFF", bold: true }),
+            cell(h, { fill: BRAND, color: "FFFFFF", bold: true }),
           ),
         }),
         new TableRow({
@@ -147,39 +216,39 @@ function findingCard(finding: ClientFinding) {
         }),
       ],
     }),
-    body(""),
-    body("สิ่งที่ตรวจพบ :", { spacing: { before: 120, after: 80 }, alignment: AlignmentType.LEFT }),
+    fieldLabel("สิ่งที่ตรวจพบ"),
     ...bullets(finding.discovered ?? []),
   ];
 
   if (finding.steps?.length) {
-    children.push(body("ขั้นตอนการทดสอบ :", { spacing: { before: 120, after: 80 } }));
+    children.push(fieldLabel("ขั้นตอนการทดสอบ"));
     children.push(...numbers(finding.steps));
   }
 
   if (finding.evidence) {
-    children.push(body("หลักฐานการทดสอบ :", { spacing: { before: 120, after: 80 } }));
+    children.push(fieldLabel("หลักฐานการทดสอบ"));
     children.push(
       new Paragraph({
-        children: [new TextRun({ text: finding.evidence, font: "Consolas", size: 20, color: "333333" })],
-        shading: { type: ShadingType.CLEAR, fill: "F2F2F2" },
+        children: [new TextRun({ text: finding.evidence, font: MONO_FONT, size: 20, color: "333333" })],
+        shading: { type: ShadingType.CLEAR, fill: EVIDENCE_FILL },
         border: {
-          top: { style: BorderStyle.SINGLE, size: 4, color: "D9D9D9" },
-          bottom: { style: BorderStyle.SINGLE, size: 4, color: "D9D9D9" },
-          left: { style: BorderStyle.SINGLE, size: 4, color: "D9D9D9" },
-          right: { style: BorderStyle.SINGLE, size: 4, color: "D9D9D9" },
+          top: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: GRID },
+          left: { style: BorderStyle.SINGLE, size: 12, color: BRAND_MID },
+          right: { style: BorderStyle.SINGLE, size: 4, color: GRID },
         },
-        spacing: { after: 120 },
+        spacing: { after: 120, line: 260 },
+        indent: { left: 120 },
       }),
     );
   }
 
-  children.push(body("รายละเอียดผลกระทบ :", { spacing: { before: 120, after: 80 } }));
+  children.push(fieldLabel("รายละเอียดผลกระทบ"));
   children.push(...bullets(finding.impactDetails ?? []));
-  children.push(body("แนวทางแก้ไข และคำแนะนำ :", { spacing: { before: 120, after: 80 } }));
+  children.push(fieldLabel("แนวทางแก้ไข และคำแนะนำ"));
   children.push(...bullets(finding.recommendations ?? []));
   if (finding.references?.length) {
-    children.push(body("ศึกษาเพิ่มเติม :", { spacing: { before: 120, after: 80 } }));
+    children.push(fieldLabel("ศึกษาเพิ่มเติม"));
     children.push(...bullets(finding.references));
   }
   children.push(new Paragraph({ children: [new PageBreak()] }));
@@ -189,11 +258,11 @@ function findingCard(finding: ClientFinding) {
 function blockToDocx(block: ClientReport["body"][number]) {
   switch (block.type) {
     case "h1":
-      return [heading(block.text, HeadingLevel.HEADING_1)];
+      return [heading(block.text, "ReportH1")];
     case "h2":
-      return [heading(block.text, HeadingLevel.HEADING_2)];
+      return [heading(block.text, "ReportH2")];
     case "h3":
-      return [heading(block.text, HeadingLevel.HEADING_3)];
+      return [heading(block.text, "ReportH3")];
     case "p":
       return [body(block.text)];
     case "bullets":
@@ -212,23 +281,42 @@ function blockToDocx(block: ClientReport["body"][number]) {
 /**
  * Render the report.
  *
- * The document is its own table of contents: a heading, the summary the reader
- * meets first, the risk counts, then one section per finding. There is no cover,
- * front matter, table of contents, terms chapter or page-number footer to
- * render, so there is nothing here that could drift from the findings.
+ * The document is its own table of contents: a title block, the summary the
+ * reader meets first, the risk counts, then one section per finding. There is
+ * no cover, front matter, table of contents or terms chapter to render, so
+ * nothing here can drift from the findings. The one piece of furniture is the
+ * footer — the document title and a page number — which is a fixed string plus
+ * a field, not report content.
  */
 export async function buildReportDocx(report: ClientReport): Promise<Buffer> {
-  const children = [
+  numberListInstance = 0;
+  const titleBlock = [
     new Paragraph({
-      children: [new TextRun({ text: report.title, font: THAI_FONT, size: 40, bold: true })],
-      spacing: { after: 120 },
+      children: [new TextRun({ text: report.title, font: THAI_FONT, size: 48, bold: true, color: BRAND })],
+      spacing: { after: 60 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: BRAND_MID, space: 6 } },
     }),
     new Paragraph({
-      children: [new TextRun({ text: report.subtitle, font: THAI_FONT, size: 26, color: "595959" })],
-      spacing: { after: 240 },
+      children: [new TextRun({ text: report.subtitle, font: THAI_FONT, size: 28, color: "595959" })],
+      spacing: { before: 80, after: 280 },
     }),
-    ...report.body.flatMap((block) => blockToDocx(block)),
   ];
+
+  const children = [...titleBlock, ...report.body.flatMap((block) => blockToDocx(block))];
+
+  const footer = new Footer({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({ text: `${report.title}  |  หน้า `, font: THAI_FONT, size: 18, color: "808080" }),
+          new TextRun({ children: [PageNumber.CURRENT], font: THAI_FONT, size: 18, color: "808080" }),
+          new TextRun({ text: " / ", font: THAI_FONT, size: 18, color: "808080" }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], font: THAI_FONT, size: 18, color: "808080" }),
+        ],
+      }),
+    ],
+  });
 
   const doc = new Document({
     numbering: {
@@ -239,10 +327,55 @@ export async function buildReportDocx(report: ClientReport): Promise<Buffer> {
         },
       ],
     },
-    styles: { default: { document: { run: { font: THAI_FONT, size: 32 } } } },
+    styles: {
+      default: { document: { run: { font: THAI_FONT, size: 32 } } },
+      paragraphStyles: [
+        {
+          id: "ReportH1",
+          name: "Report H1",
+          basedOn: "Normal",
+          next: "Normal",
+          quickFormat: true,
+          run: { font: THAI_FONT, size: 36, bold: true, color: "FFFFFF" },
+          paragraph: {
+            shading: { type: ShadingType.CLEAR, fill: BRAND },
+            spacing: { before: 320, after: 200, line: 300 },
+            indent: { left: 140, right: 140 },
+            border: {
+              top: { style: BorderStyle.SINGLE, size: 4, color: BRAND },
+              bottom: { style: BorderStyle.SINGLE, size: 4, color: BRAND },
+              left: { style: BorderStyle.SINGLE, size: 4, color: BRAND },
+              right: { style: BorderStyle.SINGLE, size: 4, color: BRAND },
+            },
+          },
+        },
+        {
+          id: "ReportH2",
+          name: "Report H2",
+          basedOn: "Normal",
+          next: "Normal",
+          quickFormat: true,
+          run: { font: THAI_FONT, size: 32, bold: true, color: BRAND_TEXT },
+          paragraph: {
+            spacing: { before: 260, after: 140, line: 300 },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: RULE, space: 4 } },
+          },
+        },
+        {
+          id: "ReportH3",
+          name: "Report H3",
+          basedOn: "Normal",
+          next: "Normal",
+          quickFormat: true,
+          run: { font: THAI_FONT, size: 30, bold: true, color: BRAND_MID },
+          paragraph: { spacing: { before: 200, after: 120, line: 300 } },
+        },
+      ],
+    },
     sections: [
       {
         properties: {},
+        footers: { default: footer },
         children,
       },
     ],

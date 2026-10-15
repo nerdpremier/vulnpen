@@ -23,7 +23,6 @@ import {
   persistPendingConsent,
   loadPendingConsent,
   recordConsentOutcome,
-  recordCircuitOpen,
   splitConsentBatch,
 } from "./consent-batch";
 import { ContextBudget } from "./compaction.service";
@@ -36,7 +35,6 @@ import { wasSessionClearedSince } from "./session.helpers";
 import { engagementStateFromSession } from "./engagement-state";
 import { getModelContextLimit, getModelMaxOutput } from "../utils/modelMetadata";
 import { normalizeMaxAgentIterations } from "../utils/agentConfig";
-import { ApprovalRejectionTracker } from "./tool-approval.service";
 
 // ─── Agent run state (pause flag, persisted run state) ───────────────
 
@@ -217,8 +215,15 @@ export async function runAgentLoop(params: {
    * follows the user config.
    */
   toolExecutionMode?: ToolExecutionMode;
+  /**
+   * No operator is watching this turn (an unattended scan). A boundary-crossing
+   * action is recorded as a refusal against the case instead of parking on
+   * `waiting_consent`: the launch contract is that such a run never parks, and
+   * before this it did — a parked unattended scan sat until recovery reset it.
+   */
+  unattended?: boolean;
 }): Promise<void> {
-  const { sessionId, userId, sse } = params;
+  const { sessionId, userId, sse, unattended } = params;
 
   // The tail must not reach a document that was wiped mid-run — a clear (not
   // a pause or stop) is what suppresses flushing. Captured once: anything
@@ -232,6 +237,9 @@ export async function runAgentLoop(params: {
   const toolExecutionMode =
     params.toolExecutionMode ?? resolveToolExecutionMode(user?.configs);
   const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
+  // "Dynamic" values that only need to be stable within a run are still re-read
+  // here, but disabled tools are merged once at run start; mid-run setting
+  // changes apply on the next run (acceptable — a run's config set is fixed).
   const maxAgentIterations = normalizeMaxAgentIterations(
     user?.configs?.maxAgentIterations,
   );
@@ -280,7 +288,6 @@ export async function runAgentLoop(params: {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let iteration = 0;
   let completedNormally = false;
-  const approvalRejections = new ApprovalRejectionTracker();
 
   // Shared by the proactive path and the finishReason === "length" path. The
   // cached-prompt reset lives inside ContextBudget.compact — that invariant is
@@ -496,20 +503,47 @@ export async function runAgentLoop(params: {
         executionCtx,
         disableSafetyProtections,
         toolExecutionMode,
+        disabledAgentTools,
       );
 
-      let approvalCircuitOpen = false;
-      for (const result of toolResults) {
-        // The circuit breaker counts only clear operator decisions: a refusal
-        // feeds it a rejection. With the reviewer gone there is no
-        // "approved on someone else's authority" case to clear the streak, and
-        // boundary blocks are deterministic refusals, not decisions.
-        if (result.kind === "approval_denied") {
-          approvalCircuitOpen = approvalRejections.record(true) || approvalCircuitOpen;
+      // No denial can appear in one run's tool results: a refusal is the
+      // operator answering a parked prompt, which resumes in a *later* turn, so
+      // a tracker scoped to this loop can never see a streak. The brake the old
+      // code here claimed needs session-scoped denial state (consentStats
+      // already counts the denials) — until then there is no circuit to trip,
+      // and the counters below are the honest record.
+      let consentResults = toolResults.filter((r) => r.kind === "consent_required");
+
+      if (consentResults.length > 0 && unattended) {
+        // Nobody is watching this run, so there is nobody to answer a consent
+        // request: recording it as a refusal is what the launch contract
+        // promises ("record the refusal against the case and move on"). Parking
+        // it left the scan on `waiting_consent` until recovery reset it.
+        // The refusal is answered from here so the model is not left waiting on
+        // a tool result that will never arrive.
+        for (const result of consentResults) {
+          if (result.kind !== "consent_required") continue;
+          pushToolResultMessages(
+            [
+              {
+                kind: "executed",
+                toolCallId: result.toolCallId,
+                toolName: result.toolName,
+                result: {
+                  output:
+                    "Not run: this is an unattended scan, so no operator is available to approve a boundary-crossing action. " +
+                    "Record it against the test case (blocked or skipped, with the reason) and continue.",
+                  exitCode: 126,
+                },
+              },
+            ],
+            runBuffer,
+            turnIndex,
+          );
         }
+        consentResults = [];
       }
 
-      const consentResults = toolResults.filter((r) => r.kind === "consent_required");
       if (consentResults.length > 0) {
         pushToolResultMessages(
           toolResults.filter(hasTranscriptResult),
@@ -523,19 +557,6 @@ export async function runAgentLoop(params: {
         sse.write("consent_required", consentRequiredEvent(batch));
         await runBuffer.flushIfLive();
         await persistPendingConsent(sessionId, batch);
-        sse.end();
-        return;
-      }
-
-      if (approvalCircuitOpen) {
-        await recordCircuitOpen(sessionId);
-        pushToolResultMessages(toolResults, runBuffer, turnIndex);
-        await runBuffer.flushIfLive();
-        await setAgentState(sessionId, "idle");
-        sse.write("error", {
-          message:
-            "This turn was interrupted after repeated approval requests were denied.",
-        });
         sse.end();
         return;
       }
@@ -615,6 +636,8 @@ export async function initAndRun(params: {
   channel?: string;
   /** Approval mode for this turn; see runAgentLoop. */
   toolExecutionMode?: ToolExecutionMode;
+  /** No operator is watching; a boundary action is recorded, never parked. */
+  unattended?: boolean;
 }): Promise<void> {
   const {
     sessionId,
@@ -624,6 +647,7 @@ export async function initAndRun(params: {
     abortSignal,
     channel,
     toolExecutionMode,
+    unattended,
   } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
@@ -640,7 +664,7 @@ export async function initAndRun(params: {
 
   sse.write("user_message_ack", { id: userMsg.id });
 
-  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode, unattended });
 }
 
 // ─── Handle consent response and resume ──────────────────────────────
@@ -660,6 +684,8 @@ export async function handleConsent(params: {
   /** Kept from the run that parked: see initAndRun for both. */
   channel?: string;
   toolExecutionMode?: ToolExecutionMode;
+  /** Kept from the run that parked: see runAgentLoop for what it changes. */
+  unattended?: boolean;
 }): Promise<void> {
   const {
     sessionId,
@@ -670,6 +696,7 @@ export async function handleConsent(params: {
     abortSignal,
     channel,
     toolExecutionMode,
+    unattended,
   } = params;
 
   const session = await loadRunSession(sessionId, sse);
@@ -719,7 +746,7 @@ export async function handleConsent(params: {
   if (allowed.length === 0) {
     await appendMessages(sessionId, denialMessages);
     await setAgentState(sessionId, "idle");
-    await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode });
+    await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode, unattended });
     return;
   }
 
@@ -732,6 +759,16 @@ export async function handleConsent(params: {
 
   const callbacks = createSseToolCallbacks(sse);
 
+  // A tool the operator disabled must not run just because it was parked for
+  // approval before the setting changed.
+  const consentUser = await UserModel.findById(userId).lean();
+  const disabledAgentTools: string[] = [
+    ...new Set([
+      ...(consentUser?.configs?.disabledAgentTools ?? []),
+      ...(session.disabledAgentTools ?? []),
+    ]),
+  ];
+
   const toolMessages: AgentMessageDoc[] = [];
   for (const pending of allowed) {
     const result = await executeConsentedTool(
@@ -742,6 +779,7 @@ export async function handleConsent(params: {
       callbacks,
       ctx,
       pending.safetyKind,
+      disabledAgentTools,
     );
     toolMessages.push(
       toolResultMessage(
@@ -758,5 +796,5 @@ export async function handleConsent(params: {
   // Refused items are answered too, or the model waits on a tool result that
   // will never arrive.
   await appendMessages(sessionId, [...toolMessages, ...denialMessages]);
-  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel, toolExecutionMode, unattended });
 }

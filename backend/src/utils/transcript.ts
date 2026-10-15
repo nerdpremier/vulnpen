@@ -8,6 +8,16 @@ import type { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 
 export const CHARS_PER_TOKEN_ESTIMATE = 3.5;
 
+/**
+ * How much of a tool result ever exists, decided once by the tool layer
+ * (`agent.tools.ts` truncateOutput) and imported by the prompt renderer. The
+ * renderer must not cut a fresh result further: it would re-truncate output the
+ * tool layer already sized, hiding the middle of a scan from the model that
+ * asked for it, and every cap below the tool layer is a silent, unraisable
+ * ceiling on what the agent can read.
+ */
+export const TOOL_OUTPUT_MAX_CHARS = 12_000;
+
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN_ESTIMATE);
 }

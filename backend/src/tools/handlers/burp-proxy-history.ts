@@ -1,7 +1,14 @@
 import { ToolDefinition } from "../types";
 import { burpNotReady, burpFailureToToolOutput, decodeBurpBody, withBurpClient } from "../../services/burp-client.service";
+import { elideMiddle } from "../../utils/transcript";
 
 const MAX_ENTRIES_RETURNED = 25;
+
+// Per-entry ceilings for the "get" action. The transport allows 64 MB
+// (burp-client.service), so these exist to protect the context window, not the
+// channel — elideMiddle keeps both ends rather than the head alone.
+const REQUEST_MAX_CHARS = 4000;
+const RESPONSE_MAX_CHARS = 6000;
 
 const burpProxyHistory: ToolDefinition = {
   name: "search_burp_proxy_history",
@@ -113,22 +120,35 @@ const burpProxyHistory: ToolDefinition = {
 
       output += `--- REQUEST ---\n`;
       if (entry.request?.rawBytesBase64) {
-        let reqText = await decodeBurpBody(entry.request.rawBytesBase64);
-        if (reqText.length > 4000) {
-          reqText = reqText.substring(0, 4000) + "\n... [truncated]";
-        }
-        output += reqText;
+        const reqText = await decodeBurpBody(entry.request.rawBytesBase64);
+        // Head and tail both kept: a request opens with its line and headers,
+        // but a body ends with whatever the payload was — the part worth
+        // reading. Head-only cut the tail away and said nothing about it.
+        output +=
+          reqText.length > REQUEST_MAX_CHARS
+            ? elideMiddle(
+                reqText,
+                REQUEST_MAX_CHARS,
+                `\n... [${reqText.length - REQUEST_MAX_CHARS} of ${reqText.length} characters elided from the middle of the request] ...\n`,
+                0.4,
+              )
+            : reqText;
       } else {
         output += "(no request data)";
       }
 
       output += `\n\n--- RESPONSE ---\n`;
       if (entry.response?.rawBytesBase64) {
-        let respText = await decodeBurpBody(entry.response.rawBytesBase64);
-        if (respText.length > 6000) {
-          respText = respText.substring(0, 6000) + "\n... [truncated]";
-        }
-        output += respText;
+        const respText = await decodeBurpBody(entry.response.rawBytesBase64);
+        output +=
+          respText.length > RESPONSE_MAX_CHARS
+            ? elideMiddle(
+                respText,
+                RESPONSE_MAX_CHARS,
+                `\n... [${respText.length - RESPONSE_MAX_CHARS} of ${respText.length} characters elided from the middle of the response] ...\n`,
+                0.4,
+              )
+            : respText;
       } else {
         output += "(no response data)";
       }

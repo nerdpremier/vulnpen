@@ -301,6 +301,7 @@ export const respondToConsent = async (req: Request, res: Response) => {
         abortSignal: abortCtrl.signal,
         channel: parked?.channel,
         toolExecutionMode: parked?.toolExecutionMode,
+        unattended: parked?.unattended,
       })
     );
   } catch (err: any) {

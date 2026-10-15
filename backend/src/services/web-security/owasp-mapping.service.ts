@@ -64,9 +64,8 @@ export function mapFindingToOwaspTop10(input: OwaspMappingInput): OwaspMappingRe
     return {
       source: "unmapped",
       rationale:
-        "No CWE is recorded on this finding, so it cannot be classified from the official " +
-        "OWASP Top 10:2025 CWE lists. Record the weakness id (data.cwe) and the category " +
-        "follows deterministically.",
+        "ช่องโหว่นี้ไม่ได้บันทึก CWE ไว้ จึงไม่สามารถจัดหมวดจากรายการ CWE ของ OWASP Top 10:2025 " +
+        "ที่เป็นทางการได้ ให้บันทึกรหัสจุดอ่อน (data.cwe) แล้วหมวดจะตามมาอย่างกำหนดแน่นอน",
     };
   }
 
@@ -75,8 +74,8 @@ export function mapFindingToOwaspTop10(input: OwaspMappingInput): OwaspMappingRe
     return {
       source: "unmapped",
       rationale:
-        `${cwe} is not in the CWE list OWASP publishes for any OWASP Top 10:2025 category, ` +
-        "so this finding is left unmapped rather than forced into one.",
+        `${cwe} ไม่อยู่ในรายการ CWE ที่ OWASP เผยแพร่สำหรับหมวดใดของ OWASP Top 10:2025 ` +
+        "ช่องโหว่นี้จึงถูกทิ้งไว้เป็น unmapped แทนการบังคับจัดเข้าหมวด",
     };
   }
 
@@ -87,13 +86,13 @@ export function mapFindingToOwaspTop10(input: OwaspMappingInput): OwaspMappingRe
     primaryTitle: category.title,
     source: "cwe",
     provenance: "official",
-    rationale: `${cwe} is listed by the OWASP Top 10:2025 under ${primary} ${category.title}.`,
+    rationale: `${cwe} ถูกจัดอยู่ใน OWASP Top 10:2025 ภายใต้ ${primary} ${category.title}`,
   };
 }
 
 export function describeOwaspMapping(result: OwaspMappingResult): string {
   if (!result.primary) {
-    return `Unmapped to the OWASP Top 10:2025. ${result.rationale}`;
+    return `Unmapped ต่อ OWASP Top 10:2025 ${result.rationale}`;
   }
   return `${result.primary} ${result.primaryTitle ?? ""} — official (${result.source}): ${result.rationale}`;
 }

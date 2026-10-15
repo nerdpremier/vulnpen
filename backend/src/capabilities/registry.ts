@@ -12,6 +12,9 @@ export interface Capability {
   size: string;
 }
 
+/** The one bucket whose promptContext is prose for the prompt. */
+const WEBAPP_BUCKET_ID = "webapp";
+
 export interface CapabilityBucket {
   id: string;
   label: string;
@@ -869,8 +872,71 @@ Python: PyJWT (JWT decode/encode)`,
   ],
 };
 
+/**
+ * Every capability declares `bucket: "core" | "network" | "web"` (plus the
+ * categories below), so every one of those ids must resolve here: the prompt
+ * builder and the wordlist section both look the id up and skip a capability
+ * whose bucket is missing. Only `webapp` carries promptContext; the rest exist
+ * to resolve, so their content is the capability list itself.
+ */
 export const capabilityBuckets: CapabilityBucket[] = [
   webappBucket,
+  {
+    id: "core",
+    label: "Core Tools",
+    description: "Shell, file, encoding and general purpose utilities.",
+    promptContext: "",
+    capabilities: [],
+  },
+  {
+    id: "network",
+    label: "Network",
+    description: "Port scanning, web enumeration and network utilities.",
+    promptContext: "",
+    capabilities: [],
+  },
+  {
+    id: "web",
+    label: "Web Testing",
+    description: "Web-specific testing utilities.",
+    promptContext: "",
+    capabilities: [],
+  },
+  {
+    id: "rev",
+    label: "Reverse Engineering",
+    description: "Reverse engineering and analysis tools.",
+    promptContext: "",
+    capabilities: [],
+  },
+  {
+    id: "pwn",
+    label: "Exploitation",
+    description: "Exploitation and post-exploitation utilities.",
+    promptContext: "",
+    capabilities: [],
+  },
+  {
+    id: "crypto",
+    label: "Cryptography",
+    description: "Cryptanalysis and encoding utilities.",
+    promptContext: "",
+    capabilities: [],
+  },
+  {
+    id: "forensics",
+    label: "Forensics",
+    description: "Forensics and data recovery.",
+    promptContext: "",
+    capabilities: [],
+  },
+  {
+    id: "stego",
+    label: "Steganography",
+    description: "Steganography analysis.",
+    promptContext: "",
+    capabilities: [],
+  },
 ];
 
 export const allCapabilities: Capability[] = capabilityBuckets.flatMap(
@@ -934,24 +1000,33 @@ export function getActiveBucketIds(selectedCapabilities: string[]): string[] {
 export function buildCapabilityPromptContext(
   installedCapabilities: string[]
 ): string {
-  const activeBuckets = getActiveBucketIds(installedCapabilities);
+  // Group by each capability's own `bucket` tag, not by the bucket records:
+  // every capability lives in one bucket and carries the tag it belongs to, so
+  // looking the tag up in the records and filtering *their* lists found nothing
+  // and the prompt's capability block came out empty.
+  const installed = installedCapabilities
+    .map((name) => getCapabilityByName(name))
+    .filter((cap): cap is Capability => Boolean(cap));
+  if (installed.length === 0) return "";
+
   const sections: string[] = [];
+  const prose = getBucketById(WEBAPP_BUCKET_ID)?.promptContext;
+  if (prose) sections.push(prose);
 
-  for (const bucketId of activeBuckets) {
-    const bucket = getBucketById(bucketId);
-    if (!bucket) continue;
+  const byBucket = new Map<string, Capability[]>();
+  for (const cap of installed) {
+    const list = byBucket.get(cap.bucket) ?? [];
+    list.push(cap);
+    byBucket.set(cap.bucket, list);
+  }
 
-    const installed = bucket.capabilities.filter((c) =>
-      installedCapabilities.includes(c.name)
-    );
-    if (installed.length === 0) continue;
-
-    const lines = installed.map((c) => {
+  for (const [bucketId, caps] of byBucket) {
+    const label = getBucketById(bucketId)?.label ?? bucketId;
+    const lines = caps.map((c) => {
       const hint = c.usageHint ? `: ${c.usageHint}` : "";
       return `- ${c.label} (${c.name})${hint} — ${c.description}`;
     });
-
-    sections.push(`${bucket.label}:\n${lines.join("\n")}`);
+    sections.push(`${label}:\n${lines.join("\n")}`);
   }
 
   return sections.join("\n\n");

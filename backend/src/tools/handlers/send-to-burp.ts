@@ -6,6 +6,7 @@ import {
   withBurpClient,
 } from "../../services/burp-client.service";
 import { rawRequestSafetyDetail } from "../../utils/consentDetail";
+import { elideMiddle } from "../../utils/transcript";
 
 const MAX_RESPONSE_LENGTH = 8000;
 
@@ -19,7 +20,7 @@ const sendToBurp: ToolDefinition = {
     "Each request is sent individually through Burp's HTTP engine which handles TLS, HTTP/2, " +
     "and connection management. Provide a complete raw HTTP request (request line + headers + body). " +
     "The tool automatically normalizes line endings and recalculates Content-Length. " +
-    "Proof-of-concept engagement: destructive steps are refused outright (see <rules_of_engagement>) — proving that a control is missing is the finding.",
+    "Proof-of-concept engagement: destructive steps stop for operator approval (see <rules_of_engagement>) — proving that a control is missing is the finding.",
   parameters: {
     type: "object",
     properties: {
@@ -73,14 +74,22 @@ const sendToBurp: ToolDefinition = {
       };
     }
 
-    let rawResponse = result.value.rawResponse;
-    if (rawResponse.length > MAX_RESPONSE_LENGTH) {
-      rawResponse =
-        rawResponse.substring(0, MAX_RESPONSE_LENGTH) +
-        `\n\n... [response truncated — ${rawResponse.length} bytes total]`;
-    }
+    const rawResponse = result.value.rawResponse;
+    // Head *and* tail: the status line and headers open the response, but the
+    // evidence proving the point (a reflected payload, a stack trace, a
+    // trailing JSON field) is appended last. Head-only truncation cut exactly
+    // the part the operator sent this request to see.
+    const output =
+      rawResponse.length > MAX_RESPONSE_LENGTH
+        ? elideMiddle(
+            rawResponse,
+            MAX_RESPONSE_LENGTH,
+            `\n\n... [${rawResponse.length - MAX_RESPONSE_LENGTH} of ${rawResponse.length} characters elided from the middle of the response] ...\n\n`,
+            0.4,
+          )
+        : rawResponse;
 
-    return { output: rawResponse, exitCode: 0 };
+    return { output, exitCode: 0 };
   },
 };
 

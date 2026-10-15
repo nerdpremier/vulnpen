@@ -5,7 +5,7 @@ import { ShellManager, ShellPurpose } from "./shell.manager";
 import { EngagementState } from "./engagement-state";
 import { stripAnsi, collapseBlankLines } from "../utils/ansi";
 import { parseToolArguments } from "../utils/toolArguments";
-import { elideMiddle } from "../utils/transcript";
+import { elideMiddle, TOOL_OUTPUT_MAX_CHARS } from "../utils/transcript";
 import type { ToolExecutionMode } from "../models/User/User.model";
 import { decideToolConsent, effectiveSafetyDetail } from "./tool-approval.service";
 
@@ -13,7 +13,11 @@ import { decideToolConsent, effectiveSafetyDetail } from "./tool-approval.servic
 // re-run scans to read their own output; too large and every turn pays for it.
 // 12k chars ≈ 3.4k tokens: scan verdicts and errors live in the tail, which
 // truncateOutput keeps, so the interesting part always survives.
-const MAX_OUTPUT_CHARS = 12_000;
+//
+// This is the single ceiling. The prompt renderer (context.service) imports the
+// same constant instead of cutting again — a second, smaller cap there made
+// this number nominal and hid the middle of scan output from the model.
+const MAX_OUTPUT_CHARS = TOOL_OUTPUT_MAX_CHARS;
 const DEFAULT_TOOL_TIMEOUT_MS = 60_000; // 1 min hard cap if no timeoutMs on the definition
 
 /**
@@ -22,9 +26,10 @@ const DEFAULT_TOOL_TIMEOUT_MS = 60_000; // 1 min hard cap if no timeoutMs on the
  */
 function pocBoundaryOutput(reason: string): string {
   return (
-    "Blocked at the proof-of-concept boundary: " + reason +
-    "\nVulnPen is a security tester, not a system destroyer: a destructive action against the engagement target is never executed and can never be approved. " +
-    "Prove the weakness without carrying it out - access what you should not be able to access, act on a test object you own, or show the endpoint is reachable - then record the finding and state that the destructive step was deliberately not performed. " +
+    "Stopped at the proof-of-concept boundary: " + reason +
+    "\nThis engagement is proof-of-concept: prove the weakness without carrying it out against the client's live data. " +
+    "Access what you should not be able to access, act on a test object you own, or show the endpoint is reachable - then record the finding and state that the destructive step was deliberately not performed. " +
+    "The operator can authorise this specific action in chat, but ask first: state exactly what you would run and why the non-destructive proof is not enough. " +
     "Note that this only gates altering or deleting data that already exists: creating and using your own resources on the target (registering your own account, filling your own basket, placing your own orders) is normal testing and is allowed."
   );
 }
@@ -34,7 +39,13 @@ async function executeWithTimeout(
   args: Record<string, any>,
   ctx: ExecutionContext,
 ): Promise<ToolResult> {
-  const timeoutMs = toolDef.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
+  // A declared 0 is not a bound: `??` kept it, arms a 0 ms timer, and races the
+  // tool instead of limiting it. ask_user declares 0 and only survives because
+  // its body resolves in a microtask — one `await` from breaking. An absent or
+  // non-positive value falls back to the default bound.
+  const declared = toolDef.timeoutMs;
+  const timeoutMs =
+    declared === undefined || declared <= 0 ? DEFAULT_TOOL_TIMEOUT_MS : declared;
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
@@ -93,7 +104,7 @@ interface ConsentRequiredOutcome {
 }
 
 interface BoundaryBlockedOutcome {
-  kind: "boundary_blocked";
+  kind: "approval_required";
   toolCallId: string;
   toolName: string;
   result: ToolResult;
@@ -254,7 +265,23 @@ export async function executeToolCall(
   ctx: ExecutionContext,
   disableSafetyProtections?: boolean,
   toolExecutionMode?: ToolExecutionMode,
+  /** The operator's disabled list: a tool the schema dropped must not run. */
+  disabledTools: readonly string[] = [],
 ): Promise<ToolExecutionResult> {
+  if (disabledTools.includes(toolCall.name)) {
+    // The schema already hides it, but a name can still arrive — a stale prompt
+    // description, a tool loaded before the setting changed. Disabling a tool is
+    // an operator decision; it is enforced here, where the call would run.
+    const error = `Tool '${toolCall.name}' is disabled in settings.`;
+    callbacks.onToolError(toolCall.id, error);
+    return {
+      kind: "executed",
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      result: { output: error, exitCode: 1 },
+    };
+  }
+
   const toolDef = toolRegistry.get(toolCall.name);
 
   if (!toolDef) {
@@ -298,9 +325,8 @@ export async function executeToolCall(
   }
 
   // The safety-protection setting silences the boundaries the operator finds
-  // noisy — but not the one the product promises is absolute. See
-  // effectiveSafetyDetail: a destructive action against the engagement target is
-  // refused outright whatever the setting says.
+  // noisy, but the destructive-target kind is retained here so it still surfaces
+  // for operator approval above.
   const safetyDetail = effectiveSafetyDetail(
     toolDef.describeSafety?.(args, ctx),
     disableSafetyProtections === true,
@@ -309,6 +335,9 @@ export async function executeToolCall(
   const mode: ToolExecutionMode = toolExecutionMode ?? "auto";
   const approval = decideToolConsent({ mode, safetyTriggered, safetyDetail });
   const needsConsent = approval.requireConsent;
+  if (approval.source === "boundary") {
+    callbacks.onToolError(toolCall.id, pocBoundaryOutput(approval.reason));
+  }
   if (needsConsent) {
     callbacks.onConsentRequired(toolCall.id, toolCall.name, args, safetyTriggered, approval.reason, safetyDetail);
     return {
@@ -320,33 +349,6 @@ export async function executeToolCall(
       safetyReason: safetyDetail?.reason,
       safetyImpact: safetyDetail?.impact,
       safetyKind: safetyDetail?.kind,
-    };
-  }
-
-  if (approval.denied && approval.source === "boundary") {
-    const output = pocBoundaryOutput(approval.reason);
-    callbacks.onToolError(toolCall.id, output);
-    return {
-      kind: "boundary_blocked",
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      result: { output, exitCode: 126 },
-      approvalReason: approval.reason,
-      safetyKind: safetyDetail?.kind,
-    };
-  }
-
-  if (approval.denied) {
-    const output =
-      `This approval-boundary request was denied: ${approval.reason}\n` +
-      "Do not retry the same action or try to route around the boundary. Use a materially safer approach, or ask the user.";
-    callbacks.onToolError(toolCall.id, output);
-    return {
-      kind: "approval_denied",
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      result: { output, exitCode: 126 },
-      approvalReason: approval.reason,
     };
   }
 
@@ -366,6 +368,7 @@ export async function executeToolCalls(
   ctx: ExecutionContext,
   disableSafetyProtections?: boolean,
   toolExecutionMode?: ToolExecutionMode,
+  disabledTools: readonly string[] = [],
 ): Promise<ToolExecutionResult[]> {
   // Run sequentially, not Promise.all: tool calls in one turn share the
   // session's shell manager, and two run_bash/shell tools racing would
@@ -380,6 +383,7 @@ export async function executeToolCalls(
         ctx,
         disableSafetyProtections,
         toolExecutionMode,
+        disabledTools,
       ),
     );
   }
@@ -394,7 +398,15 @@ export async function executeConsentedTool(
   callbacks: ToolExecutionCallbacks,
   ctx: ExecutionContext,
   parkedSafetyKind?: SafetyKind,
+  /** The operator's disabled list: a tool the schema dropped must not run. */
+  disabledTools: readonly string[] = [],
 ): Promise<ToolResult> {
+  if (disabledTools.includes(toolName)) {
+    const output = `Tool '${toolName}' is disabled in settings.`;
+    callbacks.onToolError(toolCallId, output);
+    return { output, exitCode: 1 };
+  }
+
   const toolDef = toolRegistry.get(toolName);
   if (!toolDef) {
     return { output: `Unknown tool: ${toolName}`, exitCode: 1 };
@@ -412,12 +424,7 @@ export async function executeConsentedTool(
   // a resume that only re-checks destructive_target would execute a tool
   // whose fresh verdict is out_of_scope or dangerous.
   const freshVerdict = toolDef.describeSafety?.(args, ctx);
-  if (freshVerdict?.kind === "destructive_target") {
-    const output = pocBoundaryOutput(freshVerdict.reason);
-    callbacks.onToolError(toolCallId, output);
-    return { output, exitCode: 126 };
-  }
-  if (freshVerdict && freshVerdict.kind !== parkedSafetyKind) {
+  if (freshVerdict && freshVerdict.kind !== parkedSafetyKind && freshVerdict.kind !== "destructive_target") {
     const output =
       `Not executed: the consent boundary changed while this approval was pending. ` +
       `Fresh verdict: ${freshVerdict.kind} — ${freshVerdict.reason}. ` +
