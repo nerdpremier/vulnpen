@@ -1,0 +1,146 @@
+# Benchmark targets — OWASP Juice Shop and OWASP WebGoat.
+#
+# These are NOT part of the product stack. They are the *things being tested* by a
+# benchmark run, so they deliberately live in their own file: a plain
+# `docker compose up -d` must never start them, and a normal deployment must never
+# ship them. (Juice Shop used to sit in docker-compose.yml; it was removed in
+# e9490e0 when Collabora took that slot, which is the right shape — a target is a
+# fixture, not a component.)
+#
+# Start / stop them explicitly:
+#
+#     docker compose -f docker-compose.target.yml up -d
+#     docker compose -f docker-compose.target.yml down
+#
+# Do NOT pass --remove-orphans to either command. Compose treats every container
+# of the `projectz` project that is absent from *this* file as an orphan, so
+# `up -d --remove-orphans` here would tear down the backend, the attack box,
+# MongoDB and the rest of the real stack. Compose prints an orphan warning on
+# every run of this file; it is expected and must be ignored, not "cleaned up".
+#
+# Each service carries two addresses on purpose:
+#
+#   * `<service>:<internal-port>` — how the agent reaches it. Both services join
+#     the project's `default` network as an external network, so the backend and
+#     the Kali attack box resolve them by name. This is the address that must work
+#     for a benchmark run.
+#   * `127.0.0.1:<host-port>`     — how the operator reaches it from the host, for
+#     readiness checks and manual inspection. Bound to loopback only: these
+#     targets are intentionally vulnerable and must not be on a routable interface.
+#
+# Images are pinned rather than `latest`. `latest` drifts, and a write-up that
+# states a version has to be reproducible.
+
+services:
+  juice-shop:
+    container_name: vulnpen-juice-shop
+    # Pinned to the version the recorded run reports; its evidence shows
+    # /rest/admin/application-version -> 20.2.0.
+    image: bkimminich/juice-shop:v20.2.0
+    ports:
+      # host 4000 -> container 3000 (`http://juice-shop:3000` from the network)
+      - "127.0.0.1:4000:3000"
+    networks:
+      - default
+    # Juice Shop keeps all state in memory, so there is no volume to declare and
+    # nothing to preserve between runs. `down` therefore gives a genuinely fresh
+    # target, which is what a repeatable benchmark needs.
+    healthcheck:
+      # The image is distroless: it ships no shell and no curl/wget, and its
+      # runtime is at /nodejs/bin/node — *not* on PATH (see the image's own
+      # Entrypoint). So the probe must be an absolute path to the runtime, run
+      # directly in exec form. A `sh -c` test, or a bare `node` test, both fail
+      # with "executable file not found" and leave the container stuck at
+      # "health: starting" forever.
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - -e
+        - >-
+          require('http')
+            .get('http://127.0.0.1:3000/rest/admin/application-version', (r) =>
+              process.exit(r.statusCode === 200 ? 0 : 1))
+            .on('error', () => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  # OWASP WebGoat, plus its companion WebWolf — the second benchmark target.
+  #
+  # One container serves both. The image's ExposedPorts are exactly 8080 and 9090
+  # and its entrypoint runs a single jar that starts two Spring apps: WebGoat on
+  # 8080 and WebWolf on 9090.
+  #
+  #   * `http://webgoat:8080/WebGoat`  — how the agent reaches WebGoat
+  #   * `http://webgoat:9090/WebWolf`  — how the browser reaches WebWolf
+  #   * `http://127.0.0.1:4001/WebGoat` — operator, WebGoat (host side)
+  #   * `http://127.0.0.1:4002/WebWolf` — operator, WebWolf (host side)
+  #
+  # Host ports are 4001/4002 rather than 8080/9090 because the backend already
+  # publishes host 8080, and 9090 is left free rather than assumed.
+  webgoat:
+    container_name: vulnpen-webgoat
+    image: webgoat/webgoat:v2026.5
+    ports:
+      - "127.0.0.1:4001:8080"
+      - "127.0.0.1:4002:9090"
+    networks:
+      - default
+    environment:
+      # WebGoat derives the *advertised* WebWolf URL from the host it thinks it
+      # is on (BOOT-INF/classes/application-webgoat.properties inside the jar):
+      #
+      #     webwolf.url = http://${webwolf.host}:${webwolf.port}${webwolf.context}
+      #
+      # Untouched that resolves to http://127.0.0.1:9090/WebWolf, which is only
+      # correct for a browser running *inside this container*. The agent's browser
+      # runs on the Kali attack box, where 127.0.0.1 is the attack box itself — so
+      # every WebWolf-backed lesson would send the browser to a dead address.
+      # WEBWOLF_URL overrides the derived value outright (an OS environment
+      # variable outranks application properties in Spring), so the advertised
+      # link names the container instead.
+      WEBWOLF_URL: "http://webgoat:9090/WebWolf"
+      # Keep the *listener* on every interface. This is deliberately not set to
+      # `webgoat`: application-webwolf.properties binds with
+      # `server.address=${webwolf.host}`, so a hostname here would have to serve
+      # as both bind address and advertised host, and WEBWOLF_URL already pins the
+      # advertised half precisely.
+      WEBWOLF_HOST: "0.0.0.0"
+      # Same split for WebGoat's own advertised URL (webgoat.url). The real bind
+      # stays 0.0.0.0 regardless: the image's entrypoint passes
+      # `--server.address=0.0.0.0` on the command line, and CLI arguments outrank
+      # environment variables.
+      WEBGOAT_HOST: "webgoat"
+      # The image defaults to Europe/Amsterdam; match the operator's clock so the
+      # timestamps in the UI and the container log line up with everything else.
+      TZ: "Asia/Bangkok"
+    healthcheck:
+      # The image ships no curl and no wget (verified against it), but it does
+      # have bash — so the probe is a raw HTTP request over bash's /dev/tcp.
+      # Actuator is exposed on WebGoat's context path
+      # (management.endpoints.web.exposure.include=env,health,configprops), so
+      # /WebGoat/actuator/health answers once Spring is actually serving.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /WebGoat/actuator/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n' >&3 &&
+          head -c 15 <&3 | grep -q ' 200'
+      # Spring Boot needs real time to boot, hence the long start_period; a short
+      # one would just mark a healthy container as failing while it starts.
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    restart: unless-stopped
+
+networks:
+  # Owned by docker-compose.yml — joined here, not created here. `external: true`
+  # keeps Compose from trying to create a second, differently-named network.
+  default:
+    name: projectz_default
+    external: true

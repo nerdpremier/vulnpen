@@ -193,13 +193,34 @@ platform's methodology going forward:
 ## 8. Reproducing
 
 ```bash
-# stack
-docker compose up -d                      # mongodb, redis, backend, kali, juice-shop
-# target check
+# stack (the product)
+docker compose up -d                      # mongodb, redis, backend, kali, collabora, frontend
+
+# the benchmark TARGET — a separate file, on purpose
+docker compose -f docker-compose.target.yml up -d
+# Juice Shop is a fixture, not part of the product, so it is not in
+# docker-compose.yml: a plain `up -d` must never start it. It joins the
+# project's default network as an external network, so the backend and the Kali
+# attack box resolve it by name.
+#
+# Do NOT add --remove-orphans to that command: Compose would treat the whole
+# real stack as orphaned and tear it down.
+
+# target check (host side)
 curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000   # 200
+curl -s http://127.0.0.1:4000/rest/admin/application-version  # {"version":"20.2.0"}
+
+# target check (the way the agent reaches it, from inside the network)
+docker exec vulnpen-backend sh -c 'wget -qO- http://juice-shop:3000/rest/admin/application-version'
 
 # source session (read-only evidence):
 #   MongoDB vulnpen.sessions._id = 6abdd84b21425f4984101ada
 #   webAppTestPlan.cases (97) + vulnerabilities (45) hold per-case observations
 #   and full evidence/steps-to-reproduce for every finding
 ```
+
+The image is pinned to `bkimminich/juice-shop:v20.2.0` rather than `latest`, so the
+version this document reports stays reproducible. Note the image is distroless — no shell,
+no `curl`/`wget`, and its runtime is at `/nodejs/bin/node` rather than on `PATH` — so the
+compose healthcheck calls that absolute path directly and `docker exec … sh` is not
+available for inspecting it.
