@@ -51,7 +51,13 @@ const openVPNFileFilter = (
   }
 };
 
-const uploadImageMiddleware = multer({ fileFilter: imageFilter });
+// The fileFilter runs per-part, but multer buffers the whole file in memory
+// before the controller's own size check, so the limit must live here: without
+// it an authenticated caller can allocate an unbounded buffer per request.
+const uploadImageMiddleware = multer({
+  fileFilter: imageFilter,
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+});
 const uploadOpenVPNMiddleware = multer({
   fileFilter: openVPNFileFilter,
   limits: { fileSize: 2 * 1024 * 1024, files: 16 },

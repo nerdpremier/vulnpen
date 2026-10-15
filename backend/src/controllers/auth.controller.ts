@@ -184,11 +184,34 @@ export const loginUser = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // Account-level lockout: survive IP rotation where per-IP throttling cannot.
+    // Partial updates on the lockout fields avoid running validators on legacy documents.
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      return res.status(429).json({
+        message: "Account temporarily locked due to repeated failed logins",
+        until: user.lockedUntil,
+      });
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      // Linear ramp after the configured cap: 10 failures => lockedMinutes = 5 + 5*5 = 30m; default 5m first lock.
+      const failed = (user.failedLoginCount ?? 0) + 1;
+      const update: Record<string, any> = { failedLoginCount: failed };
+      const LOCK_THRESHOLD = 10;
+      if (failed >= LOCK_THRESHOLD) {
+        const lockMinutes = Math.min(60 * 24, 5 * Math.floor(failed / LOCK_THRESHOLD) * 5);
+        update.lockedUntil = new Date(Date.now() + lockMinutes * 60 * 1000);
+      }
+      await UserModel.updateOne({ _id: user._id }, { $set: update });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // Reset on success and update geo/ip as before.
+    await UserModel.updateOne(
+      { _id: user._id },
+      { $set: { failedLoginCount: 0, lockedUntil: null, ip: clientIp } },
+    );
     const ip = clientIp;
     user.ip = ip;
     const geo = geoip.lookup(ip);
@@ -201,7 +224,7 @@ export const loginUser = async (req: Request, res: Response) => {
     }
 
     await user.save();
-    
+
     req.session.user = {
       userId: user._id.toString(),
     };

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { verifySess } from "../middlewares/VerifySession.middleware";
+import { requireHostOwner } from "../services/host-owner.service";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import { requireActiveSession } from "../services/session.helpers";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
@@ -45,8 +46,13 @@ router.post("/test-ssh", async (_req: Request, res: Response) => {
  * Kali box. Detection (detect-capabilities) had always talked to the box via
  * ssh.service, so installing through the same ssh.service keeps installs and
  * detection on the same host.
+ *
+ * That host is the installation's shared attack box (ssh.service resolves its
+ * target from the installation SSH config, not from the caller's own work host),
+ * so the install is owner-only: a non-owner member must not add software to
+ * infrastructure other users' sessions execute against.
  */
-router.post("/install-capability", async (req: Request, res: Response) => {
+router.post("/install-capability", requireHostOwner, async (req: Request, res: Response) => {
   try {
     const capabilityName = String(req.body?.capabilityName || "").trim();
     if (!capabilityName) {

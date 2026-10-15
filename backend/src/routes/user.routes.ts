@@ -85,20 +85,25 @@ router.get("/get-ssh-config", [verifySess, requireHostOwner], getSSHConfig);
 router.post("/update-ssh-config", [verifySess, requireHostOwner], updateSSHConfig);
 router.post("/update-safety-protections", [verifySess, requireHostOwner], updateSafetyProtections);
 
-router.get("/get-vnc-config", [verifySess], getVNCConfig);
-router.post("/update-vnc-config", [verifySess], updateVNCConfig);
-router.post("/reset-vnc-config", [verifySess], resetVNCConfig);
-router.post("/auto-setup-vnc", [verifySess], autoSetupVNC);
-router.post("/diagnose-vnc", [verifySess], diagnoseVNC);
-router.post("/repair-vnc", [verifySess], repairVNC);
+// VNC, Burp RPC and Magnitude are installation-wide integrations: they write the
+// shared .env and expose the shared desktop/Burp endpoint. Like the SSH, model
+// and swarm settings above, they are host-owner only. get-vnc-config and
+// get-browser-agent-vnc return the shared desktop password, so the reads are
+// gated too.
+router.get("/get-vnc-config", [verifySess, requireHostOwner], getVNCConfig);
+router.post("/update-vnc-config", [verifySess, requireHostOwner], updateVNCConfig);
+router.post("/reset-vnc-config", [verifySess, requireHostOwner], resetVNCConfig);
+router.post("/auto-setup-vnc", [verifySess, requireHostOwner], autoSetupVNC);
+router.post("/diagnose-vnc", [verifySess, requireHostOwner], diagnoseVNC);
+router.post("/repair-vnc", [verifySess, requireHostOwner], repairVNC);
 
-router.get("/get-burp-config", [verifySess], getBurpConfig);
-router.post("/update-burp-config", [verifySess], updateBurpConfig);
+router.get("/get-burp-config", [verifySess, requireHostOwner], getBurpConfig);
+router.post("/update-burp-config", [verifySess, requireHostOwner], updateBurpConfig);
 
-router.get("/get-magnitude-config", [verifySess], getMagnitudeConfig);
-router.post("/update-magnitude-config", [verifySess], updateMagnitudeConfig);
-router.post("/start-magnitude-agent", [verifySess], startMagnitudeAgent);
-router.get("/get-browser-agent-vnc", [verifySess], getBrowserAgentVNC);
+router.get("/get-magnitude-config", [verifySess, requireHostOwner], getMagnitudeConfig);
+router.post("/update-magnitude-config", [verifySess, requireHostOwner], updateMagnitudeConfig);
+router.post("/start-magnitude-agent", [verifySess, requireHostOwner], startMagnitudeAgent);
+router.get("/get-browser-agent-vnc", [verifySess, requireHostOwner], getBrowserAgentVNC);
 
 router.get("/get-agent-tools-config", [verifySess], getAgentToolsConfig);
 router.post("/update-agent-tools-config", [verifySess], updateAgentToolsConfig);

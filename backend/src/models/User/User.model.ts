@@ -1,4 +1,9 @@
 import mongoose from "mongoose";
+import {
+  DEFAULT_MAX_AGENT_ITERATIONS,
+  MAX_MAX_AGENT_ITERATIONS,
+  MIN_MAX_AGENT_ITERATIONS,
+} from "../../utils/agentConfig";
 const Schema = mongoose.Schema;
 
 export interface ModelPresetDoc {
@@ -16,7 +21,7 @@ export interface ModelPresetDoc {
  * How the agent acts. Two modes only:
  *   - `auto`: tools run; an action that crosses the deterministic approval
  *     boundary asks. A destructive action against the target is never a
- *     question — it is refused outright.
+ *     question — it is left for the operator.
  *   - `requires_consent`: every tool action asks.
  *
  * An `auto_approve` mode used to sit between them and sent boundary-crossing
@@ -38,6 +43,8 @@ export interface UserDoc extends mongoose.Document {
   email: string;
   name: string;
   password: string;
+  failedLoginCount: number;
+  lockedUntil?: Date | null;
   profilePicture: string;
   openvpnFile: string;
   firstLogin?: boolean;
@@ -81,6 +88,8 @@ const UserSchema = new Schema({
   },
   name: { type: String, required: true },
   password: { type: String, required: true },
+  failedLoginCount: { type: Number, default: 0 },
+  lockedUntil: { type: Date, default: null },
   profilePicture: { type: String },
   openvpnFile: { type: String },
   firstLogin: { type: Boolean, default: true },
@@ -158,11 +167,15 @@ const UserSchema = new Schema({
       type: [{ type: String }],
       default: [],
     },
+    // The bounds and the default come from agentConfig, so the schema cannot
+    // disagree with what the API validates and what the loop clamps to: max 200
+    // here vs 500 advertised there made a save of 201-500 pass the controller
+    // and then fail silently at the schema.
     maxAgentIterations: {
       type: Number,
-      min: 5,
-      max: 200,
-      default: 25,
+      min: MIN_MAX_AGENT_ITERATIONS,
+      max: MAX_MAX_AGENT_ITERATIONS,
+      default: DEFAULT_MAX_AGENT_ITERATIONS,
     },
     models: {
       type: [

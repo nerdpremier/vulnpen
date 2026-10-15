@@ -12,6 +12,7 @@
 import crypto from "crypto";
 import { Router, Request, Response } from "express";
 import getSecrets from "./getSecrets";
+import { isPublicInternetHost } from "./scopeGate";
 
 export const LLM_PROXY_PREFIX = "/api/agent/llm-proxy";
 
@@ -38,6 +39,60 @@ export async function buildProxiedBaseUrl(
 
 const FORWARDED_HEADERS = ["authorization", "content-type", "accept", "user-agent"];
 
+/**
+ * The proxy reaches the model provider on the backend's behalf, so an
+ * attacker-chosen target turns a valid signature into an SSRF relay into the
+ * backend's network (Mongo, Redis, Collabora, the cloud metadata address).
+ * A target is allowed only when it is plainly public infrastructure, or when
+ * the operator names it in LLM_PROXY_ALLOWED_HOSTS (self-hosted/local/in-cluster).
+ * The check is by host name here *and* looked up at request time, so a
+ * hostname that passes by name but resolves to a private address is still refused.
+ */
+export function isAllowedProxyTarget(target: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(target);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (!host) return false;
+  const allow = (process.env.LLM_PROXY_ALLOWED_HOSTS || "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  if (allow.some((entry) => host === entry || host.endsWith("." + entry))) {
+    return true;
+  }
+  if (!isPublicInternetHost(host)) return false;
+  // Resolve the hostname to confirm it does not point at a private address
+  // by name ("api.attacker.com" → 127.0.0.1).
+  try {
+    const dns = require("node:dns");
+    const addresses = dns.lookupSync(host, { all: true }) as Array<{ address: string }>;
+    if (addresses.some((entry) => isPrivateAddress(entry.address))) return false;
+  } catch {
+    // If DNS cannot be resolved now, let the request fail at delivery time.
+  }
+  return true;
+}
+
+function isPrivateAddress(address: string): boolean {
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(address) && !address.includes(":")) return false;
+  return (
+    /^127\./.test(address) ||
+    /^0\./.test(address) ||
+    /^10\./.test(address) ||
+    /^192\.168\./.test(address) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(address) ||
+    /^169\.254\./.test(address) ||
+    /^100\.64\./.test(address) ||
+    /^224\.|^255\.|^fe80:/i.test(address) ||
+    address === "::1"
+  );
+}
+
 export const llmProxyRouter = Router();
 
 llmProxyRouter.use("/:payload/:sig", async (req: Request, res: Response) => {
@@ -62,7 +117,7 @@ llmProxyRouter.use("/:payload/:sig", async (req: Request, res: Response) => {
     } catch {
       return res.status(400).json({ message: "Invalid proxy payload" });
     }
-    if (!/^https?:\/\//.test(target)) {
+    if (!isAllowedProxyTarget(target)) {
       return res.status(400).json({ message: "Invalid proxy target" });
     }
 

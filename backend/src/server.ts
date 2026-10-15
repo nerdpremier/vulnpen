@@ -188,7 +188,13 @@ const initializeApp = async () => {
       proxy: true,
       store: redisStore,
       cookie: {
-        sameSite: true as const,
+        // `sameSite: true` is the Express shorthand for "Strict". Strict cookies
+        // never leave the site, which breaks a deployment that serves the API
+        // and the SPA on different registrable domains (the Caddy reverse proxy
+        // default). Cross-site-xhr creds flow only when the cookie is None, so
+        // use None over HTTPS (matching the allowed CORS origins), Strict only
+        // in local development.
+        sameSite: (DEPLOYMENT === "LOCAL" ? "lax" as const : "none" as const),
         secure: DEPLOYMENT === "LOCAL" ? false : true,
         maxAge: sessionMaxAgeMs,
       },
