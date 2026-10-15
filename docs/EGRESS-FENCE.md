@@ -76,7 +76,8 @@ destination:
 | A method override (`X-HTTP-Method-Override`, `X-HTTP-Method`, `_method`) that says `DELETE` does not leave, in a header, the query or the body | **100%** for those names |
 | A body the fence cannot read in full (over `maxBody`, default 1 MiB, or a non-identity `Content-Encoding`), an `https:` absolute URL, a `CONNECT` tunnel or an `Upgrade` does not leave | **100%** — refused, never guessed at |
 | Percent-encoded (also double-encoded) or `\uXXXX`-escaped statements and paths are judged in their decoded form | **100%** for those encodings |
-| A request to a delete/disable endpoint (any method inside the engagement; any word in a path segment or query such as `/deleteUser`, `?action=remove`), a GraphQL mutation named `delete*`/`remove*`, a destructive SQL statement, or a sqlmap write flag does not leave | best effort — "this POST removes data" is a judgement about meaning, and a novel endpoint name will not be recognised |
+| A request to a delete/disable endpoint (a path segment or query **key** naming one, such as `/deleteUser`, `/user-remove`, `?action=remove`), a GraphQL mutation named `delete*`/`remove*`, a destructive SQL statement, or a sqlmap write flag does not leave | best effort — "this POST removes data" is a judgement about meaning, and a novel endpoint name will not be recognised |
+| A read whose query **value** happens to be a delete word (`?q=delete`, `?filter=trash`) | **allowed on purpose** — a value beside an ordinary key is what the caller searched for, not the name of the operation. Refusing it cost the agent every read of a page whose parameter merely spelled one. The method and the path still carry the guarantees above |
 | Command-level evasion (`sudo`, `bash -c`, `base64 \| sh`, a script on disk) buys nothing | **100%** — the fence never reads the command |
 
 The chokepoint removes the *evasion* problem. It does not remove the *semantics*
@@ -106,7 +107,7 @@ services:
     environment:
       EGRESS_ALLOWLIST: "${EGRESS_ALLOWLIST:-}"   # the engagement target hosts
       EGRESS_PORT: "3128"
-      EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-0}"  # terminate + judge CONNECT (see TLS)
+      EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-1}"  # terminate + judge CONNECT (see TLS)
     volumes:
       - ./kali-data:/kali-data                    # holds the fence's CA
     networks: [fenced, upstream]

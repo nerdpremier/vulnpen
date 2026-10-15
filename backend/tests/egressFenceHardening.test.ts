@@ -72,11 +72,38 @@ test("state and field names are not operations", () => {
     "/api/Orders?status=removed",
     "/api/Products/undelete-policy",
     "/api/Users/1/avatar",
+    // A query value under an ordinary key is what the caller searched for,
+    // filtered by or echoed — not the name of the operation being called.
+    // `?x=remove` is indistinguishable from `?q=delete`; the method and the
+    // path remain the 100% guarantees (see the fence doc's strength table).
+    "/rest/products/search?q=delete",
+    "/rest/products/search?q=remove",
+    "/api/Feedbacks?filter=trash",
+    "?x=remove",
   ]) {
     assert.equal(hasDeleteEndpoint(text), false, text);
   }
-  for (const text of ["/deleteUser", "/delete_user", "/user-delete", "/userDelete", "?x=remove"]) {
+  for (const text of ["/deleteUser", "/delete_user", "/user-delete", "/userDelete"]) {
     assert.equal(hasDeleteEndpoint(text), true, text);
+  }
+});
+
+test("an operation key puts its value in the operation slot", () => {
+  // `?action=remove` still names a removal operation, so the value beside an
+  // operation-naming key is judged like a path segment.
+  for (const text of [
+    "/api/Users?action=remove",
+    "/api/Users?action=remove&id=3",
+    "/api/Users?op=delete",
+    "/api/Users?operation=purge",
+    "/api/Users?cmd=revoke",
+    "/api/Users?method=delete",
+  ]) {
+    assert.equal(hasDeleteEndpoint(text), true, text);
+  }
+  // A data-shaped key with an operation word in its value is a read.
+  for (const text of ["/api/Users?action=list", "/api/Users?cmd=whoami"]) {
+    assert.equal(hasDeleteEndpoint(text), false, text);
   }
 });
 

@@ -188,6 +188,9 @@ export function decideEgressRequest(
   request: EgressRequest,
   allowlist: string[],
 ): EgressDecision {
+  if (!Array.isArray(allowlist) || allowlist.length === 0) {
+    return { allow: false, rule: "egress:unarmed", reason: "Egress fence not armed: no declared target or scope." };
+  }
   const method = (request.method || "GET").toUpperCase();
   const wire = asWireRequest({ ...request, method });
 

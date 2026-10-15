@@ -304,7 +304,7 @@ function main() {
   // Refuse to run unarmed: the box has no other route, so an unarmed fence that
   // serves traffic is worse than no fence at all.
   assertEgressProxyArmed(config);
-  const allowTls = process.env.EGRESS_ALLOW_TLS === "1";
+  const allowTls = process.env.EGRESS_ALLOW_TLS !== "0";
   const caDir = (process.env.EGRESS_CA_DIR ?? "").trim() || EGRESS_CA_DIR;
   // Materialise the CA at boot, not lazily on the first tunnel: the backend's
   // trust installer reads ca.crt off the shared mount and cannot install what

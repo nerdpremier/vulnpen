@@ -184,7 +184,7 @@ services:
       # request inside is judged exactly like a plain-HTTP one. The box has to
       # trust that CA or every HTTPS client errors on it — the backend installs
       # it from the shared /kali-data mount below (`egress-ca-trust.service.ts`).
-      EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-0}"
+      EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-1}"
       EGRESS_CA_DIR: "/kali-data/egress-ca"
     volumes:
       # Holds the fence's CA. Only the fence reads the private key (0600, in the

@@ -26,6 +26,7 @@ import { createLeafSigner, loadOrCreateCa } from "../src/utils/egressCa";
  */
 
 const ALLOWLIST = allowlistFromTarget("juice-shop:3000");
+let EMPTY_ALLOWLIST: string[] = [];
 
 test("a request to a host outside the engagement does not leave", () => {
   for (const host of ["evil.test", "10.9.9.9", "erp.internal"]) {
