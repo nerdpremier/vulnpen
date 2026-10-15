@@ -14,14 +14,11 @@ WATCHDOG_INTERVAL="${BROWSER_AGENT_WATCHDOG_INTERVAL:-5}"
 # The operator's view of the ATTACK BOX's desktop. Empty (the default) means the
 # deployment does not bridge it and this container serves only its own display.
 #
-# Why a second websockify: the agent's Chromium runs on the attack box, and that
-# box is attached to `control` and `fenced` only — both `internal: true`. Docker
-# has no route from the host into an internal network, so it never applies the
-# box's port mapping at all: `NetworkSettings.Ports` reports `{"9020/tcp":[]}`
-# and `docker port` prints nothing, however the compose file is written. The
-# backend sits on `control` too and IS published, so it bridges the box's Xvnc
-# to a port the operator's browser can open. Same websockify, same noVNC assets,
-# no new dependency.
+# Why a second websockify: the agent's Chromium runs on the attack box, and the
+# panel opens a single stable address for it. The backend is published on the
+# host, so it bridges the box's Xvnc to a port the operator's browser can open,
+# independent of how the box itself is networked. Same websockify, same noVNC
+# assets, no new dependency.
 DESKTOP_PORT="${BROWSER_AGENT_DESKTOP_PORT:-}"
 DESKTOP_TARGET="${BROWSER_AGENT_DESKTOP_TARGET:-kali:5989}"
 

@@ -60,10 +60,10 @@ export function getBurpBrowserHome(): string {
  *
  * Deliberately not simply MAGNITUDE_PROXY_URL. That setting is addressed the way
  * the BROWSER reaches the proxy, and the browser runs on the attack box — so it
- * may name a host that only resolves there (or, under the egress fence, the
- * fence itself rather than Burp at all). The CA has to be fetched from here, so
- * it is addressed the way the backend reaches Burp: the host its RPC bridge
- * already lives on, on the proxy listener's port.
+ * may name a host that only resolves there (or an external proxy rather than
+ * Burp at all). The CA has to be fetched from here, so it is addressed the way
+ * the backend reaches Burp: the host its RPC bridge already lives on, on the
+ * proxy listener's port.
  */
 function proxyUrlFromConfig(): string {
   const env = readEnvFile();

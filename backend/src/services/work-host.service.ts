@@ -45,8 +45,7 @@ export interface DirectoryListing {
 /**
  * The agent's commands run on the attack box over SSH and never inside the
  * backend: the backend holds the model keys, the database credentials and a
- * direct route to the internet, so it is not disposable test infrastructure and
- * it sits outside the egress fence that judges the attack box's traffic.
+ * direct route to the internet, so it is not disposable test infrastructure.
  */
 export const NO_ATTACK_BOX_MESSAGE =
   "Agent commands run on the attack box over SSH, never inside the VulnPen backend. " +

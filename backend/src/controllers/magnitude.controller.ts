@@ -209,9 +209,7 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
         // here judges it: this is the operator's own browser on their own
         // workstation, the route is host-owner only, and the agent's
         // browser_action tool — which does pass its goal and URL through the
-        // boundary — is not used on this path. The destination is still bound by
-        // the egress fence, which judges the wire request rather than the words
-        // in a goal.
+        // boundary — is not used on this path.
         await agent.nav(targetUrl);
       });
     } catch (agentError: any) {

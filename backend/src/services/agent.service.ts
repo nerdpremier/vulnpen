@@ -40,15 +40,6 @@ import { normalizeMaxAgentIterations } from "../utils/agentConfig";
 
 import { isPaused, setAgentState, setPaused } from "./agent-state.service";
 
-// ─── Abort controller registry (for immediate pause) ───────────────────
-
-import {
-  abortSession,
-  hasActiveController,
-  releaseAbortController,
-  reserveAbortController,
-} from "./agent-controller-registry";
-
 // ─── SSE helpers ─────────────────────────────────────────────────────
 
 import {

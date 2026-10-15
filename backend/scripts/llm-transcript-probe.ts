@@ -62,7 +62,7 @@ async function main() {
     let ok = true;
     try {
       await invoke_llm({ messages: openai.slice(0, cut) as any, providerOverride: config, reasoningMode, userId });
-    } catch (err: any) {
+    } catch {
       ok = false;
     }
     if (ok) { lo = cut + 1; } else { firstBad = cut; hi = mid - 1; }

@@ -75,31 +75,13 @@ HTTP to the two verbs and never exec or write the user config themselves.
 
 ## Safety
 
-Two layers guard the engagement target, and they are independent on purpose.
-
 **Target safety rules** — the command-reading boundary, owned by
 `utils/targetSafety.ts`: `detectDestructiveTargetAction` (a shell command, a
 Python script, a shell input or a raw HTTP request) and
 `detectDestructiveBrowserGoal` (a browser goal). A match is a
 `destructive_target` verdict that no execution mode may turn into a consent
 question. This layer reads the *command*, so it is a best-effort judgement
-about meaning; it is the only layer present in the core stack.
-
-**Egress fence** — the wire-level boundary, owned by `utils/egressPolicy.ts`
-(`decideEgressRequest`) and run by `src/egressProxy.ts`
-(`assertEgressProxyArmed` refuses to start unarmed). It judges the request on
-the wire rather than the command, so command-level evasion buys nothing. It is
-wired only in `docker-compose.kali.yml`, where the attack box has no internet
-route of its own, so the fence is its only way out; the browser agent runs **on
-that attack box** (launched by the backend over SSH, attached over CDP through a
-loopback tunnel), so it is fenced by topology and `MAGNITUDE_PROXY_URL` only has
-to name the fence. Plain HTTP is judged on the request line; a `CONNECT` tunnel
-is refused by default, and with `EGRESS_ALLOW_TLS=1` the fence terminates the
-TLS with its own CA (`utils/egressCa.ts`, trust distributed by
-`services/egress-ca-trust.service.ts`) and judges the request inside it by the
-same rules. It reuses the target-safety rules for "does this remove data" and
-the scope gate for "is this inside the engagement" — nothing new is invented,
-only relocated. `docs/EGRESS-FENCE.md` is the contract.
+about meaning rather than a hard guarantee.
 
 ## Settings
 
@@ -442,15 +424,13 @@ reads it back.
 **Remote browser** — the Chromium the agent drives runs on the **attack box**,
 not in the backend container (`services/remote-browser.service.ts`). That
 placement is the point: the browser inherits that container's network position —
-the VPN OpenVPN brings up there, and the egress fence every packet has to leave
-through — so a target reachable only through the attack box's VPN can be opened,
-and the browser is fenced by topology rather than by a setting being correct.
-The backend launches it over SSH with the flags the operator's settings imply
-(proxy above all, so Settings still applies), forwards a **loopback-only** SSH
-port to its CDP endpoint, and attaches with `connectOverCDP`. The CDP port is
-never published on a network, because CDP has no authentication. Set
-`BROWSER_AGENT_REMOTE=false` to launch Chromium beside the backend instead —
-only useful when there is no attack box.
+the VPN OpenVPN brings up there — so a target reachable only through the attack
+box's VPN can be opened. The backend launches it over SSH with the flags the
+operator's settings imply (proxy above all, so Settings still applies), forwards
+a **loopback-only** SSH port to its CDP endpoint, and attaches with
+`connectOverCDP`. The CDP port is never published on a network, because CDP has
+no authentication. Set `BROWSER_AGENT_REMOTE=false` to launch Chromium beside
+the backend instead — only useful when there is no attack box.
 
 **Display names do not cross between the two boxes** — `MAGNITUDE_DISPLAY` names
 a display on the *backend* (its Xvfb is `:99`); the attack box's X server is the
@@ -464,7 +444,7 @@ way the **backend** reaches the proxy, and the backend reaches Burp as
 `http://kali:8080`. On the attack box that same listener is simply
 `127.0.0.1:8080`, so `proxyUrlForAttackBox` rewrites a host naming the attack box
 itself (`kali`, `vulnpen-kali`, `localhost`, `$SSH_HOST`) to loopback and passes
-anything else — the egress fence, an external proxy — through unchanged.
+anything else — an external proxy — through unchanged.
 
 The rewrite is not there because `kali` fails to resolve on the attack box: Docker
 registers that name as an alias on the container, so it resolves to the attack

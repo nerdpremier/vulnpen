@@ -1,48 +1,21 @@
+# ── Kali / attack-box override ─────────────────────────────
+# This file is an *override* of docker-compose.yml, NOT a standalone stack.
+# Always pass both files, base first:
+#
+#     docker compose -f docker-compose.yml -f docker-compose.kali.yml up -d
+#
+# run.sh does that for you in "Full Docker + Kali" mode. Everything the base
+# file already defines (mongodb, redis, collabora, frontend, and the backend's
+# image, base volumes, healthcheck and Collabora wiring) is inherited; only
+# what the attack box *changes* is listed below.
 services:
-  mongodb:
-    container_name: vulnpen-mongodb
-    image: mongo:7
-    volumes:
-      - mongodb-data:/data/db
-    ports:
-      - "127.0.0.1:27017:27017"
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-    restart: always
-
-  redis:
-    container_name: vulnpen-redis
-    image: redis:7-alpine
-    volumes:
-      - redis-data:/data
-    ports:
-      - "127.0.0.1:6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-    restart: always
-
   backend:
-    container_name: vulnpen-backend
-    build: ./backend
     networks:
-      # `default` is how the backend reaches Mongo, Redis and the outside world;
-      # `control` is the only path to the attack box, and it has no gateway;
-      # `fenced` carries no gateway either — it is there so the browser agent
-      # below can reach the fence and nothing else.
+      # `default` is how the backend reaches Mongo, Redis, the outside world and
+      # the attack box; `control` is an internal network it shares with the box.
       - default
       - control
-      - fenced
     environment:
-      MONGO_URI: mongodb://mongodb:27017/vulnpen
-      REDIS_URL: redis://redis:6379
-      CODEX_HOME: /root/.codex
-      SSH_CONFIG_FILE: /root/.ssh/config
       # The attack box as the *backend* reaches it: the Compose service name on
       # the control network, not the host's published 127.0.0.1:4242 — that
       # address is loopback on the host and there is nothing behind it inside
@@ -54,16 +27,14 @@ services:
       SSH_HOST: kali
       SSH_PORT: "22"
       WORKSPACE_DIR: /kali-data/workspaces
-      HTTP_PROXY: "${HTTP_PROXY:-}"
-      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      # Same as the base value plus `kali`: requests the backend makes to the
+      # attack box must not be sent through an HTTP proxy.
       NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,mongodb,redis,kali,collabora,host.docker.internal}"
-      # The browser agent's Chromium now runs ON THE ATTACK BOX, not here, so it
-      # sits inside the fenced topology like every other tool and the fence
-      # judges its traffic on the wire instead of by configuration. This value is
-      # addressed the way THAT box reaches the proxy — which is why the fence is
-      # named directly rather than Burp, whose own egress would have to be
-      # pointed at the fence separately.
-      MAGNITUDE_PROXY_URL: "${MAGNITUDE_PROXY_URL:-http://egress:3128}"
+      # The browser agent's Chromium runs ON THE ATTACK BOX, not here, so this
+      # value is addressed the way THAT box reaches the proxy. Empty (the
+      # default) means the browser egresses directly from the attack box; point
+      # it at Burp (`http://kali:8080`) to intercept instead.
+      MAGNITUDE_PROXY_URL: "${MAGNITUDE_PROXY_URL:-}"
       # The backend launches that browser over SSH and drives it over CDP
       # through a loopback-only tunnel, so nothing new is published on any
       # network. The profile lives on /kali-data, which both containers mount,
@@ -71,140 +42,29 @@ services:
       BROWSER_AGENT_REMOTE: "${BROWSER_AGENT_REMOTE:-true}"
       BROWSER_AGENT_CDP_PORT: "${BROWSER_AGENT_CDP_PORT:-9222}"
       BROWSER_AGENT_PROFILE_DIR: "${BROWSER_AGENT_PROFILE_DIR:-/kali-data/chromium-home}"
-      # The operator's view of the attack box's desktop. The box's own noVNC port
-      # cannot be published (it is on internal networks only), so the backend
-      # bridges it here: the browser the operator watches runs on that box, and
-      # without this the "Browser Agent" panel and the Desktop tab both embed
-      # `http://localhost:9020`, where nothing listens on the host, and show a
-      # blank frame. See backend/entrypoint.sh.
+      # The operator's view of the attack box's desktop. The backend bridges the
+      # box's Xvnc to this port: the browser the operator watches runs on that
+      # box, and this is the stable address the "Browser Agent" panel and the
+      # Desktop tab open. See backend/entrypoint.sh.
       BROWSER_AGENT_DESKTOP_PORT: "${BROWSER_AGENT_DESKTOP_PORT:-9021}"
       BROWSER_AGENT_DESKTOP_TARGET: "${BROWSER_AGENT_DESKTOP_TARGET:-kali:5989}"
       # The kali image starts Burp and its gRPC bridge on :50051; without a
       # host every burp_* tool reports "not configured".
       BURP_RPC_HOST: "${BURP_RPC_HOST:-kali}"
-      # Report editor (WOPI/Collabora): COLLABORA_URL is server-side discovery
-      # (container network), COLLABORA_PUBLIC_URL is the browser iframe address,
-      # WOPI_PUBLIC_BASE is how Collabora calls back into the backend.
-      COLLABORA_URL: http://collabora:9980
-      COLLABORA_PUBLIC_URL: http://localhost:9980
-      WOPI_PUBLIC_BASE: http://host.docker.internal:8080/api/wopi/files
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
-      - "127.0.0.1:8080:8080"
-      # The backend's own display (Xvfb :99). NOT where the agent's browser runs.
-      - "127.0.0.1:6080:6080"
       # The ATTACK BOX's desktop, bridged by the backend (see backend/entrypoint.sh).
-      # The box itself cannot publish this: it is on `control`/`fenced`, both
-      # internal, and Docker does not apply port mappings for a container the host
-      # has no route into — `NetworkSettings.Ports` stays empty however the
-      # `ports:` block below is written. This is the port the operator's browser
-      # and the "Browser Agent" panel actually open.
+      # This is the port the operator's browser and the "Browser Agent" panel
+      # open — what BROWSER_AGENT_DESKTOP_PORT above points at — and it stays
+      # stable regardless of how the box itself is networked. (The backend's own
+      # Xvfb display on 6080 comes from the base file.)
       - "127.0.0.1:9021:9021"
     volumes:
+      # Shared with the attack box: workspaces, reports/screenshots, the Burp CA
+      # and the Chromium profile all live here.
       - ./kali-data:/kali-data
-      - backend-data:/srv/data
-      - ./backend/.env:/srv/data/.env
-      - ./backend/model-registry.json:/srv/data/model-registry.json
-      - ./config.toml:/srv/data/config.toml:ro
     depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
       kali:
         condition: service_healthy
-      collabora:
-        condition: service_started
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/healthcheck').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
-      interval: 5s
-      timeout: 5s
-      retries: 24
-      start_period: 10s
-
-  # LibreOffice in the browser — the report is opened/edited here like Word.
-  # COLLABORA_URL (server-side) / COLLABORA_PUBLIC_URL (browser iframe) /
-  # WOPI_PUBLIC_BASE (WOPI callback) are set on the backend service above.
-  collabora:
-    container_name: vulnpen-collabora
-    image: collabora/code:latest
-    environment:
-      - aliasgroup1=http://host.docker.internal:8080.*
-      - aliasgroup2=http://backend:8080.*
-      - username=admin
-      - password=${COLLABORA_PASSWORD:-vulnpen-admin}
-      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:net.post_allow.host[0]=.+ --o:frame_ancestors=localhost:3000 --o:user_interface.smart_zoom=false --o:user_interface.default_zoom=100
-    cap_add:
-      - MKNOD
-    ports:
-      - "127.0.0.1:9980:9980"
-    restart: unless-stopped
-
-  frontend:
-    container_name: vulnpen-frontend
-    build:
-      context: ./frontend
-      args:
-        NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI:-http://localhost:8080}
-        NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-LOCAL}
-    ports:
-      - "127.0.0.1:3000:3000"
-    env_file:
-      - ./frontend/.env
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # The egress fence: the only container with a route to the internet, and the
-  # only thing that decides whether a request the agent produced may leave.
-  # `src/egressProxy.ts` — plain HTTP is judged on the wire request; when
-  # EGRESS_ALLOW_TLS=1, TLS is terminated here and the request inside it is
-  # judged by the same rules. See docs/EGRESS-FENCE.md.
-  egress:
-    container_name: vulnpen-egress
-    build: ./backend
-    # The image's ENTRYPOINT is the backend's own boot script, so it has to be
-    # replaced, not appended to: `command:` alone would run entrypoint.sh with
-    # our arguments and never start the proxy.
-    entrypoint: ["node", "dist/egressProxy.js"]
-    environment:
-      # The engagement's target hosts. Either give the host list directly
-      # (EGRESS_ALLOWLIST) or the engagement's own Target/scope text
-      # (EGRESS_TARGET / EGRESS_SCOPE), which the proxy parses with the same
-      # scope gate the rest of the product uses. With none of the three the
-      # proxy refuses to start rather than passing every request uninspected.
-      EGRESS_ALLOWLIST: "${EGRESS_ALLOWLIST:-}"
-      EGRESS_TARGET: "${EGRESS_TARGET:-}"
-      EGRESS_SCOPE: "${EGRESS_SCOPE:-}"
-      EGRESS_PORT: "3128"
-      # When on, CONNECT tunnels are terminated with the fence's own CA and the
-      # request inside is judged exactly like a plain-HTTP one. The box has to
-      # trust that CA or every HTTPS client errors on it — the backend installs
-      # it from the shared /kali-data mount below (`egress-ca-trust.service.ts`).
-      EGRESS_ALLOW_TLS: "${EGRESS_ALLOW_TLS:-1}"
-      EGRESS_CA_DIR: "/kali-data/egress-ca"
-    volumes:
-      # Holds the fence's CA. Only the fence reads the private key (0600, in the
-      # same directory); the backend reads just the public certificate from this
-      # mount instead of fetching it over the wire.
-      - ./kali-data:/kali-data
-    networks:
-      - fenced
-      - upstream
-    healthcheck:
-      # Without this, a fence that never served looks exactly like one that
-      # did: `compose up` still reports success and run.sh still prints
-      # "Running". The check also gates kali (see depends_on there), so an
-      # unarmed fence stops the stack instead of silently un-fencing it.
-      test: ["CMD", "node", "-e", "const s=require('net').connect(3128,'127.0.0.1');s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 5s
-    restart: unless-stopped
 
   kali:
     container_name: vulnpen-kali
@@ -244,30 +104,26 @@ services:
       - SETUID
     devices:
       - /dev/net/tun:/dev/net/tun
-    environment:
-      # Every outbound request goes through the fence. There is no other route:
-      # this container sits only on `control` and `fenced`, both internal.
-      HTTP_PROXY: "http://egress:3128"
-      HTTPS_PROXY: "http://egress:3128"
-      # APT (and the runtime `apti` installer) reads the lowercase names, not
-      # the uppercase ones — without these a runtime tool install has no route.
-      http_proxy: "http://egress:3128"
-      https_proxy: "http://egress:3128"
-      # The target is deliberately NOT in NO_PROXY — it must be reached through
-      # the fence, not around it.
-      NO_PROXY: "localhost,127.0.0.1,kali,backend,mongodb,redis,collabora"
     networks:
+      # `default` carries the box's own route to the internet; `control` is the
+      # internal network it shares with the backend.
+      - default
       - control
-      - fenced
-    depends_on:
-      # Do not start the attack box before the fence that is its only way out.
-      egress:
-        condition: service_healthy
+    # Loopback-only operator access to the box itself. The backend reaches the
+    # box by service name over `control` (SSH 22, Xvnc 5989), so none of the
+    # box's own service ports need publishing — and two that used to be are gone:
+    #
+    #   :9020  the box's own websockify/noVNC. The operator's panel and Desktop
+    #          tab open the *backend's* bridge on 9021, never this; nothing on
+    #          the host ever listened on 9020, and the panel embedding
+    #          localhost:9020 was the "blank frame" bug (see browser-view.service.ts).
+    #   :1194/udp  an OpenVPN *server* listener. The box is a VPN client; nothing
+    #          in the image ever binds this port.
+    #
+    # These two are the operator-facing ones and stay:
     ports:
-      - "127.0.0.1:4242:22"
-      - "127.0.0.1:4200:4200"
-      - "127.0.0.1:1194:1194/udp"
-      - "127.0.0.1:9020:9020"
+      - "127.0.0.1:4242:22"   # ssh into the attack box by hand
+      - "127.0.0.1:4200:4200" # shellinabox — the browser shell run.sh advertises
     volumes:
       - ./kali-data:/kali-data
       - ./backend/.env:/run/vulnpen.env:ro
@@ -280,19 +136,8 @@ services:
     restart: unless-stopped
 
 networks:
-  # Both are `internal`: Docker gives them no gateway, so a container on them
-  # cannot reach anything except the other containers on them. That is what
-  # makes the fence the only way out rather than one option among several.
+  # `internal`: Docker gives it no gateway, so a container on it cannot reach
+  # anything except the other containers on it. The backend and the attack box
+  # share it for management traffic.
   control:
     internal: true
-  fenced:
-    internal: true
-  upstream: {}
-
-volumes:
-  mongodb-data:
-    driver: local
-  redis-data:
-    driver: local
-  backend-data:
-    driver: local

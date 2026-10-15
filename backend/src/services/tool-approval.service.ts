@@ -12,7 +12,7 @@
  */
 
 import type { ToolExecutionMode } from "../models/User/User.model";
-import type { SafetyDetail, ToolDefinition } from "../tools/types";
+import type { SafetyDetail } from "../tools/types";
 
 export interface ToolApprovalDecision {
   requireConsent: boolean;

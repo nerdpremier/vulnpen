@@ -12,7 +12,7 @@ export interface DangerCheckResult {
    * onto an existing resource, `UPDATE … SET`). A replacement is gated because
    * it destroys the original value, but it is not the one action the product
    * refuses to let a person authorise, so the consent dialog names it
-   * differently and the fence treats it as a boundary rather than a deletion.
+   * differently and it is treated as a boundary rather than a deletion.
    */
   overwrite?: boolean;
 }
@@ -36,9 +36,7 @@ export interface DangerCheckResult {
  * the word `delete`, or prose quoting a statement, reads the same as the real
  * thing, and an inventively named endpoint reads as nothing at all. That is why
  * it asks rather than refuses: the operator sees the command and the reason and
- * decides. The layer that judges the actual wire request (`egressPolicy`) is
- * the one that can carry a hard guarantee, and it does not read text the agent
- * controls.
+ * decides.
  */
 
 const SAFE_RESULT: DangerCheckResult = { dangerous: false, rule: "", reason: "", impact: "" };
@@ -120,7 +118,7 @@ function endpointTarget(text: string): string {
   // shapes that carry no absolute URL: a raw request line, a Python call, a
   // bare curl path. A body parameter (`q=delete`, `action=remove`) has no
   // leading slash and is not an endpoint, so it is not read.
-  for (const match of text.matchAll(/(?:^|[\s'"=,(\[])(\/[^\s'"\],)]*)/g)) {
+  for (const match of text.matchAll(/(?:^|[\s'"=,([])(\/[^\s'"\],)]*)/g)) {
     tokens.push(match[1]);
   }
   return tokens.join(" ");

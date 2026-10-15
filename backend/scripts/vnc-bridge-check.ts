@@ -3,13 +3,10 @@
  *
  * The failure this exists to catch, and which shipped: the panel embedded
  * `http://localhost:9020` — the attack box's own noVNC port — and nothing on the
- * host was listening there. The attack box is attached to `control` and
- * `fenced`, both `internal: true`, and Docker does not apply a port mapping for
- * a container the host has no route into. It is silent about it, too: the
- * compose file declares the mapping, `HostConfig.PortBindings` carries it, and
- * `NetworkSettings.Ports` still comes back `{"9020/tcp":[]}` with `docker port`
- * printing nothing. Every check that looked at the *box* passed while the
- * operator saw a blank frame.
+ * host was listening there, so the operator saw a blank frame while every check
+ * that looked at the *box* passed. The backend now bridges the box's desktop
+ * onto a published port (BROWSER_AGENT_DESKTOP_PORT); this walks the path the
+ * operator's browser actually walks.
  *
  * So this walks the path the browser walks, and does not stop at HTTP 200 —
  * served web assets prove nothing about whether a screen is behind them:

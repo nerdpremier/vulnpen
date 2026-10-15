@@ -32,8 +32,7 @@ import { newScreenshotName, saveSessionScreenshot } from "../../services/artifac
  *
  * The browser runs on the attack box, launched over SSH and driven over CDP
  * through a loopback-only tunnel (services/remote-browser.service.ts), so it
- * shares that box's route to the target — the VPN connected there and the egress
- * fence every packet leaves through.
+ * shares that box's route to the target — the VPN connected there.
  *
  * Magnitude's bundled agent loop locates every click target as coordinates
  * through a small vision model (Moondream), which forces the Browser Agent model

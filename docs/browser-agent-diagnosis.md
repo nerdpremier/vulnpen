@@ -386,7 +386,7 @@ a run that never settles releases the chain instead of wedging it
 
 **2. transport — SSH tunnel หรือเปิด CDP port ตรง ๆ?**
 เลือก **SSH tunnel** CDP ไม่มี authentication ถ้าเปิดบน network ใครก็ตามที่อยู่ network เดียวกัน
-(ใน prod คือ `control`/`fenced`) สั่งเบราว์เซอร์ได้ — ซึ่งเป็นเบราว์เซอร์ที่ถือเส้นทาง VPN
+(คือ network ที่กล่องใช้ร่วมกับ backend) สั่งเบราว์เซอร์ได้ — ซึ่งเป็นเบราว์เซอร์ที่ถือเส้นทาง VPN
 tunnel ผูกกับ loopback ทั้งสองฝั่ง จึงไม่มี port ใหม่ถูก publish เลย
 
 **3. NSS trust store — ใครติดตั้ง Burp CA?**
@@ -394,12 +394,16 @@ profile ถูกวางไว้ที่ `/kali-data/chromium-home` ซึ�
 backend จึงเขียน NSS db (`certutil`) ลงไปได้ตรง ๆ แล้ว Chromium ฝั่ง kali อ่านเจอ
 ไม่ต้อง SSH ไปรัน certutil ทีละใบ
 
-### ผลข้างเคียงที่ดี: ปิดรูของ egress fence
+### ผลข้างเคียงที่ดี: เบราว์เซอร์อยู่บนกล่องเดียวกับเครื่องมืออื่น
 
-`docs/EGRESS-FENCE.md` เคยระบุเองว่าเบราว์เซอร์เป็น **"รูเดียวที่ topology ปิดไม่ได้ด้วยตัวเอง"**
-เพราะรันใน backend ซึ่งต้องคุย Mongo/Redis/model API จึง isolate ไม่ได้ ทำได้แค่ตั้งค่า proxy ให้ถูก
-การย้ายไป attack box ทำให้เบราว์เซอร์ **อยู่ใน fenced network เหมือนเครื่องมืออื่น** — fence ตัดสินที่ wire
-แทนที่จะพึ่งการตั้งค่าถูกต้อง ดูรายละเอียดที่ `docs/EGRESS-FENCE.md`
+เอกสาร egress fence (ถอดออกแล้วพร้อมกับตัว fence) เคยระบุเองว่าเบราว์เซอร์เป็น
+**"รูเดียวที่ topology ปิดไม่ได้ด้วยตัวเอง"** เพราะรันใน backend ซึ่งต้องคุย Mongo/Redis/model API
+จึง isolate ไม่ได้ ทำได้แค่ตั้งค่า proxy ให้ถูก
+การย้ายไป attack box ทำให้เบราว์เซอร์ **อยู่บนกล่องเดียวกับเครื่องมืออื่น** — พึ่งตำแหน่งทาง network
+แทนที่จะพึ่งการตั้งค่าให้ถูกต้อง
+
+> **หมายเหตุ (ภายหลัง):** egress fence ถูกถอดออกทั้งระบบแล้ว — attack box ออกอินเทอร์เน็ตเองได้
+> และ `docs/EGRESS-FENCE.md` ถูกลบไปแล้ว
 
 ### ผลข้างเคียงที่ดีอีกข้อ: จอ Desktop เห็นเบราว์เซอร์โดยไม่ต้องเขียนโค้ดเพิ่ม
 
@@ -641,7 +645,7 @@ return `${url.protocol}//${auth}${url.host}`;
 |---|---|
 | **ภาษา/รันไทม์** | เป็น Python ขณะที่ backend เป็น TypeScript + patchright การรับมาใช้คือเพิ่มรันไทม์ที่สอง sidecar process และ seam รับส่งข้อมูลใหม่ — ต้นทุนสถาปัตยกรรมสูงสำหรับสิ่งที่เรามีอยู่แล้ว |
 | **พึ่งพาบริการภายนอก** | ต้องมี `TYPESAFE_API_KEY` (SaaS ของ TypeSafe) ในเส้นทาง inference ของผลิตภัณฑ์ความปลอดภัย ที่ปัจจุบันให้ผู้ใช้ "Bring your own model" พร้อมระบบ verify/assignment/consent — ขัดกับโมเดลการตั้งค่าและการ trace (Langfuse) ที่มีอยู่ |
-| **โมเดลการเชื่อมเบราว์เซอร์** | มัน attach กับ **Chrome จริงของผู้ใช้** (โปรไฟล์เดิม + remote debugging) แต่เราต้องการ Chromium headless ใต้ Xvfb พร้อมโปรไฟล์ที่ trust Burp CA, ผ่าน Burp proxy และผ่าน egress fence (`MAGNITUDE_PROXY_URL`) การไปเกาะ Chrome ส่วนตัวของผู้ปฏิบัติงานคือ **ความเสี่ยงด้านความปลอดภัยย้อนกลับ** (คุกกี้/เซสชันส่วนตัว) และทำให้ proxy/fence หลุด |
+| **โมเดลการเชื่อมเบราว์เซอร์** | มัน attach กับ **Chrome จริงของผู้ใช้** (โปรไฟล์เดิม + remote debugging) แต่เราต้องการ Chromium headless ใต้ Xvfb พร้อมโปรไฟล์ที่ trust Burp CA และผ่าน Burp proxy (`MAGNITUDE_PROXY_URL`) การไปเกาะ Chrome ส่วนตัวของผู้ปฏิบัติงานคือ **ความเสี่ยงด้านความปลอดภัยย้อนกลับ** (คุกกี้/เซสชันส่วนตัว) และทำให้ proxy หลุด |
 | **ไม่มีชั้น safety** | กฎของผลิตภัณฑ์ (`detectDestructiveBrowserGoal`, consent batch, การปฏิเสธที่ไม่มีโหมดไหนอนุมัติได้) บังคับใช้ที่ชั้น tool ถ้าเอา agent อัตโนมัติมาแทน จะต้อง implement ซ้ำทั้งหมด |
 | **ยังเป็น MVP** | README ระบุเองว่าไม่รองรับ: shadow roots, iframes, canvas, uploads, pop-up tabs, nested scrolling, arbitrary keyboard widgets และไม่ได้ implement accessible-name spec ครบ — ซึ่งคือจุดที่เป้าหมาย pentest เจอจริง (login ใน iframe, CSRF token ใน shadow DOM, ทดสอบ unrestricted file upload, OAuth หลายแท็บ) |
 | **หลักฐานยังบาง** | ส่วน "Evidence and limits" ยอมรับเองว่าเป็น "three repeats of one task on one browser profile, **not a general reliability benchmark**" — ยังไม่มีหลักฐานความน่าเชื่อถือพอจะแทนที่เส้นทางที่ทำงานได้ |
@@ -749,7 +753,7 @@ docker exec vulnpen-backend sh -c 'rm -rf /usr/src/backend/verify'
 | `backend/tests/browserAgentService.test.ts` | + เทสต์โหมด remote (headful บังคับ, rewrite proxy, fingerprint, display, รูปแบบคำสั่ง launch, **stop ต้องฆ่า process**, **ต้องล้าง profile lock**) — พิสูจน์แล้วว่าทั้งคู่ fail เมื่อถอด fix |
 | `kali/Dockerfile` | Layer 7 `apti chromium` — แยกชั้นล่างสุดเพื่อไม่ให้ invalidate ชั้น kali-linux-* ที่แพงที่สุด |
 | `backend/.env.template`, `docker-compose.kali.yml`, `docker-compose.dev.yml` | `BROWSER_AGENT_REMOTE` / `_CDP_PORT` / `_PROFILE_DIR` / `_DISPLAY` |
-| `docs/EGRESS-FENCE.md`, `docs/SETUP.md` | fence ครอบเบราว์เซอร์แล้ว / P0 VPN เป็น "Handled by design" |
+| `docs/SETUP.md` | P0 VPN เป็น "Handled by design" |
 
 รอบที่ 3 — settle / ยืนยันผลหลัง action / Burp CA (§3.10, §3.11):
 
@@ -992,8 +996,6 @@ ln -sf "deadbeef1234-99999" /kali-data/chromium-home/profile/SingletonLock
 - `docker exec ... ls /path` บน Git Bash ถูกแปลง path เป็น `C:/...` ⇒ ต้อง `MSYS_NO_PATHCONV=1`
 - เรียก service ที่อ่าน env ตรง ๆ ด้วย `node -e` จะได้ env ไม่ครบ (`loadConfig()` ไม่ถูกเรียก)
   ⇒ ต้อง `require("./dist/utils/loadConfig.js").loadConfig()` ก่อน ไม่งั้นจะเห็น "auth failed" หลอก ๆ
-- รัน `docker compose up -d` เองโดยไม่ส่ง `EGRESS_ALLOWLIST` ⇒ egress fence ไม่ยอมสตาร์ท
-  (`assertEgressProxyArmed`) แล้ว **kali/backend/frontend ไม่ขึ้นตาม** เพราะ `depends_on: service_healthy`
 
 
 ### รอบที่ 5 — click ที่สำเร็จถูกรายงานเป็น "Browser action failed" + ข้อความชี้ไปที่ proxy ผิดที่
@@ -1085,6 +1087,11 @@ Browser action failed: locator.click: Timeout 15000ms exceeded.
 **สาเหตุราก — ไม่ใช่การตั้งค่าผิด แต่เป็นข้อจำกัดของดีไซน์:**
 `vulnpen-kali` ต่ออยู่กับเน็ตเวิร์ก **`control` และ `fenced` เท่านั้น ซึ่ง `internal: true` ทั้งคู่**
 Docker **ไม่ apply port mapping** ให้คอนเทนเนอร์ที่ host ไม่มีเส้นทางเข้าไป — และมันเงียบด้วย:
+
+> **หมายเหตุ (ภายหลัง):** egress fence ถูกถอดออกทั้งระบบแล้ว และ `kali` ย้ายไปอยู่บน `default` + `control`
+> — port mapping ของกล่องจึงทำงานได้ตามปกติ ส่วนจอยัง bridge ผ่าน backend ที่ `BROWSER_AGENT_DESKTOP_PORT` เหมือนเดิม
+> ต่อมา `127.0.0.1:9020:9020` ถูกถอดออกจาก `docker-compose.kali.yml` แล้วด้วย เพราะไม่มีใครใช้เส้นทางนั้นจริง
+> (panel/แท็บ Desktop เปิด `9021` ของ backend) — ที่เหลือคือ `4242` (ssh) กับ `4200` (shellinabox)
 
 | ตรวจ | ผล |
 |---|---|

@@ -20,10 +20,11 @@ const FLAG_TARGET_RE = /(?:^|\s)(?:-u|--url|--host|-t|--target|--upload-file)\s+
 
 /**
  * Strip `-x <url>` / `--proxy[=]<url>` flags before scanning for hosts: the
- * proxy is the attack box's *way out* (the egress fence at `http://egress:3128`),
- * not a destination the command itself connects to. Without this, an ordinary
- * scan recipe — `P="-x http://egress:3128"; curl $P "$B/"` — reads `egress` as
- * an out-of-scope host and asks the operator to approve every single request.
+ * proxy is the attack box's *way out* (Burp at `http://kali:8080`, or whatever
+ * `MAGNITUDE_PROXY_URL` names), not a destination the command itself connects
+ * to. Without this, an ordinary scan recipe — `P="-x http://kali:8080"; curl $P
+ * "$B/"` — reads the proxy host as an out-of-scope host and asks the operator
+ * to approve every single request.
  * The *consumed URL of the flag* is removed; the flag name alone is kept, so
  * `curl -x` without an argument still reads as itself, not a host. A leading
  * quote is allowed so a flag stored in a shell variable (`P="-x url"`) is

@@ -122,7 +122,7 @@ test("collector promotes stop to tool_calls only when calls exist", () => {
 });
 
 test("collector supports late id/name patches and argument replacement", () => {
-  const { deltas, onDelta } = recorder();
+  const { onDelta } = recorder();
   const collector = createStreamCollector(onDelta);
 
   // chat-completions style: the first chunk may carry no id/name yet.
@@ -317,7 +317,7 @@ test("responses pipeline assembles function calls and honors arguments.done", as
 });
 
 test("responses pipeline falls back to the last started call on mismatched item ids", async () => {
-  const { deltas, onDelta } = recorder();
+  const { onDelta } = recorder();
   const client = fakeResponsesClient([
     {
       type: "response.output_item.added",
@@ -349,7 +349,7 @@ test("responses pipeline keeps parallel function calls' arguments apart", async 
   // output item's `id` (`fc_a`/`fc_b`), while `call_id` (`call_a`) is only the
   // id the result is sent back with. Keying the accumulator by call_id made
   // every fragment after the first land on the last-started call.
-  const { deltas, onDelta } = recorder();
+  const { onDelta } = recorder();
   const client = fakeResponsesClient([
     {
       type: "response.output_item.added",
@@ -531,7 +531,7 @@ test("chat completions pipeline handles reasoning variants, tool indexes, and us
 });
 
 test("chat completions pipeline promotes stop to tool_calls and maps kimi effort", async () => {
-  const { deltas, onDelta } = recorder();
+  const { onDelta } = recorder();
   const { client, params } = fakeChatClient([
     {
       choices: [

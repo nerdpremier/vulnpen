@@ -36,32 +36,10 @@ listeners[0]["listen_mode"] = "all_interfaces"
 listeners[0]["listener_port"] = 8080
 listeners[0]["running"] = True
 
-# The attack box has no route of its own (docker-compose.kali.yml puts it only
-# on the internal `control`/`fenced` networks) — the egress fence is the only
-# way out. When the operator points the browser's proxy at Burp instead of at
-# the fence directly (MAGNITUDE_PROXY_URL=http://kali:8080, for interception),
-# Burp becomes the thing making the outbound connection, so Burp itself needs
-# this rule or it tries a direct lookup from a network with no gateway and
-# every request dies with "Unknown host". `destination_host: "*"` sends
-# everything Burp forwards through the same fence every other tool on the box
-# already goes through. See docs/EGRESS-FENCE.md.
-upstream = config["project_options"]["connections"]["upstream_proxy"]
-upstream["use_user_options"] = False
-upstream["servers"] = [
-    {
-        "enabled": True,
-        "destination_host": "*",
-        "proxy_host": "egress",
-        "proxy_port": 3128,
-        "auth_type": "none",
-    }
-]
-
 with open(path, "w") as fh:
     json.dump(config, fh, indent=2)
 
 print("burp project options: proxy listener -> all interfaces on :8080")
-print("burp project options: upstream proxy -> egress:3128 for all destinations")
 PY
 
 # Verify the generated document is usable, so a broken one fails the build
@@ -75,13 +53,4 @@ assert listener["listen_mode"] == "all_interfaces", listener
 assert listener["listener_port"] == 8080, listener
 assert listener["running"] is True, listener
 print("verified listener:", listener)
-
-upstream = config["project_options"]["connections"]["upstream_proxy"]
-assert upstream["use_user_options"] is False, upstream
-rule = upstream["servers"][0]
-assert rule["enabled"] is True, rule
-assert rule["destination_host"] == "*", rule
-assert rule["proxy_host"] == "egress", rule
-assert rule["proxy_port"] == 3128, rule
-print("verified upstream proxy rule:", rule)
 PY

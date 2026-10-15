@@ -273,13 +273,17 @@ check_selected_environment() {
     else
         local ports=(27017 6379)
         if [[ "${DEV_MODE:-false}" != true ]]; then
-            ports+=(3000 8080 6080 9020)
+            # Exactly the ports the Docker stack publishes: frontend (3000),
+            # backend (8080) and the backend's own noVNC (6080), plus the report
+            # editor (9980). The attack box's own 9020 is no longer published —
+            # the backend bridges its desktop on 9021 (docker-compose.kali.yml).
+            ports+=(3000 8080 6080 9980)
         fi
         if [[ "${DEPLOY_MODE:-}" == "kali" || "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
             ports+=(4242 4200)
         fi
         if [[ "${DEPLOY_MODE:-}" == "kali" ]]; then
-            ports+=(9020)
+            ports+=(9021)
         fi
         local port listener
         for port in "${ports[@]}"; do
@@ -440,14 +444,22 @@ ensure_frontend_env() {
 }
 
 sync_compose_file_from_config() {
-    [[ "${DEV_MODE:-false}" == true ]] && return
     local ssh_host
     ssh_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
+    # `kali` means "the built-in attack box, reached by service name" — that is
+    # only true of the full Docker + Kali stack, where the backend runs in the
+    # stack. It is checked *before* the dev-mode early return below so a stale
+    # `.run-state` (e.g. DEV_MODE=true left over from a previous developer run)
+    # cannot pin the launcher to the dev compose file while the full stack runs.
     if [[ "$ssh_host" == "kali" ]]; then
         set_normal_kali_mode
-    else
-        set_normal_mode
+        return
     fi
+    # Developer mode starts only the infrastructure services and runs the
+    # backend on the host, so the .env address stays host-facing and the dev
+    # compose file is correct.
+    [[ "${DEV_MODE:-false}" == true ]] && return
+    set_normal_mode
 }
 
 configure_dev_mode_choice() {
@@ -464,6 +476,7 @@ set_normal_mode() {
 
 set_normal_kali_mode() {
     DEV_MODE=false
+    # An override of docker-compose.yml, not a standalone stack — see compose().
     COMPOSE_FILE="docker-compose.kali.yml"
     DEPLOY_MODE="kali"
 }
@@ -1052,13 +1065,26 @@ prompt_rebuild_normal() {
 # ── Compose wrapper ───────────────────────────────────────
 compose() {
     local args=()
+    # The Kali topology is an *override* of the base stack: docker-compose.yml
+    # defines mongodb/redis/backend/collabora/frontend, and
+    # docker-compose.kali.yml adds only what the attack box changes (the `kali`
+    # service, the internal `control` network, the backend's kali wiring).
+    # Compose only applies it as an override when the base file comes first, so
+    # the base is prepended here rather than at every call site.
+    if [[ "${COMPOSE_FILE:-}" == "docker-compose.kali.yml" ]]; then
+        args+=(-f "docker-compose.yml")
+    fi
     [[ -n "${COMPOSE_FILE:-}" ]] && args+=(-f "$COMPOSE_FILE")
-    # Skip override in dev mode: docker-compose.dev.yml has no backend service,
-    # and the override only customizes backend. Merging would create an invalid
-    # backend service with no image/build.
+    # Skip the generated override in dev mode: dev mode starts only the
+    # infrastructure services (mongodb/redis[/kali]) and runs the backend on the
+    # host, so an override that only customizes `backend` has nothing to apply to.
     if [[ "${DEV_MODE:-false}" != true ]] && [[ -f "$COMPOSE_OVERRIDE" ]]; then
         args+=(-f "$COMPOSE_OVERRIDE")
     fi
+    # Optional tooling (mongo-express) sits behind the `tools` profile so a plain
+    # `up` never starts it. Teardown opts in explicitly, otherwise the container
+    # would outlive `down` as an unmanaged leftover.
+    [[ "${ENABLE_TOOLS_PROFILE:-false}" == true ]] && args+=(--profile tools)
     $COMPOSE_CMD "${args[@]}" "$@"
 }
 
@@ -1155,7 +1181,11 @@ launch() {
         info "Created .env from template"
     fi
 
-    info "Compose file: $COMPOSE_FILE"
+    if [[ "${COMPOSE_FILE:-}" == "docker-compose.kali.yml" ]]; then
+        info "Compose files: docker-compose.yml + docker-compose.kali.yml (override)"
+    else
+        info "Compose file: $COMPOSE_FILE"
+    fi
 
     if [[ "$build_flag" == "--build" ]]; then
         warn "Building images — may take a while on first run..."
@@ -1423,8 +1453,10 @@ cmd_stop() {
     select_mode_for_operations
     section "Stopping VulnPen"
     # --remove-orphans so services from a previous, different mode (e.g. a
-    # kali container left over from full-kali mode) are stopped too.
-    compose down --remove-orphans
+    # kali container left over from full-kali mode) are stopped too. The tools
+    # profile is enabled here so optional tooling (mongo-express) is torn down
+    # with everything else instead of surviving as an unmanaged container.
+    ENABLE_TOOLS_PROFILE=true compose down --remove-orphans
     info "All containers stopped"
 }
 

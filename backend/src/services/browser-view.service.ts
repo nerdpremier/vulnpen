@@ -8,11 +8,10 @@
  *   backend     Xvfb :99  + x11vnc :5999 + websockify :6080   (entrypoint.sh)
  *   attack box  Xvnc :89  +             + websockify :9020   (kali entrypoint)
  *
- * The attack box's own :9020 can never be published: it is on internal Docker
- * networks only, so the host has no route to it. The backend therefore bridges
- * it on `BROWSER_AGENT_DESKTOP_PORT` (default 9021, also entrypoint.sh), and
- * that bridged port — not :9020 — is the address the operator's browser opens.
- * See operatorNovncUrl.
+ * The attack box's own :9020 is not published to the host, so the host has no
+ * route to it. The backend therefore bridges it on `BROWSER_AGENT_DESKTOP_PORT`
+ * (default 9021, also entrypoint.sh), and that bridged port — not :9020 — is
+ * the address the operator's browser opens. See operatorNovncUrl.
  *
  * So the panel streamed an empty display holding a placeholder Chromium parked
  * on about:blank, while the agent clicked and typed on :89 — the operator could
@@ -141,14 +140,11 @@ export function parseRemoteDesktopProbe(output: string): {
  *      localhost: `kali` resolves inside the Compose network but not from the
  *      browser that loads the iframe.
  *
- * (2) exists because (3) cannot work in the Docker deployment. The attack box
- * sits on `control` and `fenced`, both `internal: true`, so Docker has no route
- * from the host into it and simply never applies the port mapping — measured:
- * `NetworkSettings.Ports` comes back `{"9020/tcp":[]}` even though the compose
- * file declares it, and `docker port` prints nothing. The panel therefore
- * embedded `http://localhost:9020`, which is nothing on the host, and the iframe
- * stayed blank. The backend bridges it on a port that *is* published, which is
- * the only address the operator's browser can actually open.
+ * (2) exists because the backend bridges the box's desktop onto a published
+ * port (BROWSER_AGENT_DESKTOP_PORT) — the stable address the "Browser Agent"
+ * panel and the Desktop tab are configured to open, independent of how the box
+ * itself is networked. Without it the panel embedded `http://localhost:9020`,
+ * which is nothing on the host, and the iframe stayed blank.
  */
 export function operatorNovncUrl(config: VncConfig): string {
   const base = (config.baseUrl || "").trim();

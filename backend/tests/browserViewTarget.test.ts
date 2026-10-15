@@ -139,18 +139,15 @@ test("a routable host is left alone", () => {
 });
 
 /**
- * The attack box cannot publish its own noVNC port.
+ * The operator's view of the attack box's desktop goes through the backend's
+ * bridge, not the box's own noVNC port.
  *
- * It is attached to `control` and `fenced` only, both `internal: true`, and
- * Docker does not apply a port mapping for a container the host has no route
- * into — measured on the real deployment: the compose file declares
- * `127.0.0.1:9020:9020`, `HostConfig.PortBindings` carries it, and
- * `NetworkSettings.Ports` still comes back `{"9020/tcp":[]}` with `docker port`
- * printing nothing. So the panel embedded `http://localhost:9020`, where nothing
- * listens on the host, and the iframe stayed blank.
+ * The backend bridges the box's Xvnc onto a published port
+ * (BROWSER_AGENT_DESKTOP_PORT). The panel embedded `http://localhost:9020` once,
+ * where nothing was listening on the host, and the iframe stayed blank.
  *
- * The backend bridges it instead (entrypoint.sh), and these tests pin the rule
- * that the operator is sent to the bridge rather than to the box.
+ * These tests pin the rule that the operator is sent to the bridge rather than
+ * to the box.
  */
 function withDesktopBridge<T>(port: string, fn: () => T): T {
   const previous = process.env.BROWSER_AGENT_DESKTOP_PORT;

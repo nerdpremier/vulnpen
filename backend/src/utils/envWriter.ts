@@ -36,14 +36,13 @@ export function readEnvFile(): Record<string, string> {
  * — which is why these values are read from the file at the point of use
  * rather than captured at boot. The deployment, however, can pin a value by
  * exporting it as a container variable: `docker-compose.kali.yml` pins
- * MAGNITUDE_PROXY_URL to the egress fence, because the browser agent runs on
- * the attack box and the fence is the only way off that box.
+ * SSH_HOST/SSH_PORT to the attack box's Compose service, because the address
+ * the backend must dial differs from the host-facing value the `.env` carries.
  *
- * Reading `.env` raw made the pin invisible. Measured on a fenced deployment:
- * compose exported `http://egress:3128`, `.env` still carried the pre-fence
- * `http://kali:8080` (Burp), and the browser was launched at Burp — a listener
- * that has no route of its own, so every navigation died on Burp's own
- * "Unknown host" page while the fence answered the same URL with 200.
+ * Reading `.env` raw made the pin invisible. Measured on a Compose deployment:
+ * compose exported `SSH_HOST=kali`, `.env` still carried the host-facing
+ * `127.0.0.1` / `4242`, and every SSH-dependent feature dialled loopback inside
+ * the backend container — where nothing listens — and failed with ECONNREFUSED.
  *
  * Order, highest first:
  *   1. a value the deployment exported (see isDeploymentPinned);

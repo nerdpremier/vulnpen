@@ -27,6 +27,32 @@ services:
       retries: 12
     restart: always
 
+  # MongoDB web UI, for looking at what the agent actually stored (sessions,
+  # messages, findings) while debugging. It is a *tool*, not part of the app, so
+  # it lives behind a profile: a plain `docker compose up -d` never starts it.
+  #
+  #     docker compose --profile tools up -d mongo-express
+  #
+  # Basic Auth is off and it binds to loopback only — do not publish it wider,
+  # and do not enable the profile on a shared host. `./run.sh stop` tears it
+  # down along with the rest of the stack.
+  mongo-express:
+    container_name: vulnpen-mongo-express
+    image: mongo-express:latest
+    profiles:
+      - tools
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+      ME_CONFIG_BASICAUTH: "false"
+      ME_CONFIG_SITE_SESSIONSECRET: secret
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
   backend:
     container_name: vulnpen-backend
     build: ./backend

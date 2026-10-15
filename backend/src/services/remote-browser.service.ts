@@ -3,16 +3,13 @@
  *
  * The browser used to be launched inside the backend container. That put it on
  * the wrong side of the network for the work it does: a target reachable only
- * through the attack box's VPN could never be opened from the backend, and
- * because the backend also needs Mongo, Redis and the model API, network
- * isolation could not fence the browser either — it had to be pointed at the
- * fence by configuration, and an empty setting left it unfenced (see
- * docs/EGRESS-FENCE.md, "The browser agent is behind the fence too").
+ * through the attack box's VPN could never be opened from the backend, and the
+ * proxy the browser used had to be configured by hand rather than inherited
+ * from the box it should have been running on.
  *
  * Running it on the attack box fixes both at once: the browser inherits that
- * container's route to the target — the VPN OpenVPN brings up there, and the
- * egress fence every packet has to leave through — so neither has to be
- * re-established for the browser by hand.
+ * container's route to the target — the VPN OpenVPN brings up there — so it
+ * does not have to be re-established for the browser by hand.
  *
  * This module owns the three things that makes possible:
  *
@@ -385,13 +382,37 @@ export async function launchRemoteChromium(options: {
   }
 }
 
-/** Stop the remote Chromium, if one is running. Never throws. */
+/**
+ * Stop the remote Chromium, if one is running, and wait until it is really gone.
+ * Never throws.
+ *
+ * `pkill` only *signals*. Chromium handles SIGTERM by shutting down gracefully —
+ * measured: the process was still on the box when a `pgrep` ran immediately
+ * after this function returned (check:browser:remote caught it as "pid N
+ * survived"), and it was gone a moment later. Returning before the process has
+ * exited is not just a flaky assertion: `launchRemoteChromium` calls this and
+ * launches 1s later, so a slow shutdown means the new browser can start while
+ * the old one still holds the profile's SingletonLock — the failure mode that
+ * makes Chromium refuse to start with "profile appears to be in use".
+ *
+ * So: SIGTERM, poll for actual exit, then SIGKILL anything still standing.
+ */
 export async function killRemoteChromium(port = remoteCdpPort()): Promise<void> {
+  // The bracket keeps the pattern from matching the shell running it — this has
+  // to stay a separate SSH command for the same reason.
+  const pattern = shellQuote(`[r]emote-debugging-port=${port}`);
   try {
-    await execSSHCommand(
-      `pkill -f ${shellQuote(`[r]emote-debugging-port=${port}`)} 2>/dev/null || true`,
-      10_000,
-    );
+    await execSSHCommand(`pkill -f ${pattern} 2>/dev/null || true`, 10_000);
+
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const still = await execSSHCommand(`pgrep -f ${pattern} | head -1`, 10_000);
+      if (!still.trim()) return;
+      // Give graceful shutdown ~2s, then stop asking.
+      if (attempt === 8) {
+        await execSSHCommand(`pkill -9 -f ${pattern} 2>/dev/null || true`, 10_000);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   } catch {
     // A browser that is already gone, or an attack box that is unreachable,
     // both mean the same thing here: there is nothing to stop.

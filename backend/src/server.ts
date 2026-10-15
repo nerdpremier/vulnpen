@@ -28,7 +28,6 @@ import { repairEmptyToolCallArguments } from "./migrations/003-repair-empty-tool
 import { dropLegacyOwaspMappingFields } from "./migrations/004-drop-legacy-owasp-mapping-fields";
 import { retireAutoApproveMode } from "./migrations/005-retire-auto-approve-mode";
 import { startBurpCaWatcher } from "./services/burp-ca.service";
-import { startEgressCaWatcher } from "./services/egress-ca-trust.service";
 import { setAgentStateStore } from "./services/agent-state.service";
 
 declare module "express-session" {
@@ -306,12 +305,6 @@ const initializeApp = async () => {
     // profile's trust would otherwise go stale until an operator clicked
     // "Refresh CA trust". Keep it current in the background.
     startBurpCaWatcher();
-
-    // When the egress fence terminates TLS, everything on the attack box has to
-    // trust its CA or every HTTPS handshake fails on an unknown issuer. The CA
-    // is read off the shared mount, so this notices the moment the fence has
-    // generated it and installs it into both stores without an operator action.
-    startEgressCaWatcher();
 
     process.on("SIGTERM", async () => {
       console.log("SIGTERM received. Shutting down gracefully...");

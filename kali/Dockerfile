@@ -138,11 +138,10 @@ RUN chmod +x /usr/local/bin/burp-project-options && burp-project-options
 # -- Layer 7: The Browser Agent's engine --
 # Chromium is what the Browser Agent drives, and it lives on the ATTACK BOX
 # rather than in the backend image, because the work it does depends on this
-# box's network position: the VPN OpenVPN brings up here, and the egress fence
-# every packet has to leave through. The backend launches it over SSH and
-# attaches to it over CDP through a loopback-only tunnel
+# box's network position: the VPN OpenVPN brings up here. The backend launches
+# it over SSH and attaches to it over CDP through a loopback-only tunnel
 # (backend/src/services/remote-browser.service.ts). Running it in the backend
-# put it on the wrong side of both, which is why a target reachable only through
+# put it on the wrong side of that, which is why a target reachable only through
 # this box's VPN could never be opened.
 #
 # It gets its own layer, after everything else, on purpose: adding this one

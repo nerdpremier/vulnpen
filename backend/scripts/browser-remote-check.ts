@@ -3,8 +3,8 @@
  *
  * The browser the agent drives does not run in the backend container — it runs
  * on the attack box, so it shares that box's route to the target (the VPN
- * connected there, and the egress fence every packet leaves through). This
- * check proves each link of the chain that makes that work, in order:
+ * connected there). This check proves each link of the chain that makes that
+ * work, in order:
  *
  *   1. SSH to the attack box
  *   2. launch Chromium there with CDP on its loopback

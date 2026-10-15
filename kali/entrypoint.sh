@@ -167,8 +167,8 @@ launch_burp_flow() {
     # scanning for Burp's orange primary-button colour (ImageMagick pixel scan
     # -> centroid -> xte click), which survives dialog layout shifts.
 
-    # Ensure the orange-button clicker exists (installed into the image via the
-    # Dockerfile, but generate it here too so rebuilt images need no extra file).
+    # Ensure the orange-button clicker exists. It is generated here (not baked
+    # into the image) so the clicker and its call sites can never drift apart.
     if [ ! -x /usr/local/bin/click_orange.sh ]; then
         cat > /usr/local/bin/click_orange.sh <<'CO'
 #!/usr/bin/env bash
@@ -226,12 +226,21 @@ CO
             xwininfo -name "burp-StartBurp" >/dev/null 2>&1
         }
         for _ in $(seq 1 90); do burp_window_up && break; sleep 1; done
+        # While the wizard animates in, a miss is the normal case rather than a
+        # fault, so the clicker's own output is discarded here: it would
+        # otherwise write one "no orange button found" line per second into the
+        # container log (measured: ~20 lines per boot) and bury everything else.
         for _ in $(seq 1 60); do
             port_free ":8080" && break
-            click_orange.sh "260x220+860+480" 1 1 || true
+            click_orange.sh "260x220+860+480" 1 1 >/dev/null 2>&1 || true
             sleep 1
         done
         for _ in $(seq 1 30); do port_free ":8080" && break; sleep 1; done
+        if port_free ":8080"; then
+            echo "Burp proxy listener is up on :8080"
+        else
+            echo "Burp proxy listener did NOT come up on :8080 (see /tmp/burp.log)"
+        fi
 
         # The saved user config loads burp-rpc at startup, so give the bridge a
         # moment before falling back to the click-driven load below.
