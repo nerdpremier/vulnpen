@@ -46,7 +46,7 @@ export default function AgentBehaviorPage() {
   if (isLoading) return <Loader />;
 
   const min = data?.minMaxAgentIterations ?? 5;
-  const max = data?.maxMaxAgentIterations ?? 200;
+  const max = data?.maxMaxAgentIterations ?? 500;
 
   return (
     <div className={styles.settingsContainer}>

@@ -10,7 +10,7 @@ For authorised testing only — see the disclaimer at the end of this file.
 
 ## What It Does
 
-- **Agentic execution** - the AI runs commands directly on the attack box, reads output, decides next steps, and loops. Up to 40 iterations per turn by default (configurable 5-200), no manual nudging required.
+- **Agentic execution** - the AI runs commands directly on the attack box, reads output, decides next steps, and loops. Up to 80 iterations per turn by default (configurable 5-500), no manual nudging required.
 - **Web application security testing** - the assistant plans and works the OWASP WSTG v4.2 catalogue (97 test cases across 12 categories), records a result per test case, maps every finding to the OWASP Top 10:2025, and drafts the Web Application Penetration Testing Report. Every OWASP classification is a lookup of the finding's CWE in the CWE lists OWASP publishes — there is no curated crosswalk and no model in the path, so a report never claims a mapping the official sources do not support.
 - **Agent tools** - bash, Python scripts, tool installation, shell management, Burp Suite (proxy history, Repeater, Intruder, Collaborator), browser automation, image reading, and the web application security testing tools (WSTG test plan, OWASP Top 10:2025 mapping, report generation).
 - **Capability registry** - a curated registry of the security tools and Python packages a web-application engagement needs, each with its install command and a presence check. The agent installs what a test calls for on demand; the WSTG-recommended tools are all covered (see `backend/src/capabilities/registry.ts`).
