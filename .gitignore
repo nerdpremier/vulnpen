@@ -32,6 +32,10 @@ ssh-keys/
 /tmp-work/
 /tmp-debug/
 /.freebuff/
+/.agents/
+/.zcode/
+/.workbuddy-ai/
+skills-lock.json
 
 # ── Generated deliverables (decks, reports) ──
 /output/
@@ -39,12 +43,6 @@ ssh-keys/
 
 # Academic paper build - never publish to the repository
 paper-build/
-
-# ── Local agent/tooling state ──
-/.agents/
-/.zcode/
-/.workbuddy-ai/
-skills-lock.json
 
 # Internal engineering notes - never ship to a customer
 /internal-docs/
