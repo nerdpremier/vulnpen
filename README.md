@@ -165,13 +165,20 @@ For development setup and troubleshooting, see the
 
 VulnPen is developed by **T-NET IT Solution**.
 
+The codebase derives from work originally published by BugBase Pte Ltd. Their
+copyright notice is retained in [LICENSE](./LICENSE), as the MIT License
+requires.
+
 ## Contributing
 
 Contributions welcome. See the [Contributing Guide](./CONTRIBUTING.md) and [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 
-[MIT License](./LICENSE)
+[MIT License](./LICENSE). The licence carries two copyright notices - BugBase
+Pte Ltd for the original work and T-NET IT Solution for the changes that
+followed. Both must be preserved in copies and substantial portions of the
+software.
 
 ## Disclaimer
 
