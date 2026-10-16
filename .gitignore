@@ -48,6 +48,9 @@ skills-lock.json
 
 # Local agent scratch (verification logs, probes, temp artifacts)
 /.scratch/
+/.cursor/
+/.serena/
+/.zcodeignore
 
 # Internal engineering notes - never ship to a customer
 /internal-docs/
