@@ -29,11 +29,9 @@ Any violations of this Code of Conduct may result in:
 - **Temporary or permanent bans** from contributing or using the tool.
 - **Legal consequences** if the tool is misused in ways that violate laws or ethical standards.
 
-If you witness or experience any unethical behavior related to VulnPen, please report it to our team (contact details: TBD).
+If you witness or experience any unethical behavior related to VulnPen, report it to the maintainers.
 
 ## Final Note
 VulnPen is created with the intent of **improving cybersecurity** by helping organizations and researchers find and fix vulnerabilities before they can be exploited. Let’s work together to ensure it is used for ethical and legal purposes only.
-
-For more details, please refer to our Terms and Conditions (TBD).
 
 Thank you for being a responsible member of our community!

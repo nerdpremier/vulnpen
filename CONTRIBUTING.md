@@ -18,14 +18,32 @@ Follow the instructions in the [README](./README.md) to set up VulnPen on your l
 
 ### Reporting Bugs
 If you find a bug in the software:
-1. Check the project issue tracker to see if it has already been reported.
+1. Check the [project issue tracker](https://github.com/nerdpremier/vulnpen/issues) to see if it has already been reported.
 2. If not, open a new issue and provide a detailed description of the bug, including steps to reproduce it.
 
 ### Suggesting Enhancements
 We love new ideas! To suggest enhancements:
-1. Check if your idea is already being discussed in the project issue tracker.
+1. Check if your idea is already being discussed in the [project issue tracker](https://github.com/nerdpremier/vulnpen/issues).
 2. If not, open a new issue and label it as a **feature request**.
 3. Clearly describe the feature and its benefits.
+
+### Checks That Must Pass
+
+CI runs the same five steps on every push to `main` and every pull request. Run
+them before you open one — each block works from inside `backend/` or
+`frontend/`, and CI uses Node 22 with pnpm 9.
+
+```bash
+pnpm install --frozen-lockfile            # fails if the lockfile is out of step
+pnpm run lint
+pnpm run build
+pnpm test
+pnpm audit --prod --audit-level high      # fails on a known high+ prod advisory
+```
+
+Commit `pnpm-lock.yaml` with any dependency change or the frozen-lockfile step
+fails. A change that passes locally but not in CI is usually a stale lockfile
+or a TypeScript error the dev server never hit.
 
 ### Pull Requests
 1. **Fork the Repository:** Click the 'Fork' button at the top right of the GitHub page to create your own copy of the repository.

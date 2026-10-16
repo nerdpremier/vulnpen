@@ -21,7 +21,7 @@ Docker deployment is local-only: application and infrastructure ports bind to
 | P0 | Browser target is only reachable through the SSH host's VPN | Handled by design: the browser runs **on** the attack box, so it uses that box's own VPN route and needs no proxy back to the backend. | No action required. Only if the Browser Agent was switched to a local launch (`BROWSER_AGENT_REMOTE=false`) can this bite — set it back to the default, or connect the VPN and expose a proxy the backend can reach. |
 | P0 | Backend compromise reaches the Docker daemon | The backend no longer mounts the Docker socket or controls work hosts through Docker APIs. | No action required. |
 | P1 | Docker missing, stopped, old, or Compose v1 | The launcher checks Docker Engine 20+, Compose v2, and daemon connectivity. | Install/update Docker Desktop or Docker Engine plus the Compose plugin. |
-| P1 | Port collision | Before a first start, the launcher identifies occupied TCP ports and the owning listener where the OS exposes it. | Stop the listener, then retry. The standard ports are 3000, 8080, 6080, 9021, 9980, 27017, and 6379; Kali adds 4200 and 4242. |
+| P1 | Port collision | Before a first start, the launcher identifies occupied TCP ports and the owning listener where the OS exposes it. | Stop the listener, then retry. The standard ports are 27017, 6379, 3000, 8080, 6080, and 9980; the built-in attack box adds 4200, 4242, and 9021. |
 | P1 | Low disk or memory | The launcher warns below 20 GB free disk or 8 GB RAM. | Free disk, increase Docker Desktop resources, reduce concurrent agents, or avoid the built-in Kali desktop. |
 | P1 | ARM64 host | The launcher warns because some third-party Kali tools are x86_64-only. | Use core mode with an ARM64 work host where possible; install unsupported tools manually or use an x86_64 attack box. |
 | P1 | Rootless Docker | The launcher warns and blocks built-in Kali, which needs privileged networking. | Use core mode with an external SSH work host, or switch to non-rootless Docker. OpenVPN runs on the attack box, never in the backend. |
@@ -42,17 +42,22 @@ Docker deployment is local-only: application and infrastructure ports bind to
 ## Normal installation
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/nerdpremier/vulnpen.git
 cd vulnpen
 ./run.sh start
 ```
 
-The compose stack serves the backend API only — the frontend runs on your host
-via `pnpm run dev` inside `frontend/` (the launcher prints the commands) or
-behind the reverse proxy in the TLS procedure below. Open the frontend URL
-(`http://localhost:3000` in dev), create the installation-owner account, then add
-and verify an orchestrator under **Settings → Models**. Open a workspace's
-**Connection** page and save a tested SSH alias for the attack box.
+`./run.sh start` brings up the whole stack — MongoDB, Redis, the backend API on
+port 8080, the frontend on port 3000, and the Collabora/WOPI editor the report
+draft opens in. Open `http://localhost:3000`, create the installation-owner
+account, then add and verify an orchestrator under **Settings → Models**. Open a
+workspace's **Connection** page and save a tested SSH alias for the attack box.
+
+Developer mode is the one exception: `./run.sh dev` starts MongoDB and Redis
+(plus the attack box in `dev-kali`) and prints the commands for running the
+backend and frontend on your host instead — see the Development mode row above.
+For remote access, keep the compose ports loopback-only and put the stack behind
+the TLS reverse proxy in the procedure below.
 
 For subsequent starts, use `./run.sh start -q`. Useful diagnostics are:
 
