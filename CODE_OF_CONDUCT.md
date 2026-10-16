@@ -3,10 +3,13 @@
 ## Introduction
 Welcome to **VulnPen**! As an ethical hacking and penetration testing tool, VulnPen is designed to assist security professionals and researchers in identifying vulnerabilities responsibly.
 
-**This tool must only be used for lawful, ethical, and authorized security testing purposes.** Unauthorized use of this tool on systems you do not own or have explicit permission to test is strictly prohibited and may violate legal and ethical guidelines.
+**This tool is intended only for lawful, ethical, and authorized security testing.**
+Using it against systems you do not own, or do not have explicit permission to test,
+is unlawful in most jurisdictions and against the standards below — see the
+[LICENSE](./LICENSE) for the terms the software is actually released under.
 
 ## Our Standards
-To maintain a professional and responsible community, we expect all contributors and users to adhere to the following guidelines:
+To maintain a professional and responsible community, we expect everyone taking part in the project to follow these guidelines:
 
 - **Legal and Ethical Use:**
   - Do not use VulnPen on networks, systems, or applications without **explicit** permission from the owner.
@@ -24,10 +27,22 @@ To maintain a professional and responsible community, we expect all contributors
   - Avoid introducing malicious or harmful code.
 
 ## Enforcement
-Any violations of this Code of Conduct may result in:
-- **Warnings** for minor infractions.
-- **Temporary or permanent bans** from contributing or using the tool.
-- **Legal consequences** if the tool is misused in ways that violate laws or ethical standards.
+
+This Code of Conduct governs participation in the project: its repositories, issue
+tracker, review and discussion spaces. It does not restrict what anyone may do with
+a copy of the software — the [MIT License](./LICENSE) grants that permission
+irrevocably — so the measures below apply to taking part in the project, not to
+using the tool.
+
+A violation may result in:
+
+- **A warning** for a minor or first infraction.
+- **Removal or rejection of a contribution**, and a temporary or permanent block
+  from the project's repositories and discussion spaces.
+- **Referral to the relevant authorities** where the conduct is unlawful.
+
+Maintainers may also decline to provide support to anyone using the tool against
+systems they are not authorised to test.
 
 If you witness or experience any unethical behavior related to VulnPen, report it to the maintainers.
 
