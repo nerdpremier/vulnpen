@@ -20,6 +20,7 @@ import { workspaceRoutes } from "./routes/workspace.routes";
 import { wopiRoutes } from "./routes/wopi.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
+import { scrubErrorForLog } from "./utils/scrubErrorForLog";
 import { setupShellWebSocket } from "./services/shell.socket";
 import { sessionLifecycle } from "./services/session.lifecycle";
 import { migrateSessionsToWorkspaces } from "./migrations/001-create-workspaces";
@@ -161,7 +162,10 @@ const initializeApp = async () => {
         type: ["application/json", "text/plain"],
       })(req, res, (err) => {
         if (err) {
-          console.log(err);
+          // Never log the error object itself. body-parser attaches the raw
+          // request body to a parse failure, so for a login or register POST
+          // this line used to write the credentials into the log in clear text.
+          console.warn("[body-parser] rejected a request body:", scrubErrorForLog(err));
           return res.status(400).json({ message: "Invalid JSON" });
         } else {
           next();
@@ -244,7 +248,10 @@ const initializeApp = async () => {
         }
         return res.status(400).json({ message: "Error occurred uploading file" });
       }
-      console.error("Unhandled error:", err);
+      // Same reason as the body parser above: body-parser attaches the raw body
+      // in its shared read step (lib/read.js), so a parse failure coming from
+      // express.urlencoded reaches this handler carrying one too.
+      console.error("Unhandled error:", scrubErrorForLog(err, true));
       const status = typeof err?.status === "number" && err.status >= 400 && err.status < 600 ? err.status : 500;
       return res.status(status).json({
         message: "Something went wrong, please try again later",
