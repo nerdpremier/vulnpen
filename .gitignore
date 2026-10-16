@@ -45,3 +45,13 @@ paper-build/
 /.zcode/
 /.workbuddy-ai/
 skills-lock.json
+
+# Local agent scratch (verification logs, probes, temp artifacts)
+/.scratch/
+
+# Internal engineering notes - never ship to a customer
+/internal-docs/
+
+# Research apparatus: pins the measured limits of the safety gate, evaluated in
+# the paper. Kept out of the shipped repository; still runs in a local pnpm test.
+/backend/tests/safetyMatrix.test.ts
