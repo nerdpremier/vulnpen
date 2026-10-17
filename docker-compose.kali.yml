@@ -102,6 +102,33 @@ services:
       - SYS_CHROOT
       - SETGID
       - SETUID
+      #
+      #   DAC_OVERRIDE / FOWNER
+      #               root on the box is not a normal root once `cap_drop: ALL`
+      #               has run: without these two it cannot read a 0700 directory
+      #               it does not own, nor chmod/chown a file it does not own.
+      #               Two things break on that, both measured on a stock image:
+      #
+      #                 apt-get update -> "rename failed, Permission denied
+      #                 (/var/lib/apt/lists/partial/... -> /var/lib/apt/lists/...)"
+      #                 because the download half of apt runs as `_apt` and the
+      #                 index files land root-owned. Result: an empty index, so
+      #                 `apt install zaproxy` (the registry's installCommand for
+      #                 ZAP, and every other on-demand tool) cannot resolve.
+      #                 dpkg still answers "already the newest version" for
+      #                 installed packages, which is what hid this for so long.
+      #
+      #                 msfconsole -> dies before printing anything:
+      #                 "Permission denied - opendir @ /usr/lib/mysql/plugin/
+      #                 auth_pam_tool_dir (Errno::EACCES)" raised from bootsnap's
+      #                 load_path_cache scan. That directory is mysql-owned 0700,
+      #                 so msfconsole and msfvenom exit 1 on every invocation.
+      #
+      #               Both are a *file permission* gap, not extra power for the
+      #               tooling: the box is single-user root and owns everything it
+      #               runs. Verified with and without them on the same image.
+      - DAC_OVERRIDE
+      - FOWNER
     devices:
       - /dev/net/tun:/dev/net/tun
     networks:
