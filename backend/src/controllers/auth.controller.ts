@@ -6,6 +6,8 @@ import {
   readAllowRegistrationFlag,
   resolveRegistrationPolicy,
 } from "../utils/registrationPolicy";
+import { validatePasswordChange, validatePasswordValue } from "../utils/passwordPolicy";
+import { isHostOwner } from "../services/host-owner.service";
 
 import bcrypt from "bcrypt";
 import geoip from "geoip-lite";
@@ -71,6 +73,9 @@ export const checkUserSession = async (req: Request, res: Response) => {
           firstLogin: u.firstLogin,
           profilePicture: u.profilePicture,
           uid: u._id,
+          // The account tab uses this to decide whether to offer the user list
+          // and reset-code issuing, which only the installation owner may do.
+          isOwner: await isHostOwner(u._id),
         },
       });
     }
@@ -163,6 +168,12 @@ export const getRegistrationStatus = async (_req: Request, res: Response) => {
 
 const loginRateLimited = createRateLimiter(10, 15 * 60 * 1000);
 const registerRateLimited = createRateLimiter(10, 60 * 60 * 1000);
+// A session cookie alone must not be enough to brute-force the current
+// password, so this endpoint gets its own budget.
+const passwordChangeRateLimited = createRateLimiter(10, 15 * 60 * 1000);
+// Guessing an 8-character code is already hopeless; this budget exists so a
+// script cannot make the attempt cheap either.
+const passwordResetRateLimited = createRateLimiter(5, 15 * 60 * 1000);
 
 export const loginUser = async (req: Request, res: Response) => {
   try {
@@ -248,6 +259,7 @@ export const loginUser = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         profilePicture: user.profilePicture,
+        isOwner: await isHostOwner(user._id),
       },
     });
 
@@ -256,3 +268,103 @@ export const loginUser = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+/**
+ * Self-service password change for the signed-in account. There is no email
+ * delivery on this installation, so "reset" means "set a new one while proving
+ * you know the current one" — the installation owner resets a forgotten member
+ * password from the server side (see docs/SETUP.md).
+ */
+export const changePassword = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    if (!user) {
+      return res.status(403).json({ message: "Session not provided!" });
+    }
+
+    const clientIp = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    if (passwordChangeRateLimited(clientIp)) {
+      return res.status(429).json({
+        message: "Too many password change attempts, please try again later",
+      });
+    }
+
+    const validation = validatePasswordChange(req.body ?? {});
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    const matches = await bcrypt.compare(validation.currentPassword, user.password);
+    if (!matches) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    user.password = await bcrypt.hash(validation.newPassword, 10);
+    // Changing the password also clears a lockout the old password earned, so
+    // the operator is not left waiting out a timer they can no longer trigger.
+    user.failedLoginCount = 0;
+    user.lockedUntil = null;
+    await user.save();
+
+    return res.status(200).json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Error changing password:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Reset from the sign-in page: an email and a new password, nothing else.
+ *
+ * Unauthenticated by design — the caller cannot sign in — so the address is the
+ * only thing that selects the account. Anyone who can reach this page and knows
+ * an address can set that account's password, which is why the stack stays on
+ * loopback behind the TLS proxy. Rate limited, and it clears any lockout so a
+ * reset always gets the account back.
+ */
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const clientIp = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    if (passwordResetRateLimited(clientIp)) {
+      return res.status(429).json({
+        message: "Too many reset attempts, please try again later",
+      });
+    }
+
+    const { email, newPassword } = req.body ?? {};
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const policy = validatePasswordValue(newPassword);
+    if (!policy.ok) {
+      return res.status(400).json({ message: policy.message });
+    }
+
+    const user = await UserModel.findOne({ email: String(email) });
+    if (!user) {
+      return res.status(404).json({ message: "No account uses that email" });
+    }
+
+    await UserModel.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          password: await bcrypt.hash(policy.newPassword, 10),
+          failedLoginCount: 0,
+          lockedUntil: null,
+        },
+      },
+    );
+
+    return res
+      .status(200)
+      .json({ message: "Password updated. Sign in with your new password." });
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+

@@ -24,7 +24,8 @@
     "migrate:db-name": "node scripts/migrate-database-name.mjs",
     "migrate:risk-matrix": "node scripts/migrate-risk-matrix.mjs",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "reset-password": "node scripts/reset-password.mjs"
   },
   "author": "T-NET IT Solution",
   "license": "MIT",

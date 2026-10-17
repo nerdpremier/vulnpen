@@ -34,6 +34,23 @@ const ModalComponent = ({
 
   const handleCancel = onCancel ? onCancel : closeModal;
 
+  // A dialog that draws its own heading (the auth-shaped reset card does) would
+  // otherwise pay for an empty header row: a 2rem close button plus its margin
+  // above content that already starts with an eyebrow.
+  const hasHeading = Boolean(heading || subheading);
+
+  const closeButton = (floating) =>
+    !showClose ? (
+      <button
+        type="button"
+        className={`${styles.closeBtn}${floating ? ` ${styles.floatingClose}` : ""}`}
+        onClick={handleCancel}
+        aria-label="Close dialog"
+      >
+        <RiCloseLine />
+      </button>
+    ) : null;
+
   return (
     <Modal
       keyboard={keyboard}
@@ -52,26 +69,21 @@ const ModalComponent = ({
       footer={null}
       title={null}
     >
-      <div className={styles.headingController}>
-        <div className={styles.headingtextController} style={headerStyles}>
-          {heading && <h1 style={headingStyles}>{heading}</h1>}
-          {subheading && (
-            <p className={styles.subheading} style={subheadingStyles}>
-              {subheading}
-            </p>
-          )}
+      {hasHeading ? (
+        <div className={styles.headingController}>
+          <div className={styles.headingtextController} style={headerStyles}>
+            {heading && <h1 style={headingStyles}>{heading}</h1>}
+            {subheading && (
+              <p className={styles.subheading} style={subheadingStyles}>
+                {subheading}
+              </p>
+            )}
+          </div>
+          {closeButton(false)}
         </div>
-        {!showClose && (
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={handleCancel}
-            aria-label="Close dialog"
-          >
-            <RiCloseLine />
-          </button>
-        )}
-      </div>
+      ) : (
+        closeButton(true)
+      )}
       {description && <p className={styles.description}>{description}</p>}
       <div className={styles.body}>{children}</div>
     </Modal>

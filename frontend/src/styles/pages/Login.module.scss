@@ -216,6 +216,57 @@
   }
 }
 
+.forgotRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -0.45rem;
+}
+
+.forgotLink {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--moon-text-dim);
+  transition: color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--moon-text);
+  }
+}
+
+/* Mirrors .authLink so the dialog's secondary action is the same bordered
+   surface as "New here? Create an account" on the sign-in card. */
+.forgotCancel {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--moon-text-dim);
+  border: 1px solid var(--moon-line-1);
+  border-radius: var(--moon-radius-sm);
+  background: var(--moon-surface-2);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--moon-text);
+    border-color: var(--moon-line-3);
+    background: var(--moon-surface-3);
+  }
+}
+
 .authLink {
   display: inline-flex;
   align-items: center;

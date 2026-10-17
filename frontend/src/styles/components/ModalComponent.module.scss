@@ -49,6 +49,7 @@
   border-radius: var(--moon-radius-xl);
 
   :global(.ant-modal-content) {
+    position: relative;
     background: linear-gradient(
       170deg,
       var(--moon-surface-2) 0%,
@@ -159,4 +160,13 @@
 
 .body {
   color: var(--moon-text-dim);
+}
+
+/* Dialog without a heading: the close target floats in the top-right corner so
+   the body's own eyebrow/title can start at the padding edge. */
+.floatingClose {
+  position: absolute;
+  top: 1.1rem;
+  right: 1.1rem;
+  z-index: 2;
 }

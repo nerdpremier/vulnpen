@@ -147,7 +147,27 @@ ALLOW_REGISTRATION=false
 
 With registration closed, the sign-up form stays visible, but the API refuses new accounts with `403 Registration is closed on this installation` and points people at signing in with an existing account.
 
-There is no self-service password reset or account deletion yet; accounts are managed on the server side (`backend/.env` + MongoDB) until an admin UI lands.
+Signed-in users can change their own password under **Settings → My Account →
+Reset password**. The current password is required, and the new one must be at
+least 8 characters and differ from the old one.
+
+A forgotten password is reset from the sign-in page: **Forgot password?**, then
+the account's email address and a new password. There is no email, no reset
+link and no administrator step — the address alone selects the account, so the
+endpoint is rate limited (5 attempts per 15 minutes per IP) and it clears any
+account lockout. Because it is unauthenticated, **do not expose the installation
+to an untrusted network**: keep the Compose ports on loopback and put it behind
+the authenticated TLS proxy described above.
+
+If the owner is locked out of the machine itself, reset the account from the
+server side:
+
+```bash
+docker compose exec backend pnpm reset-password -- --email owner@example.com
+```
+
+Without `--password` a random password is generated and printed once. Account
+deletion is not exposed in the UI.
 
 ## Database name
 

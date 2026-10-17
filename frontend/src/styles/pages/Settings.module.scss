@@ -547,6 +547,20 @@
   }
 }
 
+.passwordRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.passwordActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 .statusRow {
   display: flex;
   align-items: center;

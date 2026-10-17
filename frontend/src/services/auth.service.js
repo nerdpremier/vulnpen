@@ -24,6 +24,34 @@ export const getRegistrationStatus = async () => {
   return response.data;
 };
 
+// Self-service password change: the current password is part of the request so
+// a borrowed session cannot lock the real owner out.
+export const changePassword = async ({
+  currentPassword,
+  newPassword,
+  confirmPassword,
+}) => {
+  const response = await apiClient.post("/auth/change-password", {
+    currentPassword,
+    newPassword,
+    confirmPassword,
+  });
+
+  return response.data;
+};
+
+
+// Public reset: the email selects the account and the new password is applied
+// immediately, because this installation has no way to send a verification
+// message. Keep the port behind the TLS proxy.
+export const resetPassword = async ({ email, newPassword }) => {
+  const response = await apiClient.post("/auth/reset-password", {
+    email,
+    newPassword,
+  });
+
+  return response.data;
+};
 
 export const checkSession = async () => {
   try {
