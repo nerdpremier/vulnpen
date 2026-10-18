@@ -21,9 +21,14 @@
  *   — a single render, no PDF stitching, and the running footer still works.
  *
  * The result is cached beside the .docx and rebuilt when the findings, the
- * summary or the template change. When the document was hand-edited in Word the
- * HTML renderer is bypassed entirely: those edits are the report, and printing
- * the template over them would silently discard the tester's work.
+ * summary or the template change.
+ *
+ * A document that was hand-edited in Word is read back into the report before
+ * the template renders it (report-merge.service.ts): the tester's wording, in
+ * the layout the client was promised. Only when nothing can be read back — the
+ * document was restructured beyond recognition — is it converted as it stands,
+ * because a plain document that says the right thing still beats a designed one
+ * that says the wrong thing.
  */
 import fs from "fs";
 import path from "path";
@@ -42,6 +47,8 @@ import {
   type ReportStats,
 } from "./report.service";
 import { PAGE_BOX, buildReportHtml, type ReportHtmlContext } from "./report-html.service";
+import { mergeReportEdits } from "./report-merge.service";
+import { extractDocxText } from "./docx-text.service";
 import {
   convertReportToPdf,
   ensureReportDocx,
@@ -300,9 +307,9 @@ const inFlight = new Map<string, Promise<ReportPdfResult>>();
 /**
  * The report as a PDF, stored beside the .docx.
  *
- * A Word-edited document wins: it is converted rather than re-rendered, because
- * the tester's rewrite is the report. `force` is the operator overruling that —
- * discard the edits and regenerate from the engagement's current results.
+ * A Word-edited document wins — but as *text*, laid over the designed layout,
+ * not as a printout. `force` is the operator overruling that: discard the edits
+ * and regenerate from the engagement's current results.
  *
  * Chromium is the only part that can fail in a deployment (no browser in the
  * image, no memory to start one); when it does, the .docx conversion is still
@@ -324,6 +331,24 @@ export async function ensureReportPdf(
   return task;
 }
 
+/**
+ * Print the .docx as it stands. The last resort: the design is lost, but the
+ * document the tester wrote is what reaches the client.
+ */
+async function writeConverted(docxPath: string, sessionId: string, fileName: string): Promise<ReportPdfResult> {
+  const filePath = reportPdfPath(sessionId);
+  const pdf = await convertReportToPdf(docxPath);
+  fs.writeFileSync(filePath, pdf);
+  // Keyed on the file itself, because converting is the slow path: Collabora,
+  // then LibreOffice. The merged render has its own signature.
+  const stat = fs.statSync(docxPath);
+  fs.writeFileSync(
+    pdfMetaPath(sessionId),
+    JSON.stringify({ signature: `docx:${stat.mtimeMs}:${stat.size}`, fileName }),
+  );
+  return { filePath, fileName, source: "docx" };
+}
+
 async function buildReportPdf(
   sessionId: string,
   uid: unknown,
@@ -338,23 +363,9 @@ async function buildReportPdf(
   const meta = readPdfMeta(sessionId);
 
   // The working document is (re)built first either way: it carries the model's
-  // opening summary, and it is what a Word-edited export prints from.
+  // opening summary, and it is what a Word-edited export reads its text from.
   const docx = await ensureReportDocx(sessionId, uid, { force: options.force });
-
-  if (!options.force && reportDocxStatus(sessionId).editedByWord) {
-    const fileName = pdfFileName(docx.fileName);
-    // Converting the .docx is the slow path (Collabora, then LibreOffice), so
-    // the file is reused for as long as the document behind it is unchanged.
-    const stat = fs.statSync(docx.filePath);
-    const stamp = `docx:${stat.mtimeMs}:${stat.size}`;
-    if (fs.existsSync(filePath) && meta.signature === stamp) {
-      return { filePath, fileName, source: "docx" };
-    }
-    const pdf = await convertReportToPdf(docx.filePath);
-    fs.writeFileSync(filePath, pdf);
-    fs.writeFileSync(pdfMetaPath(sessionId), JSON.stringify({ signature: stamp, fileName }));
-    return { filePath, fileName, source: "docx" };
-  }
+  const editedByWord = options.force !== true && reportDocxStatus(sessionId).editedByWord;
 
   const vulnerabilities = (session.vulnerabilities ?? []) as SessionVulnerabilityDoc[];
   const testPlan = (session.webAppTestPlan as WebAppTestPlanDoc | undefined) ?? null;
@@ -382,21 +393,43 @@ async function buildReportPdf(
     generatedAt,
   };
   const report = buildClientReport(reportOptions);
-  const signature = pdfSignature(report, ctx);
   const fileName = pdfFileName(report.fileName);
+
+  // The tester's own words, read back out of the working document. Everything
+  // they changed replaces the generated value; everything they left alone keeps
+  // it, so a half-polished report still prints whole.
+  const merge = editedByWord
+    ? mergeReportEdits(report, extractDocxText(fs.readFileSync(docx.filePath)))
+    : undefined;
+
+  if (editedByWord && merge && merge.merged === 0 && report.body.some((block) => block.type === "finding")) {
+    console.warn("[report] the edited document could not be read back; converting it as it stands");
+    return writeConverted(docx.filePath, sessionId, fileName);
+  }
+
+  const document = merge?.report ?? report;
+  const context: ReportHtmlContext = merge
+    ? { ...ctx, stats: { ...ctx.stats, bySeverity: merge.bySeverity } }
+    : ctx;
+  const signature = pdfSignature(document, context);
 
   if (!options.force && fs.existsSync(filePath) && meta.signature === signature) {
     return { filePath, fileName: meta.fileName ?? fileName, source: "html" };
   }
+  if (merge) {
+    console.log(
+      `[report] merged ${merge.merged} hand-edited card(s) into the layout${
+        merge.unplaced ? ` (${merge.unplaced} could not be placed)` : ""
+      }`,
+    );
+  }
 
   let pdf: Buffer;
   try {
-    pdf = await renderHtmlToPdf(buildReportHtml(report, ctx));
+    pdf = await renderHtmlToPdf(buildReportHtml(document, context));
   } catch (err: any) {
     console.error("[report] html render failed, falling back to the .docx:", err?.message ?? err);
-    pdf = await convertReportToPdf(docx.filePath);
-    fs.writeFileSync(filePath, pdf);
-    return { filePath, fileName, source: "docx" };
+    return writeConverted(docx.filePath, sessionId, fileName);
   }
 
   fs.writeFileSync(filePath, pdf);

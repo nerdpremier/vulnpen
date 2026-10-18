@@ -93,7 +93,7 @@ function thaiSeverity(severity: Severity): ThaiLevel {
           : "ข้อมูลข่าวสาร";
 }
 
-function bandFor(level: ThaiLevel): ClientFinding["band"] {
+export function bandFor(level: ThaiLevel): ClientFinding["band"] {
   if (level === "วิกฤต" || level === "สูง") return "red";
   if (level === "ปานกลาง") return "orange";
   if (level === "ต่ำ") return "yellow";

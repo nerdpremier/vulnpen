@@ -1,8 +1,8 @@
 @import "@/styles/variables";
 
 /* ============================================================================
-   REPORT (LibreOffice Writer)
-   The editor is the page: it takes every pixel the shell can give it, so the
+   REPORT (the PDF, and LibreOffice Writer behind it)
+   The document is the page: it takes every pixel the shell can give it, so the
    frame has to be a flex child of a *sized* chain the whole way down, and the
    page keeps no chrome of its own.
    ========================================================================== */
@@ -53,6 +53,17 @@
   border: 0;
   transform: scale(0.75);
   transform-origin: top left;
+}
+
+/* The PDF viewer needs none of that: it is already sized for a frame, and
+   scaling it would scale its own page thumbnails and zoom controls with it. */
+.viewer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--moon-surface-2);
 }
 
 /* The document's provenance, as the first line of the actions menu: this page
