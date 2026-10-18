@@ -64,6 +64,13 @@ backend and frontend on your host instead — see the Development mode row above
 For remote access, keep the compose ports loopback-only and put the stack behind
 the TLS reverse proxy in the procedure below.
 
+The guided menus offer only what an installation actually needs. `./run.sh
+start` goes straight to the attack-box question, which has two answers — spin one
+up here, or connect to an existing host over SSH — and Enter takes the built-in
+box. The two options that only make sense while building VulnPen — **Developer
+mode** in the mode menu, and **No exploit box** in the attack-box menu — appear
+only when `VULNPEN_ADVANCED=1` is set.
+
 For subsequent starts, use `./run.sh start -q`. Useful diagnostics are:
 
 ```bash

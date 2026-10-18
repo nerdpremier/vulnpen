@@ -100,6 +100,12 @@ section() { echo; echo -e " ${CYAN}${BOLD}── $1 ──${NC}"; }
 hint()    { echo -e "   ${DIM}$1${NC}"; }
 prompt_input() { echo -en " ${CYAN}$1${NC} "; }
 
+# Options that only make sense to whoever builds this thing - developer mode and
+# "no exploit box at all" - stay out of the customer's menus unless asked for.
+# `./run.sh dev` and `./run.sh settings` still reach them, so nothing is lost;
+# the point is that a first `./run.sh start` offers only the two real choices.
+is_advanced_mode() { [[ "${VULNPEN_ADVANCED:-0}" == "1" ]]; }
+
 confirm() {
     local msg="$1" default="${2:-n}"
     if [[ "$default" == "y" ]]; then
@@ -546,9 +552,13 @@ select_mode_for_operations() {
     echo
     echo -e "   ${BOLD}1)${NC} ${GREEN}Core Docker mode${NC}"
     echo -e "   ${BOLD}2)${NC} ${GREEN}Full Docker + Kali${NC}"
-    echo -e "   ${BOLD}3)${NC} ${YELLOW}Developer mode${NC}"
+    local max_choice=2
+    if is_advanced_mode; then
+        echo -e "   ${BOLD}3)${NC} ${YELLOW}Developer mode${NC}"
+        max_choice=3
+    fi
     echo
-    prompt_input "Choose [1/2/3]:"
+    prompt_input "Choose [1-${max_choice}]:"
     read -r mode_choice
 
     case "$mode_choice" in
@@ -556,9 +566,14 @@ select_mode_for_operations() {
             set_normal_kali_mode
             ;;
         3)
-            DEV_MODE=true
-            COMPOSE_FILE="docker-compose.dev.yml"
-            DEPLOY_MODE="dev"
+            if is_advanced_mode; then
+                DEV_MODE=true
+                COMPOSE_FILE="docker-compose.dev.yml"
+                DEPLOY_MODE="dev"
+            else
+                warn "Invalid choice. Select 1 or 2."
+                select_mode_for_operations
+            fi
             ;;
         *)
             set_normal_mode
@@ -567,6 +582,13 @@ select_mode_for_operations() {
 }
 
 select_launch_mode() {
+    # One option is not a choice: without the developer entry the answer is
+    # always normal mode, so do not make the operator press Enter for it.
+    if ! is_advanced_mode; then
+        set_normal_mode
+        return
+    fi
+
     section "Choose How To Run"
     echo
     echo -e "   ${BOLD}1)${NC} ${GREEN}Normal mode${NC}"
@@ -880,9 +902,16 @@ configure_exploit_box() {
     echo
     echo -e "   ${BOLD}1)${NC} Kali VM exploit box spin up  ${DIM}(first build can take 15-30+ min)${NC}"
     echo -e "   ${BOLD}2)${NC} Connect to external exploit box (any VM via SSH, including your local computer)"
-    echo -e "   ${BOLD}3)${NC} ${RED}No exploit box${NC}  ${RED}(reduces VulnPen functionality significantly)${NC}"
-    prompt_input "Choose [1/2/3]:"
+    if is_advanced_mode; then
+        echo -e "   ${BOLD}3)${NC} ${RED}No exploit box${NC}  ${RED}(no terminal, shells or command execution)${NC}"
+        prompt_input "Choose [1/2/3] (Enter = 1):"
+    else
+        prompt_input "Choose [1/2] (Enter = 1):"
+    fi
     read -r ssh_choice
+    # Enter is the built-in box: it is the answer that needs nothing prepared
+    # beforehand, and an empty line used to fall through to "Invalid choice".
+    ssh_choice="${ssh_choice:-1}"
 
     case "$ssh_choice" in
         1)
@@ -892,12 +921,17 @@ configure_exploit_box() {
             configure_connect_external_exploit_box
             ;;
         3)
-            echo
-            warn "No exploit box selected — VulnPen will have reduced functionality (no terminal, shells, or command execution on a target)."
-            clear_exploit_box_config
+            if is_advanced_mode; then
+                echo
+                warn "No exploit box selected — VulnPen will have reduced functionality (no terminal, shells, or command execution on a target)."
+                clear_exploit_box_config
+            else
+                warn "Invalid choice. Select 1 or 2."
+                configure_exploit_box
+            fi
             ;;
         *)
-            warn "Invalid choice. Select 1, 2, or 3."
+            warn "Invalid choice. Select 1 or 2."
             configure_exploit_box
             ;;
     esac
@@ -1364,7 +1398,7 @@ cmd_config() {
     section "Configuration"
     echo
     echo -e "   ${BOLD}1)${NC} Langfuse tracing          ${DIM}(requires container restart)${NC}"
-    echo -e "   ${BOLD}2)${NC} Exploit box               ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}2)${NC} Exploit box               ${DIM}(one box per install; per workspace in the Connection page)${NC}"
     echo -e "   ${BOLD}3)${NC} All of the above"
     if [[ "${DEV_MODE:-false}" == true ]]; then
         echo -e "   ${BOLD}4)${NC} Server / Database / CORS  ${DIM}(requires process restart)${NC}"
