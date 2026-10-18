@@ -875,7 +875,7 @@ configure_langfuse() {
 
 configure_exploit_box() {
     section "Exploit Box Connection"
-    hint "The exploit box is the SSH target where pentesting commands run. You can change this later via Settings UI."
+    hint "The exploit box is the SSH target where pentesting commands run. This is the only place the connection is set up: it is written into backend/.env here, and every workspace uses it with a default work folder, so nothing has to be entered in the UI. To point a single workspace somewhere else, use that workspace's Connection page; to change the box itself, re-run ./run.sh start or ./run.sh settings."
     ensure_env_defaults
     echo
     echo -e "   ${BOLD}1)${NC} Kali VM exploit box spin up  ${DIM}(first build can take 15-30+ min)${NC}"

@@ -50,8 +50,13 @@ cd vulnpen
 `./run.sh start` brings up the whole stack — MongoDB, Redis, the backend API on
 port 8080, the frontend on port 3000, and the Collabora/WOPI editor the report
 draft opens in. Open `http://localhost:3000`, create the installation-owner
-account, then add and verify an orchestrator under **Settings → Models**. Open a
-workspace's **Connection** page and save a tested SSH alias for the attack box.
+account, then add and verify an orchestrator under **Settings → Models**. That is
+all: the attack box is wired during installation (the launcher asks for it in
+guided mode and writes `SSH_HOST`/`SSH_USERNAME`/credentials into
+`backend/.env`), and every workspace falls back to that host with a default work
+folder, so no SSH alias has to be entered in the UI. A workspace's **Connection**
+page only overrides it — a different attack box, or a work folder other than
+`/kali-data/workspaces/<workspaceId>`.
 
 Developer mode is the one exception: `./run.sh dev` starts MongoDB and Redis
 (plus the attack box in `dev-kali`) and prints the commands for running the
