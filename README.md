@@ -144,6 +144,9 @@ removed when the container is recreated.
 
 The in-repository **[Setup and Troubleshooting guide](./docs/SETUP.md)** is the
 authoritative source for installation, configuration, recovery, and deployment.
+If you received VulnPen as a package rather than a clone, start with the
+**[delivery note](./DELIVERY.md)** (`DELIVERY.md`) — it covers the same install in
+short form, plus what has to be configured after the first start.
 
 ## Local Development
 
