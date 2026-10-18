@@ -188,14 +188,24 @@ const fieldLabel = (text: string) =>
 function findingCard(finding: ClientFinding) {
   const fill = BAND_FILL[finding.band] ?? BAND_FILL.grey;
   const color = BAND_TEXT[finding.band] ?? "FFFFFF";
+  // The classification the reader came for: the OWASP category, the WSTG case
+  // and the CWE weakness are stated as their own rows. CVE is printed only
+  // when one was actually identified — an empty row would read as "none exists".
+  const details: [string, string][] = [
+    ["OWASP Top 10:2025 :", finding.owasp],
+    ["อ้างอิงเคสทดสอบ (WSTG) :", finding.goal],
+    ["CWE :", finding.cwe ?? "ไม่ได้บันทึก"],
+  ];
+  if (finding.cve) details.push(["CVE :", finding.cve]);
+  details.push(["วันที่ค้นพบช่องโหว่ :", finding.discoveredOn]);
+
   const children: (Paragraph | Table)[] = [
-    heading(`${finding.code} — ${finding.title}`, "ReportH2"),
-    detailTable([
-      ["OWASP Top 10:2025 :", finding.owasp],
-      ["เป้าหมายการทดสอบ :", finding.goal],
-      ["รูปแบบการทดสอบ :", finding.method],
-      ["วันที่ค้นพบช่องโหว่ :", finding.discoveredOn],
-    ]),
+    // The card is headed by the finding's own title: the F-00N code is an
+    // internal index, and the client document prints no code the reader would
+    // have to look up. The code still exists on the block (and orders the
+    // cards) — it just never reaches the page.
+    heading(finding.title, "ReportH2"),
+    detailTable(details),
     body(""),
     new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
@@ -247,10 +257,6 @@ function findingCard(finding: ClientFinding) {
   children.push(...bullets(finding.impactDetails ?? []));
   children.push(fieldLabel("แนวทางแก้ไข และคำแนะนำ"));
   children.push(...bullets(finding.recommendations ?? []));
-  if (finding.references?.length) {
-    children.push(fieldLabel("ศึกษาเพิ่มเติม"));
-    children.push(...bullets(finding.references));
-  }
   children.push(new Paragraph({ children: [new PageBreak()] }));
   return children;
 }
@@ -482,7 +488,7 @@ export function readReportDocument(sessionId: string): ReportDocumentReading | u
  * whose document was built by an older format keeps being served that older
  * document forever, and only `rebuild=1` would ever refresh it.
  */
-const REPORT_FORMAT_VERSION = 2;
+const REPORT_FORMAT_VERSION = 3;
 
 /** Fingerprint of the session data the deterministic report is built from. */
 function reportSignature(session: {
@@ -510,6 +516,7 @@ function reportSignature(session: {
     v.stepsToReproduce,
     v.remediation,
     v.cwe,
+    v.cve,
     v.wstgId,
   ]);
   const cases = (session.webAppTestPlan?.cases ?? []).map((c) => [c.testId, c.status]);

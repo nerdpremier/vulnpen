@@ -46,6 +46,21 @@ const SEVERITY_RANK: Record<Severity, number> = {
   info: 1,
 };
 
+/**
+ * The severity band as the Thai document prints it. The band is a fixed label,
+ * not model prose, so the report must not fall back to the English enum value —
+ * "3 critical" in a Thai sentence is the same defect as an English finding.
+ */
+const SEVERITY_TH: Record<Severity, string> = {
+  critical: "วิกฤต",
+  high: "สูง",
+  medium: "ปานกลาง",
+  low: "ต่ำ",
+  info: "ข้อมูลข่าวสาร",
+};
+
+const severityLabel = (severity: Severity): string => SEVERITY_TH[severity] ?? severity;
+
 export interface ReportOptions {
   session: {
     sessionId: string;
@@ -237,7 +252,7 @@ export function reportFileName(options: ReportOptions): string {
 }
 function severityCountsLine(stats: ReportStats): string {
   const parts = SEVERITY_ORDER.filter((severity) => stats.bySeverity[severity] > 0).map(
-    (severity) => `${stats.bySeverity[severity]} ${severity}`,
+    (severity) => `${severityLabel(severity)} ${stats.bySeverity[severity]} รายการ`,
   );
   return parts.length ? parts.join(", ") : "ไม่พบช่องโหว่ที่บันทึกไว้";
 }
@@ -316,9 +331,9 @@ function executiveSummarySection(options: ReportOptions, findings: ReportFinding
   if (top.length) {
     lines.push("**ช่องโหว่หลักที่พบ**", "");
     for (const finding of top) {
-      lines.push(
-        `- **F-${String(finding.index).padStart(3, "0")} ${finding.title}** (${finding.severity}${finding.cvss ? `, คะแนนฐาน CVSS v3.0 ${finding.cvss.score}` : ""}) — ${finding.host}${finding.endpoint ? ` ${finding.endpoint}` : ""}. ${owaspTitle(finding.owaspTop10)}.`,
-      );
+    lines.push(
+      `- **F-${String(finding.index).padStart(3, "0")} ${finding.title}** (${severityLabel(finding.severity)}${finding.cvss ? `, คะแนนฐาน CVSS v3.0 ${finding.cvss.score}` : ""}) — ${finding.host}${finding.endpoint ? ` ${finding.endpoint}` : ""}. ${owaspTitle(finding.owaspTop10)}.`,
+    );
     }
     lines.push("");
   }
@@ -401,7 +416,7 @@ function riskSummarySection(findings: ReportFindingsRow[], stats: ReportStats): 
   for (const severity of SEVERITY_ORDER) {
     const rows = findings.filter((finding) => finding.severity === severity);
     lines.push(
-      `| ${severity} | ${rows.length} | ${rows.filter((row) => row.exploited).length} |`,
+      `| ${severityLabel(severity)} | ${rows.length} | ${rows.filter((row) => row.exploited).length} |`,
     );
   }
   lines.push(`| **รวม** | **${stats.totalFindings}** | **${stats.exploited}** |`, "");
@@ -434,7 +449,7 @@ function findingsSummarySection(findings: ReportFindingsRow[]): string[] {
   }
   for (const finding of findings) {
     lines.push(
-      `| F-${String(finding.index).padStart(3, "0")} | ${finding.severity}${finding.exploited ? " (exploited)" : ""} | ${finding.cvss ? `${finding.cvss.score}` : "—"} | ${tableCell(finding.title)} | ${tableCell(finding.host)}${finding.endpoint ? `<br>${tableCell(finding.endpoint)}` : ""} | ${finding.wstgId ?? "—"} | ${owaspTitle(finding.owaspTop10)} |`,
+      `| F-${String(finding.index).padStart(3, "0")} | ${severityLabel(finding.severity)}${finding.exploited ? " (exploited)" : ""} | ${finding.cvss ? `${finding.cvss.score}` : "—"} | ${tableCell(finding.title)} | ${tableCell(finding.host)}${finding.endpoint ? `<br>${tableCell(finding.endpoint)}` : ""} | ${finding.wstgId ?? "—"} | ${owaspTitle(finding.owaspTop10)} |`,
     );
   }
   lines.push("");
@@ -468,14 +483,14 @@ function detailedFindingsSection(
 
     lines.push(`### 6.${finding.index} F-${String(finding.index).padStart(3, "0")} — ${finding.title}`, "");
     lines.push("| หัวข้อ | รายละเอียด |", "| --- | --- |");
-    lines.push(`| ระดับความรุนแรง | ${finding.severity}${finding.exploited ? " (exploited)" : ""} |`);
+    lines.push(`| ระดับความรุนแรง | ${severityLabel(finding.severity)}${finding.exploited ? " (exploited)" : ""} |`);
 
     lines.push(`| ทรัพย์สินที่กระทบ | ${tableCell(finding.host)}${finding.endpoint ? ` — ${tableCell(finding.endpoint)}` : vulnerability?.service ? ` — ${tableCell(vulnerability.service)}` : ""} |`);
     lines.push(`| CWE | ${finding.cwe ?? "ไม่ได้บันทึก"} |`);
     // The score was computed from the eight CVSS v3.0 base metrics; see
     // Appendix B for the methodology.
     lines.push(
-      `| คะแนนฐาน CVSS v3.0 | ${finding.cvss ? `${finding.cvss.score} (${finding.severity})` : "ไม่ได้ประเมิน"} |`,
+      `| คะแนนฐาน CVSS v3.0 | ${finding.cvss ? `${finding.cvss.score} (${severityLabel(finding.severity)})` : "ไม่ได้ประเมิน"} |`,
       `| เวกเตอร์ CVSS | ${finding.cvss ? tableCell(finding.cvss.vector) : "ไม่ได้ประเมิน — ต้องบันทึกเมทริกฐานทั้งแปดตัว"} |`,
     );
     if (vulnerability?.cve) lines.push(`| CVE | ${tableCell(vulnerability.cve)} |`);
@@ -496,10 +511,6 @@ function detailedFindingsSection(
       lines.push("**บริบท**", "", vulnerability.contextSummary, "");
     }
 
-    if (wstg) {
-      lines.push("**วิธีการทดสอบ (ตาม WSTG)**", "", `${wstg.objective} ${wstg.howToTest}`, "");
-    }
-
     lines.push("**หลักฐาน**", "");
     lines.push("```text");
     lines.push(maskSensitive((vulnerability?.evidence || "ไม่ได้เก็บหลักฐานดิบไว้").trim()));
@@ -515,7 +526,9 @@ function detailedFindingsSection(
     lines.push(
       "**แนวทางแก้ไข**",
       "",
-      vulnerability?.remediation || category?.remediation.map((item) => `- ${item}`).join("\n") || "ไม่ได้บันทึกแนวทางแก้ไข",
+      // The catalogue's category remediation is English prose, so a finding
+      // without its own remediation says so in Thai instead of borrowing it.
+      vulnerability?.remediation || "ไม่ได้บันทึกแนวทางแก้ไข — ต้องกำหนดก่อนนำส่ง",
       "",
     );
 
@@ -612,14 +625,18 @@ function owaspMappingSection(stats: ReportStats): string[] {
 
   const affected = stats.byOwasp.filter((entry) => entry.findings > 0);
   if (affected.length) {
-    lines.push("แนวทางระดับโครงการสำหรับหมวดที่พบ:", "");
+    lines.push("หมวดที่พบช่องโหว่ในเซสชันนี้:", "");
     for (const entry of affected) {
       const category = getOwaspCategory(entry.id);
       if (!category) continue;
-      lines.push(`**${category.id} ${category.title}** — ${category.summary}`, "");
-      for (const item of category.remediation.slice(0, 4)) lines.push(`- ${item}`);
-      lines.push("");
+      // Only the category's official name is printed: the summary and the
+      // remediation guidance in the catalogue are English prose, and the
+      // finding-level Thai remediation (section 6) already carries the advice.
+      lines.push(
+        `**${category.id} ${category.title}** — พบ ${entry.findings} รายการ แนวทางแก้ไขของแต่ละช่องโหว่อยู่ในหัวข้อ 6`,
+      );
     }
+    lines.push("");
   }
 
   return lines;

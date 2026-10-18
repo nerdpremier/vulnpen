@@ -239,7 +239,7 @@ test("the report follows the WSTG Reporting structure and cites its sources", ()
   assert.ok(!report.markdown.includes("Hunter2"), "the secret is masked in the report");
   assert.ok(/password=\[REDACTED\]/i.test(report.markdown), "the masked secret is present");
   assert.ok(report.findings[0].owaspProvenance, "the finding records a mapping provenance");
-  assert.ok(report.markdown.includes("| คะแนนฐาน CVSS v3.0 | 9.8 (critical) |"), "the base score is reported");
+  assert.ok(report.markdown.includes("| คะแนนฐาน CVSS v3.0 | 9.8 (วิกฤต) |"), "the base score is reported");
   assert.ok(
     report.markdown.includes("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"),
     "the vector string is reported so the score is reproducible",

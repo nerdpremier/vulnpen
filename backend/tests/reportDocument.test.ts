@@ -63,7 +63,6 @@ const text = (blocks: ClientBlock[]): string =>
             block.finding.discovered.join(" "),
             block.finding.impactDetails.join(" "),
             block.finding.recommendations.join(" "),
-            block.finding.references.join(" "),
             block.finding.evidence,
           ].join(" ")
         : block.type === "table"
@@ -91,7 +90,6 @@ test("the report opens with the model's summary, then the counts, then the findi
   assert.ok(rendered.includes("พบช่องโหว่ทั้งหมด 2 รายการ"), "the model's words are the summary");
   assert.ok(rendered.includes("Unauthenticated SQL injection in product search"), "findings carry their own title");
   assert.ok(rendered.includes("Use parameterised queries."), "the recorded remediation is rendered");
-  assert.ok(rendered.includes("CWE-89"), "the references the finding maps to are rendered");
 });
 
 test("the report carries only the summary and the findings", () => {

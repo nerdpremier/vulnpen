@@ -475,7 +475,7 @@ test("the report draft is complete enough to hand to a reviewer", () => {
   assert.match(markdown, /Unmapped/);
   assert.match(markdown, /OWASP WSTG v4\.2/);
   assert.ok(
-    markdown.includes("| คะแนนฐาน CVSS v3.0 | 9.8 (critical) |"),
+    markdown.includes("| คะแนนฐาน CVSS v3.0 | 9.8 (วิกฤต) |"),
     "the computed CVSS base score is reported",
   );
   assert.ok(

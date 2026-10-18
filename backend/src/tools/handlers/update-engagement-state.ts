@@ -45,7 +45,11 @@ const updateEngagementState: ToolDefinition = {
           "metrics (av, ac, pr, ui, s, c, i, a — the system computes the base score and severity), evidence, " +
           "stepsToReproduce, impact, remediation, exploited; wstgId = producing test case; omit owaspTop10/CWE " +
           "unless confident. A destructive capability proved without carrying it out is exploited=false, stated " +
-          "in impact. add_key_discovery: title and/or description. remove_finding: vulnerability_id.",
+          "in impact. add_key_discovery: title and/or description. remove_finding: vulnerability_id. " +
+          "LANGUAGE: title, description, contextSummary, impact, remediation and the prose of stepsToReproduce " +
+          "are printed in the Thai report verbatim — write them as Thai sentences. Never translate command lines, " +
+          "payloads, URLs, host names, raw requests/responses, evidence, or the official names of the standards " +
+          "(WSTG ids and case titles, OWASP Top 10:2025 category names, CWE, CVSS metrics and vectors).",
         properties: {
           // Shared fields. Keeping these explicit prevents models from
           // guessing the shape of add_key_discovery calls while retaining the

@@ -91,9 +91,13 @@ test("a .docx round-trips to readable text: paragraphs, table rows and findings"
     text.includes("ระดับความเสี่ยง | จำนวนช่องโหว่ที่ตรวจพบ"),
     `table cells are separated: ${text.slice(0, 400)}`,
   );
-  assert.ok(text.includes("F-001 — Unauthenticated SQL injection in product search"), "finding headings survive");
+  assert.ok(text.includes("Unauthenticated SQL injection in product search"), "finding headings survive");
   assert.ok(text.includes("Use parameterised queries."), "the card body survives");
-  assert.ok(text.includes("CWE-89"), "list content survives");
+  assert.ok(
+    text.includes("Send GET /api/products?q=' and observe the SQL error"),
+    "numbered steps survive",
+  );
+  assert.ok(text.includes("CWE : | CWE-89"), "the CWE row is printed with the finding's weakness");
   assert.ok(!text.includes("<w:"), "no markup is left in the text");
   assert.equal(report.body.length > 0, true);
 });
@@ -106,8 +110,9 @@ test("the tool returns the document's own words and says where they came from", 
   assert.ok(result.output.includes("Source: hand-edited and saved in Word"), result.output.slice(0, 300));
   assert.ok(result.output.includes("Last written: 20"), "the header carries the document's timestamp");
   assert.ok(result.output.includes("บทสรุปที่ผู้ทดสอบแก้เองใน Word"));
-  assert.ok(result.output.includes("F-001 — Unauthenticated SQL injection in product search"));
+  assert.ok(result.output.includes("Unauthenticated SQL injection in product search"));
   // The stored document is what the report says — not what the findings imply.
+  assert.ok(result.output.includes("Send GET /api/products?q=' and observe the SQL error"));
   assert.ok(result.output.includes("CWE-89"));
 });
 
@@ -122,8 +127,8 @@ test("one finding card can be read on its own", async () => {
   const result = await readReportDocument.execute({ finding_code: "f-002" }, context("sess-card"));
 
   assert.equal(result.exitCode, 0);
-  assert.ok(result.output.includes("F-002 — Verbose Server banner"), "the requested card is returned");
-  assert.ok(!result.output.includes("F-001"), "and no other card");
+  assert.ok(result.output.includes("Verbose Server banner"), "the requested card is returned");
+  assert.ok(!result.output.includes("Unauthenticated SQL injection"), "and no other card");
   assert.ok(!result.output.includes("บทสรุปจากโมเดล"), "nor the summary");
 });
 
@@ -131,8 +136,8 @@ test("a card that is not in the document is reported, with what is", async () =>
   await writeReport("sess-missing-card", "บทสรุปจากโมเดล", true);
   const result = await readReportDocument.execute({ finding_code: "F-009" }, context("sess-missing-card"));
 
-  assert.ok(result.output.includes('No finding "F-009" is in the document'));
-  assert.ok(result.output.includes("F-001"), "the cards that do exist are listed");
+  assert.ok(result.output.includes('No finding card "F-009" is in the document'));
+  assert.ok(result.output.includes("Unauthenticated SQL injection in product search"), "the cards that do exist are listed");
 });
 
 test("a long document is truncated at the limit, and says so", async () => {

@@ -36,7 +36,10 @@ export interface ClientFinding {
   title: string;
   owasp: string;
   goal: string;
-  method: string;
+  /** CWE the finding maps to; the report prints "ไม่ได้บันทึก" when unset. */
+  cwe?: string;
+  /** CVE this finding is an instance of, when one was identified. */
+  cve?: string;
   discoveredOn: string;
   risk: ThaiLevel;
   cvssScore?: string;
@@ -45,7 +48,6 @@ export interface ClientFinding {
   steps: string[];
   impactDetails: string[];
   recommendations: string[];
-  references: string[];
   evidence: string;
   band: "red" | "orange" | "yellow" | "grey";
 }
@@ -128,11 +130,6 @@ function buildFindingCard(
     ? splitRemediation(vulnerability.remediation)
     : category?.remediation.slice(0, 4) ?? ["ยังไม่ได้บันทึกแนวทางแก้ไข ผู้ประเมินควรระบุแนวทางก่อนนำส่งรายงาน"];
 
-  const references: string[] = [];
-  if (wstg) references.push(`OWASP WSTG v4.2 ${wstg.id}: ${wstg.title}`);
-  if (category) references.push(`OWASP Top 10:2025 ${category.id} ${category.title}`);
-  if (finding.cwe) references.push(`CWE ${finding.cwe}`);
-
   return {
     code: `F-${String(index + 1).padStart(3, "0")}`,
     title: finding.title,
@@ -140,9 +137,10 @@ function buildFindingCard(
       ? `${finding.owaspTop10} ${getOwaspCategory(finding.owaspTop10)?.title ?? ""}`.trim()
       : "ยังไม่จัดหมวดหมู่",
     goal: wstg
-      ? `${wstg.title} — ${wstg.objective}`
+      ? `${wstg.id} ${wstg.title}`
       : "ตรวจสอบช่องโหว่ของเว็บแอปพลิเคชันตามมาตรฐาน OWASP WSTG v4.2",
-    method: "ทดสอบเว็บแอปพลิเคชันแบบทราบข้อมูลบางส่วน (Grey-Box Web Application Testing)",
+    cwe: finding.cwe,
+    cve: vulnerability?.cve,
     discoveredOn: thaiDate(vulnerability?.createdAt ?? options.generatedAt),
     risk: riskLevel,
     cvssScore: cvss ? String(cvss.score) : undefined,
@@ -153,7 +151,6 @@ function buildFindingCard(
     steps: vulnerability?.stepsToReproduce ?? [],
     impactDetails,
     recommendations,
-    references,
     evidence: maskSensitive((vulnerability?.evidence || "").trim()).slice(0, 2000),
     band: bandFor(riskLevel),
   };
