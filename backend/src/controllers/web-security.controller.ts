@@ -38,13 +38,14 @@ import {
 import { buildWebAppPentestReport } from "../services/web-security/report.service";
 import { buildClientReport } from "../services/web-security/client-report.service";
 import {
-  convertReportToPdf,
   ensureReportDocx,
   markReportEditedByWord,
   readReportSummary,
   reportDocxPath,
   reportDocxStatus,
 } from "../services/web-security/report-docx.service";
+import { ensureReportPdf } from "../services/web-security/report-pdf.service";
+import { extractDocxText } from "../services/web-security/docx-text.service";
 import { buildWordEditorUrl, resolveWopiToken } from "../services/web-security/wopi.service";
 import {
   WSTG_CATEGORIES,
@@ -612,20 +613,20 @@ export const exportReportPdf = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
+    // The PDF is the designed deliverable (cover, contents, one card per
+    // finding), rendered from the same findings the .docx is built from. A
+    // document that was rewritten in Word is converted instead, so the tester's
+    // edits still reach the client.
     const rebuild = req.query.rebuild === "1";
-    const { filePath, fileName } = await ensureReportDocx(sessionId, userId, {
+    const { filePath, fileName } = await ensureReportPdf(sessionId, userId, {
       force: rebuild,
     });
-    const pdf = await convertReportToPdf(filePath);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(fileName.replace(/\.docx$/i, ".pdf"))}"`,
-    );
-    return res.status(200).send(pdf);
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(fileName)}"`);
+    return res.status(200).send(fs.readFileSync(filePath));
   } catch (err: any) {
     console.error("[web-security] pdf export error:", err);
-    return res.status(500).json({ message: err?.message ?? "Failed to convert the report to PDF" });
+    return res.status(500).json({ message: err?.message ?? "Failed to build the PDF report" });
   }
 };
 
@@ -682,7 +683,14 @@ export const putWopiFile = async (req: Request, res: Response) => {
   }
 
   const filePath = reportDocxPath(auth.sessionId);
+  const previous = fs.existsSync(filePath) ? extractDocxText(fs.readFileSync(filePath)) : "";
   fs.writeFileSync(filePath, body);
-  markReportEditedByWord(auth.sessionId);
+
+  // Collabora rewrites the whole package on save, so "the bytes changed" is no
+  // signal that the tester changed anything. The text is: opening the report in
+  // the editor and saving it untouched must not switch the PDF export from the
+  // designed render to a conversion of this document.
+  if (extractDocxText(body) !== previous) markReportEditedByWord(auth.sessionId);
+
   return res.status(200).json({ LastModifiedTime: fs.statSync(filePath).mtime.toISOString() });
 };
