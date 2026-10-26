@@ -10,8 +10,9 @@ import { GlobalOutlined, SettingOutlined, DesktopOutlined, ReloadOutlined } from
 import { useMemo } from "react";
 import { useQuery } from "react-query";
 import { novncFrameSrc, resolveNovncBase } from "@/utils/novncView.mjs";
+import { backendBaseURL } from "@/utils/axios.config";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI || "http://localhost:8080";
+const BACKEND_URL = backendBaseURL;
 
 const { Text } = Typography;
 
