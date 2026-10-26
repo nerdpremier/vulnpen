@@ -69,7 +69,7 @@ services:
   kali:
     container_name: vulnpen-kali
     build: ./kali
-    image: vulnpen-kali-fixed:latest
+    image: vulnpen-kali:latest
     # `privileged: true` also hands over the host's devices and lets the box
     # rewrite its own routing. The capabilities the tooling actually needs are
     # named instead.

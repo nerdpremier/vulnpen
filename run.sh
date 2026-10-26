@@ -490,22 +490,18 @@ set_normal_kali_mode() {
 select_mode_for_configuration() {
     section "Choose Configuration Target"
     echo
-    echo -e "   ${BOLD}1)${NC} ${GREEN}Core Docker settings${NC}"
-    echo -e "      ${DIM}Use this if VulnPen runs through Docker without provisioning Kali.${NC}"
+    echo -e "   ${BOLD}1)${NC} ${GREEN}Full Docker + Kali settings${NC}"
+    echo -e "      ${DIM}The standard install: VulnPen plus its built-in Kali attack box.${NC}"
     echo
-    echo -e "   ${BOLD}2)${NC} ${GREEN}Full Docker + Kali settings${NC}"
-    echo -e "      ${DIM}Use this if you provision the built-in Kali container in Docker.${NC}"
-    echo
-    echo -e "   ${BOLD}3)${NC} ${YELLOW}Developer mode settings${NC}"
+    echo -e "   ${BOLD}2)${NC} ${YELLOW}Developer mode settings${NC}"
     echo -e "      ${DIM}Use this if you run the frontend and backend manually.${NC}"
     echo
-    prompt_input "Choose [1/2/3]:"
+    prompt_input "Choose [1/2]:"
     read -r mode_choice
 
     case "$mode_choice" in
-        2) set_normal_kali_mode ;;
-        3) configure_dev_mode_choice ;;
-        *) set_normal_mode ;;
+        2) configure_dev_mode_choice ;;
+        *) set_normal_kali_mode ;;
     esac
 }
 
@@ -550,12 +546,11 @@ select_mode_for_operations() {
     echo
     echo -e "   ${DIM}No running containers detected — please choose:${NC}"
     echo
-    echo -e "   ${BOLD}1)${NC} ${GREEN}Core Docker mode${NC}"
-    echo -e "   ${BOLD}2)${NC} ${GREEN}Full Docker + Kali${NC}"
-    local max_choice=2
+    echo -e "   ${BOLD}1)${NC} ${GREEN}Full Docker + Kali${NC}"
+    local max_choice=1
     if is_advanced_mode; then
-        echo -e "   ${BOLD}3)${NC} ${YELLOW}Developer mode${NC}"
-        max_choice=3
+        echo -e "   ${BOLD}2)${NC} ${YELLOW}Developer mode${NC}"
+        max_choice=2
     fi
     echo
     prompt_input "Choose [1-${max_choice}]:"
@@ -563,29 +558,26 @@ select_mode_for_operations() {
 
     case "$mode_choice" in
         2)
-            set_normal_kali_mode
-            ;;
-        3)
             if is_advanced_mode; then
                 DEV_MODE=true
                 COMPOSE_FILE="docker-compose.dev.yml"
                 DEPLOY_MODE="dev"
             else
-                warn "Invalid choice. Select 1 or 2."
+                warn "Invalid choice. Select 1."
                 select_mode_for_operations
             fi
             ;;
         *)
-            set_normal_mode
+            set_normal_kali_mode
             ;;
     esac
 }
 
 select_launch_mode() {
     # One option is not a choice: without the developer entry the answer is
-    # always normal mode, so do not make the operator press Enter for it.
+    # always the full stack, so do not make the operator press Enter for it.
     if ! is_advanced_mode; then
-        set_normal_mode
+        set_normal_kali_mode
         return
     fi
 
@@ -607,7 +599,7 @@ select_launch_mode() {
             configure_dev_mode_choice
             ;;
         *)
-            set_normal_mode
+            set_normal_kali_mode
             info "Selected normal mode"
             ;;
     esac
@@ -1356,9 +1348,9 @@ cmd_start() {
 
     if [[ "$QUICK_MODE" == true ]]; then
         if ! load_run_state; then
-            set_normal_mode
+            set_normal_kali_mode
         fi
-        info "Mode: ${DEPLOY_MODE:-core} (from previous run)"
+        info "Mode: ${DEPLOY_MODE:-kali} (from previous run)"
     else
         select_launch_mode
     fi
