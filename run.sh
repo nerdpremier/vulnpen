@@ -1347,10 +1347,14 @@ cmd_start() {
     detect_wsl
 
     if [[ "$QUICK_MODE" == true ]]; then
-        if ! load_run_state; then
+        # Only claim "from previous run" when a state file actually answered;
+        # on a first start the mode below is the built-in default.
+        if load_run_state; then
+            info "Mode: ${DEPLOY_MODE:-kali} (from previous run)"
+        else
             set_normal_kali_mode
+            info "Mode: kali (default — full stack with the built-in attack box)"
         fi
-        info "Mode: ${DEPLOY_MODE:-kali} (from previous run)"
     else
         select_launch_mode
     fi
