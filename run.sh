@@ -360,8 +360,11 @@ ensure_config_defaults() {
     chmod 600 "$CONFIG_TOML"
 
     # Same CRLF trap as .env: `deployment = "LOCAL"` must not read as `LOCAL\r`.
-    if grep -q $'\r' "$CONFIG_TOML" 2>/dev/null; then
-        sed -i 's/\r$//' "$CONFIG_TOML"
+    local toml_bytes_before toml_bytes_after
+    toml_bytes_before=$(wc -c < "$CONFIG_TOML" 2>/dev/null || echo 0)
+    sed -i 's/\r$//' "$CONFIG_TOML" 2>/dev/null || true
+    toml_bytes_after=$(wc -c < "$CONFIG_TOML" 2>/dev/null || echo 0)
+    if [[ "$toml_bytes_before" != "$toml_bytes_after" ]]; then
         info "Normalised config.toml line endings (CRLF -> LF)"
     fi
 
@@ -435,8 +438,13 @@ ensure_env_defaults() {
     # A CRLF .env (Windows editor, zip round-trip) leaves every value with a
     # trailing CR. Normalise once, in place, so both this script and the backend
     # read clean values — otherwise the stack silently comes up without kali.
-    if grep -q $'\r' "$DYNAMIC_ENV" 2>/dev/null; then
-        sed -i 's/\r$//' "$DYNAMIC_ENV"
+    # Compare byte counts rather than grepping for CR: grep in a Windows shell
+    # reads text-mode and reports no match even when every line ends CRLF.
+    local env_bytes_before env_bytes_after
+    env_bytes_before=$(wc -c < "$DYNAMIC_ENV" 2>/dev/null || echo 0)
+    sed -i 's/\r$//' "$DYNAMIC_ENV" 2>/dev/null || true
+    env_bytes_after=$(wc -c < "$DYNAMIC_ENV" 2>/dev/null || echo 0)
+    if [[ "$env_bytes_before" != "$env_bytes_after" ]]; then
         info "Normalised .env line endings (CRLF -> LF)"
     fi
 
