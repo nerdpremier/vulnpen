@@ -13,7 +13,7 @@
 #     docker compose -f docker-compose.target.yml down
 #
 # Do NOT pass --remove-orphans to either command. Compose treats every container
-# of the `projectz` project that is absent from *this* file as an orphan, so
+# of the `vulnpen` project that is absent from *this* file as an orphan, so
 # `up -d --remove-orphans` here would tear down the backend, the attack box,
 # MongoDB and the rest of the real stack. Compose prints an orphan warning on
 # every run of this file; it is expected and must be ignored, not "cleaned up".
@@ -142,5 +142,5 @@ networks:
   # Owned by docker-compose.yml — joined here, not created here. `external: true`
   # keeps Compose from trying to create a second, differently-named network.
   default:
-    name: projectz_default
+    name: vulnpen_default
     external: true

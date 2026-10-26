@@ -1,3 +1,10 @@
+# The project name is pinned so every object the operator sees is named "vulnpen"
+# (containers, images built from ./backend and ./frontend, volumes, the default
+# network) no matter what the checkout directory is called. Without it Compose
+# derives the name from the folder and a `vulnpen-1.1.0/` extract would look for
+# images tagged `vulnpen-1-1-0-backend` and rebuild from source.
+name: vulnpen
+
 services:
   mongodb:
     container_name: vulnpen-mongodb
