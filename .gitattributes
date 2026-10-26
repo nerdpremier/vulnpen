@@ -9,3 +9,6 @@
 *.ico binary
 *.woff binary
 *.woff2 binary
+# Config templates are parsed by run.sh and by the backend; CRLF breaks both.
+*.template text eol=lf
+*.toml text eol=lf

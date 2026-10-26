@@ -140,7 +140,10 @@ set_env_var() {
 get_env() {
     local file="$1" var="$2"
     local raw
-    raw=$(grep "^${var}=" "$file" 2>/dev/null | head -1 | cut -d'=' -f2- || true)
+    # Strip CR: an .env that went through a Windows editor or a zip round-trip is
+    # CRLF, and "kali\r" never matches "kali" — that silently drops the whole
+    # stack to the base compose file, with no kali and no error to explain it.
+    raw=$(grep "^${var}=" "$file" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '\r' || true)
     if [[ "$raw" =~ ^\"(.*)\"$ ]]; then
         echo "${BASH_REMATCH[1]}" | sed 's/\\"/"/g; s/\\\\/\\/g'
     else
@@ -174,8 +177,9 @@ set_toml_var() {
 
 get_toml_var() {
     local file="$1" key="$2"
+    # Same CRLF trap as get_env: "LOCAL\r" is not "LOCAL".
     grep "^${key} " "$file" 2>/dev/null | head -1 \
-        | sed 's/[^=]*= *//; s/ *#.*//; s/^"//; s/"$//' || true
+        | sed 's/[^=]*= *//; s/ *#.*//; s/^"//; s/"$//' | tr -d '\r' || true
 }
 
 mask_key() {
@@ -355,6 +359,12 @@ ensure_config_defaults() {
     fi
     chmod 600 "$CONFIG_TOML"
 
+    # Same CRLF trap as .env: `deployment = "LOCAL"` must not read as `LOCAL\r`.
+    if grep -q $'\r' "$CONFIG_TOML" 2>/dev/null; then
+        sed -i 's/\r$//' "$CONFIG_TOML"
+        info "Normalised config.toml line endings (CRLF -> LF)"
+    fi
+
     # Patch mongo/redis for the current mode
     local cur_mongo cur_redis
     cur_mongo=$(get_toml_var "$CONFIG_TOML" "mongo_uri")
@@ -421,6 +431,14 @@ ensure_env_defaults() {
         info "Created model-registry.json"
     fi
     chmod 600 "$DYNAMIC_ENV" "$MODEL_REGISTRY_FILE"
+
+    # A CRLF .env (Windows editor, zip round-trip) leaves every value with a
+    # trailing CR. Normalise once, in place, so both this script and the backend
+    # read clean values — otherwise the stack silently comes up without kali.
+    if grep -q $'\r' "$DYNAMIC_ENV" 2>/dev/null; then
+        sed -i 's/\r$//' "$DYNAMIC_ENV"
+        info "Normalised .env line endings (CRLF -> LF)"
+    fi
 
     local ssh_host ssh_port kali_password
     ssh_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
