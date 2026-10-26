@@ -1122,6 +1122,18 @@ compose() {
     $COMPOSE_CMD "${args[@]}" "$@"
 }
 
+# Host paths are written into a YAML double-quoted scalar. A backslash is an
+# escape character there, so a Windows path like C:\Users\me\.ssh turns \U into
+# a unicode escape and the YAML scanner aborts with "did not find expected
+# hexadecimal number". Forward slashes are equivalent for Docker and Compose,
+# so normalise on the way in and escape any embedded double quote.
+yaml_path() {
+    local p="$1"
+    p="${p//\\//}"
+    p="${p//\"/\\\"}"
+    printf '%s' "$p"
+}
+
 ensure_compose_override() {
     local needs_key_mount=false
     local needs_agent_mount=false
@@ -1155,19 +1167,19 @@ ensure_compose_override() {
                 echo "      - ./ssh-keys:/ssh-keys:ro"
             fi
             if [[ "$needs_agent_mount" == true ]]; then
-                echo "      - \"${SSH_AUTH_SOCK}:/ssh-agent\""
+                echo "      - \"$(yaml_path "$SSH_AUTH_SOCK"):/ssh-agent\""
             fi
             if [[ "$needs_ca_mount" == true ]]; then
-                echo "      - \"${NODE_EXTRA_CA_CERTS}:/etc/vulnpen/custom-ca.pem:ro\""
+                echo "      - \"$(yaml_path "$NODE_EXTRA_CA_CERTS"):/etc/vulnpen/custom-ca.pem:ro\""
             fi
             if [[ "$needs_host_ssh_mount" == true ]]; then
-                echo "      - \"${host_ssh_dir}:/root/.ssh:ro\""
+                echo "      - \"$(yaml_path "$host_ssh_dir"):/root/.ssh:ro\""
             fi
             if [[ "$needs_host_key_mount" == true ]]; then
-                echo "      - \"${host_key_dir}:/root/keys:ro\""
+                echo "      - \"$(yaml_path "$host_key_dir"):/root/keys:ro\""
             fi
             if [[ "$needs_codex_auth_mount" == true ]]; then
-                echo "      - \"${codex_auth_file}:/root/.codex/auth.json\""
+                echo "      - \"$(yaml_path "$codex_auth_file"):/root/.codex/auth.json\""
             fi
             if [[ "$needs_agent_mount" == true || "$needs_ca_mount" == true ]]; then
                 echo "    environment:"
