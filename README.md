@@ -128,8 +128,8 @@ deployment scenario matrix, see **[Setup and Troubleshooting](./docs/SETUP.md)**
 
 |         | Minimum                                           |
 | ------- | ------------------------------------------------- |
-| RAM     | 8 GB (+2 GB if using the built-in Kali container) |
-| Disk    | 20 GB                                             |
+| RAM     | 10 GB (the default stack includes the Kali attack box) |
+| Disk    | 40 GB (product images are ~22 GB)                  |
 | Docker  | v20+ with Compose v2+                             |
 | Node.js | v22+ (dev mode only)                              |
 | pnpm    | v9+ (dev mode only)                               |

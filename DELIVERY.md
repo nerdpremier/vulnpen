@@ -7,8 +7,8 @@
 
 | ไฟล์ | ใช้เมื่อ |
 | --- | --- |
-| `vulnpen-1.1.0.zip` | Windows / macOS (แตกไฟล์ได้ทุกที่) |
-| `vulnpen-1.1.0.tar.gz` | Linux (คงสิทธิ์ executable ของ `run.sh` แน่นอนกว่า) |
+| `vulnpen-1.1.0.zip` | แตกไฟล์ได้ทุกที่ (Windows/macOS/Linux) |
+| `vulnpen-1.1.0.tar.gz` | Linux / WSL2 (คงสิทธิ์ executable ของ `run.sh` แน่นอนกว่า) |
 
 แพ็กเกจเป็น **ซอร์สโค้ดทั้งหมดของผลิตภัณฑ์** ไม่มี git history และไม่มีไฟล์
 ตั้งค่าส่วนตัวใด ๆ ติดมา (`.env`, `config.toml`, `model-registry.json` ถูกสร้าง
@@ -19,8 +19,8 @@
 - Docker Engine 20+ พร้อม Compose v2
 - Linux, macOS หรือ Windows ผ่าน WSL2 (**ไม่รองรับ** PowerShell / CMD / Git Bash
   โดยตรง — ตัวติดตั้งจะหยุดก่อนสร้างไฟล์ตั้งค่า)
-- พื้นที่ว่าง ~20 GB, หน่วยความจำ ~8 GB
-- ถ้าจะใช้กล่องโจมตีในตัว (Kali) ต้องรัน Docker แบบไม่ใช่ rootless
+- พื้นที่ว่าง **≥ 40 GB** (image ของผลิตภัณฑ์ ~22 GB + layer/ข้อมูล), หน่วยความจำ ~8 GB
+- ต้องรัน Docker แบบ **ไม่ใช่ rootless** (กล่องโจมตีในตัวต้องใช้ privileged networking)
 
 ## ติดตั้ง
 
@@ -30,9 +30,21 @@ cd vulnpen-1.1.0
 ./run.sh start
 ```
 
-ตัวติดตั้งจะถามเรื่องกล่องโจมตี (สร้างในเครื่อง หรือต่อ SSH ไปเครื่องที่มีอยู่)
-แล้วสร้าง `config.toml`, session secret และไฟล์ `.env` ให้เอง จากนั้นรอจน
-health ผ่านและเปิด `http://localhost:3000`
+ตัวติดตั้งจะสร้าง `config.toml`, session secret, รหัส root ของ Kali และไฟล์
+`.env` ให้เอง **โดยไม่ถามอะไร** (ค่าเริ่มต้นคือสแตกเต็มที่มีกล่องโจมตี Kali
+อยู่ในตัว) จากนั้นรอจน health ผ่านและเปิด `http://localhost:3000`
+
+จะได้ **6 container**: `backend`, `frontend`, `mongodb`, `redis`, `collabora`,
+และ `kali` — ถ้าเห็นแค่ 5 ตัวโดยไม่มี `kali` แปลว่ามีบางอย่างผิดปกติ
+
+**รหัส root ของ Kali** ถูกสุ่มให้แต่ละเครื่อง ดูได้ด้วย:
+
+```bash
+grep KALI_ROOT_PASSWORD backend/.env
+ssh root@localhost -p 4242        # หรือเปิด shell ที่ http://localhost:4200
+```
+
+อยากเปลี่ยนไปใช้กล่องโจมตีภายนอก (SSH ไปเครื่องอื่นแทน) ใช้ `./run.sh config`
 
 ## หลังติดตั้ง — ต้องทำ 2 อย่าง
 
@@ -57,7 +69,7 @@ ALLOW_REGISTRATION=false
 ## ตรวจรับงาน
 
 ```bash
-./run.sh status                                  # ทุก service ขึ้น
+./run.sh status                                  # ต้องเห็น 6 container ขึ้นครบ
 curl -s -o /dev/null -w '%{http_code}\n' \
   http://localhost:8080/api/healthcheck          # 200
 ```
