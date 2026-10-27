@@ -201,16 +201,16 @@ export async function runAgentLoop(params: {
   channel?: string;
   /**
    * Approval mode for this turn, overriding the user's own setting. An
-   * unattended scan passes "auto" so a launched scan finishes without parking
-   * for a human who is not there; everything else leaves it undefined and
-   * follows the user config.
+   * unattended scan passes "auto_approve" (Bypass permissions) so a launched
+   * scan finishes without parking for a human who is not there; everything
+   * else leaves it undefined and follows the user config.
    */
   toolExecutionMode?: ToolExecutionMode;
   /**
-   * No operator is watching this turn (an unattended scan). A boundary-crossing
-   * action is recorded as a refusal against the case instead of parking on
-   * `waiting_consent`: the launch contract is that such a run never parks, and
-   * before this it did — a parked unattended scan sat until recovery reset it.
+   * No operator is watching this turn (an unattended scan). Bypass permissions
+   * already never asks, so this is the backstop: if a consent request appears
+   * anyway it is recorded as a refusal against the case instead of parking on
+   * `waiting_consent`. The launch contract is that such a run never parks.
    */
   unattended?: boolean;
 }): Promise<void> {
@@ -497,12 +497,6 @@ export async function runAgentLoop(params: {
         disabledAgentTools,
       );
 
-      // No denial can appear in one run's tool results: a refusal is the
-      // operator answering a parked prompt, which resumes in a *later* turn, so
-      // a tracker scoped to this loop can never see a streak. The brake the old
-      // code here claimed needs session-scoped denial state (consentStats
-      // already counts the denials) — until then there is no circuit to trip,
-      // and the counters below are the honest record.
       let consentResults = toolResults.filter((r) => r.kind === "consent_required");
 
       if (consentResults.length > 0 && unattended) {

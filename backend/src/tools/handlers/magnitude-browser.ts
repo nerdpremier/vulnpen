@@ -55,7 +55,7 @@ const magnitudeBrowser: ToolDefinition = {
     "Drive a real browser with DOM-level actions: navigate, snapshot the page's interactive elements, " +
     "then click / fill / select / press by element id. Use `action: \"snapshot\"` first to get the numbered " +
     "element table, then act on those ids. No screenshots are involved — the page is read as DOM, not as an image. " +
-    "It acts on the real application: destructive goals (delete, overwrite, disable) stop for operator approval " +
+    "It acts on the real application: destructive goals (delete, overwrite, disable) follow the execution mode's approval gate " +
     "(proof of concept only - see <rules_of_engagement>; verify the control is missing and stop).",
   parameters: {
     type: "object",

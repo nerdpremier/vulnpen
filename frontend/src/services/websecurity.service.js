@@ -117,9 +117,9 @@ export const downloadReportPdf = (sessionId, { rebuild = false } = {}) =>
 
 /**
  * Launch a scan over a set of WSTG cases. `policy` decides how much the scan
- * may assume: "unattended" lets the Approve-for-me reviewer clear approval
- * boundaries so the scan finishes on its own, "supervised" keeps the user's
- * own tool-execution mode and may park the scan for a human.
+ * may assume: "unattended" runs the Bypass-permissions mode, which never asks,
+ * so the scan finishes on its own, while "supervised" keeps the user's own
+ * tool-execution mode and may park the scan for a human.
  */
 export const launchScan = async ({ sessionId, testIds, label, policy }) => {
   const res = await apiClient.post(`/agent/session/${sessionId}/test-plan/run`, {

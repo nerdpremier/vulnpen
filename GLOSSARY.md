@@ -79,9 +79,12 @@ HTTP to the two verbs and never exec or write the user config themselves.
 `utils/targetSafety.ts`: `detectDestructiveTargetAction` (a shell command, a
 Python script, a shell input or a raw HTTP request) and
 `detectDestructiveBrowserGoal` (a browser goal). A match is a
-`destructive_target` verdict that no execution mode may turn into a consent
-question. This layer reads the *command*, so it is a best-effort judgement
-about meaning rather than a hard guarantee.
+`destructive_target` verdict that stops the call for approval in the
+human-facing modes: the operator in `auto` and `requires_consent`. In
+`auto_approve` the verdict is still computed, but the mode runs it
+automatically — that is the operator's explicit choice. This layer reads the
+*command*, so it is a best-effort judgement about meaning rather than a hard
+guarantee.
 
 ## Settings
 
@@ -360,16 +363,15 @@ storage vocabulary stays "run" — a scan is a `webAppRuns` record on the sessio
 document, and the engine is
 `services/web-security/run-queue.service.ts` (`enqueueRun`, `pump`, `stopRun`,
 `deleteRun`, `parkedRunContext`). A launch carries a `policy`: `unattended`
-(the default, which passes `toolExecutionMode: "auto"` into `initAndRun` so the
-scan is not left parked for an operator who is not watching — the instruction
-tells the agent to record a refusal against the case and move on) or
-`supervised` (leave the user's own mode in charge, so the scan may park on
-consent and wait on its own page). A parked scan keeps both halves
+(the default, which passes `toolExecutionMode: "auto_approve"` into `initAndRun`
+so the scan is not left parked for an operator who is not watching — that mode
+never asks) or `supervised` (leave the user's own mode in charge, so the scan
+may park on consent and wait on its own page). A parked scan keeps both halves
 of that identity across the resume — `parkedRunContext` hands the consent
 continuation the scan's own channel and mode — so an unattended scan does not
 silently become supervised, and its activity never leaks into the chat feed.
-Neither policy bypasses the agent's gates: a destructive action against the
-target still stops for the operator instead of running in either case.
+`unattended` is also the backstop: if a consent request ever appears, it is
+recorded as a refusal instead of parking the run.
 
 `scan-results.ts` owns every pure projection the scan pages read: `selectRuns`
 (the history a view shows), `decorateRun` (its queue position — through

@@ -162,9 +162,9 @@ export function normalizeApprovedToolCallIds(
 
 /**
  * The consent counters' one home — the run loop and the consent resume never
- * $inc them by hand: `approvals`/`denials` feed from the user's response,
- * `circuitOpens` from the approval-rejection streak tripping.
- */export async function recordConsentOutcome(
+ * $inc them by hand: `approvals`/`denials` feed from the user's response.
+ */
+export async function recordConsentOutcome(
   sessionId: string,
   approved: boolean,
 ): Promise<void> {
@@ -176,12 +176,5 @@ export function normalizeApprovedToolCallIds(
         "consentStats.denials": approved ? 0 : 1,
       },
     },
-  );
-}
-
-export async function recordCircuitOpen(sessionId: string): Promise<void> {
-  await SessionsModel.updateOne(
-    { sessionId },
-    { $inc: { "consentStats.circuitOpens": 1 } },
   );
 }

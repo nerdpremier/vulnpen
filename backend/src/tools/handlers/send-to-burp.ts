@@ -20,7 +20,7 @@ const sendToBurp: ToolDefinition = {
     "Each request is sent individually through Burp's HTTP engine which handles TLS, HTTP/2, " +
     "and connection management. Provide a complete raw HTTP request (request line + headers + body). " +
     "The tool automatically normalizes line endings and recalculates Content-Length. " +
-    "Proof-of-concept engagement: destructive steps stop for operator approval (see <rules_of_engagement>) — proving that a control is missing is the finding.",
+    "Proof-of-concept engagement: destructive steps follow the execution mode's approval gate (see <rules_of_engagement>) — proving that a control is missing is the finding.",
   parameters: {
     type: "object",
     properties: {

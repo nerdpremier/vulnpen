@@ -80,15 +80,14 @@ export interface ToolExecutionCallbacks {
 
 /**
  * The outcome of one tool call, as a discriminated union. The valid outcomes
- * (parked for consent, blocked at the boundary, denied by review, executed)
- * are branches of `kind` — not loosely-correlated optional flags the caller
- * has to re-interpret. Every branch except `consent_required` carries a
- * `result` that belongs in the transcript.
+ * (parked for consent, blocked at the boundary, executed) are branches of
+ * `kind` — not loosely-correlated optional flags the caller has to
+ * re-interpret. Every branch except `consent_required` carries a `result` that
+ * belongs in the transcript.
  */
 export type ToolExecutionResult =
   | ConsentRequiredOutcome
   | BoundaryBlockedOutcome
-  | ApprovalDeniedOutcome
   | ExecutedOutcome;
 
 interface ConsentRequiredOutcome {
@@ -110,14 +109,6 @@ interface BoundaryBlockedOutcome {
   result: ToolResult;
   approvalReason: string;
   safetyKind?: SafetyKind;
-}
-
-interface ApprovalDeniedOutcome {
-  kind: "approval_denied";
-  toolCallId: string;
-  toolName: string;
-  result: ToolResult;
-  approvalReason: string;
 }
 
 interface ExecutedOutcome {
@@ -325,14 +316,24 @@ export async function executeToolCall(
   }
 
   // The safety-protection setting silences the boundaries the operator finds
-  // noisy, but the destructive-target kind is retained here so it still surfaces
-  // for operator approval above.
+  // noisy, but the destructive-target kind is retained here so it still reaches
+  // the approval gate: the operator in Auto / Manual, and the fully-automatic
+  // path in Bypass permissions.
   const safetyDetail = effectiveSafetyDetail(
     toolDef.describeSafety?.(args, ctx),
     disableSafetyProtections === true,
   );
   const safetyTriggered = safetyDetail !== undefined;
   const mode: ToolExecutionMode = toolExecutionMode ?? "auto";
+  if (mode === "auto_approve" && safetyDetail) {
+    // Bypass permissions is the operator's explicit choice to let the agent
+    // act without asking, so the verdict does not gate the call. Record it
+    // anyway: an irreversible action should leave a trace beyond the tool
+    // output.
+    console.warn(
+      `[approval] ${toolDef.name} crossed the ${safetyDetail.kind} boundary in Bypass permissions; running it as instructed: ${safetyDetail.reason}`,
+    );
+  }
   const approval = decideToolConsent({ mode, safetyTriggered, safetyDetail });
   const needsConsent = approval.requireConsent;
   if (approval.source === "boundary") {

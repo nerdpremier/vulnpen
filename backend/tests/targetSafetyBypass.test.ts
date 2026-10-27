@@ -9,7 +9,8 @@ import {
  * Bypass / evasion coverage for the proof-of-concept boundary.
  *
  * A destructive action against the target never runs on the agent's own
- * authority: it stops for the operator in every mode. Everything here is about
+ * authority in `auto` or `requires_consent` — it stops for the operator.
+ * `auto_approve` is the explicit full-auto mode. Everything here is about
  * whether a determined agent, writing its own request instead of using a flag,
  * can still reach one undetected — the verdict has to hold against a command
  * that is written rather than asked for.

@@ -16,6 +16,10 @@ test("legacy consent remains effective before the migration runs", () => {
     "requires_consent",
   );
   assert.equal(resolveToolExecutionMode({}), "auto");
+  assert.equal(
+    resolveToolExecutionMode({ toolExecutionMode: "auto_approve" }),
+    "auto_approve",
+  );
 });
 
 test("legacy consent users are migrated without overriding explicit modes", async () => {

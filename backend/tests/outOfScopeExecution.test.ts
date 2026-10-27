@@ -130,7 +130,7 @@ test("an internal host is never treated as public reconnaissance", () => {
 test("with no declared target the gate abstains, by design", () => {
   // Documented fail-open: the Target is the only field that arms the gate, so a
   // session that never declared one has no boundary to enforce. The execution
-  // modes and the reviewer are what remain in that case.
+  // modes are what remain in that case.
   const context = ctx("", "out of scope: legacy.example.com");
   assert.deepEqual(scopeAllowlistFromContext(context), []);
   assert.equal(shellSafetyDetail("curl -s http://anything.test/x", context), undefined);

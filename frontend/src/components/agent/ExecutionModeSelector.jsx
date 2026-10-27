@@ -6,19 +6,25 @@ import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCapabilities, updateCapabilities } from "@/services/user.service";
 import styles from "@/styles/components/Chat.module.scss";
 
-/** Tool execution modes, in the order they appear in the menu. */
+/** Tool execution modes, mirroring Claude's permission menu. */
 const EXECUTION_MODES = [
   {
     value: "auto",
-    label: "Auto run",
-    description: "Run automatically; actions the system flags still ask.",
+    label: "Auto",
+    description: "Run automatically; destructive target actions still ask.",
     icon: FiZap,
   },
   {
     value: "requires_consent",
-    label: "Requires consent",
-    description: "Ask before every tool action.",
+    label: "Manual",
+    description: "Always ask before every tool action.",
     icon: MdOutlineFrontHand,
+  },
+  {
+    value: "auto_approve",
+    label: "Bypass permissions",
+    description: "Run every action immediately, including destructive ones. No prompts.",
+    icon: FiAlertOctagon,
   },
 ];
 

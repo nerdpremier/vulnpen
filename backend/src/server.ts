@@ -27,7 +27,6 @@ import { migrateSessionsToWorkspaces } from "./migrations/001-create-workspaces"
 import { migrateToolExecutionMode } from "./migrations/002-migrate-tool-execution-mode";
 import { repairEmptyToolCallArguments } from "./migrations/003-repair-empty-tool-call-arguments";
 import { dropLegacyOwaspMappingFields } from "./migrations/004-drop-legacy-owasp-mapping-fields";
-import { retireAutoApproveMode } from "./migrations/005-retire-auto-approve-mode";
 import { startBurpCaWatcher } from "./services/burp-ca.service";
 import { setAgentStateStore } from "./services/agent-state.service";
 
@@ -278,17 +277,11 @@ const initializeApp = async () => {
     const owaspMigration = await dropLegacyOwaspMappingFields(
       mongoose.connection.collection("sessions") as never,
     );
-    // "Approve for me" is gone; a user still storing it would fail validation
-    // on every save, including the save that changes the setting back.
-    const retiredModeMigration = await retireAutoApproveMode(
-      mongoose.connection.collection("users") as never,
-    );
     console.log(
       `[startup] Migrations complete: ${workspaceMigration.created} workspace(s), ` +
       `${toolModeMigration.migrated} consent setting(s) migrated, ` +
       `${toolArgsMigration.repaired} session(s) with empty tool arguments repaired, ` +
-      `${owaspMigration.sessionsWithDroppedFields} session(s) with legacy OWASP fields dropped, ` +
-      `${retiredModeMigration.migrated} user(s) moved off the retired Approve-for-me mode`,
+      `${owaspMigration.sessionsWithDroppedFields} session(s) with legacy OWASP fields dropped`,
     );
 
     const { resetStuckRunningSessions } = await import("./services/agent-state.service");

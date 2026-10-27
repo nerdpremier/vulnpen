@@ -1,8 +1,8 @@
 /**
  * Deterministic scope gate. Extracts network targets from a command or script
  * and checks them against the engagement allowlist before anything runs.
- * This module is the boundary. Nothing downstream — no mode, no reviewer — may
- * clear a request that crossed it.
+ * This module is the boundary. No execution mode may clear a request that
+ * crossed it.
  */
 
 export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "local"]);
@@ -92,13 +92,13 @@ export interface ScopeCheckResult {
 
 /**
  * Fail-open on purpose: with no parseable allowlist there is nothing to check
- * against, so the deterministic gate abstains and the existing approval
- * pipeline (modes / LLM reviewer) stays in charge.
+ * against, so the deterministic gate abstains and the execution mode stays in
+ * charge.
  */
 export function checkScope(text: string, allowlist: string[]): ScopeCheckResult {
   // Fail-open on purpose: with no parseable allowlist there is nothing to
-  // check against, so the deterministic gate abstains and the existing
-  // approval pipeline (modes / LLM reviewer) stays in charge.
+  // check against, so the deterministic gate abstains and the execution mode
+  // stays in charge.
   if (!allowlist.length) return { outside: [], allowlist: [] };
   const allow = new Set([...LOCAL_HOSTS, ...allowlist.map((h) => h.toLowerCase())]);
   // A suffix rule covers subdomains of an in-scope domain (juice-shop:3000 etc.).

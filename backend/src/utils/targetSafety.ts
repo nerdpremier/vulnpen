@@ -27,9 +27,9 @@ export interface DangerCheckResult {
  * data. This module guards the target; there is no attack-box rule set — the
  * attack box is the tester's disposable infrastructure.
  *
- * A match never executes silently. It is surfaced to the operator as a
- * `destructive_target` verdict, which stops the call for approval in every
- * mode — including `auto`, where the agent otherwise works unsupervised.
+ * A match never executes silently. It is surfaced as a `destructive_target`
+ * verdict, which stops the call for the operator in `auto` and
+ * `requires_consent`; `auto_approve` logs it and runs it automatically.
  *
  * This is a text rule over the command the agent wrote, so it is a *judgement
  * about meaning* and inherits the limits of one: a payload that merely contains

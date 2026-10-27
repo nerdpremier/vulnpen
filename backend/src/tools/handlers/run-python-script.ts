@@ -14,7 +14,7 @@ const runPythonScript: ToolDefinition = {
     "data parsing, protocol interactions, brute-force logic, or any task requiring Python libraries " +
     "like requests, socket, struct, pwntools, etc. " +
     "Scripts always run in-memory via stdin. If file_name is provided, the script is also saved to disk for reference. " +
-    "Never script a destructive action against the target — it stops for operator approval (see <rules_of_engagement>).",
+    "Never script a destructive action against the target — it follows the execution mode's approval gate (see <rules_of_engagement>).",
   parameters: {
     type: "object",
     properties: {

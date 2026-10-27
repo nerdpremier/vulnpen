@@ -59,7 +59,6 @@ export interface ConsentStatsDoc {
   approvals: number;
   denials: number;
   safetyBlocks: number;
-  circuitOpens: number;
 }
 
 export type AgentState =
@@ -682,7 +681,6 @@ const SessionSchema = new Schema({
       approvals: { type: Number, default: 0 },
       denials: { type: Number, default: 0 },
       safetyBlocks: { type: Number, default: 0 },
-      circuitOpens: { type: Number, default: 0 },
     },
     default: undefined,
   },

@@ -291,14 +291,12 @@ async function startRun(
       channel: "run",
       // Unattended scans must not park: there is no operator watching, and a
       // consent request would sit there until recovery resets it. They run in
-      // "auto", where a boundary-crossing action would normally ask — the
-      // run instruction tells the agent to record the refusal against the case
-      // and move on instead of stopping. Supervised scans leave the setting
-      // alone so the user's own mode decides.
-      toolExecutionMode: runPolicy(run) === "unattended" ? "auto" : undefined,
-      // And the loop enforces it: in "auto" a boundary verdict still asks, so
-      // without this flag an unattended run parks on the very consent request
-      // this comment says must not happen.
+      // "Bypass permissions", which never asks. Supervised scans leave the
+      // setting alone so the user's own mode decides.
+      toolExecutionMode: runPolicy(run) === "unattended" ? "auto_approve" : undefined,
+      // And the loop enforces it: if a consent request ever appears anyway, it
+      // is recorded as a refusal instead of parking the run on a human who is
+      // not there.
       unattended: runPolicy(run) === "unattended",
     });
 
@@ -610,11 +608,10 @@ export async function parkedRunContext(
     runId: run.runId,
     channel: "run",
     // Same rule as at launch: an unattended run must not park for a human who
-    // is not there, so it runs in "auto" and the boundary (not a person, and
-    // not a reviewer) decides what stops. `unattended` carries that decision
-    // into the loop, which records a boundary-crossing action as a refusal
-    // instead of parking on it.
-    toolExecutionMode: unattended ? "auto" : undefined,
+    // is not there, so it runs in "Bypass permissions", which never asks.
+    // `unattended` is the backstop that turns any consent request into a
+    // refusal instead of parking on it.
+    toolExecutionMode: unattended ? "auto_approve" : undefined,
     unattended,
   };
 }

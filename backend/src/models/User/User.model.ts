@@ -18,17 +18,20 @@ export interface ModelPresetDoc {
 }
 
 /**
- * How the agent acts. Two modes only:
- *   - `auto`: tools run; an action that crosses the deterministic approval
- *     boundary asks. A destructive action against the target is never a
- *     question — it is left for the operator.
- *   - `requires_consent`: every tool action asks.
+ * How the agent acts. Three modes, mirroring Claude's permission menu:
+ *   - `auto` ("Auto"): tools run; an action that crosses the deterministic
+ *     approval boundary asks the operator. A destructive action against the
+ *     target stops for the operator rather than being auto-approved.
+ *   - `requires_consent` ("Manual"): every tool action asks the operator.
+ *   - `auto_approve` ("Bypass permissions"): fully autonomous. Every action
+ *     runs without asking — the deterministic boundary is computed and logged,
+ *     but it never becomes a prompt. The operator chose this mode to let the
+ *     agent run the whole engagement on its own.
  *
- * An `auto_approve` mode used to sit between them and sent boundary-crossing
- * actions to an AI reviewer instead of the operator. It was removed: see
- * migration 005, which moves any stored value to `auto`.
+ * Auto and Manual are the human-facing modes: a destructive action against the
+ * engagement target stops for the operator in both.
  */
-export type ToolExecutionMode = "auto" | "requires_consent";
+export type ToolExecutionMode = "auto" | "auto_approve" | "requires_consent";
 
 export function resolveToolExecutionMode(configs?: {
   toolExecutionMode?: ToolExecutionMode;
@@ -154,10 +157,10 @@ const UserSchema = new Schema({
     },
     toolExecutionMode: {
       type: String,
-      // Keep in step with ToolExecutionMode. `auto_approve` is gone — a stored
-      // value of it is rewritten by migration 005, and this enum must not
-      // accept it or a stale record would fail every later save.
-      enum: ["auto", "requires_consent"],
+      // Keep in step with ToolExecutionMode. A stored value the enum does not
+      // accept would make every later save fail, including the save that
+      // changes the setting back.
+      enum: ["auto", "auto_approve", "requires_consent"],
     },
     disableSafetyProtections: {
       type: Boolean,
