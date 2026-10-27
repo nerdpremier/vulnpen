@@ -13,6 +13,7 @@ import {
 } from "./provider-config";
 import { resolveInvocationProvider } from "./orchestrator";
 import { getModelMaxOutput } from "../modelMetadata";
+import { explainProviderError, withProviderRetry } from "./retry";
 import {
   assertCompletionChoices,
   buildCompletionConfig,
@@ -661,25 +662,55 @@ export async function invoke_llm_streaming(
 
   logRequest(config, opts, true);
 
+  // A retry is only safe while nothing has reached the caller: once a delta is
+  // delivered, a second attempt would append a duplicate of the text the user
+  // already saw.
+  let emitted = false;
+  const guardedOpts: StreamingInvokeOptions = {
+    ...opts,
+    onDelta: (delta) => {
+      emitted = true;
+      opts.onDelta(delta);
+    },
+  };
+  const retryOptions = {
+    abortSignal: opts.abortSignal,
+    canRetry: () => !emitted,
+    onRetry: (err: unknown, attempt: number, delayMs: number) => {
+      console.warn(
+        `[inference] ${config.model} asked us to wait; retrying the stream in ${delayMs}ms` +
+          ` (attempt ${attempt}, ${(err as any)?.status ?? "error"})`,
+      );
+    },
+  };
+
   try {
-    return await runChatCompletionsStream(
-      client,
-      config,
-      opts,
-      reasoningMode,
-      requestedTemp,
-      start,
+    return await withProviderRetry(
+      () =>
+        runChatCompletionsStream(
+          client,
+          config,
+          guardedOpts,
+          reasoningMode,
+          requestedTemp,
+          start,
+        ),
+      retryOptions,
     );
   } catch (err: any) {
     if (isTemperatureUnsupportedError(err, requestedTemp)) {
       console.warn(`[inference] Retrying stream with temperature=1`);
-      return await runChatCompletionsStream(
-        client,
-        config,
-        opts,
-        reasoningMode,
-        1,
-        start,
+      return await withProviderRetry(
+        () =>
+          runChatCompletionsStream(
+            client,
+            config,
+            guardedOpts,
+            reasoningMode,
+            1,
+            start,
+          ),
+        retryOptions,
       );
     }
 
@@ -699,7 +730,7 @@ export async function invoke_llm_streaming(
       `[inference] ✗ ${elapsed}ms stream provider=${config.provider} model=${config.model}` +
         ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`,
     );
-    throw err;
+    throw explainProviderError(err);
   }
 }
 

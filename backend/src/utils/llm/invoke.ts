@@ -3,6 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { observeOpenAI } from "@langfuse/openai";
 import { isTracingEnabled } from "../tracing";
 import { buildAnthropicMessageParams } from "./anthropicParams";
+import { explainProviderError, withProviderRetry } from "./retry";
 import {
   invokeSubscriptionInference,
   isSubscriptionProvider,
@@ -319,13 +320,20 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
   };
 
   try {
-    return await tryCompletion(requestedTemp);
+    return await withProviderRetry(() => tryCompletion(requestedTemp), {
+      onRetry: (err, attempt, delayMs) => {
+        console.warn(
+          `[inference] ${config.model} asked us to wait; retrying in ${delayMs}ms` +
+            ` (attempt ${attempt}, ${(err as any)?.status ?? "error"})`,
+        );
+      },
+    });
   } catch (err: any) {
     if (isTemperatureUnsupportedError(err, requestedTemp)) {
       console.warn(
         `[inference] Model ${config.model} does not support temperature=${requestedTemp}, retrying with temperature=1`,
       );
-      return await tryCompletion(1);
+      return await withProviderRetry(() => tryCompletion(1));
     }
 
     const elapsed = Date.now() - start;
@@ -333,6 +341,6 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
       `[inference] ✗ ${elapsed}ms provider=${config.provider} model=${config.model}` +
         ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`,
     );
-    throw err;
+    throw explainProviderError(err);
   }
 }
