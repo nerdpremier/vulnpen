@@ -27,7 +27,7 @@
 ```bash
 unzip vulnpen-1.1.0.zip        # หรือ tar -xzf vulnpen-1.1.0.tar.gz
 cd vulnpen-1.1.0
-./run.sh start
+./run.sh start -q
 ```
 
 ตัวติดตั้งจะสร้าง `config.toml`, session secret, รหัส root ของ Kali และไฟล์
