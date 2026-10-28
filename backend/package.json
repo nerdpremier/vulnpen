@@ -1,6 +1,6 @@
 {
   "name": "vulnpen",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "VulnPen â€” AI assistant for web application security testing (T-NET IT Solution)",
   "main": "src/server.ts",
   "engines": {
