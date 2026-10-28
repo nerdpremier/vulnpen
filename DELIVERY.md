@@ -1,4 +1,4 @@
-# การส่งมอบ — VulnPen 1.1.1
+# การส่งมอบ — VulnPen 1.1.0
 
 เอกสารนี้เป็นใบนำส่งสำหรับผู้รับมอบ รายละเอียดเชิงลึกอยู่ใน `README.md` และ
 `docs/SETUP.md` — ที่นี่สรุปเฉพาะสิ่งที่ต้องรู้และต้องทำ
@@ -7,8 +7,8 @@
 
 | ไฟล์ | ใช้เมื่อ |
 | --- | --- |
-| `vulnpen-1.1.1.zip` | แตกไฟล์ได้ทุกที่ (Windows/macOS/Linux) |
-| `vulnpen-1.1.1.tar.gz` | Linux / WSL2 (คงสิทธิ์ executable ของ `run.sh` แน่นอนกว่า) |
+| `vulnpen-1.1.0.zip` | แตกไฟล์ได้ทุกที่ (Windows/macOS/Linux) |
+| `vulnpen-1.1.0.tar.gz` | Linux / WSL2 (คงสิทธิ์ executable ของ `run.sh` แน่นอนกว่า) |
 
 แพ็กเกจเป็น **ซอร์สโค้ดทั้งหมดของผลิตภัณฑ์** ไม่มี git history และไม่มีไฟล์
 ตั้งค่าส่วนตัวใด ๆ ติดมา (`.env`, `config.toml`, `model-registry.json` ถูกสร้าง
@@ -25,8 +25,8 @@
 ## ติดตั้ง
 
 ```bash
-unzip vulnpen-1.1.1.zip        # หรือ tar -xzf vulnpen-1.1.1.tar.gz
-cd vulnpen-1.1.1
+unzip vulnpen-1.1.0.zip        # หรือ tar -xzf vulnpen-1.1.0.tar.gz
+cd vulnpen-1.1.0
 ./run.sh start
 ```
 
